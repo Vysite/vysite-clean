@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { FileText, Download, BarChart3, TrendingUp, Calendar, Filter, X, Printer, ChevronDown } from 'lucide-react';
+import { FileText, Download, BarChart3, TrendingUp, Calendar, X, Printer, ChevronDown } from 'lucide-react';
 import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 import type { Action, Snag } from '../data/types';
 import { useAppStore } from '../lib/StoreContext';
@@ -596,13 +596,57 @@ function buildReportHTML(
   return buildPrintDocument(title, REPORT_PRINT_STYLES, body);
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function SelectFilter({
+  label, value, onChange, children,
+}: { label: string; value: string; onChange: (v: string) => void; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{label}</label>
+      <div className="relative">
+        <select
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="appearance-none bg-[#1a2236] border border-[#1e2d4a] rounded-lg pl-3 pr-8 py-2 text-xs font-semibold text-slate-300 outline-none focus:border-[#f97316] hover:border-slate-600 transition-colors cursor-pointer min-w-[150px]"
+        >
+          {children}
+        </select>
+        <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+      </div>
+    </div>
+  );
+}
+
+function DateInput({
+  label, value, onChange,
+}: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{label}</label>
+      <input
+        type="date"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="bg-[#1a2236] border border-[#1e2d4a] rounded-lg px-3 py-2 text-xs font-semibold text-slate-300 outline-none focus:border-[#f97316] hover:border-slate-600 transition-colors cursor-pointer [color-scheme:dark]"
+      />
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function Reports() {
   const store = useAppStore();
   const [printMode, setPrintMode] = useState<PrintMode | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+
+  // Filters
+  const [filterReportType, setFilterReportType] = useState('all');
   const [filterProject, setFilterProject] = useState('All');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterOwner, setFilterOwner] = useState('All');
 
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -615,11 +659,33 @@ export default function Reports() {
   const actions = filterProject === 'All' ? allActions : allActions.filter(a => a.projectName === filterProject);
   const forms = filterProject === 'All' ? allForms : allForms.filter(f => f.project_name === filterProject);
 
-  // Derived strictly from the live projects table — never from child records or static data.
+  // Project names derived only from live store.projects
   const liveProjectNames = useMemo(
     () => store.projects.map(p => p.name).sort(),
     [store.projects],
   );
+
+  // Owner names derived from live platform users (active only)
+  const liveOwnerNames = useMemo(
+    () => [...new Set(store.platformUsers.filter(u => u.status === 'Active').map(u => u.name))].sort(),
+    [store.platformUsers],
+  );
+
+  // Filtered report type cards
+  const visibleReportCards = useMemo(
+    () => filterReportType === 'all' ? REPORT_TYPE_CARDS : REPORT_TYPE_CARDS.filter(r => r.id === filterReportType),
+    [filterReportType],
+  );
+
+  const hasActiveFilters = filterReportType !== 'all' || filterProject !== 'All' || filterDateFrom !== '' || filterDateTo !== '' || filterOwner !== 'All';
+
+  function clearFilters() {
+    setFilterReportType('all');
+    setFilterProject('All');
+    setFilterDateFrom('');
+    setFilterDateTo('');
+    setFilterOwner('All');
+  }
 
   function handleBulkExport(reportCardId: string) {
     setPrintMode({ kind: 'bulk', reportId: reportCardId, filterProject });
@@ -634,51 +700,93 @@ export default function Reports() {
   return (
     <>
       <div className="p-4 lg:p-6">
-        {/* ▼▼▼ DEPLOYMENT PROOF MARKER — remove once Vercel matches Bolt ▼▼▼ */}
-        <div className="mb-4 px-4 py-3 rounded-lg border-2 border-orange-500 bg-orange-500/10 flex items-center gap-3">
-          <span className="text-orange-400 font-black text-lg leading-none">⚠</span>
-          <div>
-            <p className="text-orange-400 font-black text-sm tracking-wide font-mono">BUILD CHECK – REPORTS CLEAN VERSION</p>
-            <p className="text-orange-300/70 text-xs font-mono mt-0.5">v1.1.0 · compiled {new Date().toISOString().slice(0, 10)} · no static history · no legacy filters</p>
-          </div>
-        </div>
-        {/* ▲▲▲ DEPLOYMENT PROOF MARKER ▲▲▲ */}
-
         <div className="mb-6">
           <h2 className="text-lg font-bold text-white">Reports</h2>
           <p className="text-sm text-slate-500">Generate and download project reports</p>
         </div>
 
-        {/* Project filter */}
-        <div className="flex items-center gap-2 mb-6">
-          <div className="relative">
-            <select
-              value={filterProject}
-              onChange={e => setFilterProject(e.target.value)}
-              className="appearance-none bg-[#1a2236] border border-[#1e2d4a] rounded-lg pl-3 pr-8 py-2 text-xs font-semibold text-slate-300 outline-none focus:border-[#f97316] hover:border-slate-600 transition-colors cursor-pointer"
-            >
+        {/* Filter bar */}
+        <div className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl p-4 mb-6">
+          <div className="flex flex-wrap items-end gap-3">
+            <SelectFilter label="Report Type" value={filterReportType} onChange={setFilterReportType}>
+              <option value="all">All Report Types</option>
+              {REPORT_TYPE_CARDS.map(r => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </SelectFilter>
+
+            <SelectFilter label="Project" value={filterProject} onChange={setFilterProject}>
               <option value="All">All Projects</option>
               {liveProjectNames.map(name => (
-                <option key={name} value={name}>
-                  {name.split(' ').slice(0, 4).join(' ')}{name.split(' ').length > 4 ? '...' : ''}
-                </option>
+                <option key={name} value={name}>{name}</option>
               ))}
-            </select>
-            <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            </SelectFilter>
+
+            <DateInput label="Date From" value={filterDateFrom} onChange={setFilterDateFrom} />
+            <DateInput label="Date To" value={filterDateTo} onChange={setFilterDateTo} />
+
+            {liveOwnerNames.length > 0 && (
+              <SelectFilter label="Owner / Generated By" value={filterOwner} onChange={setFilterOwner}>
+                <option value="All">All Owners</option>
+                {liveOwnerNames.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </SelectFilter>
+            )}
+
+            {hasActiveFilters && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider opacity-0 select-none">Clear</label>
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white bg-[#0d1628] border border-[#1e2d4a] hover:border-slate-600 transition-colors"
+                >
+                  <X size={12} />Clear filters
+                </button>
+              </div>
+            )}
           </div>
-          {filterProject !== 'All' && (
-            <button
-              onClick={() => setFilterProject('All')}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-            >
-              <Filter size={12} />Clear
-            </button>
+
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-[#1e2d4a]">
+              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Active:</span>
+              {filterReportType !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#f97316]/15 text-[#f97316] text-[10px] font-semibold rounded-full">
+                  {REPORT_TYPE_CARDS.find(r => r.id === filterReportType)?.name}
+                  <button onClick={() => setFilterReportType('all')} className="hover:text-white transition-colors"><X size={9} /></button>
+                </span>
+              )}
+              {filterProject !== 'All' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-500/15 text-blue-400 text-[10px] font-semibold rounded-full">
+                  {filterProject}
+                  <button onClick={() => setFilterProject('All')} className="hover:text-white transition-colors"><X size={9} /></button>
+                </span>
+              )}
+              {filterDateFrom && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold rounded-full">
+                  From: {new Date(filterDateFrom).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  <button onClick={() => setFilterDateFrom('')} className="hover:text-white transition-colors"><X size={9} /></button>
+                </span>
+              )}
+              {filterDateTo && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold rounded-full">
+                  To: {new Date(filterDateTo).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  <button onClick={() => setFilterDateTo('')} className="hover:text-white transition-colors"><X size={9} /></button>
+                </span>
+              )}
+              {filterOwner !== 'All' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-500/20 text-slate-300 text-[10px] font-semibold rounded-full">
+                  Owner: {filterOwner}
+                  <button onClick={() => setFilterOwner('All')} className="hover:text-white transition-colors"><X size={9} /></button>
+                </span>
+              )}
+            </div>
           )}
         </div>
 
         {/* Report type cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-          {REPORT_TYPE_CARDS.map((report) => {
+          {visibleReportCards.map((report) => {
             const Icon = report.icon;
             return (
               <div key={report.id} className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-4 hover:border-[#2a3d5a] transition-all group cursor-pointer">
@@ -699,14 +807,18 @@ export default function Reports() {
           })}
         </div>
 
-        {/* Report history — empty state until live history tracking is implemented */}
+        {/* Report history — clean empty state; no static rows */}
         <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a]">
-          <div className="p-5 border-b border-[#1e2d4a]">
-            <h2 className="text-sm font-semibold text-white">Report History</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Previously generated reports will appear here</p>
+          <div className="p-5 border-b border-[#1e2d4a] flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Report History</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Reports generated this session will appear here</p>
+            </div>
           </div>
-          <div className="px-5 py-12 text-center text-slate-600 text-sm">
-            No reports generated yet
+          <div className="px-5 py-14 flex flex-col items-center justify-center gap-2">
+            <FileText size={28} className="text-slate-700" />
+            <p className="text-slate-600 text-sm font-medium">No reports generated yet</p>
+            <p className="text-slate-700 text-xs">Use the report cards above to generate and download a PDF</p>
           </div>
         </div>
       </div>

@@ -152,15 +152,6 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggleCol
           </ul>
         </nav>
 
-        {/* Build marker — remove once Vercel deployment is confirmed */}
-        {!collapsed && (
-          <div className="shrink-0 px-4 pb-1">
-            <p className="text-[9px] text-orange-500 font-mono font-bold tracking-wide">
-              BUILD 1.1.0 – REPORTS CLEAN
-            </p>
-          </div>
-        )}
-
         {/* Support link */}
         {!collapsed && (
           <div className="shrink-0 px-4 pb-2">
