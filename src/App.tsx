@@ -13,8 +13,10 @@ import Users from './pages/Users';
 import BetaFeedback from './pages/BetaFeedback';
 import Settings from './pages/Settings';
 import TestingCommissioning from './pages/TestingCommissioning';
+import Login from './pages/Login';
 import { StoreContext } from './lib/StoreContext';
 import { useStore } from './lib/store';
+import { useAuth } from './lib/AuthContext';
 
 // Maps notification linked_type to a Page
 function linkedTypeToPage(linkedType: string): Page | null {
@@ -40,6 +42,7 @@ export interface PendingFilter {
 }
 
 export default function App() {
+  const auth = useAuth();
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -98,6 +101,23 @@ export default function App() {
         return null;
     }
   };
+
+  // Show spinner while Supabase auth session is being resolved
+  if (auth.loading) {
+    return (
+      <div className="min-h-screen bg-[#111827] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-xl bg-[#f97316] flex items-center justify-center font-black text-white text-2xl mx-auto mb-4">V</div>
+          <p className="text-slate-400 text-sm">Loading VYSITE...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Unauthenticated — show login gate
+  if (!auth.session) {
+    return <Login />;
+  }
 
   if (store.loading) {
     return (
