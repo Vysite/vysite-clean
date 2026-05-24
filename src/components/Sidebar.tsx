@@ -14,6 +14,7 @@ import {
   Menu,
   FileSpreadsheet,
   FlaskConical,
+  MessageSquareDot,
 } from 'lucide-react';
 import { useAppStore } from '../lib/StoreContext';
 import { switchUser } from '../lib/store';
@@ -28,6 +29,7 @@ type Page =
   | 'testing'
   | 'reports'
   | 'users'
+  | 'beta-feedback'
   | 'settings';
 
 interface SidebarProps {
@@ -49,6 +51,7 @@ const navItems: { id: Page; label: string; icon: React.ComponentType<{ size?: nu
   { id: 'testing', label: 'Testing & Commissioning', icon: FlaskConical },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
   { id: 'users', label: 'Users', icon: Users },
+  { id: 'beta-feedback', label: 'BETA Feedback', icon: MessageSquareDot },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 

@@ -10,6 +10,7 @@ import Snagging from './pages/Snagging';
 import Actions from './pages/Actions';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
+import BetaFeedback from './pages/BetaFeedback';
 import Settings from './pages/Settings';
 import TestingCommissioning from './pages/TestingCommissioning';
 import { StoreContext } from './lib/StoreContext';
@@ -89,6 +90,8 @@ export default function App() {
         return <Reports />;
       case 'users':
         return <Users />;
+      case 'beta-feedback':
+        return <BetaFeedback />;
       case 'settings':
         return <Settings />;
       default:
