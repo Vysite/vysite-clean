@@ -18,6 +18,8 @@ export interface DBPlatformUser {
   avatar_initials: string;
   join_date: string;
   assigned_project_ids: string[];
+  auth_user_id?: string | null;
+  org_id?: string | null;
   created_at?: string;
 }
 
@@ -475,12 +477,10 @@ export interface AppStore {
   markAllNotificationsRead: () => Promise<void>;
 }
 
-// Active session user — resolved from localStorage. Falls back to the first
-// Admin in the platform users list once auth is wired up.
-const DEFAULT_USER_NAME = '';
-
+// Legacy localStorage user-switching — kept for UI compatibility, no longer
+// drives currentUser resolution. currentUser is now derived from auth_user_id.
 let _activeUserName: string = (() => {
-  try { return localStorage.getItem('vysite_active_user') ?? DEFAULT_USER_NAME; } catch { return DEFAULT_USER_NAME; }
+  try { return localStorage.getItem('vysite_active_user') ?? ''; } catch { return ''; }
 })();
 
 export function switchUser(name: string) {
@@ -495,7 +495,7 @@ function requireOrgId(orgId: string | null): string {
   return orgId;
 }
 
-export function useStore(orgId: string | null): AppStore {
+export function useStore(orgId: string | null, authUserId: string | null): AppStore {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectDocuments, setProjectDocuments] = useState<DBProjectDocument[]>([]);
   const [attachments, setAttachments] = useState<DBAttachment[]>([]);
@@ -759,7 +759,14 @@ export function useStore(orgId: string | null): AppStore {
     await supabase.from('vy_settings').upsert({ ...s, org_id: oid, updated_at: new Date().toISOString() }, { onConflict: 'id' });
   }, []);
 
-  const currentUser = platformUsers.find(u => u.name === _activeUserName) ?? null;
+  // Resolve currentUser from the authenticated Supabase user id (auth_user_id).
+  // Fall back to the legacy localStorage name match so existing switchUser() UI
+  // still works during the transition period before full Phase 4 auth wiring.
+  const currentUser =
+    (authUserId ? platformUsers.find(u => u.auth_user_id === authUserId) : null)
+    ?? platformUsers.find(u => u.name === _activeUserName)
+    ?? null;
+
   const visibleProjectIds = !currentUser || currentUser.role === 'Admin'
     ? null
     : currentUser.assigned_project_ids;

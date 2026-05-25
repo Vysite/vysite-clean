@@ -49,7 +49,7 @@ export default function App() {
   const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null);
   const [pendingFilter, setPendingFilter] = useState<PendingFilter | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
-  const store = useStore(auth.currentOrgId);
+  const store = useStore(auth.currentOrgId, auth.user?.id ?? null);
 
   function navigateTo(page: Page, filter?: PendingFilter, open?: PendingOpen) {
     setActivePage(page);

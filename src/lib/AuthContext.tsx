@@ -18,7 +18,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
-  const [orgLoading, setOrgLoading] = useState(false);
+  // Start true: holds the loading gate until we know whether a session exists
+  // and, if so, until org resolution completes. Prevents the window where
+  // loading=false but currentOrgId=null while resolveOrg is still in-flight.
+  const [orgLoading, setOrgLoading] = useState(true);
 
   async function resolveOrg(userId: string) {
     setOrgLoading(true);
@@ -39,7 +42,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
       setLoading(false);
       if (data.session?.user) {
+        // resolveOrg will call setOrgLoading(false) when done
         resolveOrg(data.session.user.id);
+      } else {
+        // No session — nothing to resolve, clear the gate immediately
+        setOrgLoading(false);
       }
     });
 
@@ -49,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (async () => { await resolveOrg(newSession.user.id); })();
       } else {
         setCurrentOrgId(null);
+        setOrgLoading(false);
       }
     });
 
