@@ -530,6 +530,23 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   orgIdRef.current = orgId;
 
   useEffect(() => {
+    // Block all data loading if org context is not resolved.
+    // This prevents global reads and cross-org data leakage.
+    if (!orgId) {
+      setProjects([]);
+      setProjectDocuments([]);
+      setAttachments([]);
+      setActions([]);
+      setSnags([]);
+      setSiteForms([]);
+      setTenders([]);
+      setTCRecords([]);
+      setNotifications([]);
+      // Keep platformUsers/settings as-is — they load below with org filter
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     const loadingTimeout = setTimeout(() => {
@@ -537,26 +554,26 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     }, 15000);
 
     async function load() {
-      console.log('[VYSITE] store.load() started, orgId at load time:', orgIdRef.current);
+      console.log('[VYSITE] store.load() started, orgId:', orgId);
       const ATT_COLS = 'id,linked_type,linked_id,project_id,project_name,name,type,size,category,uploaded_by,created_at';
 
+      // All queries are explicitly scoped to the resolved org — no global reads.
       const [projRes, docRes, attRes, actRes, snaRes, frmRes, tenRes, tcRes, puRes, notifRes, settingsRes] = await Promise.all([
-        supabase.from('vy_projects').select('*').order('created_at', { ascending: true }),
-        supabase.from('vy_project_documents').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_attachments').select(ATT_COLS).order('created_at', { ascending: false }),
-        supabase.from('vy_actions').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_snags').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_site_forms').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_tenders').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_tc_records').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_platform_users').select('*').order('created_at', { ascending: true }),
-        supabase.from('vy_notifications').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_settings').select('*').eq('id', 'workspace').maybeSingle(),
+        supabase.from('vy_projects').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
+        supabase.from('vy_project_documents').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_actions').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_snags').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_site_forms').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_tenders').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_tc_records').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_platform_users').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
+        supabase.from('vy_notifications').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_settings').select('*').eq('org_id', orgId).maybeSingle(),
       ]);
 
       if (cancelled) return;
 
-      // Always log load results and any errors — visible in production console
       console.log('[VYSITE] load() results:',
         'projects:', projRes.data?.length ?? 0,
         '| platformUsers:', puRes.data?.length ?? 0,
@@ -566,6 +583,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       if (projRes.error) console.error('[VYSITE] load vy_projects error:', projRes.error);
       if (puRes.error) console.error('[VYSITE] load vy_platform_users error:', puRes.error);
       if (tenRes.error) console.error('[VYSITE] load vy_tenders error:', tenRes.error);
+      if (settingsRes.error) console.error('[VYSITE] load vy_settings error:', settingsRes.error);
 
       setProjects((projRes.data ?? []).map(r => dbToProject(r as DBProject)));
       setProjectDocuments((docRes.data ?? []) as DBProjectDocument[]);
@@ -586,7 +604,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       cancelled = true;
       clearTimeout(loadingTimeout);
     };
-  }, []);
+  }, [orgId]);
 
   // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -831,7 +849,12 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
     setSettings(s);
-    const { error } = await supabase.from('vy_settings').upsert({ ...s, org_id: oid, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+    // Upsert by org_id — each org has exactly one settings row.
+    // id is set to the org_id string to satisfy the PK uniqueness requirement.
+    const { error } = await supabase.from('vy_settings').upsert(
+      { ...s, id: oid, org_id: oid, updated_at: new Date().toISOString() },
+      { onConflict: 'org_id' }
+    );
     logWrite('updateSettings', 'vy_settings', error);
   }, []);
 
