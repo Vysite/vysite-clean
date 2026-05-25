@@ -18,25 +18,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
-  // orgLoading starts true — holds the UI gate until the first resolution
-  // completes. It is only ever set back to true on a genuine sign-in/sign-out,
-  // NOT on token refresh events.
+  // orgLoading starts true — holds the UI gate until the first resolution completes.
   const [orgLoading, setOrgLoading] = useState(true);
 
-  // Track the user ID we last resolved so we never resolve the same user twice
-  // (avoids re-running on TOKEN_REFRESHED which fires with the same user).
+  // Refs keep the skip-guard readable from within the stable useEffect closure
+  // without needing to re-register the onAuthStateChange listener on every render.
   const resolvedForRef = useRef<string | null>(null);
+  const currentOrgIdRef = useRef<string | null>(null);
+  currentOrgIdRef.current = currentOrgId;
 
-  async function resolveOrg(userId: string, isInitial: boolean) {
-    // Skip if we already have an org for this exact user — prevents TOKEN_REFRESHED
-    // from clearing currentOrgId and re-running the spinner.
-    if (!isInitial && resolvedForRef.current === userId && currentOrgId !== null) {
-      console.log('[VYSITE] resolveOrg() skipped — already resolved for:', userId, 'orgId:', currentOrgId);
+  // resolveOrg always manages orgLoading. The ref guard prevents re-running for
+  // the same user on TOKEN_REFRESHED (same userId, org already set).
+  async function resolveOrg(userId: string) {
+    if (resolvedForRef.current === userId && currentOrgIdRef.current !== null) {
+      console.log('[VYSITE] resolveOrg() skipped — already resolved for:', userId, 'orgId:', currentOrgIdRef.current);
       return;
     }
 
-    console.log('[VYSITE] resolveOrg() for user:', userId, 'isInitial:', isInitial);
-    if (isInitial) setOrgLoading(true);
+    console.log('[VYSITE] resolveOrg() for user:', userId);
+    setOrgLoading(true);
 
     const { data, error } = await supabase
       .from('user_orgs')
@@ -48,60 +48,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
 
     const resolved = data?.org_id ?? null;
-    console.log('[VYSITE] resolveOrg() result:', resolved);
+    console.log('[VYSITE] resolveOrg() result:', resolved, error ? `error: ${error.message}` : '');
     if (error) console.error('[VYSITE] resolveOrg() error:', error);
 
     resolvedForRef.current = userId;
     setCurrentOrgId(resolved);
-    if (isInitial) setOrgLoading(false);
+    setOrgLoading(false);
   }
 
   useEffect(() => {
     // getSession() is the source of truth on page load / refresh.
+    // onAuthStateChange also fires INITIAL_SESSION shortly after, but we
+    // handle org resolution here to avoid a double-resolve on first load.
     supabase.auth.getSession().then(({ data }) => {
       console.log('[VYSITE] getSession() user:', data.session?.user?.id ?? 'none');
       setSession(data.session);
       setLoading(false);
       if (data.session?.user) {
-        resolveOrg(data.session.user.id, true);
+        resolveOrg(data.session.user.id);
       } else {
         setOrgLoading(false);
       }
     });
 
     // onAuthStateChange handles sign-in / sign-out / token refresh.
-    // Only re-resolve org on SIGNED_IN and SIGNED_OUT — not on TOKEN_REFRESHED
-    // or USER_UPDATED, which fire frequently and would clear currentOrgId.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       console.log('[VYSITE] onAuthStateChange:', event, newSession?.user?.id ?? 'none');
       setSession(newSession);
 
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
         if (newSession?.user) {
-          // isInitial=false: don't show the org spinner again if we already have an org
-          resolveOrg(newSession.user.id, false);
+          // resolveOrg is idempotent for the same userId — TOKEN_REFRESHED and
+          // duplicate INITIAL_SESSION events are no-ops when already resolved.
+          resolveOrg(newSession.user.id);
         }
       } else if (event === 'SIGNED_OUT') {
         resolvedForRef.current = null;
         setCurrentOrgId(null);
         setOrgLoading(false);
       }
-      // TOKEN_REFRESHED, USER_UPDATED, PASSWORD_RECOVERY — no org change needed
+      // TOKEN_REFRESHED, USER_UPDATED, PASSWORD_RECOVERY — resolveOrg skip guard handles these
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   async function signIn(email: string, password: string): Promise<{ error: string | null }> {
-    // Reset resolved cache on a fresh sign-in so a different user gets re-resolved
+    // Reset the resolved cache so a fresh sign-in (possibly a different user)
+    // always runs resolveOrg rather than hitting the skip guard.
     resolvedForRef.current = null;
-    setOrgLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setOrgLoading(false);
-      return { error: error.message };
-    }
-    // resolveOrg will be triggered by the SIGNED_IN event in onAuthStateChange
+    if (error) return { error: error.message };
+    // SIGNED_IN fires in onAuthStateChange → resolveOrg() handles orgLoading
     return { error: null };
   }
 
