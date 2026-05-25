@@ -428,7 +428,7 @@ export interface AppStore {
   updateSettings: (s: DBSettings) => Promise<void>;
 
   // Projects
-  addProject: (p: Project) => Promise<void>;
+  addProject: (p: Project) => Promise<string | null>;
   updateProject: (p: Project) => Promise<void>;
   removeProject: (id: string) => Promise<void>;
 
@@ -457,7 +457,7 @@ export interface AppStore {
   removeSiteForm: (id: string) => Promise<void>;
 
   // Tenders
-  addTender: (t: Tender) => Promise<void>;
+  addTender: (t: Tender) => Promise<string | null>;
   updateTender: (t: Tender) => Promise<void>;
   removeTender: (id: string) => Promise<void>;
 
@@ -590,13 +590,14 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
 
   // ── Projects ──────────────────────────────────────────────────────────────────
 
-  const addProject = useCallback(async (p: Project) => {
+  const addProject = useCallback(async (p: Project): Promise<string | null> => {
     console.log('[VYSITE] addProject called, id:', p.id, 'orgId:', orgIdRef.current);
     const oid = getOrgId(orgIdRef.current);
-    if (!oid) return;
+    if (!oid) return 'No organisation context — cannot save project.';
     setProjects(prev => [...prev, p]);
     const { data, error } = await supabase.from('vy_projects').upsert({ ...projectToDB(p), org_id: oid }, { onConflict: 'id' }).select('id,name,org_id').maybeSingle();
     logWrite('addProject', 'vy_projects', error, data);
+    return error ? `Save failed: ${error.message}` : null;
   }, []);
 
   const updateProject = useCallback(async (p: Project) => {
@@ -707,13 +708,14 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
 
   // ── Tenders ───────────────────────────────────────────────────────────────────
 
-  const addTender = useCallback(async (t: Tender) => {
+  const addTender = useCallback(async (t: Tender): Promise<string | null> => {
     console.log('[VYSITE] addTender called, id:', t.id, 'orgId:', orgIdRef.current);
     const oid = getOrgId(orgIdRef.current);
-    if (!oid) return;
+    if (!oid) return 'No organisation context — cannot save tender.';
     setTenders(prev => [t, ...prev]);
     const { data, error } = await supabase.from('vy_tenders').upsert({ ...tenderToDB(t), org_id: oid }, { onConflict: 'id' }).select('id,name,org_id').maybeSingle();
     logWrite('addTender', 'vy_tenders', error, data);
+    return error ? `Save failed: ${error.message}` : null;
   }, []);
 
   const updateTender = useCallback(async (t: Tender) => {
