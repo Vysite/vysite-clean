@@ -16,6 +16,7 @@ import {
   FlaskConical,
   MessageSquareDot,
 } from 'lucide-react';
+import type { LucideIcon } from '../data/types';
 import { useAppStore } from '../lib/StoreContext';
 import { switchUser } from '../lib/store';
 
@@ -41,7 +42,7 @@ interface SidebarProps {
   onCloseMobile: () => void;
 }
 
-const navItems: { id: Page; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+const navItems: { id: Page; label: string; icon: LucideIcon }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'tenders', label: 'Tender & Estimating', icon: FileSpreadsheet },
   { id: 'projects', label: 'Projects', icon: FolderOpen },

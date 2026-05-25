@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader, AlertTriangle, CheckCircle, FileText, HelpCircle, Plus, Save, RotateCcw, Upload, FileSearch, File, Layers, RefreshCw, Trash2 } from 'lucide-react';
-import type { TenderRFI, TenderScopeEntry, RFIStatus, StoredAIReview, AIReviewRFI, AIReviewRisk } from '../data/types';
+import type { TenderRFI, TenderScopeEntry, RFIStatus, StoredAIReview, AIReviewRFI, AIReviewRisk, LucideIcon } from '../data/types';
 import { splitPdfIntoChunks, getPdfPageCount, type PdfChunk } from '../lib/pdfChunker';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ interface Props {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const TASKS: { id: AITask; label: string; description: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+const TASKS: { id: AITask; label: string; description: string; icon: LucideIcon }[] = [
   { id: 'review-document',     label: 'Review Document',      description: 'Upload a tender document for full AI commercial review', icon: FileSearch   },
   { id: 'draft-rfi',           label: 'Draft RFI',            description: 'Convert rough notes into a professional RFI',            icon: HelpCircle   },
   { id: 'suggest-assumptions', label: 'Suggest Assumptions',  description: 'Generate practical pricing & programme assumptions',     icon: CheckCircle  },
@@ -252,7 +252,6 @@ type ReviewTab = 'rfis' | 'assumptions' | 'exclusions' | 'scopeNotes' | 'risks';
 
 function DocumentReviewOutput({
   review,
-  rfiCount,
   onSaveRFIs,
   onSaveList,
   onConvertRisk,
@@ -260,7 +259,6 @@ function DocumentReviewOutput({
   onEditListItem,
 }: {
   review: StoredAIReview;
-  rfiCount: number;
   onSaveRFIs: (items: Array<{ rfi: RFIResult; index: number }>) => void;
   onSaveList: (indices: number[], texts: string[], category: string) => void;
   onConvertRisk: (risk: RiskResult, action: string, i: number) => void;
@@ -283,13 +281,13 @@ function DocumentReviewOutput({
     }) ?? 'rfis';
   const [activeTab, setActiveTab] = useState<ReviewTab>(firstNonEmpty);
 
-  const tabs: { id: ReviewTab; label: string; count: number; saved: number; color: string }[] = [
-    { id: 'rfis',        label: 'RFIs',        count: rfis.length,        saved: review.savedRfiIndices.length,         color: 'blue'    },
-    { id: 'assumptions', label: 'Assumptions',  count: assumptions.length,  saved: review.savedAssumptionIndices.length,  color: 'emerald' },
-    { id: 'exclusions',  label: 'Exclusions',   count: exclusions.length,   saved: review.savedExclusionIndices.length,   color: 'orange'  },
-    { id: 'scopeNotes',  label: 'Scope Notes',  count: scopeNotes.length,   saved: review.savedScopeNoteIndices.length,   color: 'teal'    },
-    { id: 'risks',       label: 'Risks',        count: review.risks.length, saved: review.convertedRiskIndices.length,    color: 'red'     },
-  ].filter(t => t.count > 0);
+  const tabs: { id: ReviewTab; label: string; count: number; saved: number; color: string }[] = ([
+    { id: 'rfis' as ReviewTab,        label: 'RFIs',        count: rfis.length,        saved: review.savedRfiIndices.length,         color: 'blue'    },
+    { id: 'assumptions' as ReviewTab, label: 'Assumptions',  count: assumptions.length,  saved: review.savedAssumptionIndices.length,  color: 'emerald' },
+    { id: 'exclusions' as ReviewTab,  label: 'Exclusions',   count: exclusions.length,   saved: review.savedExclusionIndices.length,   color: 'orange'  },
+    { id: 'scopeNotes' as ReviewTab,  label: 'Scope Notes',  count: scopeNotes.length,   saved: review.savedScopeNoteIndices.length,   color: 'teal'    },
+    { id: 'risks' as ReviewTab,       label: 'Risks',        count: review.risks.length, saved: review.convertedRiskIndices.length,    color: 'red'     },
+  ] as { id: ReviewTab; label: string; count: number; saved: number; color: string }[]).filter(t => t.count > 0);
 
   const tabColorMap: Record<string, string> = {
     blue:    'border-blue-500/60 text-blue-300',
@@ -359,7 +357,6 @@ function DocumentReviewOutput({
           <ReviewRFIList
             rfis={rfis}
             savedIndices={review.savedRfiIndices}
-            rfiCount={rfiCount}
             onSave={onSaveRFIs}
             onEdit={onEditRfi}
           />
@@ -406,10 +403,9 @@ function DocumentReviewOutput({
   );
 }
 
-function ReviewRFIList({ rfis, savedIndices, rfiCount, onSave, onEdit }: {
+function ReviewRFIList({ rfis, savedIndices, onSave, onEdit }: {
   rfis: RFIResult[];
   savedIndices: number[];
-  rfiCount: number;
   onSave: (items: Array<{ rfi: RFIResult; index: number }>) => void;
   onEdit: (i: number, field: keyof RFIResult, value: string) => void;
 }) {
@@ -973,7 +969,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     }
   }
 
-  async function runConsolidation(fileName: string, chunks: PdfChunk[], pageCount: number): Promise<DocumentReviewResult> {
+  async function runConsolidation(_fileName: string, chunks: PdfChunk[], pageCount: number): Promise<DocumentReviewResult> {
     const consolidationIdx = chunks.length;
     const successfulResults = (chunkResultsRef.current).filter((r): r is DocumentReviewResult => r !== null);
 
@@ -1162,7 +1158,6 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
               </div>
               <DocumentReviewOutput
                 review={review}
-                rfiCount={tender.rfis.length}
                 onSaveRFIs={handleReviewSaveRFIs}
                 onSaveList={handleReviewSaveList}
                 onConvertRisk={handleReviewConvertRisk}
@@ -1249,7 +1244,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
           )}
 
           {/* Context input for non-document tasks */}
-          {selectedTask !== 'review-document' && !singleResult && (
+          {selectedTask !== 'review-document' && singleResult === null && (
             <div>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                 {selectedTask === 'draft-rfi' ? 'Your Rough Notes' :
@@ -1287,7 +1282,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
           )}
 
           {/* Single-task results */}
-          {singleResult && !error && selectedTask !== 'review-document' && (
+          {singleResult !== null && !error && selectedTask !== 'review-document' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">AI Draft — Review &amp; Edit Before Saving</p>
@@ -1306,7 +1301,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
         </div>
 
         {/* Footer — generate button */}
-        {!review && !isChunking && !singleResult && (
+        {!review && !isChunking && singleResult === null && (
           <div className="flex items-center justify-between px-5 py-4 border-t border-[#1e2d4a] shrink-0 bg-[#0d1628]/50">
             <p className="text-[10px] text-slate-600 max-w-xs leading-snug">
               AI suggestions are drafts only. Review and edit all output before saving.

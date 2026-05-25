@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { LucideIcon } from '../data/types';
 import { Plus, X, Search, ChevronDown, CheckCircle, FileText, Activity, Zap, Wind, Droplets, Thermometer, Settings, ClipboardList, Filter, Printer, Trash2, Eye, Download, Paperclip, CreditCard as Edit2 } from 'lucide-react';
 import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
@@ -70,7 +71,7 @@ function tcToDB(r: TCRecord): DBTCRecord {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const categoryConfig: Record<TCCategory, { icon: React.ComponentType<{ size?: number; className?: string }>; color: string; bg: string; border: string; description: string }> = {
+const categoryConfig: Record<TCCategory, { icon: LucideIcon; color: string; bg: string; border: string; description: string }> = {
   'AHU Commissioning':      { icon: Wind,         color: 'text-blue-400',    bg: 'bg-blue-900/60',    border: 'border-l-blue-700',    description: 'Air handling unit commissioning records & data sheets' },
   'Plantroom Testing':      { icon: Settings,      color: 'text-amber-400',   bg: 'bg-amber-900/60',   border: 'border-l-amber-700',   description: 'Plant room equipment testing and performance verification' },
   'Pipework Pressure Test': { icon: Droplets,      color: 'text-cyan-400',    bg: 'bg-cyan-900/60',    border: 'border-l-cyan-700',    description: 'Hydraulic pressure testing records for pipework systems' },

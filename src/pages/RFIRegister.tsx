@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Search, Plus, Paperclip, ChevronDown, Clock, FileQuestion, X } from 'lucide-react';
 import { useAppStore } from '../lib/StoreContext';
-import type { DBSiteForm } from '../lib/store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,7 +80,7 @@ interface RFIRegisterProps {
 }
 
 export default function RFIRegister({
-  rfis, onNewRFI, onOpenTicket, onUpdateStatus, filterProject, onFilterProject,
+  rfis, onNewRFI, onOpenTicket, filterProject, onFilterProject,
 }: RFIRegisterProps) {
   const store = useAppStore();
   const [search, setSearch] = useState('');

@@ -1,3 +1,8 @@
+import type React from 'react';
+
+// Shared type for Lucide icon components (size accepts number or string per Lucide's own props)
+export type LucideIcon = React.ComponentType<{ size?: number | string; className?: string }>;
+
 export type ProjectStatus = 'Active' | 'On Hold' | 'Completed' | 'Tender';
 
 export interface Project {
