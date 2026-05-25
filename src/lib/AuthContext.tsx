@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
+const DEV = import.meta.env.DEV;
+
 interface AuthState {
   session: Session | null;
   user: User | null;
@@ -24,8 +26,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [orgLoading, setOrgLoading] = useState(true);
 
   async function resolveOrg(userId: string) {
+    if (DEV) console.log('[VYSITE] resolveOrg() for user:', userId);
     setOrgLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('user_orgs')
       .select('org_id')
       .eq('user_id', userId)
@@ -33,12 +36,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
-    setCurrentOrgId(data?.org_id ?? null);
+    const resolved = data?.org_id ?? null;
+    if (DEV) console.log('[VYSITE] resolveOrg() result:', resolved, error ?? '');
+    setCurrentOrgId(resolved);
     setOrgLoading(false);
   }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
+      if (DEV) console.log('[VYSITE] getSession() user:', data.session?.user?.id ?? 'none');
       setSession(data.session);
       setLoading(false);
       if (data.session?.user) {
@@ -51,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (DEV) console.log('[VYSITE] onAuthStateChange:', _event, newSession?.user?.id ?? 'none');
       setSession(newSession);
       if (newSession?.user) {
         (async () => { await resolveOrg(newSession.user.id); })();

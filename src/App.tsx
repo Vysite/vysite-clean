@@ -102,8 +102,8 @@ export default function App() {
     }
   };
 
-  // Show spinner while auth session or org membership is being resolved
-  if (auth.loading || auth.orgLoading) {
+  // Waiting for Supabase to confirm whether a session exists
+  if (auth.loading) {
     return (
       <div className="min-h-screen bg-[#111827] flex items-center justify-center">
         <div className="text-center">
@@ -114,9 +114,22 @@ export default function App() {
     );
   }
 
-  // Unauthenticated — show login gate
+  // Unauthenticated — show login gate immediately, no need to wait for org
   if (!auth.session) {
     return <Login />;
+  }
+
+  // Session exists but org membership is still being resolved — hold here so
+  // currentOrgId is guaranteed non-null before any write-capable UI is shown
+  if (auth.orgLoading) {
+    return (
+      <div className="min-h-screen bg-[#111827] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-xl bg-[#f97316] flex items-center justify-center font-black text-white text-2xl mx-auto mb-4">V</div>
+          <p className="text-slate-400 text-sm">Loading VYSITE...</p>
+        </div>
+      </div>
+    );
   }
 
   if (store.loading) {
