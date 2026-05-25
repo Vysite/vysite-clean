@@ -49,7 +49,7 @@ export default function App() {
   const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null);
   const [pendingFilter, setPendingFilter] = useState<PendingFilter | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
-  const store = useStore();
+  const store = useStore(auth.currentOrgId);
 
   function navigateTo(page: Page, filter?: PendingFilter, open?: PendingOpen) {
     setActivePage(page);
@@ -102,8 +102,8 @@ export default function App() {
     }
   };
 
-  // Show spinner while Supabase auth session is being resolved
-  if (auth.loading) {
+  // Show spinner while auth session or org membership is being resolved
+  if (auth.loading || auth.orgLoading) {
     return (
       <div className="min-h-screen bg-[#111827] flex items-center justify-center">
         <div className="text-center">
