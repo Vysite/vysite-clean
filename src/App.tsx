@@ -50,6 +50,7 @@ export default function App() {
   const [pendingFilter, setPendingFilter] = useState<PendingFilter | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
   const store = useStore(auth.currentOrgId, auth.user?.id ?? null);
+  const showDebug = typeof window !== 'undefined' && window.location.search.includes('debug');
 
   function navigateTo(page: Page, filter?: PendingFilter, open?: PendingOpen) {
     setActivePage(page);
@@ -145,6 +146,19 @@ export default function App() {
 
   return (
     <StoreContext.Provider value={store}>
+      {showDebug && (
+        <div style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 9999, background: '#0d1117', border: '1px solid #f97316', borderRadius: 8, padding: '10px 14px', fontSize: 11, fontFamily: 'monospace', color: '#e2e8f0', maxWidth: 340, lineHeight: 1.6, pointerEvents: 'none' }}>
+          <div style={{ color: '#f97316', fontWeight: 700, marginBottom: 4 }}>VYSITE DEBUG</div>
+          <div>auth.loading: <b>{String(auth.loading)}</b></div>
+          <div>auth.orgLoading: <b>{String(auth.orgLoading)}</b></div>
+          <div>auth.user.id: <b>{auth.user?.id ?? 'null'}</b></div>
+          <div>auth.currentOrgId: <b style={{ color: auth.currentOrgId ? '#4ade80' : '#f87171' }}>{auth.currentOrgId ?? 'null'}</b></div>
+          <div>store.loading: <b>{String(store.loading)}</b></div>
+          <div>store.currentOrgId: <b style={{ color: store.currentOrgId ? '#4ade80' : '#f87171' }}>{store.currentOrgId ?? 'null'}</b></div>
+          <div>currentUser: <b>{store.currentUser?.name ?? 'null'}</b></div>
+          <div>platformUsers: <b>{store.platformUsers.length}</b></div>
+        </div>
+      )}
       <EnvBanner />
       <div className="min-h-screen bg-[#111827] flex">
         <Sidebar
