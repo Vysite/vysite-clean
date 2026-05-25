@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { AlertTriangle, CheckSquare, FolderOpen, Clock, FileText, ArrowRight, Activity, Wrench, ClipboardList, FileSpreadsheet } from 'lucide-react';
 import { useAppStore } from '../lib/StoreContext';
 import type { PendingFilter, PendingOpen } from '../App';
+import type { LucideIcon } from '../data/types';
 
 function StatCard({
   title,
@@ -15,7 +16,7 @@ function StatCard({
   title: string;
   value: string | number;
   subtitle: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   color: string;
   onClick?: () => void;
   alert?: boolean;
@@ -82,7 +83,7 @@ interface ActivityItem {
 }
 
 function ActivityIcon({ type }: { type: ActivityItemType }) {
-  const map: Record<ActivityItemType, { icon: React.ComponentType<{ size?: number; className?: string }>; color: string }> = {
+  const map: Record<ActivityItemType, { icon: LucideIcon; color: string }> = {
     action:  { icon: CheckSquare,    color: 'bg-blue-900/60 text-blue-400' },
     snag:    { icon: AlertTriangle,  color: 'bg-red-900/60 text-red-400' },
     form:    { icon: ClipboardList,  color: 'bg-emerald-900/60 text-emerald-400' },

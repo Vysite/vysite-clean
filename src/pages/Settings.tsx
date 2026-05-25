@@ -4,6 +4,7 @@ import {
   ChevronRight, ToggleLeft, ToggleRight, Save, Upload,
   Hash, CheckSquare, ArrowLeft,
 } from 'lucide-react';
+import type { LucideIcon } from '../data/types';
 import { useAppStore } from '../lib/StoreContext';
 import type { DBSettings } from '../lib/store';
 
@@ -406,7 +407,7 @@ function OperationalSettings({ settings, onSave }: { settings: DBSettings; onSav
 
 // ─── Coming Soon placeholder ──────────────────────────────────────────────────
 
-function ComingSoon({ title, icon: Icon }: { title: string; icon: React.ComponentType<{ size?: number; className?: string }> }) {
+function ComingSoon({ title, icon: Icon }: { title: string; icon: LucideIcon }) {
   return (
     <div className="py-12 text-center">
       <div className="w-14 h-14 bg-[#0d1628] rounded-2xl flex items-center justify-center mx-auto mb-4">

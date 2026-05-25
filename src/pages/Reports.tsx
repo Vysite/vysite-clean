@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { FileText, Download, BarChart3, TrendingUp, Calendar, X, Printer, ChevronDown } from 'lucide-react';
 import { openPrintTab, buildPrintDocument } from '../lib/printTab';
-import type { Action, Snag } from '../data/types';
+import type { Action, Snag, Tender, Project } from '../data/types';
 import { useAppStore } from '../lib/StoreContext';
 import type { DBSiteForm, DBTCRecord } from '../lib/store';
 
@@ -173,7 +173,7 @@ function BulkProjectStatus({ filterProject, today, projects }: { filterProject: 
 }
 
 // Bulk: Snag Summary
-function BulkSnagSummary({ snags, filterProject, today }: { snags: Snag[]; filterProject: string; today: string }) {
+function BulkSnagSummary({ snags, filterProject, today, projects }: { snags: Snag[]; filterProject: string; today: string; projects: Project[] }) {
   const filtered = filterProject === 'All' ? snags : snags.filter(s => s.projectName === filterProject);
   const priorities = ['Critical', 'High', 'Medium', 'Low'] as const;
   return (
@@ -296,9 +296,9 @@ function BulkFormsLog({ forms, filterProject, today }: { forms: DBSiteForm[]; fi
   );
 }
 
-function BulkTenderPipeline({ tenders, today }: { tenders: import('../lib/store').DBTender[]; today: string }) {
+function BulkTenderPipeline({ tenders, today }: { tenders: Tender[]; today: string }) {
   const active = tenders.filter(t => !['Won', 'Lost', 'No Bid'].includes(t.status));
-  const totalValue = tenders.reduce((sum, t) => sum + (t.estimated_value ?? 0), 0);
+  const totalValue = tenders.reduce((sum, t) => sum + (t.estimatedValue ?? 0), 0);
   const fmt = (n: number) => n >= 1000000 ? `£${(n / 1000000).toFixed(2)}m` : n >= 1000 ? `£${(n / 1000).toFixed(0)}k` : `£${n.toLocaleString()}`;
   return (
     <>
@@ -319,8 +319,8 @@ function BulkTenderPipeline({ tenders, today }: { tenders: import('../lib/store'
               <td className={t.status === 'Won' ? 'rpt-complete' : t.status === 'Lost' ? 'rpt-overdue' : 'rpt-inprogress'}>{t.status}</td>
               <td>{t.priority}</td>
               <td>{t.owner}</td>
-              <td>{t.return_date ? new Date(t.return_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}</td>
-              <td style={{ fontWeight: 600 }}>{t.estimated_value ? fmt(t.estimated_value) : '—'}</td>
+              <td>{t.returnDate ? new Date(t.returnDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}</td>
+              <td style={{ fontWeight: 600 }}>{t.estimatedValue ? fmt(t.estimatedValue) : '—'}</td>
               <td>{t.progress != null ? `${t.progress}%` : '—'}</td>
             </tr>
           ))}
@@ -352,9 +352,9 @@ function PrintPreviewModal({
   snags: Snag[];
   actions: Action[];
   forms: DBSiteForm[];
-  tenders: import('../lib/store').DBTender[];
+  tenders: Tender[];
   today: string;
-  projects: import('../data/types').Project[];
+  projects: Project[];
 }) {
   const title = printMode.kind === 'bulk'
     ? (REPORT_TYPE_CARDS.find(r => r.id === printMode.reportId)?.name ?? 'Report')
@@ -399,7 +399,7 @@ function PrintPreviewModal({
           </div>
           <div className="text-sm text-gray-800">
             {printMode.kind === 'bulk' && printMode.reportId === 'project-status' && <BulkProjectStatus filterProject={printMode.filterProject} today={today} projects={projects} />}
-            {printMode.kind === 'bulk' && printMode.reportId === 'snag-summary' && <BulkSnagSummary snags={snags} filterProject={printMode.filterProject} today={today} />}
+            {printMode.kind === 'bulk' && printMode.reportId === 'snag-summary' && <BulkSnagSummary snags={snags} filterProject={printMode.filterProject} today={today} projects={projects} />}
             {printMode.kind === 'bulk' && printMode.reportId === 'actions-report' && <BulkActionsReport actions={actions} filterProject={printMode.filterProject} today={today} />}
             {printMode.kind === 'bulk' && printMode.reportId === 'forms-log' && <BulkFormsLog forms={forms} filterProject={printMode.filterProject} today={today} />}
             {printMode.kind === 'bulk' && printMode.reportId === 'tender-pipeline' && <BulkTenderPipeline tenders={tenders} today={today} />}
@@ -446,9 +446,9 @@ function buildReportHTML(
   snags: Snag[],
   actions: Action[],
   forms: DBSiteForm[],
-  tenders: import('../lib/store').DBTender[],
+  tenders: Tender[],
   today: string,
-  projects: import('../data/types').Project[],
+  projects: Project[],
 ): string {
   const title = mode.kind === 'bulk'
     ? (REPORT_TYPE_CARDS.find(r => r.id === mode.reportId)?.name ?? 'Report')
@@ -521,8 +521,8 @@ function buildReportHTML(
       <td style="font-weight:600">${t.name}</td><td>${t.client}</td>
       <td class="${t.status === 'Won' ? 'c-complete' : 'c-inprogress'}">${t.status}</td>
       <td>${t.priority}</td><td>${t.owner}</td>
-      <td>${t.return_date ? new Date(t.return_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}</td>
-      <td style="font-weight:600">${t.estimated_value ? fmt(t.estimated_value) : '—'}</td>
+      <td>${t.returnDate ? new Date(t.returnDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}</td>
+      <td style="font-weight:600">${t.estimatedValue ? fmt(t.estimatedValue) : '—'}</td>
       <td>${t.progress != null ? `${t.progress}%` : '—'}</td>
     </tr>`).join('');
     content = `<p style="font-size:12px;color:#475569;margin-bottom:16px">Tender pipeline as at ${today}. ${tenders.length} total. Active: ${active.length} | Won: ${tenders.filter(t => t.status === 'Won').length} | Lost: ${tenders.filter(t => t.status === 'Lost').length}</p>

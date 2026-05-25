@@ -15,6 +15,7 @@ import type {
   SubcontractorStatus,
   RFIStatus,
   EstimateItem,
+  LucideIcon,
 } from '../data/types';
 import { useAppStore } from '../lib/StoreContext';
 import type { DBNotification, DBAttachment } from '../lib/store';
@@ -94,7 +95,7 @@ function renderMentions(text: string) {
 const TABS = ['Overview', 'Estimating', 'Scope Notes', 'Assumptions', 'Exclusions', 'Discussion', 'Subcontractors', 'RFIs', 'Documents', 'Outcome'] as const;
 type Tab = typeof TABS[number];
 
-const tabIcons: Record<Tab, React.ComponentType<{ size?: number; className?: string }>> = {
+const tabIcons: Record<Tab, LucideIcon> = {
   Overview:       TrendingUp,
   Estimating:     Calculator,
   'Scope Notes':  FileText,
@@ -738,7 +739,7 @@ interface TenderRFIRegisterProps {
   onDeleteRFI: (rfi: TenderRFI) => void;
 }
 
-function TenderRFIRegister({ rfis, attachments, onAddRFI, onEditRFI, onOpenRFI, onUpdateStatus, onDeleteRFI }: TenderRFIRegisterProps) {
+function TenderRFIRegister({ rfis, attachments, onAddRFI, onEditRFI, onOpenRFI, onDeleteRFI }: TenderRFIRegisterProps) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'All' | 'Open' | 'Overdue' | RFIStatus>('All');
   const today = new Date().toISOString().slice(0, 10);
@@ -1098,7 +1099,7 @@ function AddSubcontractorModal({ tenderId, tenderName, onClose, onSave, initial 
       package: form.package,
       company: form.company,
       contact: form.contact,
-      dateSent: form.dateSent || undefined,
+      dateSent: form.dateSent,
       returnDue: form.returnDue,
       status: form.status,
       notes: form.notes,
@@ -1303,13 +1304,13 @@ function EditTenderModal({ tender, onClose, onSave, onDelete }: EditTenderModalP
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Status</label>
-              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputCls}>
+              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as TenderStatus }))} className={inputCls}>
                 {(['New Enquiry','Reviewing','Pricing','Awaiting Subcontractor Returns','Submitted','Negotiation','Won','Lost','No Bid'] as TenderStatus[]).map(s => <option key={s}>{s}</option>)}
               </select>
             </div>
             <div>
               <label className={labelCls}>Priority</label>
-              <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))} className={inputCls}>
+              <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value as TenderPriority }))} className={inputCls}>
                 <option>Critical</option><option>High</option><option>Medium</option><option>Low</option>
               </select>
             </div>
@@ -2130,10 +2131,8 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject }: TenderDe
   const [activeTab, setActiveTab] = useState<Tab>('Overview');
   const [newComment, setNewComment] = useState('');
   const [editNotes, setEditNotes] = useState(tender.internalNotes);
-  const [scopeNotes, setScopeNotes] = useState(tender.scopeNotes ?? { summary: '', inclusions: '', exclusions: '', assumptions: '', risks: '', opportunities: '', specialistItems: '', siteVisitNotes: '' });
+  const scopeNotes = tender.scopeNotes ?? { summary: '', inclusions: '', exclusions: '', assumptions: '', risks: '', opportunities: '', specialistItems: '', siteVisitNotes: '' };
   const [scopeEntries, setScopeEntries] = useState<TenderScopeEntry[]>(tender.scopeEntries ?? []);
-  const [addScopeCategory, setAddScopeCategory] = useState<string | null>(null);
-  const [newScopeText, setNewScopeText] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
   const [mentionSearch, setMentionSearch] = useState('');
 
@@ -3411,7 +3410,12 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
         <ConfirmDeleteModal
           title="Delete Tender"
           description="This tender and all its data will be permanently deleted."
-          onConfirm={() => { store.removeTender(deleteConfirm); setDeleteConfirm(null); if (selectedTender?.id === deleteConfirm) setSelectedTender(null); }}
+          onConfirm={() => {
+            const id = deleteConfirm;
+            store.removeTender(id);
+            setDeleteConfirm(null);
+            setSelectedTender(prev => (prev?.id === id ? null : prev));
+          }}
           onCancel={() => setDeleteConfirm(null)}
         />
       )}

@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { MessageSquare, Bug, Paperclip, Send, Info } from 'lucide-react';
+import type { LucideIcon } from '../data/types';
 
 function TextareaCard({
   title,
@@ -12,7 +13,7 @@ function TextareaCard({
 }: {
   title: string;
   description: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   iconColor: string;
   placeholder: string;
   submitLabel: string;

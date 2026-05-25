@@ -333,9 +333,113 @@ The banner reads the `VITE_APP_ENV` variable injected by Vercel at build time.
 
 ---
 
+## Branch Protection Setup
+
+After pushing this repository to GitHub, apply these rules manually in **GitHub → Settings → Branches**.
+
+### `main` — production (strictest)
+
+| Setting | Value |
+|---|---|
+| Require pull request before merging | Yes |
+| Required approving reviews | 1 |
+| Dismiss stale reviews on new commits | Yes |
+| Require status checks to pass | Yes |
+| Required checks | `typecheck`, `build` |
+| Require branch to be up to date | Yes |
+| Include administrators | Yes |
+| Allow force pushes | No |
+| Allow deletions | No |
+
+### `staging` — pre-release gate
+
+| Setting | Value |
+|---|---|
+| Require pull request before merging | Yes |
+| Required approving reviews | 1 |
+| Dismiss stale reviews on new commits | Yes |
+| Require status checks to pass | Yes |
+| Required checks | `typecheck`, `build` |
+| Require branch to be up to date | Yes |
+| Include administrators | No (admins may push staging hotfixes) |
+| Allow force pushes | No |
+| Allow deletions | No |
+
+### `develop` — active development
+
+| Setting | Value |
+|---|---|
+| Require pull request before merging | No (self-merge allowed) |
+| Require status checks to pass | Yes |
+| Required checks | `typecheck`, `build` |
+| Allow force pushes | No |
+| Allow deletions | No |
+
+---
+
+## Release Workflow
+
+```
+develop  ──── feature work, bug fixes ──────────────────────────────►
+                        │
+                        PR: develop → staging
+                        (staging_merge template)
+                        │
+                        ▼
+staging  ──── test gate ── regression ── sign-off ──────────────────►
+                        │
+                        PR: staging → main
+                        (production_release template)
+                        │
+                        ▼
+main     ──── production ── app.vysite.com ──────────────────────────►
+```
+
+### Step-by-step: promoting a feature to production
+
+**1. Develop on `develop` (or a feature branch)**
+```bash
+git checkout develop
+# make changes, commit
+git push origin develop
+```
+CI runs automatically. Fix any `typecheck` or `build` failures before proceeding.
+
+**2. Open a PR: `develop` → `staging`**
+Use the **staging_merge** PR template (`.github/PULL_REQUEST_TEMPLATE/staging_merge.md`).
+Complete all pre-merge checks in the template before requesting review.
+
+**3. Merge to `staging` after approval**
+Vercel automatically redeploys `staging.vysite.com`.
+Complete the full staging validation checklist in the PR template.
+Do not open the production PR until staging is signed off.
+
+**4. Open a PR: `staging` → `main`**
+Use the **production_release** PR template (`.github/PULL_REQUEST_TEMPLATE/production_release.md`).
+Every item in the checklist must be ticked before merging.
+
+**5. Merge to `main` after approval**
+Vercel automatically redeploys `app.vysite.com`.
+Verify the production deployment within 10 minutes of merge.
+
+---
+
+## GitHub Actions (CI)
+
+Two workflows run automatically on every push and PR:
+
+| Workflow | File | What it does |
+|---|---|---|
+| CI | `.github/workflows/ci.yml` | Runs `typecheck` and `build` — required status checks for all branch protection rules |
+| Production guard | `.github/workflows/production-guard.yml` | Fails if a push to `main` did not originate from `staging` — secondary safety net |
+
+The CI workflow uses stub Supabase environment variables so the build step succeeds without real credentials. Real credentials are injected by Vercel at deployment time.
+
+---
+
 ## Staging Sign-Off Checklist
 
-Complete this checklist before every production deployment:
+Complete this checklist before opening a `staging → main` PR:
 
 - [ ] All new features tested end-to-end on staging
 - [ ] PDF / export outputs verified (correct data, correct layout)
