@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabase';
 import type {
   Action, Snag, Tender, Project,
@@ -18,6 +18,8 @@ export interface DBPlatformUser {
   avatar_initials: string;
   join_date: string;
   assigned_project_ids: string[];
+  auth_user_id?: string | null;
+  org_id?: string | null;
   created_at?: string;
 }
 
@@ -419,13 +421,14 @@ export interface AppStore {
   notifications: DBNotification[];
   loading: boolean;
   currentUser: DBPlatformUser | null;
+  currentOrgId: string | null;
   visibleProjectIds: string[] | null; // null = all (Admin)
   switchUser: (name: string) => void;
   settings: DBSettings;
   updateSettings: (s: DBSettings) => Promise<void>;
 
   // Projects
-  addProject: (p: Project) => Promise<void>;
+  addProject: (p: Project) => Promise<string | null>;
   updateProject: (p: Project) => Promise<void>;
   removeProject: (id: string) => Promise<void>;
 
@@ -454,7 +457,7 @@ export interface AppStore {
   removeSiteForm: (id: string) => Promise<void>;
 
   // Tenders
-  addTender: (t: Tender) => Promise<void>;
+  addTender: (t: Tender) => Promise<string | null>;
   updateTender: (t: Tender) => Promise<void>;
   removeTender: (id: string) => Promise<void>;
 
@@ -474,22 +477,40 @@ export interface AppStore {
   markAllNotificationsRead: () => Promise<void>;
 }
 
-// Active session user — resolved from localStorage. Falls back to the first
-// Admin in the platform users list once auth is wired up.
-const DEFAULT_USER_NAME = '';
-
+// Legacy localStorage user-switching — kept for UI compatibility, no longer
+// drives currentUser resolution. currentUser is now derived from auth_user_id.
 let _activeUserName: string = (() => {
-  try { return localStorage.getItem('vysite_active_user') ?? DEFAULT_USER_NAME; } catch { return DEFAULT_USER_NAME; }
+  try { return localStorage.getItem('vysite_active_user') ?? ''; } catch { return ''; }
 })();
 
 export function switchUser(name: string) {
   _activeUserName = name;
   try { localStorage.setItem('vysite_active_user', name); } catch { /* ignore */ }
-  // Trigger re-render by forcing a page reload
   window.location.reload();
 }
 
-export function useStore(): AppStore {
+const DEV = import.meta.env.DEV;
+
+// Returns orgId or null. Always logs if missing — not gated on DEV — so the
+// failure is visible in the production browser console.
+function getOrgId(orgId: string | null): string | null {
+  if (!orgId) {
+    console.error('[VYSITE] Write blocked: currentOrgId is null. User may not have a user_orgs entry, or org resolution has not completed yet.');
+    return null;
+  }
+  return orgId;
+}
+
+function logWrite(op: string, table: string, error: unknown, data?: unknown) {
+  // Errors are always logged (production + dev). Success is dev-only.
+  if (error) {
+    console.error(`[VYSITE] ${op} ${table} FAILED:`, error);
+  } else if (DEV) {
+    console.log(`[VYSITE] ${op} ${table} OK`, data ?? '');
+  }
+}
+
+export function useStore(orgId: string | null, authUserId: string | null): AppStore {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectDocuments, setProjectDocuments] = useState<DBProjectDocument[]>([]);
   const [attachments, setAttachments] = useState<DBAttachment[]>([]);
@@ -503,33 +524,66 @@ export function useStore(): AppStore {
   const [settings, setSettings] = useState<DBSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
+  // Keep a stable ref to orgId so callbacks always read the latest value
+  // without needing to be re-created (avoids cascading re-renders).
+  const orgIdRef = useRef(orgId);
+  orgIdRef.current = orgId;
+
   useEffect(() => {
+    // Block all data loading if org context is not resolved.
+    // This prevents global reads and cross-org data leakage.
+    if (!orgId) {
+      setProjects([]);
+      setProjectDocuments([]);
+      setAttachments([]);
+      setActions([]);
+      setSnags([]);
+      setSiteForms([]);
+      setTenders([]);
+      setTCRecords([]);
+      setNotifications([]);
+      // Keep platformUsers/settings as-is — they load below with org filter
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
-    // Safety net: if Supabase never responds (wrong URL/key), stop the spinner
-    // after 15 s so the app renders rather than showing a permanent black screen.
     const loadingTimeout = setTimeout(() => {
       if (!cancelled) setLoading(false);
     }, 15000);
 
     async function load() {
+      console.log('[VYSITE] store.load() started, orgId:', orgId);
       const ATT_COLS = 'id,linked_type,linked_id,project_id,project_name,name,type,size,category,uploaded_by,created_at';
 
+      // All queries are explicitly scoped to the resolved org — no global reads.
       const [projRes, docRes, attRes, actRes, snaRes, frmRes, tenRes, tcRes, puRes, notifRes, settingsRes] = await Promise.all([
-        supabase.from('vy_projects').select('*').order('created_at', { ascending: true }),
-        supabase.from('vy_project_documents').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_attachments').select(ATT_COLS).order('created_at', { ascending: false }),
-        supabase.from('vy_actions').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_snags').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_site_forms').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_tenders').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_tc_records').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_platform_users').select('*').order('created_at', { ascending: true }),
-        supabase.from('vy_notifications').select('*').order('created_at', { ascending: false }),
-        supabase.from('vy_settings').select('*').eq('id', 'workspace').maybeSingle(),
+        supabase.from('vy_projects').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
+        supabase.from('vy_project_documents').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_actions').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_snags').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_site_forms').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_tenders').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_tc_records').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_platform_users').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
+        supabase.from('vy_notifications').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_settings').select('*').eq('org_id', orgId).maybeSingle(),
       ]);
 
       if (cancelled) return;
+
+      console.log('[VYSITE] load() results:',
+        'projects:', projRes.data?.length ?? 0,
+        '| platformUsers:', puRes.data?.length ?? 0,
+        '| tenders:', tenRes.data?.length ?? 0,
+        '| settings:', settingsRes.data ? 'found' : 'none',
+      );
+      if (projRes.error) console.error('[VYSITE] load vy_projects error:', projRes.error);
+      if (puRes.error) console.error('[VYSITE] load vy_platform_users error:', puRes.error);
+      if (tenRes.error) console.error('[VYSITE] load vy_tenders error:', tenRes.error);
+      if (settingsRes.error) console.error('[VYSITE] load vy_settings error:', settingsRes.error);
 
       setProjects((projRes.data ?? []).map(r => dbToProject(r as DBProject)));
       setProjectDocuments((docRes.data ?? []) as DBProjectDocument[]);
@@ -550,139 +604,192 @@ export function useStore(): AppStore {
       cancelled = true;
       clearTimeout(loadingTimeout);
     };
-  }, []);
+  }, [orgId]);
 
   // ── Projects ──────────────────────────────────────────────────────────────────
 
-  const addProject = useCallback(async (p: Project) => {
+  const addProject = useCallback(async (p: Project): Promise<string | null> => {
+    console.log('[VYSITE] addProject called, id:', p.id, 'orgId:', orgIdRef.current);
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return 'No organisation context — cannot save project.';
     setProjects(prev => [...prev, p]);
-    await supabase.from('vy_projects').upsert(projectToDB(p), { onConflict: 'id' });
+    const { data, error } = await supabase.from('vy_projects').upsert({ ...projectToDB(p), org_id: oid }, { onConflict: 'id' }).select('id,name,org_id').maybeSingle();
+    logWrite('addProject', 'vy_projects', error, data);
+    return error ? `Save failed: ${error.message}` : null;
   }, []);
 
   const updateProject = useCallback(async (p: Project) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setProjects(prev => prev.map(x => x.id === p.id ? p : x));
-    await supabase.from('vy_projects').upsert(projectToDB(p), { onConflict: 'id' });
+    const { data, error } = await supabase.from('vy_projects').upsert({ ...projectToDB(p), org_id: oid }, { onConflict: 'id' }).select('id,name').maybeSingle();
+    logWrite('updateProject', 'vy_projects', error, data);
   }, []);
 
   const removeProject = useCallback(async (id: string) => {
     setProjects(prev => prev.filter(p => p.id !== id));
-    await supabase.from('vy_projects').delete().eq('id', id);
+    const { error } = await supabase.from('vy_projects').delete().eq('id', id);
+    logWrite('removeProject', 'vy_projects', error, { id });
   }, []);
 
   // ── Project Documents ─────────────────────────────────────────────────────────
 
   const addProjectDocument = useCallback(async (d: DBProjectDocument) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setProjectDocuments(prev => [d, ...prev]);
-    await supabase.from('vy_project_documents').upsert(d, { onConflict: 'id' });
+    const { error } = await supabase.from('vy_project_documents').upsert({ ...d, org_id: oid }, { onConflict: 'id' });
+    logWrite('addProjectDocument', 'vy_project_documents', error);
   }, []);
 
   const removeProjectDocument = useCallback(async (id: string) => {
     setProjectDocuments(prev => prev.filter(d => d.id !== id));
-    await supabase.from('vy_project_documents').delete().eq('id', id);
+    const { error } = await supabase.from('vy_project_documents').delete().eq('id', id);
+    logWrite('removeProjectDocument', 'vy_project_documents', error);
   }, []);
 
   // ── Actions ───────────────────────────────────────────────────────────────────
 
   const addAction = useCallback(async (a: Action) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setActions(prev => [a, ...prev]);
-    await supabase.from('vy_actions').upsert(actionToDB(a), { onConflict: 'id' });
+    const { data, error } = await supabase.from('vy_actions').upsert({ ...actionToDB(a), org_id: oid }, { onConflict: 'id' }).select('id,title,org_id').maybeSingle();
+    logWrite('addAction', 'vy_actions', error, data);
   }, []);
 
   const updateAction = useCallback(async (a: Action) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setActions(prev => prev.map(x => x.id === a.id ? a : x));
-    await supabase.from('vy_actions').upsert(actionToDB(a), { onConflict: 'id' });
+    const { error } = await supabase.from('vy_actions').upsert({ ...actionToDB(a), org_id: oid }, { onConflict: 'id' });
+    logWrite('updateAction', 'vy_actions', error);
   }, []);
 
   const removeAction = useCallback(async (id: string) => {
     setActions(prev => prev.filter(a => a.id !== id));
     setAttachments(prev => prev.filter(a => !(a.linked_type === 'action' && a.linked_id === id)));
-    await supabase.from('vy_actions').delete().eq('id', id);
+    const { error } = await supabase.from('vy_actions').delete().eq('id', id);
+    logWrite('removeAction', 'vy_actions', error);
     await supabase.from('vy_attachments').delete().eq('linked_type', 'action').eq('linked_id', id);
   }, []);
 
   // ── Snags ─────────────────────────────────────────────────────────────────────
 
   const addSnag = useCallback(async (s: Snag) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setSnags(prev => [s, ...prev]);
-    await supabase.from('vy_snags').upsert(snagToDB(s), { onConflict: 'id' });
+    const { data, error } = await supabase.from('vy_snags').upsert({ ...snagToDB(s), org_id: oid }, { onConflict: 'id' }).select('id,title,org_id').maybeSingle();
+    logWrite('addSnag', 'vy_snags', error, data);
   }, []);
 
   const updateSnag = useCallback(async (s: Snag) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setSnags(prev => prev.map(x => x.id === s.id ? s : x));
-    await supabase.from('vy_snags').upsert(snagToDB(s), { onConflict: 'id' });
+    const { error } = await supabase.from('vy_snags').upsert({ ...snagToDB(s), org_id: oid }, { onConflict: 'id' });
+    logWrite('updateSnag', 'vy_snags', error);
   }, []);
 
   const removeSnag = useCallback(async (id: string) => {
     setSnags(prev => prev.filter(s => s.id !== id));
     setAttachments(prev => prev.filter(a => !(a.linked_type === 'snag' && a.linked_id === id)));
-    await supabase.from('vy_snags').delete().eq('id', id);
+    const { error } = await supabase.from('vy_snags').delete().eq('id', id);
+    logWrite('removeSnag', 'vy_snags', error);
     await supabase.from('vy_attachments').delete().eq('linked_type', 'snag').eq('linked_id', id);
   }, []);
 
   // ── Site Forms ────────────────────────────────────────────────────────────────
 
   const addSiteForm = useCallback(async (f: DBSiteForm) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setSiteForms(prev => [f, ...prev]);
-    await supabase.from('vy_site_forms').upsert(f, { onConflict: 'id' });
+    const { error } = await supabase.from('vy_site_forms').upsert({ ...f, org_id: oid }, { onConflict: 'id' });
+    logWrite('addSiteForm', 'vy_site_forms', error);
   }, []);
 
   const updateSiteForm = useCallback(async (f: DBSiteForm) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setSiteForms(prev => prev.map(x => x.id === f.id ? f : x));
-    await supabase.from('vy_site_forms').upsert(f, { onConflict: 'id' });
+    const { error } = await supabase.from('vy_site_forms').upsert({ ...f, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateSiteForm', 'vy_site_forms', error);
   }, []);
 
   const removeSiteForm = useCallback(async (id: string) => {
     setSiteForms(prev => prev.filter(f => f.id !== id));
-    await supabase.from('vy_site_forms').delete().eq('id', id);
+    const { error } = await supabase.from('vy_site_forms').delete().eq('id', id);
+    logWrite('removeSiteForm', 'vy_site_forms', error);
   }, []);
 
   // ── Tenders ───────────────────────────────────────────────────────────────────
 
-  const addTender = useCallback(async (t: Tender) => {
+  const addTender = useCallback(async (t: Tender): Promise<string | null> => {
+    console.log('[VYSITE] addTender called, id:', t.id, 'orgId:', orgIdRef.current);
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return 'No organisation context — cannot save tender.';
     setTenders(prev => [t, ...prev]);
-    await supabase.from('vy_tenders').upsert(tenderToDB(t), { onConflict: 'id' });
+    const { data, error } = await supabase.from('vy_tenders').upsert({ ...tenderToDB(t), org_id: oid }, { onConflict: 'id' }).select('id,name,org_id').maybeSingle();
+    logWrite('addTender', 'vy_tenders', error, data);
+    return error ? `Save failed: ${error.message}` : null;
   }, []);
 
   const updateTender = useCallback(async (t: Tender) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setTenders(prev => prev.map(x => x.id === t.id ? t : x));
-    await supabase.from('vy_tenders').upsert(tenderToDB(t), { onConflict: 'id' });
+    const { error } = await supabase.from('vy_tenders').upsert({ ...tenderToDB(t), org_id: oid }, { onConflict: 'id' });
+    logWrite('updateTender', 'vy_tenders', error);
   }, []);
 
   const removeTender = useCallback(async (id: string) => {
     setTenders(prev => prev.filter(t => t.id !== id));
-    await supabase.from('vy_tenders').delete().eq('id', id);
+    const { error } = await supabase.from('vy_tenders').delete().eq('id', id);
+    logWrite('removeTender', 'vy_tenders', error);
   }, []);
 
   // ── TC Records ────────────────────────────────────────────────────────────────
 
   const addTCRecord = useCallback(async (r: DBTCRecord) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setTCRecords(prev => [r, ...prev]);
-    await supabase.from('vy_tc_records').upsert(r, { onConflict: 'id' });
+    const { error } = await supabase.from('vy_tc_records').upsert({ ...r, org_id: oid }, { onConflict: 'id' });
+    logWrite('addTCRecord', 'vy_tc_records', error);
   }, []);
 
   const updateTCRecord = useCallback(async (r: DBTCRecord) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setTCRecords(prev => prev.map(x => x.id === r.id ? r : x));
-    await supabase.from('vy_tc_records').upsert(r, { onConflict: 'id' });
+    const { error } = await supabase.from('vy_tc_records').upsert({ ...r, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateTCRecord', 'vy_tc_records', error);
   }, []);
 
   const removeTCRecord = useCallback(async (id: string) => {
     setTCRecords(prev => prev.filter(r => r.id !== id));
-    await supabase.from('vy_tc_records').delete().eq('id', id);
+    const { error } = await supabase.from('vy_tc_records').delete().eq('id', id);
+    logWrite('removeTCRecord', 'vy_tc_records', error);
   }, []);
 
   // ── Attachments ───────────────────────────────────────────────────────────────
 
   const addAttachment = useCallback(async (a: DBAttachment) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setAttachments(prev => [a, ...prev]);
-    await supabase.from('vy_attachments').upsert(a, { onConflict: 'id' });
+    const { error } = await supabase.from('vy_attachments').upsert({ ...a, org_id: oid }, { onConflict: 'id' });
+    logWrite('addAttachment', 'vy_attachments', error);
   }, []);
 
   const removeAttachment = useCallback(async (id: string) => {
     setAttachments(prev => prev.filter(a => a.id !== id));
-    await supabase.from('vy_attachments').delete().eq('id', id);
+    const { error } = await supabase.from('vy_attachments').delete().eq('id', id);
+    logWrite('removeAttachment', 'vy_attachments', error);
   }, []);
 
-  // Fetch data_url on demand — not loaded on initial query to keep payload small
   const fetchAttachmentData = useCallback(async (id: string): Promise<string> => {
     const cached = attachments.find(a => a.id === id);
     if (cached?.data_url) return cached.data_url;
@@ -698,44 +805,67 @@ export function useStore(): AppStore {
 
   const addPlatformUser = useCallback(async (u: DBPlatformUser) => {
     setPlatformUsers(prev => [...prev, u]);
-    await supabase.from('vy_platform_users').upsert(u, { onConflict: 'id' });
+    const { data, error } = await supabase.from('vy_platform_users').upsert(u, { onConflict: 'id' }).select('id,name').maybeSingle();
+    logWrite('addPlatformUser', 'vy_platform_users', error, data);
   }, []);
 
   const updatePlatformUser = useCallback(async (u: DBPlatformUser) => {
     setPlatformUsers(prev => prev.map(x => x.id === u.id ? u : x));
-    await supabase.from('vy_platform_users').upsert(u, { onConflict: 'id' });
+    const { error } = await supabase.from('vy_platform_users').upsert(u, { onConflict: 'id' });
+    logWrite('updatePlatformUser', 'vy_platform_users', error);
   }, []);
 
   const removePlatformUser = useCallback(async (id: string) => {
     setPlatformUsers(prev => prev.filter(u => u.id !== id));
-    await supabase.from('vy_platform_users').delete().eq('id', id);
+    const { error } = await supabase.from('vy_platform_users').delete().eq('id', id);
+    logWrite('removePlatformUser', 'vy_platform_users', error);
   }, []);
 
   // ── Notifications ─────────────────────────────────────────────────────────────
 
   const addNotification = useCallback(async (n: DBNotification) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setNotifications(prev => [n, ...prev]);
-    await supabase.from('vy_notifications').upsert(n, { onConflict: 'id' });
+    const { error } = await supabase.from('vy_notifications').upsert({ ...n, org_id: oid }, { onConflict: 'id' });
+    logWrite('addNotification', 'vy_notifications', error);
   }, []);
 
   const markNotificationRead = useCallback(async (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    await supabase.from('vy_notifications').update({ read: true }).eq('id', id);
+    const { error } = await supabase.from('vy_notifications').update({ read: true }).eq('id', id);
+    logWrite('markNotificationRead', 'vy_notifications', error);
   }, []);
 
   const markAllNotificationsRead = useCallback(async () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    await supabase.from('vy_notifications').update({ read: true }).eq('read', false);
+    const { error } = await supabase.from('vy_notifications').update({ read: true }).eq('read', false);
+    logWrite('markAllNotificationsRead', 'vy_notifications', error);
   }, []);
 
   // ── Settings ──────────────────────────────────────────────────────────────────
 
   const updateSettings = useCallback(async (s: DBSettings) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
     setSettings(s);
-    await supabase.from('vy_settings').upsert({ ...s, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+    // Upsert by org_id — each org has exactly one settings row.
+    // id is set to the org_id string to satisfy the PK uniqueness requirement.
+    const { error } = await supabase.from('vy_settings').upsert(
+      { ...s, id: oid, org_id: oid, updated_at: new Date().toISOString() },
+      { onConflict: 'org_id' }
+    );
+    logWrite('updateSettings', 'vy_settings', error);
   }, []);
 
-  const currentUser = platformUsers.find(u => u.name === _activeUserName) ?? null;
+  // Resolve currentUser from the authenticated Supabase user id (auth_user_id).
+  // Fall back to the legacy localStorage name match so existing switchUser() UI
+  // still works during the transition period before full Phase 4 auth wiring.
+  const currentUser =
+    (authUserId ? platformUsers.find(u => u.auth_user_id === authUserId) : null)
+    ?? platformUsers.find(u => u.name === _activeUserName)
+    ?? null;
+
   const visibleProjectIds = !currentUser || currentUser.role === 'Admin'
     ? null
     : currentUser.assigned_project_ids;
@@ -746,6 +876,7 @@ export function useStore(): AppStore {
     platformUsers, notifications,
     loading,
     currentUser,
+    currentOrgId: orgId,
     visibleProjectIds,
     switchUser,
     settings,

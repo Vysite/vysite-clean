@@ -2979,41 +2979,51 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject }: TenderDe
 
 // ─── Create Tender Modal ──────────────────────────────────────────────────────
 
-function CreateTenderModal({ onClose, onSave }: { onClose: () => void; onSave: (t: Tender) => void }) {
+function CreateTenderModal({ onClose, onSave }: { onClose: () => void; onSave: (t: Tender) => Promise<string | null> }) {
   const store = useAppStore();
   const [form, setForm] = useState({
     name: '', client: '', location: '', returnDate: '', estimatedValue: '',
     owner: '', priority: 'High' as TenderPriority, nextAction: '', internalNotes: '',
   });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const inputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600';
   const labelCls = 'text-xs font-semibold text-slate-500 uppercase tracking-wider';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
+    setSaveError(null);
+    const today = new Date().toISOString().slice(0, 10);
     const t: Tender = {
       id: `t${Date.now()}`,
       ref: `TND-2026-${String(Math.floor(Math.random() * 900) + 100)}`,
       name: form.name,
       client: form.client,
       location: form.location,
-      receivedDate: '2026-05-19',
+      receivedDate: today,
       returnDate: form.returnDate,
       estimatedValue: parseFloat(form.estimatedValue.replace(/[^0-9.]/g, '')) || 0,
       status: 'New Enquiry',
       owner: form.owner,
       priority: form.priority,
-      lastUpdated: '2026-05-19',
+      lastUpdated: today,
       nextAction: form.nextAction,
       internalNotes: form.internalNotes,
       scopeNotes: { summary: '', inclusions: '', exclusions: '', assumptions: '', risks: '', opportunities: '', specialistItems: '', siteVisitNotes: '' },
+      scopeEntries: [],
       subcontractors: [],
       rfis: [],
       documents: [],
       comments: [],
       outcomeNotes: '',
+      progress: 0,
+      estimateItems: [],
     };
-    onSave(t);
+    const err = await onSave(t);
+    setSaving(false);
+    if (err) { setSaveError(err); return; }
     onClose();
   };
 
@@ -3025,6 +3035,11 @@ function CreateTenderModal({ onClose, onSave }: { onClose: () => void; onSave: (
           <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a] transition-colors"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {saveError && (
+            <div className="bg-red-900/40 border border-red-500/50 rounded-lg px-4 py-3 text-sm text-red-300">
+              {saveError}
+            </div>
+          )}
           <div><label className={labelCls}>Tender Name *</label><input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="e.g. Ward 5 Electrical Upgrade" /></div>
           <div><label className={labelCls}>Client *</label><input required value={form.client} onChange={e => setForm(f => ({ ...f, client: e.target.value }))} className={inputCls} placeholder="Client name" /></div>
           <div><label className={labelCls}>Site / Location</label><input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className={inputCls} placeholder="Site address" /></div>
@@ -3050,8 +3065,10 @@ function CreateTenderModal({ onClose, onSave }: { onClose: () => void; onSave: (
           <div><label className={labelCls}>Next Action</label><input value={form.nextAction} onChange={e => setForm(f => ({ ...f, nextAction: e.target.value }))} className={inputCls} placeholder="What needs to happen next?" /></div>
           <div><label className={labelCls}>Internal Notes</label><textarea value={form.internalNotes} onChange={e => setForm(f => ({ ...f, internalNotes: e.target.value }))} rows={2} className={`${inputCls} resize-none`} /></div>
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors">Cancel</button>
-            <button type="submit" className="flex-1 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">Create Tender</button>
+            <button type="button" onClick={onClose} disabled={saving} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={saving} className="flex-1 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50">
+              {saving ? 'Saving…' : 'Create Tender'}
+            </button>
           </div>
         </form>
       </div>

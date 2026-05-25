@@ -4,6 +4,7 @@ import { MobileMenuButton } from './Sidebar';
 import type { Page } from './Sidebar';
 import { useAppStore } from '../lib/StoreContext';
 import type { DBNotification } from '../lib/store';
+import { useAuth } from '../lib/AuthContext';
 
 interface HeaderProps {
   activePage: Page;
@@ -22,6 +23,7 @@ const pageTitles: Record<Page, string> = {
   testing: 'Testing & Commissioning',
   reports: 'Reports',
   users: 'Users',
+  'beta-feedback': 'BETA Feedback',
   settings: 'Settings',
 };
 
@@ -121,6 +123,7 @@ function NotificationPanel({ notifications, onClose, onMarkRead, onMarkAllRead, 
 
 function ProfileDropdown({ onNavigate, onClose }: { onNavigate: (page: Page) => void; onClose: () => void }) {
   const store = useAppStore();
+  const { signOut, user: authUser } = useAuth();
   const user = store.currentUser;
 
   function go(page: Page) {
@@ -128,12 +131,20 @@ function ProfileDropdown({ onNavigate, onClose }: { onNavigate: (page: Page) => 
     onClose();
   }
 
+  async function handleSignOut() {
+    onClose();
+    await signOut();
+  }
+
+  const displayEmail = authUser?.email ?? '';
+
   return (
-    <div className="absolute right-0 top-full mt-2 w-52 bg-[#1a2236] border border-[#1e2d4a] rounded-2xl shadow-2xl z-50 overflow-hidden">
+    <div className="absolute right-0 top-full mt-2 w-56 bg-[#1a2236] border border-[#1e2d4a] rounded-2xl shadow-2xl z-50 overflow-hidden">
       {/* User info header */}
       <div className="px-4 py-3 border-b border-[#1e2d4a]">
         <p className="text-sm font-semibold text-slate-200 leading-tight">{user?.name ?? 'My Account'}</p>
-        <p className="text-[11px] text-slate-500 mt-0.5">{user?.role ?? 'Administrator'}</p>
+        <p className="text-[11px] text-slate-500 mt-0.5">{user?.role ?? 'Authenticated User'}</p>
+        {displayEmail && <p className="text-[10px] text-slate-600 mt-0.5 truncate">{displayEmail}</p>}
       </div>
 
       <div className="py-1">
@@ -151,7 +162,10 @@ function ProfileDropdown({ onNavigate, onClose }: { onNavigate: (page: Page) => 
       </div>
 
       <div className="border-t border-[#1e2d4a] py-1">
-        <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-500 hover:bg-[#0d1628] hover:text-slate-300 transition-colors">
+        <button
+          onClick={handleSignOut}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-400 hover:bg-red-900/20 hover:text-red-400 transition-colors"
+        >
           <LogOut size={14} className="shrink-0" />Sign Out
         </button>
       </div>

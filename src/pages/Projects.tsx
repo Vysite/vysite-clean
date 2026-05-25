@@ -1099,7 +1099,7 @@ function EditProjectModal({ project, onClose, onSave }: EditProjectModalProps) {
 
 interface CreateProjectModalProps {
   onClose: () => void;
-  onSave: (project: Project) => void;
+  onSave: (project: Project) => Promise<string | null>;
 }
 
 function CreateProjectModal({ onClose, onSave }: CreateProjectModalProps) {
@@ -1107,10 +1107,14 @@ function CreateProjectModal({ onClose, onSave }: CreateProjectModalProps) {
     name: '', client: '', location: '', projectManager: '',
     status: 'Active' as ProjectStatus, startDate: '', completionDate: '', value: '',
   });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
+    setSaving(true);
+    setSaveError(null);
+    const err = await onSave({
       ...form,
       value: formatProjectValue(form.value),
       id: `p${Date.now()}`,
@@ -1118,6 +1122,8 @@ function CreateProjectModal({ onClose, onSave }: CreateProjectModalProps) {
       openSnags: 0,
       progress: 0,
     });
+    setSaving(false);
+    if (err) { setSaveError(err); return; }
     onClose();
   };
 
@@ -1132,6 +1138,11 @@ function CreateProjectModal({ onClose, onSave }: CreateProjectModalProps) {
           <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a] transition-colors"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {saveError && (
+            <div className="bg-red-900/40 border border-red-500/50 rounded-lg px-4 py-3 text-sm text-red-300">
+              {saveError}
+            </div>
+          )}
           <div><label className={labelCls}>Project Name *</label><input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="e.g. Ward 5 Electrical Upgrade" /></div>
           <div><label className={labelCls}>Client *</label><input required value={form.client} onChange={e => setForm(f => ({ ...f, client: e.target.value }))} className={inputCls} placeholder="Client name" /></div>
           <div><label className={labelCls}>Location</label><input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className={inputCls} placeholder="Site address" /></div>
@@ -1149,8 +1160,10 @@ function CreateProjectModal({ onClose, onSave }: CreateProjectModalProps) {
           </div>
           <div><label className={labelCls}>Contract Value</label><input value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} className={inputCls} placeholder="£000,000" /></div>
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors">Cancel</button>
-            <button type="submit" className="flex-1 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">Create Project</button>
+            <button type="button" onClick={onClose} disabled={saving} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={saving} className="flex-1 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50">
+              {saving ? 'Saving…' : 'Create Project'}
+            </button>
           </div>
         </form>
       </div>
