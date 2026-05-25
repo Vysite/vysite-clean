@@ -41,6 +41,30 @@ export interface PendingFilter {
   filterValue: string; // e.g. 'Overdue', 'Critical'
 }
 
+const SHOW_DEBUG = typeof window !== 'undefined' && window.location.search.includes('debug');
+
+function DebugPanel({ auth, store }: {
+  auth: { loading: boolean; orgLoading: boolean; user: { id: string } | null; currentOrgId: string | null };
+  store?: { loading: boolean; currentOrgId?: string | null; currentUser?: { name: string } | null; platformUsers?: unknown[] };
+}) {
+  if (!SHOW_DEBUG) return null;
+  return (
+    <div style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 2147483647, background: '#0d1117', border: '2px solid #f97316', borderRadius: 8, padding: '10px 14px', fontSize: 11, fontFamily: 'monospace', color: '#e2e8f0', maxWidth: 360, lineHeight: 1.7, userSelect: 'text' }}>
+      <div style={{ color: '#f97316', fontWeight: 700, marginBottom: 4 }}>VYSITE DEBUG</div>
+      <div>auth.loading: <b>{String(auth.loading)}</b></div>
+      <div>auth.orgLoading: <b>{String(auth.orgLoading)}</b></div>
+      <div>auth.user.id: <b style={{ fontSize: 10 }}>{auth.user?.id ?? 'null'}</b></div>
+      <div>auth.currentOrgId: <b style={{ color: auth.currentOrgId ? '#4ade80' : '#f87171' }}>{auth.currentOrgId ?? 'null'}</b></div>
+      {store && <>
+        <div>store.loading: <b>{String(store.loading)}</b></div>
+        <div>store.currentOrgId: <b style={{ color: store.currentOrgId ? '#4ade80' : '#f87171' }}>{store.currentOrgId ?? 'null'}</b></div>
+        <div>currentUser: <b>{store.currentUser?.name ?? 'null'}</b></div>
+        <div>platformUsers: <b>{store.platformUsers?.length ?? 0}</b></div>
+      </>}
+    </div>
+  );
+}
+
 export default function App() {
   const auth = useAuth();
   const [activePage, setActivePage] = useState<Page>('dashboard');
@@ -50,7 +74,6 @@ export default function App() {
   const [pendingFilter, setPendingFilter] = useState<PendingFilter | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
   const store = useStore(auth.currentOrgId, auth.user?.id ?? null);
-  const showDebug = typeof window !== 'undefined' && window.location.search.includes('debug');
 
   function navigateTo(page: Page, filter?: PendingFilter, open?: PendingOpen) {
     setActivePage(page);
@@ -103,62 +126,66 @@ export default function App() {
     }
   };
 
+  const debugPanel = <DebugPanel auth={auth} store={store} />;
+
   // Waiting for Supabase to confirm whether a session exists
   if (auth.loading) {
     return (
-      <div className="min-h-screen bg-[#111827] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 rounded-xl bg-[#f97316] flex items-center justify-center font-black text-white text-2xl mx-auto mb-4">V</div>
-          <p className="text-slate-400 text-sm">Loading VYSITE...</p>
+      <>
+        {debugPanel}
+        <div className="min-h-screen bg-[#111827] flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 rounded-xl bg-[#f97316] flex items-center justify-center font-black text-white text-2xl mx-auto mb-4">V</div>
+            <p className="text-slate-400 text-sm">Loading VYSITE...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   // Unauthenticated — show login gate immediately, no need to wait for org
   if (!auth.session) {
-    return <Login />;
+    return (
+      <>
+        {debugPanel}
+        <Login />
+      </>
+    );
   }
 
   // Session exists but org membership is still being resolved — hold here so
   // currentOrgId is guaranteed non-null before any write-capable UI is shown
   if (auth.orgLoading) {
     return (
-      <div className="min-h-screen bg-[#111827] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 rounded-xl bg-[#f97316] flex items-center justify-center font-black text-white text-2xl mx-auto mb-4">V</div>
-          <p className="text-slate-400 text-sm">Loading VYSITE...</p>
+      <>
+        {debugPanel}
+        <div className="min-h-screen bg-[#111827] flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 rounded-xl bg-[#f97316] flex items-center justify-center font-black text-white text-2xl mx-auto mb-4">V</div>
+            <p className="text-slate-400 text-sm">Loading VYSITE...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (store.loading) {
     return (
-      <div className="min-h-screen bg-[#111827] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 rounded-xl bg-[#f97316] flex items-center justify-center font-black text-white text-2xl mx-auto mb-4">V</div>
-          <p className="text-slate-400 text-sm">Loading VYSITE...</p>
+      <>
+        {debugPanel}
+        <div className="min-h-screen bg-[#111827] flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 rounded-xl bg-[#f97316] flex items-center justify-center font-black text-white text-2xl mx-auto mb-4">V</div>
+            <p className="text-slate-400 text-sm">Loading VYSITE...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
     <StoreContext.Provider value={store}>
-      {showDebug && (
-        <div style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 9999, background: '#0d1117', border: '1px solid #f97316', borderRadius: 8, padding: '10px 14px', fontSize: 11, fontFamily: 'monospace', color: '#e2e8f0', maxWidth: 340, lineHeight: 1.6, pointerEvents: 'none' }}>
-          <div style={{ color: '#f97316', fontWeight: 700, marginBottom: 4 }}>VYSITE DEBUG</div>
-          <div>auth.loading: <b>{String(auth.loading)}</b></div>
-          <div>auth.orgLoading: <b>{String(auth.orgLoading)}</b></div>
-          <div>auth.user.id: <b>{auth.user?.id ?? 'null'}</b></div>
-          <div>auth.currentOrgId: <b style={{ color: auth.currentOrgId ? '#4ade80' : '#f87171' }}>{auth.currentOrgId ?? 'null'}</b></div>
-          <div>store.loading: <b>{String(store.loading)}</b></div>
-          <div>store.currentOrgId: <b style={{ color: store.currentOrgId ? '#4ade80' : '#f87171' }}>{store.currentOrgId ?? 'null'}</b></div>
-          <div>currentUser: <b>{store.currentUser?.name ?? 'null'}</b></div>
-          <div>platformUsers: <b>{store.platformUsers.length}</b></div>
-        </div>
-      )}
+      {debugPanel}
       <EnvBanner />
       <div className="min-h-screen bg-[#111827] flex">
         <Sidebar
