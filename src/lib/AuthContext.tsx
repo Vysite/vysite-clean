@@ -104,8 +104,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    // Clear state immediately so the UI transitions to login without waiting
+    // for the network round-trip. This prevents the published-link hang where
+    // signOut() resolves but onAuthStateChange fires late or not at all.
     resolvedForRef.current = null;
-    await supabase.auth.signOut();
+    setSession(null);
+    setCurrentOrgId(null);
+    setOrgLoading(false);
+
+    // scope: 'local' ensures the local session + localStorage token are always
+    // cleared even if the server-side revocation call fails (e.g. network error,
+    // expired token). Without this, a failed global signOut leaves the user
+    // stuck — still authenticated locally but with a dead server token.
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) {
+      console.error('[VYSITE] signOut() error:', error.message);
+    }
   }
 
   return (
