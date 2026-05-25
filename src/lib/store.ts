@@ -491,8 +491,8 @@ export function switchUser(name: string) {
 
 const DEV = import.meta.env.DEV;
 
-// Returns orgId or null. Logs clearly if missing so the cause is visible in
-// the browser console without throwing (which was being silently swallowed).
+// Returns orgId or null. Always logs if missing — not gated on DEV — so the
+// failure is visible in the production browser console.
 function getOrgId(orgId: string | null): string | null {
   if (!orgId) {
     console.error('[VYSITE] Write blocked: currentOrgId is null. User may not have a user_orgs entry, or org resolution has not completed yet.');
@@ -502,10 +502,10 @@ function getOrgId(orgId: string | null): string | null {
 }
 
 function logWrite(op: string, table: string, error: unknown, data?: unknown) {
-  if (!DEV) return;
+  // Errors are always logged (production + dev). Success is dev-only.
   if (error) {
     console.error(`[VYSITE] ${op} ${table} FAILED:`, error);
-  } else {
+  } else if (DEV) {
     console.log(`[VYSITE] ${op} ${table} OK`, data ?? '');
   }
 }
@@ -537,7 +537,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     }, 15000);
 
     async function load() {
-      if (DEV) console.log('[VYSITE] store.load() started');
+      console.log('[VYSITE] store.load() started, orgId at load time:', orgIdRef.current);
       const ATT_COLS = 'id,linked_type,linked_id,project_id,project_name,name,type,size,category,uploaded_by,created_at';
 
       const [projRes, docRes, attRes, actRes, snaRes, frmRes, tenRes, tcRes, puRes, notifRes, settingsRes] = await Promise.all([
@@ -556,14 +556,16 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
 
       if (cancelled) return;
 
-      if (DEV) {
-        console.log('[VYSITE] load() results:',
-          'projects:', projRes.data?.length ?? 0, projRes.error ?? '',
-          '| platformUsers:', puRes.data?.length ?? 0, puRes.error ?? '',
-          '| tenders:', tenRes.data?.length ?? 0, tenRes.error ?? '',
-          '| settings:', settingsRes.data ? 'found' : 'none', settingsRes.error ?? '',
-        );
-      }
+      // Always log load results and any errors — visible in production console
+      console.log('[VYSITE] load() results:',
+        'projects:', projRes.data?.length ?? 0,
+        '| platformUsers:', puRes.data?.length ?? 0,
+        '| tenders:', tenRes.data?.length ?? 0,
+        '| settings:', settingsRes.data ? 'found' : 'none',
+      );
+      if (projRes.error) console.error('[VYSITE] load vy_projects error:', projRes.error);
+      if (puRes.error) console.error('[VYSITE] load vy_platform_users error:', puRes.error);
+      if (tenRes.error) console.error('[VYSITE] load vy_tenders error:', tenRes.error);
 
       setProjects((projRes.data ?? []).map(r => dbToProject(r as DBProject)));
       setProjectDocuments((docRes.data ?? []) as DBProjectDocument[]);
@@ -589,6 +591,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   // ── Projects ──────────────────────────────────────────────────────────────────
 
   const addProject = useCallback(async (p: Project) => {
+    console.log('[VYSITE] addProject called, id:', p.id, 'orgId:', orgIdRef.current);
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
     setProjects(prev => [...prev, p]);
@@ -705,6 +708,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   // ── Tenders ───────────────────────────────────────────────────────────────────
 
   const addTender = useCallback(async (t: Tender) => {
+    console.log('[VYSITE] addTender called, id:', t.id, 'orgId:', orgIdRef.current);
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
     setTenders(prev => [t, ...prev]);

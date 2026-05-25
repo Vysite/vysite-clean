@@ -26,7 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [orgLoading, setOrgLoading] = useState(true);
 
   async function resolveOrg(userId: string) {
-    if (DEV) console.log('[VYSITE] resolveOrg() for user:', userId);
+    console.log('[VYSITE] resolveOrg() for user:', userId);
     setOrgLoading(true);
     const { data, error } = await supabase
       .from('user_orgs')
@@ -37,14 +37,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .limit(1)
       .maybeSingle();
     const resolved = data?.org_id ?? null;
-    if (DEV) console.log('[VYSITE] resolveOrg() result:', resolved, error ?? '');
+    // Always log — visible in production console for diagnosis
+    console.log('[VYSITE] resolveOrg() result:', resolved);
+    if (error) console.error('[VYSITE] resolveOrg() error:', error);
     setCurrentOrgId(resolved);
     setOrgLoading(false);
   }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (DEV) console.log('[VYSITE] getSession() user:', data.session?.user?.id ?? 'none');
+      console.log('[VYSITE] getSession() user:', data.session?.user?.id ?? 'none');
       setSession(data.session);
       setLoading(false);
       if (data.session?.user) {
@@ -57,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      if (DEV) console.log('[VYSITE] onAuthStateChange:', _event, newSession?.user?.id ?? 'none');
+      console.log('[VYSITE] onAuthStateChange:', _event, newSession?.user?.id ?? 'none');
       setSession(newSession);
       if (newSession?.user) {
         (async () => { await resolveOrg(newSession.user.id); })();
