@@ -1,0 +1,1022 @@
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -2,19 +2,25 @@
+ import { createRoot } from 'react-dom/client';
+ import App from './App.tsx';
+ import AdminPanel from './pages/AdminPanel.tsx';
++import StartTrial from './pages/StartTrial.tsx';
+ import ErrorBoundary from './components/ErrorBoundary.tsx';
+ import { AuthProvider } from './lib/AuthContext.tsx';
+ import './index.css';
+ 
+ const path = window.location.pathname;
+ const isAdminRoute = path.startsWith('/adminpanel');
++const isTrialRoute = path.startsWith('/start-trial') || path.startsWith('/trial');
+ 
+ createRoot(document.getElementById('root')!).render(
+   <StrictMode>
+     <ErrorBoundary>
+-      <AuthProvider>
+-        {isAdminRoute ? <AdminPanel /> : <App />}
+-      </AuthProvider>
++      {isTrialRoute ? (
++        <StartTrial />
++      ) : (
++        <AuthProvider>
++          {isAdminRoute ? <AdminPanel /> : <App />}
++        </AuthProvider>
++      )}
+     </ErrorBoundary>
+   </StrictMode>
+ );
+--- a/src/pages/SuperAdmin.tsx
++++ b/src/pages/SuperAdmin.tsx
+@@ -2,6 +2,7 @@
+ import {
+   Shield, Building2, ChevronRight, ChevronLeft, ToggleLeft, ToggleRight,
+   Save, AlertCircle, CheckCircle, RefreshCw, UserPlus, Trash2, Ban, Search,
++  FlaskConical, X, Clock,
+ } from 'lucide-react';
+ import { supabase } from '../lib/supabase';
+ import { env } from '../lib/env';
+@@ -68,11 +69,229 @@
+   return { ...DEFAULT_MODULES, ...(stored ?? {}) };
+ }
+ 
++function trialDaysRemaining(expiresAt: string | null): number | null {
++  if (!expiresAt) return null;
++  const ms = new Date(expiresAt).getTime() - Date.now();
++  return Math.ceil(ms / (1000 * 60 * 60 * 24));
++}
++
++function TrialBadge({ expiresAt }: { expiresAt: string | null }) {
++  const days = trialDaysRemaining(expiresAt);
++  const expired = days !== null && days <= 0;
++  const warning = days !== null && days <= 3 && !expired;
++  return (
++    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
++      expired
++        ? 'bg-red-900/60 text-red-400'
++        : warning
++        ? 'bg-amber-900/60 text-amber-400'
++        : 'bg-sky-900/60 text-sky-400'
++    }`}>
++      <FlaskConical size={9} />
++      {expired
++        ? 'EXPIRED'
++        : days === null
++        ? 'TRIAL'
++        : `TRIAL · ${days}d`}
++    </span>
++  );
++}
++
++// ─── New Trial Modal ──────────────────────────────────────────────────────────
++
++interface NewTrialModalProps {
++  onClose: () => void;
++  onCreated: () => void;
++}
++
++function NewTrialModal({ onClose, onCreated }: NewTrialModalProps) {
++  const [companyName, setCompanyName] = useState('');
++  const [adminName, setAdminName]     = useState('');
++  const [adminEmail, setAdminEmail]   = useState('');
++  const [trialDays, setTrialDays]     = useState(14);
++  const [submitting, setSubmitting]   = useState(false);
++  const [error, setError]             = useState<string | null>(null);
++  const [success, setSuccess]         = useState<string | null>(null);
++
++  async function handleSubmit(e: React.FormEvent) {
++    e.preventDefault();
++    setError(null);
++    setSubmitting(true);
++
++    const { data: { session } } = await supabase.auth.getSession();
++    const token = session?.access_token;
++
++    try {
++      const res = await fetch(
++        `${env.supabaseUrl}/functions/v1/provision-trial-org`,
++        {
++          method: 'POST',
++          headers: {
++            'Content-Type': 'application/json',
++            'Authorization': `Bearer ${token}`,
++            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
++          },
++          body: JSON.stringify({
++            companyName: companyName.trim(),
++            adminName: adminName.trim(),
++            adminEmail: adminEmail.trim().toLowerCase(),
++            trialDays,
++            source: 'super-admin',
++          }),
++        }
++      );
++      const json = await res.json();
++      if (!res.ok) {
++        setError(json.error ?? 'Provisioning failed. Please try again.');
++      } else {
++        setSuccess(`Trial created for ${json.orgName}. Invite email sent to ${adminEmail.trim().toLowerCase()}.`);
++        setTimeout(() => {
++          onCreated();
++          onClose();
++        }, 2500);
++      }
++    } catch {
++      setError('Network error — please try again.');
++    } finally {
++      setSubmitting(false);
++    }
++  }
++
++  return (
++    <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
++      <div className="bg-[#111827] border border-[#1e2d4a] rounded-2xl w-full max-w-md shadow-2xl">
++        {/* Header */}
++        <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e2d4a]">
++          <div className="flex items-center gap-2.5">
++            <div className="w-8 h-8 rounded-lg bg-sky-900/50 border border-sky-800/50 flex items-center justify-center">
++              <FlaskConical size={15} className="text-sky-400" />
++            </div>
++            <div>
++              <h2 className="text-sm font-bold text-white">New Trial Organisation</h2>
++              <p className="text-[11px] text-slate-500">Creates company, admin user, and sends invite</p>
++            </div>
++          </div>
++          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
++            <X size={18} />
++          </button>
++        </div>
++
++        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
++          {error && (
++            <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg bg-red-900/20 border border-red-800/40">
++              <AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" />
++              <p className="text-xs text-red-300 leading-relaxed">{error}</p>
++            </div>
++          )}
++          {success && (
++            <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg bg-emerald-900/20 border border-emerald-800/40">
++              <CheckCircle size={14} className="text-emerald-400 shrink-0 mt-0.5" />
++              <p className="text-xs text-emerald-300 leading-relaxed">{success}</p>
++            </div>
++          )}
++
++          <div className="space-y-1.5">
++            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Company Name</label>
++            <input
++              type="text"
++              required
++              value={companyName}
++              onChange={e => setCompanyName(e.target.value)}
++              placeholder="Acme Construction Ltd"
++              className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#f97316] transition-colors"
++            />
++          </div>
++
++          <div className="grid grid-cols-2 gap-3">
++            <div className="space-y-1.5">
++              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Admin Full Name</label>
++              <input
++                type="text"
++                required
++                value={adminName}
++                onChange={e => setAdminName(e.target.value)}
++                placeholder="Jane Smith"
++                className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#f97316] transition-colors"
++              />
++            </div>
++            <div className="space-y-1.5">
++              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Trial Duration</label>
++              <div className="relative">
++                <input
++                  type="number"
++                  min={1}
++                  max={90}
++                  required
++                  value={trialDays}
++                  onChange={e => setTrialDays(Math.max(1, Math.min(90, parseInt(e.target.value) || 14)))}
++                  className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 pr-12 text-sm text-white focus:outline-none focus:border-[#f97316] transition-colors"
++                />
++                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 pointer-events-none">days</span>
++              </div>
++            </div>
++          </div>
++
++          <div className="space-y-1.5">
++            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Admin Email Address</label>
++            <input
++              type="email"
++              required
++              value={adminEmail}
++              onChange={e => setAdminEmail(e.target.value)}
++              placeholder="jane@acme.com"
++              className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#f97316] transition-colors"
++            />
++          </div>
++
++          {/* Summary */}
++          {companyName.trim() && adminEmail.trim() && (
++            <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg p-3 space-y-1">
++              <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider mb-2">This will:</p>
++              {[
++                `Create organisation: ${companyName.trim()}`,
++                `Create admin user: ${adminName.trim() || '—'} (${adminEmail.trim()})`,
++                `Enable all 8 modules`,
++                `Set trial expiry: ${trialDays} days from now`,
++                `Send invite email to ${adminEmail.trim()}`,
++                `Notify hello@vysite.com`,
++              ].map(line => (
++                <div key={line} className="flex items-center gap-2">
++                  <div className="w-1 h-1 rounded-full bg-sky-500 shrink-0" />
++                  <p className="text-[11px] text-slate-400">{line}</p>
++                </div>
++              ))}
++            </div>
++          )}
++
++          <div className="flex gap-3 pt-1">
++            <button
++              type="button"
++              onClick={onClose}
++              className="flex-1 py-2.5 border border-[#1e2d4a] text-slate-400 hover:text-white rounded-lg text-sm transition-colors"
++            >
++              Cancel
++            </button>
++            <button
++              type="submit"
++              disabled={submitting || !!success || !companyName.trim() || !adminName.trim() || !adminEmail.trim()}
++              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold transition-colors"
++            >
++              {submitting ? <RefreshCw size={14} className="animate-spin" /> : <FlaskConical size={14} />}
++              {submitting ? 'Provisioning…' : 'Create Trial'}
++            </button>
++          </div>
++        </form>
++      </div>
++    </div>
++  );
++}
++
+ // ─── Company list row ─────────────────────────────────────────────────────────
+ 
+ function CompanyRow({ org, onManage }: { org: OrgWithSettings; onManage: () => void }) {
+   const s = org.settings;
+   const isActive = s?.account_status !== 'disabled';
++  const isTrial  = s?.account_type === 'trial';
+   const aiOn = s?.ai_enabled ?? true;
+   const limit = s?.ai_monthly_limit ?? 50;
+   const used = s?.ai_used_this_month ?? 0;
+@@ -86,6 +305,7 @@
+       <div>
+         <div className="flex items-center gap-2 flex-wrap">
+           <p className="text-sm font-semibold text-white">{org.name}</p>
++          {isTrial && <TrialBadge expiresAt={s?.trial_expires_at ?? null} />}
+         </div>
+         <p className="text-[11px] text-slate-500">{org.slug}</p>
+       </div>
+@@ -160,6 +380,7 @@
+   adminEmail: string;
+ }) {
+   const existing = org.settings;
++  const isTrial = existing?.account_type === 'trial';
+   const [accountStatus, setAccountStatus] = useState<'active' | 'disabled'>(
+     existing?.account_status ?? 'active'
+   );
+@@ -226,6 +447,8 @@
+     );
+   }
+ 
++  const trialDays = trialDaysRemaining(existing?.trial_expires_at ?? null);
++
+   return (
+     <div className="space-y-4">
+       {/* Header */}
+@@ -237,8 +460,40 @@
+         <Building2 size={16} className="text-[#f97316]" />
+         <h2 className="text-sm font-bold text-white">{org.name}</h2>
+         <span className="text-[11px] text-slate-500">{org.slug}</span>
++        {isTrial && <TrialBadge expiresAt={existing?.trial_expires_at ?? null} />}
+       </div>
+ 
++      {/* Trial expiry info banner */}
++      {isTrial && (
++        <div className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${
++          trialDays !== null && trialDays <= 0
++            ? 'bg-red-900/20 border-red-800/50'
++            : trialDays !== null && trialDays <= 3
++            ? 'bg-amber-900/20 border-amber-800/50'
++            : 'bg-sky-900/20 border-sky-800/50'
++        }`}>
++          <Clock size={15} className={`shrink-0 mt-0.5 ${
++            trialDays !== null && trialDays <= 0 ? 'text-red-400' : trialDays !== null && trialDays <= 3 ? 'text-amber-400' : 'text-sky-400'
++          }`} />
++          <div>
++            <p className={`text-xs font-semibold ${
++              trialDays !== null && trialDays <= 0 ? 'text-red-300' : trialDays !== null && trialDays <= 3 ? 'text-amber-300' : 'text-sky-300'
++            }`}>
++              {trialDays !== null && trialDays <= 0
++                ? 'Trial expired'
++                : trialDays !== null
++                ? `Trial expires in ${trialDays} day${trialDays === 1 ? '' : 's'}`
++                : 'Trial organisation'}
++            </p>
++            {existing?.trial_expires_at && (
++              <p className="text-[11px] text-slate-500 mt-0.5">
++                Expiry date: {new Date(existing.trial_expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
++              </p>
++            )}
++          </div>
++        </div>
++      )}
++
+       {/* Toast */}
+       {toast && (
+         <div className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border ${
+@@ -711,6 +966,7 @@
+   const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
+   const [activeTab, setActiveTab] = useState<'companies' | 'admins'>('companies');
+   const [companySearch, setCompanySearch] = useState('');
++  const [showNewTrialModal, setShowNewTrialModal] = useState(false);
+ 
+   useEffect(() => {
+     if (!user) return;
+@@ -789,6 +1045,12 @@
+ 
+   const adminEmail = user?.email ?? '';
+ 
++  const trialOrgs   = orgs.filter(o => o.settings?.account_type === 'trial');
++  const expiredTrials = trialOrgs.filter(o => {
++    const d = trialDaysRemaining(o.settings?.trial_expires_at ?? null);
++    return d !== null && d <= 0;
++  });
++
+   if (managing) {
+     return (
+       <div className="p-4 lg:p-6">
+@@ -813,6 +1075,13 @@
+ 
+   return (
+     <div className="p-4 lg:p-6">
++      {showNewTrialModal && (
++        <NewTrialModal
++          onClose={() => setShowNewTrialModal(false)}
++          onCreated={loadOrgs}
++        />
++      )}
++
+       {/* Page header */}
+       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+         <div>
+@@ -832,6 +1101,12 @@
+             >
+               <RefreshCw size={13} />Refresh
+             </button>
++            <button
++              onClick={() => setShowNewTrialModal(true)}
++              className="flex items-center gap-1.5 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold transition-colors"
++            >
++              <FlaskConical size={13} />New Trial
++            </button>
+           </div>
+         )}
+       </div>
+@@ -870,12 +1145,14 @@
+           )}
+ 
+           {/* Stats bar */}
+-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-5">
++          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+             {[
+               { label: 'Total Companies',  value: orgs.length },
+               { label: 'Active',           value: orgs.filter(o => o.settings?.account_status !== 'disabled').length, color: 'text-emerald-400' },
+               { label: 'Disabled',         value: orgs.filter(o => o.settings?.account_status === 'disabled').length, color: 'text-red-400' },
+               { label: 'AI Enabled',       value: orgs.filter(o => o.settings?.ai_enabled !== false).length, color: 'text-[#f97316]' },
++              { label: 'Active Trials',    value: trialOrgs.length, color: 'text-sky-400' },
++              { label: 'Expired Trials',   value: expiredTrials.length, color: expiredTrials.length > 0 ? 'text-red-400' : 'text-slate-600' },
+             ].map(stat => (
+               <div key={stat.label} className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl p-4">
+                 <p className={`text-2xl font-black ${stat.color ?? 'text-white'}`}>{stat.value}</p>
+--- a/src/pages/StartTrial.tsx
++++ b/src/pages/StartTrial.tsx
+@@ -0,0 +1,256 @@
++import { useState, type FormEvent } from 'react';
++import {
++  FlaskConical, CheckCircle, AlertCircle, ArrowRight, Layers,
++  BarChart2, ClipboardList, Wrench, Zap, Shield,
++} from 'lucide-react';
++import { env } from '../lib/env';
++
++const FEATURES = [
++  { icon: <Layers size={14} />,      label: 'Tender & Estimating' },
++  { icon: <BarChart2 size={14} />,   label: 'Projects & Programmes' },
++  { icon: <Zap size={14} />,         label: 'AI Contract Review' },
++  { icon: <ClipboardList size={14} />, label: 'Site Forms & Snagging' },
++  { icon: <Wrench size={14} />,      label: 'Maintenance & Servicing' },
++  { icon: <Shield size={14} />,      label: 'Actions & Testing' },
++];
++
++export default function StartTrial() {
++  const [companyName, setCompanyName] = useState('');
++  const [adminName, setAdminName]     = useState('');
++  const [adminEmail, setAdminEmail]   = useState('');
++  const [submitting, setSubmitting]   = useState(false);
++  const [error, setError]             = useState<string | null>(null);
++  const [success, setSuccess]         = useState(false);
++
++  async function handleSubmit(e: FormEvent) {
++    e.preventDefault();
++    setError(null);
++    setSubmitting(true);
++
++    try {
++      const res = await fetch(
++        `${env.supabaseUrl}/functions/v1/provision-trial-org`,
++        {
++          method: 'POST',
++          headers: {
++            'Content-Type': 'application/json',
++            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
++          },
++          body: JSON.stringify({
++            companyName: companyName.trim(),
++            adminName: adminName.trim(),
++            adminEmail: adminEmail.trim().toLowerCase(),
++            trialDays: 14,
++            source: 'website',
++          }),
++        }
++      );
++      const json = await res.json();
++      if (!res.ok) {
++        setError(json.error ?? 'Something went wrong. Please try again or contact hello@vysite.com.');
++      } else {
++        setSuccess(true);
++      }
++    } catch {
++      setError('Network error — please check your connection and try again.');
++    } finally {
++      setSubmitting(false);
++    }
++  }
++
++  return (
++    <div className="min-h-screen bg-[#111827] flex flex-col">
++      {/* Background accents */}
++      <div className="absolute inset-0 overflow-hidden pointer-events-none">
++        <div className="absolute -top-60 -right-60 w-[700px] h-[700px] rounded-full bg-sky-900/10 blur-3xl" />
++        <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full bg-[#f97316]/5 blur-3xl" />
++      </div>
++
++      {/* Nav */}
++      <nav className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-[#1e2d4a]/60">
++        <a href="/" className="flex items-center gap-2.5 group">
++          <div className="w-8 h-8 rounded-lg bg-[#f97316] flex items-center justify-center font-black text-white text-base shadow-lg shadow-orange-900/30 transition-transform group-hover:scale-105">
++            V
++          </div>
++          <span className="font-black text-white tracking-tight">VY<span className="text-[#f97316]">SITE</span></span>
++        </a>
++        <a
++          href="/"
++          className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
++        >
++          Already have an account? Sign in
++        </a>
++      </nav>
++
++      {/* Main content */}
++      <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-12">
++        <div className="w-full max-w-4xl">
++          {success ? (
++            /* ── Success state ── */
++            <div className="max-w-md mx-auto text-center">
++              <div className="w-16 h-16 rounded-2xl bg-emerald-900/40 border border-emerald-800/50 flex items-center justify-center mx-auto mb-6">
++                <CheckCircle size={28} className="text-emerald-400" />
++              </div>
++              <h1 className="text-2xl font-black text-white mb-3">You're in.</h1>
++              <p className="text-slate-400 leading-relaxed mb-2">
++                Your VYSITE trial has been created for <span className="text-white font-semibold">{companyName}</span>.
++              </p>
++              <p className="text-slate-400 leading-relaxed mb-6">
++                We've sent an invite to <span className="text-white font-semibold">{adminEmail}</span>.
++                Click the link in that email to set your password and access your account.
++              </p>
++              <div className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl p-4 text-left space-y-2 mb-6">
++                {[
++                  'Check your inbox for the invite email',
++                  'Click the link to set your password',
++                  'Sign in and explore all modules — no restrictions',
++                  '14-day trial, no card required',
++                ].map((step, i) => (
++                  <div key={step} className="flex items-start gap-3">
++                    <div className="w-5 h-5 rounded-full bg-[#f97316] flex items-center justify-center text-white text-[10px] font-black shrink-0 mt-0.5">
++                      {i + 1}
++                    </div>
++                    <p className="text-sm text-slate-300">{step}</p>
++                  </div>
++                ))}
++              </div>
++              <p className="text-xs text-slate-600">
++                Questions? Email us at{' '}
++                <a href="mailto:hello@vysite.com" className="text-[#f97316] hover:underline">hello@vysite.com</a>
++              </p>
++            </div>
++          ) : (
++            /* ── Form state ── */
++            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
++              {/* Left — pitch */}
++              <div className="pt-2">
++                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-sky-900/40 border border-sky-800/50 rounded-full mb-6">
++                  <FlaskConical size={12} className="text-sky-400" />
++                  <span className="text-xs font-semibold text-sky-300">14-day free trial · No card required</span>
++                </div>
++                <h1 className="text-3xl lg:text-4xl font-black text-white leading-tight mb-4">
++                  Try VYSITE free<br />
++                  <span className="text-[#f97316]">for 14 days</span>
++                </h1>
++                <p className="text-slate-400 text-base leading-relaxed mb-8">
++                  Get instant access to the complete VYSITE platform — tender management, AI contract review, snagging, site forms, and more. Set up takes under two minutes.
++                </p>
++
++                <div className="space-y-2.5 mb-8">
++                  {FEATURES.map(f => (
++                    <div key={f.label} className="flex items-center gap-3">
++                      <div className="w-7 h-7 rounded-lg bg-[#1a2236] border border-[#1e2d4a] flex items-center justify-center text-[#f97316] shrink-0">
++                        {f.icon}
++                      </div>
++                      <span className="text-sm text-slate-300">{f.label}</span>
++                    </div>
++                  ))}
++                </div>
++
++                <div className="flex items-start gap-3 p-4 bg-[#1a2236] border border-[#1e2d4a] rounded-xl">
++                  <Shield size={16} className="text-slate-500 shrink-0 mt-0.5" />
++                  <p className="text-xs text-slate-500 leading-relaxed">
++                    Your data is isolated to your own organisation. All modules are enabled by default. No commitment required — cancel any time.
++                  </p>
++                </div>
++              </div>
++
++              {/* Right — form */}
++              <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl overflow-hidden">
++                <div className="px-7 pt-7 pb-5 border-b border-[#1e2d4a]">
++                  <h2 className="text-lg font-bold text-white">Start your free trial</h2>
++                  <p className="text-xs text-slate-500 mt-1">You'll receive an invite email to set your password.</p>
++                </div>
++
++                <form onSubmit={handleSubmit} className="px-7 py-6 space-y-4">
++                  {error && (
++                    <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg bg-red-900/20 border border-red-800/40">
++                      <AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" />
++                      <p className="text-xs text-red-300 leading-relaxed">{error}</p>
++                    </div>
++                  )}
++
++                  <div className="space-y-1.5">
++                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
++                      Company Name
++                    </label>
++                    <input
++                      type="text"
++                      required
++                      minLength={2}
++                      value={companyName}
++                      onChange={e => setCompanyName(e.target.value)}
++                      placeholder="Acme Construction Ltd"
++                      className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-[#f97316] transition-colors"
++                    />
++                  </div>
++
++                  <div className="space-y-1.5">
++                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
++                      Your Full Name
++                    </label>
++                    <input
++                      type="text"
++                      required
++                      minLength={2}
++                      value={adminName}
++                      onChange={e => setAdminName(e.target.value)}
++                      placeholder="Jane Smith"
++                      className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-[#f97316] transition-colors"
++                    />
++                  </div>
++
++                  <div className="space-y-1.5">
++                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
++                      Work Email Address
++                    </label>
++                    <input
++                      type="email"
++                      required
++                      value={adminEmail}
++                      onChange={e => setAdminEmail(e.target.value)}
++                      placeholder="jane@acme.com"
++                      className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-[#f97316] transition-colors"
++                    />
++                  </div>
++
++                  <button
++                    type="submit"
++                    disabled={submitting || !companyName.trim() || !adminName.trim() || !adminEmail.trim()}
++                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-[#f97316] hover:bg-orange-400 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold transition-all shadow-lg shadow-orange-900/30 mt-2"
++                  >
++                    {submitting ? (
++                      <>
++                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
++                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
++                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
++                        </svg>
++                        Setting up your trial…
++                      </>
++                    ) : (
++                      <>
++                        Start Free Trial <ArrowRight size={15} />
++                      </>
++                    )}
++                  </button>
++
++                  <p className="text-center text-[11px] text-slate-600 leading-relaxed">
++                    By starting a trial you agree to VYSITE's terms of service.
++                    Your data is securely isolated and never shared.
++                  </p>
++                </form>
++              </div>
++            </div>
++          )}
++        </div>
++      </div>
++
++      <footer className="relative z-10 text-center py-4 border-t border-[#1e2d4a]/40">
++        <p className="text-[11px] text-slate-700">
++          VYSITE &copy; {new Date().getFullYear()} &mdash; Authorised access only &mdash;{' '}
++          <a href="mailto:hello@vysite.com" className="hover:text-slate-500 transition-colors">hello@vysite.com</a>
++        </p>
++      </footer>
++    </div>
++  );
++}
+--- a/supabase/functions/provision-trial-org/index.ts
++++ b/supabase/functions/provision-trial-org/index.ts
+@@ -0,0 +1,359 @@
++import "jsr:@supabase/functions-js/edge-runtime.d.ts";
++import { createClient } from "npm:@supabase/supabase-js@2";
++
++const corsHeaders = {
++  "Access-Control-Allow-Origin": "*",
++  "Access-Control-Allow-Methods": "POST, OPTIONS",
++  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
++};
++
++const NOTIFY_EMAIL = "hello@vysite.com";
++const TRIAL_DAYS = 14;
++
++const DEFAULT_MODULES = {
++  tenders: true,
++  projects: true,
++  maintenance: true,
++  "site-forms": true,
++  snagging: true,
++  actions: true,
++  testing: true,
++  reports: true,
++};
++
++// Full Admin role permissions — mirrors ROLE_PERMISSIONS['Admin'] in store.ts
++const ADMIN_PERMISSIONS = {
++  "projects.view_all": true, "projects.view_assigned": true, "projects.create": true,
++  "projects.edit": true, "projects.archive": true, "projects.delete": true,
++  "tender.view": true, "tender.rfi.create": true, "tender.rfi.edit": true, "tender.rfi.delete": true,
++  "tender.assumptions.edit": true, "tender.exclusions.edit": true, "tender.scope_notes.edit": true,
++  "tender.risks.edit": true, "tender.reclassify": true, "tender.reconcile": true,
++  "commercial.view_pricing": true, "commercial.edit_pricing": true, "commercial.view_rates": true,
++  "commercial.view_values": true, "commercial.view_reports": true, "commercial.export_reports": true,
++  "commercial.edit_project_finance_progress": true,
++  "ai.upload_docs": true, "ai.run_review": true, "ai.approve_findings": true, "ai.reconcile": true,
++  "ai.import": true, "ai.export": true,
++  "docs.view": true, "docs.upload": true, "docs.download": true, "docs.delete": true, "docs.view_confidential": true,
++  "admin.invite_users": true, "admin.edit_users": true, "admin.assign_permissions": true,
++  "admin.view_audit_logs": true, "admin.manage_settings": true,
++  "modules.projects": true, "modules.snagging": true, "modules.site_forms": true, "modules.testing": true,
++  "modules.actions": true, "modules.comments": true, "modules.reports": true,
++  "snagging.create": true, "snagging.edit": true, "snagging.delete": true, "snagging.export": true,
++  "actions.create": true, "actions.edit": true, "actions.delete": true, "actions.export": true,
++  "site_forms.create": true, "site_forms.edit": true, "site_forms.delete": true, "site_forms.export": true,
++  "commissioning.create": true, "commissioning.edit": true, "commissioning.delete": true, "commissioning.export": true,
++  "maintenance.view": true, "maintenance.create": true, "maintenance.edit": true, "maintenance.delete": true,
++  "maintenance.assign": true, "maintenance.export": true, "maintenance.comment": true, "maintenance.upload": true, "maintenance.complete": true,
++  "programmes.view": true, "programmes.create": true, "programmes.edit": true, "programmes.delete": true, "programmes.export": true,
++};
++
++function slugify(name: string): string {
++  return name
++    .toLowerCase()
++    .trim()
++    .replace(/[^a-z0-9\s-]/g, "")
++    .replace(/\s+/g, "-")
++    .replace(/-+/g, "-")
++    .replace(/^-|-$/g, "")
++    .slice(0, 60);
++}
++
++function initialsFrom(name: string): string {
++  return name
++    .split(/\s+/)
++    .filter(Boolean)
++    .slice(0, 2)
++    .map((p) => p[0].toUpperCase())
++    .join("");
++}
++
++// Send a plain notification email via Supabase's built-in auth.admin.generateLink
++// trick is not suitable here — instead we use the Supabase email OTP endpoint as a
++// simple relay, or just log the notification. For production use, wire this to your
++// mail provider (Resend, SendGrid, etc.) via an environment variable.
++async function sendNotificationEmail(
++  adminClient: ReturnType<typeof createClient>,
++  companyName: string,
++  adminName: string,
++  adminEmail: string,
++  trialExpiresAt: string,
++  source: string,
++): Promise<void> {
++  const subject = `New VYSITE trial: ${companyName}`;
++  const body = [
++    `A new trial organisation has been provisioned on VYSITE.`,
++    ``,
++    `Company: ${companyName}`,
++    `Admin: ${adminName} <${adminEmail}>`,
++    `Source: ${source}`,
++    `Trial expires: ${new Date(trialExpiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
++    ``,
++    `You can manage this organisation from the VYSITE Admin Panel.`,
++  ].join("\n");
++
++  const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
++  if (RESEND_API_KEY) {
++    try {
++      await fetch("https://api.resend.com/emails", {
++        method: "POST",
++        headers: {
++          "Authorization": `Bearer ${RESEND_API_KEY}`,
++          "Content-Type": "application/json",
++        },
++        body: JSON.stringify({
++          from: "VYSITE <noreply@vysite.com>",
++          to: [NOTIFY_EMAIL],
++          subject,
++          text: body,
++        }),
++      });
++    } catch {
++      // Non-fatal — trial is already provisioned
++    }
++    return;
++  }
++
++  // Fallback: use Supabase's auth admin to send a magic link email as a proxy.
++  // This is best-effort and only works if the notify address is registered.
++  // In production always set RESEND_API_KEY.
++  console.log("[provision-trial-org] Notification (no mail provider configured):", subject);
++  console.log(body);
++}
++
++Deno.serve(async (req: Request) => {
++  if (req.method === "OPTIONS") {
++    return new Response(null, { status: 200, headers: corsHeaders });
++  }
++
++  try {
++    // ── 1. Parse request ──────────────────────────────────────────────────────
++    let body: {
++      companyName?: string;
++      adminName?: string;
++      adminEmail?: string;
++      trialDays?: number;
++      source?: string; // 'super-admin' | 'website'
++    };
++    try {
++      body = await req.json();
++    } catch {
++      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
++        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
++      });
++    }
++
++    const companyName = (body.companyName ?? "").trim();
++    const adminName   = (body.adminName   ?? "").trim();
++    const adminEmail  = (body.adminEmail  ?? "").trim().toLowerCase();
++    const trialDays   = typeof body.trialDays === "number" && body.trialDays > 0 ? body.trialDays : TRIAL_DAYS;
++    const source      = (body.source ?? "website") as string;
++
++    if (!companyName || companyName.length < 2) {
++      return new Response(JSON.stringify({ error: "Company name must be at least 2 characters" }), {
++        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
++      });
++    }
++    if (!adminName || adminName.length < 2) {
++      return new Response(JSON.stringify({ error: "Admin name must be at least 2 characters" }), {
++        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
++      });
++    }
++    if (!adminEmail || !adminEmail.includes("@")) {
++      return new Response(JSON.stringify({ error: "A valid email address is required" }), {
++        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
++      });
++    }
++
++    // ── 2. If called from super-admin panel, verify caller is a super admin ──
++    if (source === "super-admin") {
++      const authHeader = req.headers.get("Authorization");
++      if (!authHeader) {
++        return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
++          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
++        });
++      }
++      const callerClient = createClient(
++        Deno.env.get("SUPABASE_URL")!,
++        Deno.env.get("SUPABASE_ANON_KEY")!,
++        { global: { headers: { Authorization: authHeader } } },
++      );
++      const { data: isSuperAdmin } = await callerClient.rpc("is_super_admin");
++      if (!isSuperAdmin) {
++        return new Response(JSON.stringify({ error: "Forbidden: super admin access required" }), {
++          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
++        });
++      }
++    }
++    // Website requests are public (verify_jwt: false) — no auth check needed
++    // before provisioning; the function itself is the gatekeeper via business
++    // logic (duplicate checks, etc.)
++
++    // ── 3. Service-role client for all privileged writes ─────────────────────
++    const adminClient = createClient(
++      Deno.env.get("SUPABASE_URL")!,
++      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
++    );
++
++    // ── 4. Duplicate email check ──────────────────────────────────────────────
++    const { data: existingUsers } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
++    const emailAlreadyExists = existingUsers?.users?.some(
++      (u: { email?: string }) => u.email?.toLowerCase() === adminEmail,
++    );
++    if (emailAlreadyExists) {
++      return new Response(
++        JSON.stringify({ error: "An account with this email address already exists. Please contact support if you need access." }),
++        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
++      );
++    }
++
++    // ── 5. Duplicate company name / slug check ────────────────────────────────
++    let slug = slugify(companyName);
++    if (!slug || slug.length < 2) {
++      return new Response(JSON.stringify({ error: "Company name could not be converted to a valid slug. Please use standard characters." }), {
++        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
++      });
++    }
++
++    // Ensure slug uniqueness by appending a numeric suffix if needed
++    const { data: slugConflict } = await adminClient
++      .from("organisations")
++      .select("slug")
++      .eq("slug", slug)
++      .maybeSingle();
++
++    if (slugConflict) {
++      // Append timestamp suffix to guarantee uniqueness
++      slug = `${slug}-${Date.now().toString(36)}`;
++    }
++
++    // ── 6. Create the organisation ────────────────────────────────────────────
++    const { data: org, error: orgErr } = await adminClient
++      .from("organisations")
++      .insert({ name: companyName, slug })
++      .select("id, name, slug")
++      .single();
++
++    if (orgErr || !org) {
++      return new Response(JSON.stringify({ error: `Failed to create organisation: ${orgErr?.message}` }), {
++        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
++      });
++    }
++
++    // ── 7. Create org_settings row ────────────────────────────────────────────
++    const trialExpiresAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
++
++    const { error: settingsErr } = await adminClient
++      .from("org_settings")
++      .insert({
++        org_id: org.id,
++        account_status: "active",
++        account_type: "trial",
++        trial_expires_at: trialExpiresAt,
++        modules_enabled: DEFAULT_MODULES,
++        ai_enabled: true,
++        ai_monthly_limit: 50,
++        ai_used_this_month: 0,
++        ai_bonus_credits: 0,
++        user_limit: null,
++        updated_by: "system:trial-provision",
++      });
++
++    if (settingsErr) {
++      // Roll back the org row before returning
++      await adminClient.from("organisations").delete().eq("id", org.id);
++      return new Response(JSON.stringify({ error: `Failed to create org settings: ${settingsErr.message}` }), {
++        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
++      });
++    }
++
++    // ── 8. Create the auth user (invite — user sets their own password) ───────
++    const { data: inviteData, error: inviteErr } = await adminClient.auth.admin.inviteUserByEmail(
++      adminEmail,
++      {
++        data: {
++          trial_org_id: org.id,
++          full_name: adminName,
++        },
++        redirectTo: `${Deno.env.get("SITE_URL") ?? "https://app.vysite.com"}/`,
++      },
++    );
++
++    if (inviteErr || !inviteData?.user) {
++      // Roll back org and settings
++      await adminClient.from("org_settings").delete().eq("org_id", org.id);
++      await adminClient.from("organisations").delete().eq("id", org.id);
++      return new Response(JSON.stringify({ error: `Failed to create user account: ${inviteErr?.message}` }), {
++        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
++      });
++    }
++
++    const authUserId = inviteData.user.id;
++
++    // ── 9. Create vy_platform_users row ───────────────────────────────────────
++    const { error: puErr } = await adminClient
++      .from("vy_platform_users")
++      .insert({
++        name: adminName,
++        email: adminEmail,
++        role: "Admin",
++        company: companyName,
++        status: "Active",
++        avatar_initials: initialsFrom(adminName),
++        join_date: new Date().toISOString().split("T")[0],
++        assigned_project_ids: [],
++        permissions: ADMIN_PERMISSIONS,
++        auth_user_id: authUserId,
++        org_id: org.id,
++      });
++
++    if (puErr) {
++      // Roll back in reverse order
++      await adminClient.auth.admin.deleteUser(authUserId);
++      await adminClient.from("org_settings").delete().eq("org_id", org.id);
++      await adminClient.from("organisations").delete().eq("id", org.id);
++      return new Response(JSON.stringify({ error: `Failed to create platform user record: ${puErr.message}` }), {
++        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
++      });
++    }
++
++    // ── 10. Create user_orgs membership row ───────────────────────────────────
++    const { error: uoErr } = await adminClient
++      .from("user_orgs")
++      .insert({
++        user_id: authUserId,
++        org_id: org.id,
++        role: "company_owner",
++        status: "active",
++      });
++
++    if (uoErr) {
++      // Non-fatal in practice (user can still log in; org resolution may fail
++      // without this row). Log and return the error so an admin can fix manually.
++      console.error("[provision-trial-org] user_orgs insert failed:", uoErr.message);
++      return new Response(JSON.stringify({ error: `Organisation and user created but membership link failed: ${uoErr.message}` }), {
++        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
++      });
++    }
++
++    // ── 11. Send notification to hello@vysite.com ─────────────────────────────
++    await sendNotificationEmail(adminClient, companyName, adminName, adminEmail, trialExpiresAt, source);
++
++    // ── 12. Return success ────────────────────────────────────────────────────
++    return new Response(
++      JSON.stringify({
++        success: true,
++        orgId: org.id,
++        orgName: org.name,
++        orgSlug: org.slug,
++        trialExpiresAt,
++        message: `Trial organisation created. An invite email has been sent to ${adminEmail}.`,
++      }),
++      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
++    );
++
++  } catch (err) {
++    return new Response(JSON.stringify({ error: `Unexpected error: ${String(err)}` }), {
++      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
++    });
++  }
++});

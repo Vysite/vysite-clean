@@ -1,0 +1,53 @@
+name: Production release guard
+
+# Blocks direct pushes to main that do not come via a pull request from staging.
+# This is a safety net — GitHub branch protection rules are the primary gate.
+# Together they ensure main can only advance through the staging → main PR flow.
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify-source-branch:
+    name: Verify merge source is staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check merge commit parents
+        run: |
+          # On a merge commit, HEAD has two parents.
+          # Parent 2 (the merged branch tip) must be reachable from origin/staging.
+          PARENT_COUNT=$(git cat-file -p HEAD | grep -c '^parent')
+
+          if [ "$PARENT_COUNT" -lt 2 ]; then
+            echo "::error::Direct pushes to main are not allowed. Open a PR from staging."
+            exit 1
+          fi
+
+          MERGE_HEAD=$(git rev-parse HEAD^2)
+          if ! git merge-base --is-ancestor "$MERGE_HEAD" origin/staging; then
+            echo "::error::Production releases must come from the staging branch. This commit is not in staging history."
+            exit 1
+          fi
+
+          echo "Source verified: merge came from staging. Proceeding."
+
+  notify-release:
+    name: Log production release
+    needs: verify-source-branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Output release info
+        run: |
+          echo "Production release triggered"
+          echo "Commit: ${{ github.sha }}"
+          echo "Author: ${{ github.actor }}"
+          echo "Time:   $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          echo "Ref:    ${{ github.ref }}"

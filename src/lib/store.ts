@@ -1,0 +1,1563 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from './supabase';
+import type {
+  Action, Snag, Tender, Project,
+  ContractReviewRecord, StoredContractReview,
+} from '../data/types';
+
+// ─── Types for DB rows ────────────────────────────────────────────────────────
+
+export type PlatformUserRole =
+  | 'Admin'
+  | 'Commercial Lead'
+  | 'Project Manager'
+  | 'Site Manager'
+  | 'Engineer'
+  | 'Estimator / QS'
+  | 'Client'
+  | 'External / Subcontractor'
+  // Legacy aliases kept for backwards compatibility
+  | 'Manager'
+  | 'User'
+  | 'Client User';
+
+// Flat permission key map — null means "use role default"
+export type UserPermissions = Partial<Record<PermissionKey, boolean>> & { is_test_user?: boolean };
+
+export type PermissionKey =
+  // Projects
+  | 'projects.view_all'
+  | 'projects.view_assigned'
+  | 'projects.create'
+  | 'projects.edit'
+  | 'projects.archive'
+  | 'projects.delete'
+  // Tender Tracker
+  | 'tender.view'
+  | 'tender.rfi.create'
+  | 'tender.rfi.edit'
+  | 'tender.rfi.delete'
+  | 'tender.assumptions.edit'
+  | 'tender.exclusions.edit'
+  | 'tender.scope_notes.edit'
+  | 'tender.risks.edit'
+  | 'tender.reclassify'
+  | 'tender.reconcile'
+  // Commercial
+  | 'commercial.view_pricing'
+  | 'commercial.edit_pricing'
+  | 'commercial.view_rates'
+  | 'commercial.view_values'
+  | 'commercial.view_reports'
+  | 'commercial.export_reports'
+  | 'commercial.edit_project_finance_progress'
+  // AI
+  | 'ai.upload_docs'
+  | 'ai.run_review'
+  | 'ai.approve_findings'
+  | 'ai.reconcile'
+  | 'ai.import'
+  | 'ai.export'
+  // Documents
+  | 'docs.view'
+  | 'docs.upload'
+  | 'docs.download'
+  | 'docs.delete'
+  | 'docs.view_confidential'
+  // Client / External
+  | 'external.comment_only'
+  | 'external.respond_tickets'
+  | 'external.upload_responses'
+  | 'external.view_shared_reports'
+  // Admin
+  | 'admin.invite_users'
+  | 'admin.edit_users'
+  | 'admin.assign_permissions'
+  | 'admin.view_audit_logs'
+  | 'admin.manage_settings'
+  // Module-level access gates (sidebar visibility + route access)
+  | 'modules.projects'
+  | 'modules.snagging'
+  | 'modules.site_forms'
+  | 'modules.testing'
+  | 'modules.actions'
+  | 'modules.comments'
+  | 'modules.reports'
+  // Snagging — action-level
+  | 'snagging.create'
+  | 'snagging.edit'
+  | 'snagging.delete'
+  | 'snagging.export'
+  // Actions — action-level
+  | 'actions.create'
+  | 'actions.edit'
+  | 'actions.delete'
+  | 'actions.export'
+  // Site Forms — action-level
+  | 'site_forms.create'
+  | 'site_forms.edit'
+  | 'site_forms.delete'
+  | 'site_forms.export'
+  // Testing & Commissioning — action-level
+  | 'commissioning.create'
+  | 'commissioning.edit'
+  | 'commissioning.delete'
+  | 'commissioning.export'
+  // Maintenance & Servicing
+  | 'maintenance.view'
+  | 'maintenance.create'
+  | 'maintenance.edit'
+  | 'maintenance.delete'
+  | 'maintenance.assign'
+  | 'maintenance.export'
+  | 'maintenance.comment'
+  | 'maintenance.upload'
+  | 'maintenance.complete'
+  // Programmes
+  | 'programmes.view'
+  | 'programmes.create'
+  | 'programmes.edit'
+  | 'programmes.delete'
+  | 'programmes.export';
+
+export interface DBPlatformUser {
+  id: string;
+  name: string;
+  email: string;
+  role: PlatformUserRole;
+  company: string;
+  status: 'Active' | 'Inactive';
+  avatar_initials: string;
+  join_date: string;
+  assigned_project_ids: string[];
+  permissions?: UserPermissions | null;
+  auth_user_id?: string | null;
+  org_id?: string | null;
+  created_at?: string;
+}
+
+// ─── Role default permission templates ───────────────────────────────────────
+
+export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<PermissionKey, boolean>>> = {
+  Admin: {
+    'projects.view_all': true, 'projects.view_assigned': true, 'projects.create': true,
+    'projects.edit': true, 'projects.archive': true, 'projects.delete': true,
+    'tender.view': true, 'tender.rfi.create': true, 'tender.rfi.edit': true, 'tender.rfi.delete': true,
+    'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
+    'tender.risks.edit': true, 'tender.reclassify': true, 'tender.reconcile': true,
+    'commercial.view_pricing': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
+    'commercial.view_values': true, 'commercial.view_reports': true, 'commercial.export_reports': true,
+    'commercial.edit_project_finance_progress': true,
+    'ai.upload_docs': true, 'ai.run_review': true, 'ai.approve_findings': true, 'ai.reconcile': true,
+    'ai.import': true, 'ai.export': true,
+    'docs.view': true, 'docs.upload': true, 'docs.download': true, 'docs.delete': true, 'docs.view_confidential': true,
+    'admin.invite_users': true, 'admin.edit_users': true, 'admin.assign_permissions': true,
+    'admin.view_audit_logs': true, 'admin.manage_settings': true,
+    'modules.projects': true, 'modules.snagging': true, 'modules.site_forms': true, 'modules.testing': true,
+    'modules.actions': true, 'modules.comments': true, 'modules.reports': true,
+    'snagging.create': true, 'snagging.edit': true, 'snagging.delete': true, 'snagging.export': true,
+    'actions.create': true, 'actions.edit': true, 'actions.delete': true, 'actions.export': true,
+    'site_forms.create': true, 'site_forms.edit': true, 'site_forms.delete': true, 'site_forms.export': true,
+    'commissioning.create': true, 'commissioning.edit': true, 'commissioning.delete': true, 'commissioning.export': true,
+    'maintenance.view': true, 'maintenance.create': true, 'maintenance.edit': true, 'maintenance.delete': true,
+    'maintenance.assign': true, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
+    'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': true, 'programmes.export': true,
+  },
+  'Commercial Lead': {
+    'projects.view_all': true, 'projects.view_assigned': true,
+    'tender.view': true, 'tender.rfi.create': true, 'tender.rfi.edit': true,
+    'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
+    'tender.risks.edit': true, 'tender.reclassify': true, 'tender.reconcile': true,
+    'commercial.view_pricing': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
+    'commercial.view_values': true, 'commercial.view_reports': true, 'commercial.export_reports': true,
+    'commercial.edit_project_finance_progress': true,
+    'ai.upload_docs': true, 'ai.run_review': true, 'ai.approve_findings': true, 'ai.reconcile': true,
+    'ai.import': true, 'ai.export': true,
+    'docs.view': true, 'docs.upload': true, 'docs.download': true,
+    'modules.projects': true, 'modules.snagging': true, 'modules.site_forms': true, 'modules.testing': true,
+    'modules.actions': true, 'modules.comments': true, 'modules.reports': true,
+    'snagging.create': true, 'snagging.edit': true, 'snagging.delete': true, 'snagging.export': true,
+    'actions.create': true, 'actions.edit': true, 'actions.delete': true, 'actions.export': true,
+    'site_forms.create': true, 'site_forms.edit': true, 'site_forms.delete': true, 'site_forms.export': true,
+    'commissioning.create': true, 'commissioning.edit': true, 'commissioning.delete': true, 'commissioning.export': true,
+    'maintenance.view': true, 'maintenance.create': true, 'maintenance.edit': true, 'maintenance.delete': true,
+    'maintenance.assign': true, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
+    'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': true, 'programmes.export': true,
+  },
+  'Project Manager': {
+    'projects.view_assigned': true, 'projects.edit': true,
+    'tender.view': true, 'tender.rfi.create': true, 'tender.rfi.edit': true,
+    'tender.assumptions.edit': true, 'tender.scope_notes.edit': true, 'tender.risks.edit': true,
+    'docs.view': true, 'docs.upload': true, 'docs.download': true,
+    'modules.projects': true, 'modules.snagging': true, 'modules.site_forms': true, 'modules.testing': true,
+    'modules.actions': true, 'modules.comments': true, 'modules.reports': true,
+    'snagging.create': true, 'snagging.edit': true, 'snagging.delete': false, 'snagging.export': true,
+    'actions.create': true, 'actions.edit': true, 'actions.delete': false, 'actions.export': true,
+    'site_forms.create': true, 'site_forms.edit': true, 'site_forms.delete': false, 'site_forms.export': true,
+    'commissioning.create': true, 'commissioning.edit': true, 'commissioning.delete': false, 'commissioning.export': true,
+    'maintenance.view': true, 'maintenance.create': true, 'maintenance.edit': true, 'maintenance.delete': false,
+    'maintenance.assign': true, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
+    'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
+  },
+  'Site Manager': {
+    'projects.view_assigned': true,
+    'tender.view': false, 'tender.rfi.create': false,
+    'docs.view': true, 'docs.upload': true, 'docs.download': true,
+    'external.comment_only': true, 'external.respond_tickets': true, 'external.upload_responses': true,
+    'modules.projects': true, 'modules.snagging': true, 'modules.site_forms': true, 'modules.testing': true,
+    'modules.actions': true, 'modules.comments': true, 'modules.reports': false,
+    'snagging.create': true, 'snagging.edit': true, 'snagging.delete': false, 'snagging.export': true,
+    'actions.create': true, 'actions.edit': true, 'actions.delete': false, 'actions.export': true,
+    'site_forms.create': true, 'site_forms.edit': true, 'site_forms.delete': false, 'site_forms.export': true,
+    'commissioning.create': true, 'commissioning.edit': true, 'commissioning.delete': false, 'commissioning.export': true,
+    'maintenance.view': true, 'maintenance.create': false, 'maintenance.edit': true, 'maintenance.delete': false,
+    'maintenance.assign': false, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
+    'programmes.view': true, 'programmes.create': false, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
+  },
+  Engineer: {
+    'projects.view_assigned': true,
+    'tender.view': true, 'tender.rfi.create': true,
+    'docs.view': true, 'docs.upload': true, 'docs.download': true,
+    'modules.projects': true, 'modules.snagging': true, 'modules.site_forms': true, 'modules.testing': true,
+    'modules.actions': true, 'modules.comments': true, 'modules.reports': false,
+    'snagging.create': true, 'snagging.edit': true, 'snagging.delete': false, 'snagging.export': true,
+    'actions.create': true, 'actions.edit': true, 'actions.delete': false, 'actions.export': true,
+    'site_forms.create': true, 'site_forms.edit': true, 'site_forms.delete': false, 'site_forms.export': true,
+    'commissioning.create': true, 'commissioning.edit': true, 'commissioning.delete': false, 'commissioning.export': true,
+    'maintenance.view': true, 'maintenance.create': false, 'maintenance.edit': true, 'maintenance.delete': false,
+    'maintenance.assign': false, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
+    'programmes.view': true, 'programmes.create': false, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
+  },
+  'Estimator / QS': {
+    'projects.view_assigned': true,
+    'tender.view': true, 'tender.rfi.create': true, 'tender.rfi.edit': true,
+    'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
+    'tender.risks.edit': true, 'tender.reclassify': true, 'tender.reconcile': true,
+    'commercial.view_pricing': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
+    'commercial.view_values': true, 'commercial.view_reports': true, 'commercial.export_reports': true,
+    'ai.upload_docs': true, 'ai.run_review': true, 'ai.approve_findings': true, 'ai.reconcile': true,
+    'ai.import': true, 'ai.export': true,
+    'docs.view': true, 'docs.upload': true, 'docs.download': true,
+    'modules.projects': true, 'modules.snagging': false, 'modules.site_forms': false, 'modules.testing': false,
+    'modules.actions': false, 'modules.comments': true, 'modules.reports': true,
+    'snagging.create': false, 'snagging.edit': false, 'snagging.delete': false, 'snagging.export': false,
+    'actions.create': false, 'actions.edit': false, 'actions.delete': false, 'actions.export': false,
+    'site_forms.create': false, 'site_forms.edit': false, 'site_forms.delete': false, 'site_forms.export': false,
+    'commissioning.create': false, 'commissioning.edit': false, 'commissioning.delete': false, 'commissioning.export': false,
+    'maintenance.view': false, 'maintenance.create': false, 'maintenance.edit': false, 'maintenance.delete': false,
+    'maintenance.assign': false, 'maintenance.export': false, 'maintenance.comment': false, 'maintenance.upload': false, 'maintenance.complete': false,
+    'programmes.view': false, 'programmes.create': false, 'programmes.edit': false, 'programmes.delete': false, 'programmes.export': false,
+  },
+  Client: {
+    // Least privileged role — project overview only, no operational submodules.
+    'projects.view_assigned': true,
+    'external.comment_only': true,
+    'external.view_shared_reports': true,
+    'modules.projects': true, 'modules.snagging': false, 'modules.site_forms': false, 'modules.testing': false,
+    'modules.actions': false, 'modules.comments': false, 'modules.reports': false,
+    'snagging.create': false, 'snagging.edit': false, 'snagging.delete': false, 'snagging.export': false,
+    'actions.create': false, 'actions.edit': false, 'actions.delete': false, 'actions.export': false,
+    'site_forms.create': false, 'site_forms.edit': false, 'site_forms.delete': false, 'site_forms.export': false,
+    'commissioning.create': false, 'commissioning.edit': false, 'commissioning.delete': false, 'commissioning.export': false,
+    'maintenance.view': false, 'maintenance.create': false, 'maintenance.edit': false, 'maintenance.delete': false,
+    'maintenance.assign': false, 'maintenance.export': false, 'maintenance.comment': false, 'maintenance.upload': false, 'maintenance.complete': false,
+    'programmes.view': false, 'programmes.create': false, 'programmes.edit': false, 'programmes.delete': false, 'programmes.export': false,
+  },
+  'External / Subcontractor': {
+    // View and respond to assigned items only — no operational submodules.
+    'projects.view_assigned': true,
+    'external.comment_only': true,
+    'external.respond_tickets': true,
+    'external.upload_responses': true,
+    'modules.projects': true, 'modules.snagging': false, 'modules.site_forms': false, 'modules.testing': false,
+    'modules.actions': false, 'modules.comments': false, 'modules.reports': false,
+    'snagging.create': false, 'snagging.edit': false, 'snagging.delete': false, 'snagging.export': false,
+    'actions.create': false, 'actions.edit': false, 'actions.delete': false, 'actions.export': false,
+    'site_forms.create': false, 'site_forms.edit': false, 'site_forms.delete': false, 'site_forms.export': false,
+    'commissioning.create': false, 'commissioning.edit': false, 'commissioning.delete': false, 'commissioning.export': false,
+    'maintenance.view': false, 'maintenance.create': false, 'maintenance.edit': false, 'maintenance.delete': false,
+    'maintenance.assign': false, 'maintenance.export': false, 'maintenance.comment': false, 'maintenance.upload': false, 'maintenance.complete': false,
+    'programmes.view': false, 'programmes.create': false, 'programmes.edit': false, 'programmes.delete': false, 'programmes.export': false,
+  },
+  // Legacy aliases — map to closest equivalent defaults
+  Manager: {
+    'projects.view_all': true, 'projects.view_assigned': true, 'projects.create': true, 'projects.edit': true,
+    'tender.view': true, 'tender.rfi.create': true, 'tender.rfi.edit': true,
+    'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
+    'tender.risks.edit': true,
+    'commercial.view_pricing': true, 'commercial.view_values': true,
+    'docs.view': true, 'docs.upload': true, 'docs.download': true,
+    'modules.projects': true, 'modules.snagging': true, 'modules.site_forms': true, 'modules.testing': true,
+    'modules.actions': true, 'modules.comments': true, 'modules.reports': true,
+    'snagging.create': true, 'snagging.edit': true, 'snagging.delete': false, 'snagging.export': true,
+    'actions.create': true, 'actions.edit': true, 'actions.delete': false, 'actions.export': true,
+    'site_forms.create': true, 'site_forms.edit': true, 'site_forms.delete': false, 'site_forms.export': true,
+    'commissioning.create': true, 'commissioning.edit': true, 'commissioning.delete': false, 'commissioning.export': true,
+    'maintenance.view': true, 'maintenance.create': true, 'maintenance.edit': true, 'maintenance.delete': false,
+    'maintenance.assign': true, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
+    'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
+  },
+  User: {
+    'projects.view_assigned': true,
+    'docs.view': true, 'docs.upload': true,
+    'modules.projects': true, 'modules.snagging': true, 'modules.site_forms': true, 'modules.testing': true,
+    'modules.actions': true, 'modules.comments': true, 'modules.reports': false,
+    'snagging.create': true, 'snagging.edit': true, 'snagging.delete': false, 'snagging.export': true,
+    'actions.create': true, 'actions.edit': true, 'actions.delete': false, 'actions.export': true,
+    'site_forms.create': true, 'site_forms.edit': true, 'site_forms.delete': false, 'site_forms.export': true,
+    'commissioning.create': true, 'commissioning.edit': true, 'commissioning.delete': false, 'commissioning.export': true,
+    'maintenance.view': true, 'maintenance.create': false, 'maintenance.edit': true, 'maintenance.delete': false,
+    'maintenance.assign': false, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
+    'programmes.view': true, 'programmes.create': false, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
+  },
+  'Client User': {
+    'projects.view_assigned': true,
+    'docs.view': true, 'docs.download': true,
+    'external.comment_only': true, 'external.view_shared_reports': true,
+    'modules.projects': true, 'modules.snagging': false, 'modules.site_forms': false, 'modules.testing': false,
+    'modules.actions': false, 'modules.comments': false, 'modules.reports': false,
+    'snagging.create': false, 'snagging.edit': false, 'snagging.delete': false, 'snagging.export': false,
+    'actions.create': false, 'actions.edit': false, 'actions.delete': false, 'actions.export': false,
+    'site_forms.create': false, 'site_forms.edit': false, 'site_forms.delete': false, 'site_forms.export': false,
+    'commissioning.create': false, 'commissioning.edit': false, 'commissioning.delete': false, 'commissioning.export': false,
+    'maintenance.view': false, 'maintenance.create': false, 'maintenance.edit': false, 'maintenance.delete': false,
+    'maintenance.assign': false, 'maintenance.export': false, 'maintenance.comment': false, 'maintenance.upload': false, 'maintenance.complete': false,
+    'programmes.view': false, 'programmes.create': false, 'programmes.edit': false, 'programmes.delete': false, 'programmes.export': false,
+  },
+};
+
+// Resolve effective permissions for a user (role defaults + overrides)
+export function resolvePermissions(user: DBPlatformUser): Record<PermissionKey, boolean> {
+  const defaults = ROLE_PERMISSIONS[user.role] ?? {};
+  const overrides = user.permissions ?? {};
+  const all = {} as Record<PermissionKey, boolean>;
+  const allKeys: PermissionKey[] = [
+    'projects.view_all','projects.view_assigned','projects.create','projects.edit','projects.archive','projects.delete',
+    'tender.view','tender.rfi.create','tender.rfi.edit','tender.rfi.delete',
+    'tender.assumptions.edit','tender.exclusions.edit','tender.scope_notes.edit','tender.risks.edit',
+    'tender.reclassify','tender.reconcile',
+    'commercial.view_pricing','commercial.edit_pricing','commercial.view_rates','commercial.view_values',
+    'commercial.view_reports','commercial.export_reports','commercial.edit_project_finance_progress',
+    'ai.upload_docs','ai.run_review','ai.approve_findings','ai.reconcile','ai.import','ai.export',
+    'docs.view','docs.upload','docs.download','docs.delete','docs.view_confidential',
+    'external.comment_only','external.respond_tickets','external.upload_responses','external.view_shared_reports',
+    'admin.invite_users','admin.edit_users','admin.assign_permissions','admin.view_audit_logs','admin.manage_settings',
+    'modules.projects','modules.snagging','modules.site_forms','modules.testing','modules.actions','modules.comments','modules.reports',
+    'snagging.create','snagging.edit','snagging.delete','snagging.export',
+    'actions.create','actions.edit','actions.delete','actions.export',
+    'site_forms.create','site_forms.edit','site_forms.delete','site_forms.export',
+    'commissioning.create','commissioning.edit','commissioning.delete','commissioning.export',
+    'maintenance.view','maintenance.create','maintenance.edit','maintenance.delete',
+    'maintenance.assign','maintenance.export','maintenance.comment','maintenance.upload','maintenance.complete',
+    'programmes.view','programmes.create','programmes.edit','programmes.delete','programmes.export',
+  ];
+  for (const key of allKeys) {
+    all[key] = key in overrides ? (overrides[key] ?? false) : (defaults[key] ?? false);
+  }
+  return all;
+}
+
+export interface DBNotification {
+  id: string;
+  recipient_id: string;
+  type: string;
+  title: string;
+  body: string;
+  linked_type: string;
+  linked_id: string;
+  project_id: string;
+  project_name: string;
+  read: boolean;
+  created_at?: string;
+}
+
+export interface DBProject {
+  id: string;
+  name: string;
+  client: string;
+  location: string;
+  project_manager: string;
+  status: string;
+  start_date: string;
+  completion_date: string;
+  progress: number;
+  value: string;
+  open_actions: number;
+  open_snags: number;
+  committed?: number | null;
+}
+
+export interface DBProjectDocument {
+  id: string;
+  project_id: string;
+  project_name: string;
+  name: string;
+  type: string;
+  size: number;
+  category: string;
+  data_url: string;
+  uploaded_by: string;
+  created_at?: string;
+}
+
+export interface DBAttachment {
+  id: string;
+  linked_type: string; // 'action' | 'snag'
+  linked_id: string;
+  project_id: string;
+  project_name: string;
+  name: string;
+  type: string;
+  size: number;
+  category: string;
+  data_url: string;
+  uploaded_by: string;
+  created_at?: string;
+}
+
+export interface DBActionComment {
+  id: string;
+  user: string;
+  datetime: string;
+  text: string;
+}
+
+export interface DBAction {
+  id: string;
+  project_id: string;
+  project_name: string;
+  title: string;
+  description: string;
+  owner: string;
+  due_date: string;
+  status: string;
+  priority: string;
+  created_by: string;
+  created_date: string;
+  overdue: boolean;
+  comments: DBActionComment[];
+}
+
+export interface DBSnag {
+  id: string;
+  project_id: string;
+  project_name: string;
+  title: string;
+  description: string;
+  priority: string;
+  status: string;
+  assigned_to: string;
+  raised_by: string;
+  raised_date: string;
+  due_date: string;
+  location: string;
+  comments: string[];
+  snag_number?: string | null;
+  report_id?: string | null;
+  extra_data?: Record<string, unknown> | null;
+}
+
+export interface DBSnaggingReport {
+  id: string;
+  org_id?: string;
+  project_id: string;
+  project_name: string;
+  title: string;
+  area_block: string;
+  floor_location: string;
+  inspection_date: string;
+  inspector: string;
+  contractor: string;
+  client: string;
+  status: string;
+  overall_completion_pct: number;
+  notes: string;
+  created_by: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DBFormComment {
+  id: string;
+  user: string;
+  datetime: string;
+  text: string;
+}
+
+export interface DBSiteForm {
+  id: string;
+  type: string;
+  project_id: string;
+  project_name: string;
+  date: string;
+  completed_by: string;
+  description: string;
+  comments: string;
+  form_comments: DBFormComment[];
+  status: string;
+  submitted_date?: string;
+  notes: string;
+  extra_data: Record<string, unknown>;
+}
+
+export interface DBTender {
+  id: string;
+  ref: string;
+  name: string;
+  client: string;
+  location: string;
+  received_date: string;
+  return_date: string;
+  estimated_value: number;
+  status: string;
+  owner: string;
+  priority: string;
+  last_updated: string;
+  next_action: string;
+  internal_notes: string;
+  scope_notes: Record<string, string>;
+  scope_entries: unknown[];
+  subcontractors: unknown[];
+  rfis: unknown[];
+  documents: unknown[];
+  comments: unknown[];
+  outcome_notes: string;
+  converted_project_id?: string;
+  progress?: number;
+  estimate_items?: unknown[];
+  ai_review?: unknown;
+  contract_review?: unknown;  // legacy — kept for backward compat read
+  contract_reviews?: unknown;
+}
+
+export interface DBTCRecord {
+  id: string;
+  project_id: string;
+  project_name: string;
+  category: string;
+  ref: string;
+  title: string;
+  area: string;
+  engineer: string;
+  date: string;
+  status: string;
+  result?: string;
+  notes: string;
+  files: unknown[];
+  comments: unknown[];
+}
+
+// ─── Mappers: DB row → frontend type ─────────────────────────────────────────
+
+function dbToProject(r: DBProject): Project {
+  return {
+    id: r.id,
+    name: r.name,
+    client: r.client,
+    location: r.location,
+    projectManager: r.project_manager,
+    status: r.status as Project['status'],
+    startDate: r.start_date,
+    completionDate: r.completion_date,
+    progress: r.progress,
+    value: r.value,
+    openActions: r.open_actions,
+    openSnags: r.open_snags,
+    committed: r.committed ?? null,
+  };
+}
+
+function projectToDB(p: Project): DBProject {
+  return {
+    id: p.id,
+    name: p.name,
+    client: p.client,
+    location: p.location,
+    project_manager: p.projectManager,
+    status: p.status,
+    start_date: p.startDate,
+    completion_date: p.completionDate,
+    progress: p.progress,
+    value: p.value,
+    open_actions: p.openActions,
+    open_snags: p.openSnags,
+    committed: p.committed ?? null,
+  };
+}
+
+function dbToAction(r: DBAction): Action {
+  return {
+    id: r.id,
+    projectId: r.project_id,
+    projectName: r.project_name,
+    title: r.title,
+    description: r.description,
+    owner: r.owner,
+    dueDate: r.due_date,
+    status: r.status as Action['status'],
+    priority: r.priority as Action['priority'],
+    createdBy: r.created_by,
+    createdDate: r.created_date,
+    overdue: r.overdue,
+    comments: (r.comments ?? []) as Action['comments'],
+  };
+}
+
+function actionToDB(a: Action): DBAction {
+  return {
+    id: a.id,
+    project_id: a.projectId,
+    project_name: a.projectName,
+    title: a.title,
+    description: a.description,
+    owner: a.owner,
+    due_date: a.dueDate,
+    status: a.status,
+    priority: a.priority,
+    created_by: a.createdBy,
+    created_date: a.createdDate,
+    overdue: a.overdue,
+    comments: a.comments ?? [],
+  };
+}
+
+function dbToSnag(r: DBSnag): Snag {
+  return {
+    id: r.id,
+    projectId: r.project_id,
+    projectName: r.project_name,
+    title: r.title,
+    description: r.description,
+    priority: r.priority as Snag['priority'],
+    status: r.status as Snag['status'],
+    assignedTo: r.assigned_to,
+    raisedBy: r.raised_by,
+    raisedDate: r.raised_date,
+    dueDate: r.due_date,
+    location: r.location,
+    comments: r.comments ?? [],
+    // Extended fields stored in extra_data
+    ...(r.extra_data ?? {}),
+    snagNumber: r.snag_number ?? (r.extra_data as Record<string, unknown>)?.snagNumber ?? undefined,
+    reportId: r.report_id ?? undefined,
+  } as Snag;
+}
+
+function snagToDB(s: Snag & { snagNumber?: string; reportId?: string; extra_data?: Record<string, unknown> }): DBSnag {
+  // Pull out known top-level fields; pack everything else into extra_data
+  const { id, projectId, projectName, title, description, priority, status,
+          assignedTo, raisedBy, raisedDate, dueDate, location, comments,
+          snagNumber, reportId, extra_data, ...rest } = s as unknown as Record<string, unknown>;
+  return {
+    id: id as string,
+    project_id: projectId as string,
+    project_name: projectName as string,
+    title: title as string,
+    description: description as string,
+    priority: priority as string,
+    status: status as string,
+    assigned_to: assignedTo as string,
+    raised_by: raisedBy as string,
+    raised_date: raisedDate as string,
+    due_date: dueDate as string,
+    location: location as string,
+    comments: (comments as string[]) ?? [],
+    snag_number: (snagNumber as string) ?? null,
+    report_id: (reportId as string) ?? null,
+    extra_data: { ...((extra_data as Record<string, unknown>) ?? {}), ...(rest as Record<string, unknown>) },
+  };
+}
+
+function dbToTender(r: DBTender): Tender {
+  return {
+    id: r.id,
+    ref: r.ref,
+    name: r.name,
+    client: r.client,
+    location: r.location,
+    receivedDate: r.received_date,
+    returnDate: r.return_date,
+    estimatedValue: Number(r.estimated_value),
+    status: r.status as Tender['status'],
+    owner: r.owner,
+    priority: r.priority as Tender['priority'],
+    lastUpdated: r.last_updated,
+    nextAction: r.next_action,
+    internalNotes: r.internal_notes,
+    scopeNotes: (r.scope_notes ?? {}) as unknown as Tender['scopeNotes'],
+    scopeEntries: (r.scope_entries ?? []) as Tender['scopeEntries'],
+    subcontractors: (r.subcontractors ?? []) as Tender['subcontractors'],
+    rfis: (r.rfis ?? []) as Tender['rfis'],
+    documents: (r.documents ?? []) as Tender['documents'],
+    comments: (r.comments ?? []) as Tender['comments'],
+    outcomeNotes: r.outcome_notes ?? '',
+    convertedProjectId: r.converted_project_id,
+    progress: r.progress ?? 0,
+    estimateItems: (r.estimate_items ?? []) as Tender['estimateItems'],
+    aiReview: r.ai_review as Tender['aiReview'] ?? undefined,
+    contractReviews: migrateContractReviews(r),
+  };
+}
+
+// Reads the new contract_reviews array, falling back to the legacy single
+// contract_review object so no existing data is lost on upgrade.
+function migrateContractReviews(r: DBTender): ContractReviewRecord[] | undefined {
+  if (Array.isArray(r.contract_reviews) && r.contract_reviews.length > 0) {
+    return r.contract_reviews as ContractReviewRecord[];
+  }
+  // Migrate legacy single-review object into the new array shape
+  if (r.contract_review && typeof r.contract_review === 'object') {
+    const legacy = r.contract_review as StoredContractReview;
+    const migrated: ContractReviewRecord = {
+      id: `cr-migrated-${Date.now()}`,
+      title: legacy.documentName ?? 'Contract Review',
+      createdAt: legacy.reviewedAt ?? new Date().toISOString(),
+      createdBy: '',
+      documents: legacy.documentName
+        ? [{ name: legacy.documentName, size: 0, type: 'application/pdf', addedAt: legacy.reviewedAt ?? new Date().toISOString() }]
+        : [],
+      executiveSummary: legacy.executiveSummary ?? '',
+      findings: legacy.findings ?? [],
+      commercialHandoverNotes: legacy.commercialHandoverNotes ?? '',
+      notes: '',
+      savedToDocuments: false,
+    };
+    return [migrated];
+  }
+  return undefined;
+}
+
+function tenderToDB(t: Tender): DBTender {
+  return {
+    id: t.id,
+    ref: t.ref,
+    name: t.name,
+    client: t.client,
+    location: t.location,
+    received_date: t.receivedDate,
+    return_date: t.returnDate,
+    estimated_value: t.estimatedValue,
+    status: t.status,
+    owner: t.owner,
+    priority: t.priority,
+    last_updated: t.lastUpdated,
+    next_action: t.nextAction,
+    internal_notes: t.internalNotes,
+    scope_notes: (t.scopeNotes ?? {}) as unknown as Record<string, string>,
+    scope_entries: t.scopeEntries ?? [],
+    subcontractors: t.subcontractors,
+    rfis: t.rfis,
+    documents: t.documents,
+    comments: t.comments,
+    outcome_notes: t.outcomeNotes,
+    converted_project_id: t.convertedProjectId,
+    progress: t.progress ?? 0,
+    estimate_items: t.estimateItems ?? [],
+    ai_review: t.aiReview ?? null,
+    contract_reviews: t.contractReviews ?? null,
+  };
+}
+
+// ─── Settings type ────────────────────────────────────────────────────────────
+
+export interface DBSettings {
+  id: string;
+  company_name: string;
+  company_address: string;
+  company_phone: string;
+  company_email: string;
+  company_website: string;
+  company_vat_number: string;
+  company_number: string;
+  pdf_footer: string;
+  logo_data_url: string;
+  accent_color: string;
+  default_action_priority: string;
+  default_snag_priority: string;
+  default_project_status: string;
+  rfi_number_prefix: string;
+  rfi_number_start: number;
+  snag_number_prefix: string;
+  snag_number_start: number;
+  action_number_prefix: string;
+  action_number_start: number;
+  notification_toggles: Record<string, boolean>;
+  updated_at?: string;
+}
+
+export const DEFAULT_SETTINGS: DBSettings = {
+  id: 'workspace',
+  company_name: '',
+  company_address: '',
+  company_phone: '',
+  company_email: '',
+  company_website: '',
+  company_vat_number: '',
+  company_number: '',
+  pdf_footer: '',
+  logo_data_url: '',
+  accent_color: '#f97316',
+  default_action_priority: 'Medium',
+  default_snag_priority: 'Medium',
+  default_project_status: 'Active',
+  rfi_number_prefix: 'RFI',
+  rfi_number_start: 1,
+  snag_number_prefix: 'SNG',
+  snag_number_start: 1,
+  action_number_prefix: 'ACT',
+  action_number_start: 1,
+  notification_toggles: {},
+};
+
+// ─── Maintenance Job ──────────────────────────────────────────────────────────
+
+export type MaintenanceStatus =
+  | 'New Job'
+  | 'Engineer Allocated'
+  | 'Site Visit Booked'
+  | 'Attended'
+  | 'Awaiting Decision'
+  | 'Awaiting Quote Approval'
+  | 'Awaiting Materials'
+  | 'Materials Ordered'
+  | 'Reattend Required'
+  | 'Follow-Up Required'
+  | 'Job Complete'
+  | 'Ready to Invoice'
+  | 'Invoiced'
+  | 'Closed / Complete'
+  | 'Cancelled';
+
+export type MaintenancePriority = 'Low' | 'Medium' | 'High' | 'Critical';
+
+export interface MaintenanceMaterial {
+  id: string;
+  item: string;
+  qty: string;
+  unit: string;
+}
+
+export interface MaintenanceComment {
+  id: string;
+  user: string;
+  datetime: string;
+  text: string;
+  type?: 'comment' | 'engineer' | 'internal' | 'status';
+}
+
+export interface DBMaintenanceJob {
+  id: string;
+  job_number: string;
+  client_name: string;
+  site_address: string;
+  contact_name: string;
+  contact_number: string;
+  assigned_engineer: string;
+  description: string;
+  priority: MaintenancePriority;
+  status: MaintenanceStatus;
+  engineer_notes: string;
+  internal_notes: string;
+  materials: MaintenanceMaterial[];
+  comments: MaintenanceComment[];
+  target_date: string;
+  completion_date: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// ─── Programmes ───────────────────────────────────────────────────────────────
+
+export type ProgrammeTaskStatus = 'Not Started' | 'In Progress' | 'Awaiting Others' | 'Blocked' | 'Complete';
+
+export interface DBProgrammeTask {
+  id: string;
+  org_id?: string;
+  programme_id: string;
+  project_id: string;
+  task_name: string;
+  assigned_to: string;
+  start_date: string;
+  finish_date: string;
+  status: ProgrammeTaskStatus;
+  notes: string;
+  sort_order: number;
+  created_at?: string;
+}
+
+export interface DBProgramme {
+  id: string;
+  org_id?: string;
+  project_id: string;
+  project_name: string;
+  title: string;
+  description: string;
+  created_by: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// ─── Main store hook ──────────────────────────────────────────────────────────
+
+export interface AppStore {
+  projects: Project[];
+  projectDocuments: DBProjectDocument[];
+  attachments: DBAttachment[];
+  actions: Action[];
+  snags: Snag[];
+  snaggingReports: DBSnaggingReport[];
+  siteForms: DBSiteForm[];
+  tenders: Tender[];
+  tcRecords: DBTCRecord[];
+  maintenanceJobs: DBMaintenanceJob[];
+  programmes: DBProgramme[];
+  programmeTasks: DBProgrammeTask[];
+  platformUsers: DBPlatformUser[];
+  notifications: DBNotification[];
+  loading: boolean;
+  currentUser: DBPlatformUser | null;
+  currentOrgId: string | null;
+  visibleProjectIds: string[] | null; // null = all (Admin)
+  switchUser: (name: string) => void;
+  settings: DBSettings;
+  updateSettings: (s: DBSettings) => Promise<void>;
+
+  // Projects
+  addProject: (p: Project) => Promise<string | null>;
+  updateProject: (p: Project) => Promise<void>;
+  removeProject: (id: string) => Promise<void>;
+
+  // Project Documents
+  addProjectDocument: (d: DBProjectDocument) => Promise<void>;
+  removeProjectDocument: (id: string) => Promise<void>;
+
+  // Ticket Attachments (actions, snags)
+  addAttachment: (a: DBAttachment) => Promise<void>;
+  removeAttachment: (id: string) => Promise<void>;
+  fetchAttachmentData: (id: string) => Promise<string>;
+
+  // Actions
+  addAction: (a: Action) => Promise<void>;
+  updateAction: (a: Action) => Promise<void>;
+  removeAction: (id: string) => Promise<void>;
+
+  // Snags
+  addSnag: (s: Snag) => Promise<void>;
+  updateSnag: (s: Snag) => Promise<void>;
+  removeSnag: (id: string) => Promise<void>;
+
+  // Snagging Reports
+  addSnaggingReport: (r: DBSnaggingReport) => Promise<void>;
+  updateSnaggingReport: (r: DBSnaggingReport) => Promise<void>;
+  removeSnaggingReport: (id: string) => Promise<void>;
+
+  // Site forms
+  addSiteForm: (f: DBSiteForm) => Promise<void>;
+  updateSiteForm: (f: DBSiteForm) => Promise<void>;
+  removeSiteForm: (id: string) => Promise<void>;
+
+  // Tenders
+  addTender: (t: Tender) => Promise<string | null>;
+  updateTender: (t: Tender) => Promise<void>;
+  removeTender: (id: string) => Promise<void>;
+
+  // TC Records
+  addTCRecord: (r: DBTCRecord) => Promise<void>;
+  updateTCRecord: (r: DBTCRecord) => Promise<void>;
+  removeTCRecord: (id: string) => Promise<void>;
+
+  // Maintenance Jobs
+  addMaintenanceJob: (j: DBMaintenanceJob) => Promise<void>;
+  updateMaintenanceJob: (j: DBMaintenanceJob) => Promise<void>;
+  removeMaintenanceJob: (id: string) => Promise<void>;
+
+  // Programmes
+  addProgramme: (p: DBProgramme) => Promise<void>;
+  updateProgramme: (p: DBProgramme) => Promise<void>;
+  removeProgramme: (id: string) => Promise<void>;
+  addProgrammeTask: (t: DBProgrammeTask) => Promise<void>;
+  updateProgrammeTask: (t: DBProgrammeTask) => Promise<void>;
+  removeProgrammeTask: (id: string) => Promise<void>;
+
+  // Platform Users
+  addPlatformUser: (u: DBPlatformUser) => Promise<void>;
+  updatePlatformUser: (u: DBPlatformUser) => Promise<void>;
+  removePlatformUser: (id: string) => Promise<void>;
+
+  // Notifications
+  addNotification: (n: DBNotification) => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+}
+
+// Legacy localStorage user-switching — kept for UI compatibility, no longer
+// drives currentUser resolution. currentUser is now derived from auth_user_id.
+let _activeUserName: string = (() => {
+  try { return localStorage.getItem('vysite_active_user') ?? ''; } catch { return ''; }
+})();
+
+export function switchUser(name: string) {
+  _activeUserName = name;
+  try { localStorage.setItem('vysite_active_user', name); } catch { /* ignore */ }
+  window.location.reload();
+}
+
+const DEV = import.meta.env.DEV;
+
+// Returns orgId or null. Always logs if missing — not gated on DEV — so the
+// failure is visible in the production browser console.
+function getOrgId(orgId: string | null): string | null {
+  if (!orgId) {
+    console.error('[VYSITE] Write blocked: currentOrgId is null. User may not have a user_orgs entry, or org resolution has not completed yet.');
+    return null;
+  }
+  return orgId;
+}
+
+function logWrite(op: string, table: string, error: unknown, data?: unknown) {
+  // Errors are always logged (production + dev). Success is dev-only.
+  if (error) {
+    console.error(`[VYSITE] ${op} ${table} FAILED:`, error);
+  } else if (DEV) {
+    console.log(`[VYSITE] ${op} ${table} OK`, data ?? '');
+  }
+}
+
+export function useStore(orgId: string | null, authUserId: string | null): AppStore {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectDocuments, setProjectDocuments] = useState<DBProjectDocument[]>([]);
+  const [attachments, setAttachments] = useState<DBAttachment[]>([]);
+  const [actions, setActions] = useState<Action[]>([]);
+  const [snags, setSnags] = useState<Snag[]>([]);
+  const [snaggingReports, setSnaggingReports] = useState<DBSnaggingReport[]>([]);
+  const [siteForms, setSiteForms] = useState<DBSiteForm[]>([]);
+  const [tenders, setTenders] = useState<Tender[]>([]);
+  const [tcRecords, setTCRecords] = useState<DBTCRecord[]>([]);
+  const [maintenanceJobs, setMaintenanceJobs] = useState<DBMaintenanceJob[]>([]);
+  const [programmes, setProgrammes] = useState<DBProgramme[]>([]);
+  const [programmeTasks, setProgrammeTasks] = useState<DBProgrammeTask[]>([]);
+  const [platformUsers, setPlatformUsers] = useState<DBPlatformUser[]>([]);
+  const [notifications, setNotifications] = useState<DBNotification[]>([]);
+  const [settings, setSettings] = useState<DBSettings>(DEFAULT_SETTINGS);
+  const [loading, setLoading] = useState(true);
+
+  // Keep a stable ref to orgId so callbacks always read the latest value
+  // without needing to be re-created (avoids cascading re-renders).
+  const orgIdRef = useRef(orgId);
+  orgIdRef.current = orgId;
+
+  useEffect(() => {
+    // Block all data loading if org context is not resolved.
+    // This prevents global reads and cross-org data leakage.
+    if (!orgId) {
+      setProjects([]);
+      setProjectDocuments([]);
+      setAttachments([]);
+      setActions([]);
+      setSnags([]);
+      setSnaggingReports([]);
+      setSiteForms([]);
+      setTenders([]);
+      setTCRecords([]);
+      setMaintenanceJobs([]);
+      setProgrammes([]);
+      setProgrammeTasks([]);
+      setNotifications([]);
+      // Keep platformUsers/settings as-is — they load below with org filter
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadingTimeout = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 15000);
+
+    async function load() {
+      console.log('[VYSITE] store.load() started, orgId:', orgId);
+      const ATT_COLS = 'id,linked_type,linked_id,project_id,project_name,name,type,size,category,uploaded_by,created_at';
+
+      // All queries are explicitly scoped to the resolved org — no global reads.
+      const [projRes, docRes, attRes, actRes, snaRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, puRes, notifRes, settingsRes] = await Promise.all([
+        supabase.from('vy_projects').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
+        supabase.from('vy_project_documents').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_actions').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_snags').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_snagging_reports').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_site_forms').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_tenders').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_tc_records').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_maintenance_jobs').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_programmes').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
+        supabase.from('vy_programme_tasks').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
+        supabase.from('vy_platform_users').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
+        supabase.from('vy_notifications').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_settings').select('*').eq('org_id', orgId).maybeSingle(),
+      ]);
+
+      if (cancelled) return;
+
+      console.log('[VYSITE] load() results:',
+        'projects:', projRes.data?.length ?? 0,
+        '| platformUsers:', puRes.data?.length ?? 0,
+        '| tenders:', tenRes.data?.length ?? 0,
+        '| settings:', settingsRes.data ? 'found' : 'none',
+      );
+      if (projRes.error) console.error('[VYSITE] load vy_projects error:', projRes.error);
+      if (puRes.error) console.error('[VYSITE] load vy_platform_users error:', puRes.error);
+      if (tenRes.error) console.error('[VYSITE] load vy_tenders error:', tenRes.error);
+      if (settingsRes.error) console.error('[VYSITE] load vy_settings error:', settingsRes.error);
+
+      setProjects((projRes.data ?? []).map(r => dbToProject(r as DBProject)));
+      setProjectDocuments((docRes.data ?? []) as DBProjectDocument[]);
+      setAttachments((attRes.data ?? []) as DBAttachment[]);
+      setActions((actRes.data ?? []).map(r => dbToAction(r as DBAction)));
+      setSnags((snaRes.data ?? []).map(r => dbToSnag(r as DBSnag)));
+      setSnaggingReports((snrRes.data ?? []) as DBSnaggingReport[]);
+      setSiteForms(((frmRes.data ?? []) as DBSiteForm[]).map(f => ({
+        ...(f.extra_data as Record<string, unknown> ?? {}),
+        ...f,
+        form_comments: f.form_comments ?? [],
+        // camelCase aliases so UI code using projectName / completedBy works
+        projectName: f.project_name,
+        projectId: f.project_id,
+        completedBy: f.completed_by,
+        submittedDate: f.submitted_date,
+      })));
+      setTenders((tenRes.data ?? []).map(r => dbToTender(r as DBTender)));
+      setTCRecords((tcRes.data ?? []) as DBTCRecord[]);
+      setMaintenanceJobs((mjRes.data ?? []) as DBMaintenanceJob[]);
+      setProgrammes((progRes.data ?? []) as DBProgramme[]);
+      setProgrammeTasks((ptaskRes.data ?? []) as DBProgrammeTask[]);
+      setPlatformUsers((puRes.data ?? []) as DBPlatformUser[]);
+      setNotifications((notifRes.data ?? []) as DBNotification[]);
+      if (settingsRes.data) setSettings({ ...DEFAULT_SETTINGS, ...(settingsRes.data as DBSettings) });
+      setLoading(false);
+    }
+
+    load().finally(() => clearTimeout(loadingTimeout));
+    return () => {
+      cancelled = true;
+      clearTimeout(loadingTimeout);
+    };
+  }, [orgId]);
+
+  // ── Projects ──────────────────────────────────────────────────────────────────
+
+  const addProject = useCallback(async (p: Project): Promise<string | null> => {
+    console.log('[VYSITE] addProject called, id:', p.id, 'orgId:', orgIdRef.current);
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return 'No organisation context — cannot save project.';
+    setProjects(prev => [...prev, p]);
+    const { data, error } = await supabase.from('vy_projects').upsert({ ...projectToDB(p), org_id: oid }, { onConflict: 'id' }).select('id,name,org_id').maybeSingle();
+    logWrite('addProject', 'vy_projects', error, data);
+    return error ? `Save failed: ${error.message}` : null;
+  }, []);
+
+  const updateProject = useCallback(async (p: Project) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setProjects(prev => prev.map(x => x.id === p.id ? p : x));
+    const { data, error } = await supabase.from('vy_projects').upsert({ ...projectToDB(p), org_id: oid }, { onConflict: 'id' }).select('id,name').maybeSingle();
+    logWrite('updateProject', 'vy_projects', error, data);
+  }, []);
+
+  const removeProject = useCallback(async (id: string) => {
+    setProjects(prev => prev.filter(p => p.id !== id));
+    const { error } = await supabase.from('vy_projects').delete().eq('id', id);
+    logWrite('removeProject', 'vy_projects', error, { id });
+  }, []);
+
+  // ── Project Documents ─────────────────────────────────────────────────────────
+
+  const addProjectDocument = useCallback(async (d: DBProjectDocument) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setProjectDocuments(prev => [d, ...prev]);
+    const { error } = await supabase.from('vy_project_documents').upsert({ ...d, org_id: oid }, { onConflict: 'id' });
+    logWrite('addProjectDocument', 'vy_project_documents', error);
+  }, []);
+
+  const removeProjectDocument = useCallback(async (id: string) => {
+    setProjectDocuments(prev => prev.filter(d => d.id !== id));
+    const { error } = await supabase.from('vy_project_documents').delete().eq('id', id);
+    logWrite('removeProjectDocument', 'vy_project_documents', error);
+  }, []);
+
+  // ── Actions ───────────────────────────────────────────────────────────────────
+
+  const addAction = useCallback(async (a: Action) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setActions(prev => [a, ...prev]);
+    const { data, error } = await supabase.from('vy_actions').upsert({ ...actionToDB(a), org_id: oid }, { onConflict: 'id' }).select('id,title,org_id').maybeSingle();
+    logWrite('addAction', 'vy_actions', error, data);
+  }, []);
+
+  const updateAction = useCallback(async (a: Action) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setActions(prev => prev.map(x => x.id === a.id ? a : x));
+    const { error } = await supabase.from('vy_actions').upsert({ ...actionToDB(a), org_id: oid }, { onConflict: 'id' });
+    logWrite('updateAction', 'vy_actions', error);
+  }, []);
+
+  const removeAction = useCallback(async (id: string) => {
+    setActions(prev => prev.filter(a => a.id !== id));
+    setAttachments(prev => prev.filter(a => !(a.linked_type === 'action' && a.linked_id === id)));
+    const { error } = await supabase.from('vy_actions').delete().eq('id', id);
+    logWrite('removeAction', 'vy_actions', error);
+    await supabase.from('vy_attachments').delete().eq('linked_type', 'action').eq('linked_id', id);
+  }, []);
+
+  // ── Snags ─────────────────────────────────────────────────────────────────────
+
+  const addSnag = useCallback(async (s: Snag) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSnags(prev => [s, ...prev]);
+    const { data, error } = await supabase.from('vy_snags').upsert({ ...snagToDB(s), org_id: oid }, { onConflict: 'id' }).select('id,title,org_id').maybeSingle();
+    logWrite('addSnag', 'vy_snags', error, data);
+  }, []);
+
+  const updateSnag = useCallback(async (s: Snag) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSnags(prev => prev.map(x => x.id === s.id ? s : x));
+    const { error } = await supabase.from('vy_snags').upsert({ ...snagToDB(s), org_id: oid }, { onConflict: 'id' });
+    logWrite('updateSnag', 'vy_snags', error);
+  }, []);
+
+  const removeSnag = useCallback(async (id: string) => {
+    setSnags(prev => prev.filter(s => s.id !== id));
+    setAttachments(prev => prev.filter(a => !(a.linked_type === 'snag' && a.linked_id === id)));
+    const { error } = await supabase.from('vy_snags').delete().eq('id', id);
+    logWrite('removeSnag', 'vy_snags', error);
+    await supabase.from('vy_attachments').delete().eq('linked_type', 'snag').eq('linked_id', id);
+  }, []);
+
+  // ── Snagging Reports ──────────────────────────────────────────────────────────
+
+  const addSnaggingReport = useCallback(async (r: DBSnaggingReport) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSnaggingReports(prev => [r, ...prev]);
+    const { error } = await supabase.from('vy_snagging_reports').upsert({ ...r, org_id: oid }, { onConflict: 'id' });
+    logWrite('addSnaggingReport', 'vy_snagging_reports', error);
+  }, []);
+
+  const updateSnaggingReport = useCallback(async (r: DBSnaggingReport) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSnaggingReports(prev => prev.map(x => x.id === r.id ? r : x));
+    const { error } = await supabase.from('vy_snagging_reports').upsert({ ...r, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateSnaggingReport', 'vy_snagging_reports', error);
+  }, []);
+
+  const removeSnaggingReport = useCallback(async (id: string) => {
+    setSnaggingReports(prev => prev.filter(r => r.id !== id));
+    // Orphan snags in this report — unlink them rather than delete
+    setSnags(prev => prev.map(s => (s as Snag & { reportId?: string }).reportId === id
+      ? { ...s, reportId: undefined } as Snag
+      : s
+    ));
+    const { error } = await supabase.from('vy_snagging_reports').delete().eq('id', id);
+    logWrite('removeSnaggingReport', 'vy_snagging_reports', error);
+    // Unlink snags from this report in DB
+    await supabase.from('vy_snags').update({ report_id: null }).eq('report_id', id);
+  }, []);
+
+  // ── Site Forms ────────────────────────────────────────────────────────────────
+
+  const addSiteForm = useCallback(async (f: DBSiteForm) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const merged = {
+      ...(f.extra_data as Record<string, unknown> ?? {}),
+      ...f,
+      form_comments: f.form_comments ?? [],
+      projectName: f.project_name,
+      projectId: f.project_id,
+      completedBy: f.completed_by,
+      submittedDate: f.submitted_date,
+    };
+    setSiteForms(prev => [merged, ...prev]);
+    const { error } = await supabase.from('vy_site_forms').upsert({ ...f, org_id: oid }, { onConflict: 'id' });
+    logWrite('addSiteForm', 'vy_site_forms', error);
+  }, []);
+
+  const updateSiteForm = useCallback(async (f: DBSiteForm) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const merged = {
+      ...(f.extra_data as Record<string, unknown> ?? {}),
+      ...f,
+      form_comments: f.form_comments ?? [],
+      projectName: f.project_name,
+      projectId: f.project_id,
+      completedBy: f.completed_by,
+      submittedDate: f.submitted_date,
+    };
+    setSiteForms(prev => prev.map(x => x.id === f.id ? merged : x));
+    const { error } = await supabase.from('vy_site_forms').upsert({ ...f, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateSiteForm', 'vy_site_forms', error);
+  }, []);
+
+  const removeSiteForm = useCallback(async (id: string) => {
+    setSiteForms(prev => prev.filter(f => f.id !== id));
+    const { error } = await supabase.from('vy_site_forms').delete().eq('id', id);
+    logWrite('removeSiteForm', 'vy_site_forms', error);
+  }, []);
+
+  // ── Tenders ───────────────────────────────────────────────────────────────────
+
+  const addTender = useCallback(async (t: Tender): Promise<string | null> => {
+    console.log('[VYSITE] addTender called, id:', t.id, 'orgId:', orgIdRef.current);
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return 'No organisation context — cannot save tender.';
+    setTenders(prev => [t, ...prev]);
+    const { data, error } = await supabase.from('vy_tenders').upsert({ ...tenderToDB(t), org_id: oid }, { onConflict: 'id' }).select('id,name,org_id').maybeSingle();
+    logWrite('addTender', 'vy_tenders', error, data);
+    return error ? `Save failed: ${error.message}` : null;
+  }, []);
+
+  const updateTender = useCallback(async (t: Tender) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setTenders(prev => prev.map(x => x.id === t.id ? t : x));
+    const { error } = await supabase.from('vy_tenders').upsert({ ...tenderToDB(t), org_id: oid }, { onConflict: 'id' });
+    logWrite('updateTender', 'vy_tenders', error);
+  }, []);
+
+  const removeTender = useCallback(async (id: string) => {
+    setTenders(prev => prev.filter(t => t.id !== id));
+    const { error } = await supabase.from('vy_tenders').delete().eq('id', id);
+    logWrite('removeTender', 'vy_tenders', error);
+  }, []);
+
+  // ── TC Records ────────────────────────────────────────────────────────────────
+
+  const addTCRecord = useCallback(async (r: DBTCRecord) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setTCRecords(prev => [r, ...prev]);
+    const { error } = await supabase.from('vy_tc_records').upsert({ ...r, org_id: oid }, { onConflict: 'id' });
+    logWrite('addTCRecord', 'vy_tc_records', error);
+  }, []);
+
+  const updateTCRecord = useCallback(async (r: DBTCRecord) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setTCRecords(prev => prev.map(x => x.id === r.id ? r : x));
+    const { error } = await supabase.from('vy_tc_records').upsert({ ...r, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateTCRecord', 'vy_tc_records', error);
+  }, []);
+
+  const removeTCRecord = useCallback(async (id: string) => {
+    setTCRecords(prev => prev.filter(r => r.id !== id));
+    const { error } = await supabase.from('vy_tc_records').delete().eq('id', id);
+    logWrite('removeTCRecord', 'vy_tc_records', error);
+  }, []);
+
+  // ── Maintenance Jobs ──────────────────────────────────────────────────────────
+
+  const addMaintenanceJob = useCallback(async (j: DBMaintenanceJob) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setMaintenanceJobs(prev => [j, ...prev]);
+    const { error } = await supabase.from('vy_maintenance_jobs').upsert({ ...j, org_id: oid }, { onConflict: 'id' });
+    logWrite('addMaintenanceJob', 'vy_maintenance_jobs', error);
+  }, []);
+
+  const updateMaintenanceJob = useCallback(async (j: DBMaintenanceJob) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setMaintenanceJobs(prev => prev.map(x => x.id === j.id ? j : x));
+    const { error } = await supabase.from('vy_maintenance_jobs').upsert({ ...j, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateMaintenanceJob', 'vy_maintenance_jobs', error);
+  }, []);
+
+  const removeMaintenanceJob = useCallback(async (id: string) => {
+    setMaintenanceJobs(prev => prev.filter(j => j.id !== id));
+    const { error } = await supabase.from('vy_maintenance_jobs').delete().eq('id', id);
+    logWrite('removeMaintenanceJob', 'vy_maintenance_jobs', error);
+  }, []);
+
+  // ── Programmes ────────────────────────────────────────────────────────────────
+
+  const addProgramme = useCallback(async (p: DBProgramme) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setProgrammes(prev => [...prev, p]);
+    const { error } = await supabase.from('vy_programmes').upsert({ ...p, org_id: oid }, { onConflict: 'id' });
+    logWrite('addProgramme', 'vy_programmes', error);
+  }, []);
+
+  const updateProgramme = useCallback(async (p: DBProgramme) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setProgrammes(prev => prev.map(x => x.id === p.id ? p : x));
+    const { error } = await supabase.from('vy_programmes').upsert({ ...p, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateProgramme', 'vy_programmes', error);
+  }, []);
+
+  const removeProgramme = useCallback(async (id: string) => {
+    setProgrammes(prev => prev.filter(p => p.id !== id));
+    setProgrammeTasks(prev => prev.filter(t => t.programme_id !== id));
+    const { error } = await supabase.from('vy_programmes').delete().eq('id', id);
+    logWrite('removeProgramme', 'vy_programmes', error);
+  }, []);
+
+  const addProgrammeTask = useCallback(async (t: DBProgrammeTask) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setProgrammeTasks(prev => [...prev, t]);
+    const { error } = await supabase.from('vy_programme_tasks').upsert({ ...t, org_id: oid }, { onConflict: 'id' });
+    logWrite('addProgrammeTask', 'vy_programme_tasks', error);
+  }, []);
+
+  const updateProgrammeTask = useCallback(async (t: DBProgrammeTask) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setProgrammeTasks(prev => prev.map(x => x.id === t.id ? t : x));
+    const { error } = await supabase.from('vy_programme_tasks').upsert({ ...t, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateProgrammeTask', 'vy_programme_tasks', error);
+  }, []);
+
+  const removeProgrammeTask = useCallback(async (id: string) => {
+    setProgrammeTasks(prev => prev.filter(t => t.id !== id));
+    const { error } = await supabase.from('vy_programme_tasks').delete().eq('id', id);
+    logWrite('removeProgrammeTask', 'vy_programme_tasks', error);
+  }, []);
+
+  // ── Attachments ───────────────────────────────────────────────────────────────
+
+  const addAttachment = useCallback(async (a: DBAttachment) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setAttachments(prev => [a, ...prev]);
+    const { error } = await supabase.from('vy_attachments').upsert({ ...a, org_id: oid }, { onConflict: 'id' });
+    logWrite('addAttachment', 'vy_attachments', error);
+  }, []);
+
+  const removeAttachment = useCallback(async (id: string) => {
+    setAttachments(prev => prev.filter(a => a.id !== id));
+    const { error } = await supabase.from('vy_attachments').delete().eq('id', id);
+    logWrite('removeAttachment', 'vy_attachments', error);
+  }, []);
+
+  const fetchAttachmentData = useCallback(async (id: string): Promise<string> => {
+    const cached = attachments.find(a => a.id === id);
+    if (cached?.data_url) return cached.data_url;
+    const { data } = await supabase.from('vy_attachments').select('id,data_url').eq('id', id).maybeSingle();
+    if (data?.data_url) {
+      setAttachments(prev => prev.map(a => a.id === id ? { ...a, data_url: data.data_url } : a));
+      return data.data_url;
+    }
+    return '';
+  }, [attachments]);
+
+  // ── Platform Users ────────────────────────────────────────────────────────────
+
+  const addPlatformUser = useCallback(async (u: DBPlatformUser) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const row = { ...u, org_id: oid };
+    setPlatformUsers(prev => [...prev, row]);
+    const { data, error } = await supabase.from('vy_platform_users').upsert(row, { onConflict: 'id' }).select('id,name').maybeSingle();
+    logWrite('addPlatformUser', 'vy_platform_users', error, data);
+  }, []);
+
+  const updatePlatformUser = useCallback(async (u: DBPlatformUser) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const row = { ...u, org_id: u.org_id ?? oid };
+    setPlatformUsers(prev => prev.map(x => x.id === row.id ? row : x));
+    const { error } = await supabase.from('vy_platform_users').upsert(row, { onConflict: 'id' });
+    logWrite('updatePlatformUser', 'vy_platform_users', error);
+  }, []);
+
+  const removePlatformUser = useCallback(async (id: string) => {
+    setPlatformUsers(prev => prev.filter(u => u.id !== id));
+    const { error } = await supabase.from('vy_platform_users').delete().eq('id', id);
+    logWrite('removePlatformUser', 'vy_platform_users', error);
+  }, []);
+
+  // ── Notifications ─────────────────────────────────────────────────────────────
+
+  const addNotification = useCallback(async (n: DBNotification) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setNotifications(prev => [n, ...prev]);
+    const { error } = await supabase.from('vy_notifications').upsert({ ...n, org_id: oid }, { onConflict: 'id' });
+    logWrite('addNotification', 'vy_notifications', error);
+  }, []);
+
+  const markNotificationRead = useCallback(async (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    const { error } = await supabase.from('vy_notifications').update({ read: true }).eq('id', id);
+    logWrite('markNotificationRead', 'vy_notifications', error);
+  }, []);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const { error } = await supabase.from('vy_notifications').update({ read: true }).eq('read', false);
+    logWrite('markAllNotificationsRead', 'vy_notifications', error);
+  }, []);
+
+  // ── Settings ──────────────────────────────────────────────────────────────────
+
+  const updateSettings = useCallback(async (s: DBSettings) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSettings(s);
+    // Upsert by org_id — each org has exactly one settings row.
+    // id is set to the org_id string to satisfy the PK uniqueness requirement.
+    const { error } = await supabase.from('vy_settings').upsert(
+      { ...s, id: oid, org_id: oid, updated_at: new Date().toISOString() },
+      { onConflict: 'org_id' }
+    );
+    logWrite('updateSettings', 'vy_settings', error);
+  }, []);
+
+  // Resolve currentUser from the authenticated Supabase user id (auth_user_id).
+  // Fall back to the legacy localStorage name match so existing switchUser() UI
+  // still works during the transition period before full Phase 4 auth wiring.
+  const currentUser =
+    (authUserId ? platformUsers.find(u => u.auth_user_id === authUserId) : null)
+    ?? platformUsers.find(u => u.name === _activeUserName)
+    ?? null;
+
+  const visibleProjectIds = !currentUser || currentUser.role === 'Admin'
+    ? null
+    : currentUser.assigned_project_ids;
+
+  return {
+    projects, projectDocuments, attachments,
+    actions, snags, snaggingReports, siteForms, tenders, tcRecords, maintenanceJobs, programmes, programmeTasks,
+    platformUsers, notifications,
+    loading,
+    currentUser,
+    currentOrgId: orgId,
+    visibleProjectIds,
+    switchUser,
+    settings,
+    updateSettings,
+    addProject, updateProject, removeProject,
+    addProjectDocument, removeProjectDocument,
+    addAttachment, removeAttachment, fetchAttachmentData,
+    addAction, updateAction, removeAction,
+    addSnag, updateSnag, removeSnag,
+    addSnaggingReport, updateSnaggingReport, removeSnaggingReport,
+    addSiteForm, updateSiteForm, removeSiteForm,
+    addTender, updateTender, removeTender,
+    addTCRecord, updateTCRecord, removeTCRecord,
+    addMaintenanceJob, updateMaintenanceJob, removeMaintenanceJob,
+    addProgramme, updateProgramme, removeProgramme,
+    addProgrammeTask, updateProgrammeTask, removeProgrammeTask,
+    addPlatformUser, updatePlatformUser, removePlatformUser,
+    addNotification, markNotificationRead, markAllNotificationsRead,
+  };
+}

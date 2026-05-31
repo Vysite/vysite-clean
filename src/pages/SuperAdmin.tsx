@@ -1,0 +1,1214 @@
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Shield, Building2, ChevronRight, ChevronLeft, ToggleLeft, ToggleRight,
+  Save, AlertCircle, CheckCircle, RefreshCw, UserPlus, Trash2, Ban, Search,
+  FlaskConical, X, Clock,
+} from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { env } from '../lib/env';
+import { useAuth } from '../lib/AuthContext';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface OrgRow {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
+interface OrgSettings {
+  org_id: string;
+  account_status: 'active' | 'disabled';
+  account_type: 'trial' | 'paid' | 'internal';
+  trial_expires_at: string | null;
+  modules_enabled: Record<string, boolean>;
+  ai_enabled: boolean;
+  ai_monthly_limit: number;
+  ai_used_this_month: number;
+  ai_bonus_credits: number;
+  user_limit: number | null;
+  updated_at: string;
+  updated_by: string;
+}
+
+interface OrgWithSettings extends OrgRow {
+  settings: OrgSettings | null;
+  userCount: number;
+}
+
+interface SuperAdminRow {
+  id: string;
+  auth_user_id: string;
+  email: string;
+  name: string;
+  status: 'active' | 'disabled';
+  created_at: string;
+}
+
+// ─── Module config — mirrors the main sidebar ─────────────────────────────────
+
+const MODULES = [
+  { key: 'tenders',     label: 'Tender & Estimating' },
+  { key: 'projects',    label: 'Projects' },
+  { key: 'maintenance', label: 'Maintenance & Servicing' },
+  { key: 'site-forms',  label: 'Site Forms' },
+  { key: 'snagging',    label: 'Snagging' },
+  { key: 'actions',     label: 'Actions Tracker' },
+  { key: 'testing',     label: 'Testing & Commissioning' },
+  { key: 'reports',     label: 'Reports' },
+];
+
+const DEFAULT_MODULES: Record<string, boolean> = Object.fromEntries(
+  MODULES.map(m => [m.key, true])
+);
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function mergeModules(stored: Record<string, boolean> | null): Record<string, boolean> {
+  return { ...DEFAULT_MODULES, ...(stored ?? {}) };
+}
+
+function trialDaysRemaining(expiresAt: string | null): number | null {
+  if (!expiresAt) return null;
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
+function TrialBadge({ expiresAt }: { expiresAt: string | null }) {
+  const days = trialDaysRemaining(expiresAt);
+  const expired = days !== null && days <= 0;
+  const warning = days !== null && days <= 3 && !expired;
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+      expired
+        ? 'bg-red-900/60 text-red-400'
+        : warning
+        ? 'bg-amber-900/60 text-amber-400'
+        : 'bg-sky-900/60 text-sky-400'
+    }`}>
+      <FlaskConical size={9} />
+      {expired
+        ? 'EXPIRED'
+        : days === null
+        ? 'TRIAL'
+        : `TRIAL · ${days}d`}
+    </span>
+  );
+}
+
+// ─── New Trial Modal ──────────────────────────────────────────────────────────
+
+interface NewTrialModalProps {
+  onClose: () => void;
+  onCreated: () => void;
+}
+
+function NewTrialModal({ onClose, onCreated }: NewTrialModalProps) {
+  const [companyName, setCompanyName] = useState('');
+  const [adminName, setAdminName]     = useState('');
+  const [adminEmail, setAdminEmail]   = useState('');
+  const [trialDays, setTrialDays]     = useState(14);
+  const [submitting, setSubmitting]   = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+  const [success, setSuccess]         = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    try {
+      const res = await fetch(
+        `${env.supabaseUrl}/functions/v1/provision-trial-org`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            companyName: companyName.trim(),
+            adminName: adminName.trim(),
+            adminEmail: adminEmail.trim().toLowerCase(),
+            trialDays,
+            source: 'super-admin',
+          }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error ?? 'Provisioning failed. Please try again.');
+      } else {
+        setSuccess(`Trial created for ${json.orgName}. Invite email sent to ${adminEmail.trim().toLowerCase()}.`);
+        setTimeout(() => {
+          onCreated();
+          onClose();
+        }, 2500);
+      }
+    } catch {
+      setError('Network error — please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-[#111827] border border-[#1e2d4a] rounded-2xl w-full max-w-md shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e2d4a]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-sky-900/50 border border-sky-800/50 flex items-center justify-center">
+              <FlaskConical size={15} className="text-sky-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white">New Trial Organisation</h2>
+              <p className="text-[11px] text-slate-500">Creates company, admin user, and sends invite</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          {error && (
+            <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg bg-red-900/20 border border-red-800/40">
+              <AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-300 leading-relaxed">{error}</p>
+            </div>
+          )}
+          {success && (
+            <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg bg-emerald-900/20 border border-emerald-800/40">
+              <CheckCircle size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-emerald-300 leading-relaxed">{success}</p>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Company Name</label>
+            <input
+              type="text"
+              required
+              value={companyName}
+              onChange={e => setCompanyName(e.target.value)}
+              placeholder="Acme Construction Ltd"
+              className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#f97316] transition-colors"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Admin Full Name</label>
+              <input
+                type="text"
+                required
+                value={adminName}
+                onChange={e => setAdminName(e.target.value)}
+                placeholder="Jane Smith"
+                className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#f97316] transition-colors"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Trial Duration</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={1}
+                  max={90}
+                  required
+                  value={trialDays}
+                  onChange={e => setTrialDays(Math.max(1, Math.min(90, parseInt(e.target.value) || 14)))}
+                  className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 pr-12 text-sm text-white focus:outline-none focus:border-[#f97316] transition-colors"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 pointer-events-none">days</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Admin Email Address</label>
+            <input
+              type="email"
+              required
+              value={adminEmail}
+              onChange={e => setAdminEmail(e.target.value)}
+              placeholder="jane@acme.com"
+              className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#f97316] transition-colors"
+            />
+          </div>
+
+          {/* Summary */}
+          {companyName.trim() && adminEmail.trim() && (
+            <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg p-3 space-y-1">
+              <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider mb-2">This will:</p>
+              {[
+                `Create organisation: ${companyName.trim()}`,
+                `Create admin user: ${adminName.trim() || '—'} (${adminEmail.trim()})`,
+                `Enable all 8 modules`,
+                `Set trial expiry: ${trialDays} days from now`,
+                `Send invite email to ${adminEmail.trim()}`,
+                `Notify hello@vysite.com`,
+              ].map(line => (
+                <div key={line} className="flex items-center gap-2">
+                  <div className="w-1 h-1 rounded-full bg-sky-500 shrink-0" />
+                  <p className="text-[11px] text-slate-400">{line}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 border border-[#1e2d4a] text-slate-400 hover:text-white rounded-lg text-sm transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !!success || !companyName.trim() || !adminName.trim() || !adminEmail.trim()}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold transition-colors"
+            >
+              {submitting ? <RefreshCw size={14} className="animate-spin" /> : <FlaskConical size={14} />}
+              {submitting ? 'Provisioning…' : 'Create Trial'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Company list row ─────────────────────────────────────────────────────────
+
+function CompanyRow({ org, onManage }: { org: OrgWithSettings; onManage: () => void }) {
+  const s = org.settings;
+  const isActive = s?.account_status !== 'disabled';
+  const isTrial  = s?.account_type === 'trial';
+  const aiOn = s?.ai_enabled ?? true;
+  const limit = s?.ai_monthly_limit ?? 50;
+  const used = s?.ai_used_this_month ?? 0;
+  const bonus = s?.ai_bonus_credits ?? 0;
+  const userLimit = s?.user_limit ?? null;
+  const atUserLimit = userLimit !== null && org.userCount >= userLimit;
+
+  return (
+    <div className="grid grid-cols-[1fr_140px_1fr_80px_150px_110px_70px] gap-3 items-center px-4 py-3 border-b border-[#1e2d4a] hover:bg-[#0d1628]/40 transition-colors">
+      {/* Company */}
+      <div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-sm font-semibold text-white">{org.name}</p>
+          {isTrial && <TrialBadge expiresAt={s?.trial_expires_at ?? null} />}
+        </div>
+        <p className="text-[11px] text-slate-500">{org.slug}</p>
+      </div>
+
+      {/* Status */}
+      <div>
+        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+          isActive ? 'bg-emerald-900/60 text-emerald-400' : 'bg-red-900/60 text-red-400'
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-red-400'}`} />
+          {isActive ? 'Active' : 'Disabled'}
+        </span>
+      </div>
+
+      {/* Modules */}
+      <div className="flex flex-wrap gap-1">
+        {MODULES.map(m => {
+          const on = s ? (mergeModules(s.modules_enabled)[m.key] ?? true) : true;
+          return on ? (
+            <span key={m.key} className="text-[10px] px-1.5 py-0.5 rounded bg-[#1e2d4a] text-slate-400">{m.label}</span>
+          ) : (
+            <span key={m.key} className="text-[10px] px-1.5 py-0.5 rounded bg-[#0d1628] text-slate-700 line-through">{m.label}</span>
+          );
+        })}
+      </div>
+
+      {/* AI */}
+      <div>
+        <span className={`text-[11px] font-semibold ${aiOn ? 'text-[#f97316]' : 'text-slate-600'}`}>
+          {aiOn ? 'Enabled' : 'Disabled'}
+        </span>
+      </div>
+
+      {/* AI usage */}
+      <div className="text-[11px] text-slate-400">
+        <span className="text-white font-semibold">{used}</span>
+        {bonus > 0 && <span className="text-[#f97316]"> +{bonus}</span>}
+        <span className="text-slate-600"> / {limit} mo</span>
+      </div>
+
+      {/* Users */}
+      <div className="text-[11px]">
+        <span className={`font-semibold ${atUserLimit ? 'text-red-400' : 'text-white'}`}>{org.userCount}</span>
+        <span className="text-slate-600"> / {userLimit === null ? '∞' : userLimit}</span>
+        {atUserLimit && <span className="ml-1 text-[9px] font-bold text-red-400 bg-red-900/30 px-1 py-0.5 rounded">FULL</span>}
+      </div>
+
+      {/* Action */}
+      <div>
+        <button
+          onClick={onManage}
+          className="flex items-center gap-1 px-3 py-1.5 bg-[#f97316] hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition-colors"
+        >
+          Manage <ChevronRight size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Manage panel ─────────────────────────────────────────────────────────────
+
+function ManagePanel({
+  org,
+  onBack,
+  onSaved,
+  adminEmail,
+}: {
+  org: OrgWithSettings;
+  onBack: () => void;
+  onSaved: (updated: OrgSettings) => void;
+  adminEmail: string;
+}) {
+  const existing = org.settings;
+  const isTrial = existing?.account_type === 'trial';
+  const [accountStatus, setAccountStatus] = useState<'active' | 'disabled'>(
+    existing?.account_status ?? 'active'
+  );
+  const [modules, setModules] = useState<Record<string, boolean>>(
+    mergeModules(existing?.modules_enabled ?? null)
+  );
+  const [aiEnabled, setAiEnabled] = useState(existing?.ai_enabled ?? true);
+  const [aiLimit, setAiLimit] = useState(existing?.ai_monthly_limit ?? 50);
+  const [bonusToAdd, setBonusToAdd] = useState(0);
+  const [userLimitEnabled, setUserLimitEnabled] = useState(existing?.user_limit !== null && existing?.user_limit !== undefined);
+  const [userLimit, setUserLimit] = useState(existing?.user_limit ?? 10);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  function showToast(type: 'success' | 'error', msg: string) {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 3500);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const newBonus = (existing?.ai_bonus_credits ?? 0) + bonusToAdd;
+
+    const payload: Omit<OrgSettings, 'org_id' | 'updated_at'> & { org_id: string } = {
+      org_id: org.id,
+      account_status: accountStatus,
+      account_type: existing?.account_type ?? 'paid',
+      trial_expires_at: existing?.trial_expires_at ?? null,
+      modules_enabled: modules,
+      ai_enabled: aiEnabled,
+      ai_monthly_limit: aiLimit,
+      ai_used_this_month: existing?.ai_used_this_month ?? 0,
+      ai_bonus_credits: newBonus,
+      user_limit: userLimitEnabled ? Math.max(1, userLimit) : null,
+      updated_by: adminEmail,
+    };
+
+    const { data, error } = await supabase
+      .from('org_settings')
+      .upsert(payload, { onConflict: 'org_id' })
+      .select()
+      .maybeSingle();
+
+    setSaving(false);
+    if (error) {
+      showToast('error', `Save failed: ${error.message}`);
+    } else if (data) {
+      setBonusToAdd(0);
+      onSaved(data as OrgSettings);
+      showToast('success', 'Settings saved successfully.');
+    }
+  }
+
+  function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+    return (
+      <button onClick={() => onChange(!value)} className="flex items-center gap-2 text-sm transition-colors">
+        {value
+          ? <ToggleRight size={28} className="text-[#f97316]" />
+          : <ToggleLeft size={28} className="text-slate-600" />}
+        <span className={value ? 'text-white font-semibold' : 'text-slate-500'}>
+          {value ? 'On' : 'Off'}
+        </span>
+      </button>
+    );
+  }
+
+  const trialDays = trialDaysRemaining(existing?.trial_expires_at ?? null);
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+          <ChevronLeft size={16} />Back
+        </button>
+        <div className="w-px h-4 bg-[#1e2d4a]" />
+        <Building2 size={16} className="text-[#f97316]" />
+        <h2 className="text-sm font-bold text-white">{org.name}</h2>
+        <span className="text-[11px] text-slate-500">{org.slug}</span>
+        {isTrial && <TrialBadge expiresAt={existing?.trial_expires_at ?? null} />}
+      </div>
+
+      {/* Trial expiry info banner */}
+      {isTrial && (
+        <div className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${
+          trialDays !== null && trialDays <= 0
+            ? 'bg-red-900/20 border-red-800/50'
+            : trialDays !== null && trialDays <= 3
+            ? 'bg-amber-900/20 border-amber-800/50'
+            : 'bg-sky-900/20 border-sky-800/50'
+        }`}>
+          <Clock size={15} className={`shrink-0 mt-0.5 ${
+            trialDays !== null && trialDays <= 0 ? 'text-red-400' : trialDays !== null && trialDays <= 3 ? 'text-amber-400' : 'text-sky-400'
+          }`} />
+          <div>
+            <p className={`text-xs font-semibold ${
+              trialDays !== null && trialDays <= 0 ? 'text-red-300' : trialDays !== null && trialDays <= 3 ? 'text-amber-300' : 'text-sky-300'
+            }`}>
+              {trialDays !== null && trialDays <= 0
+                ? 'Trial expired'
+                : trialDays !== null
+                ? `Trial expires in ${trialDays} day${trialDays === 1 ? '' : 's'}`
+                : 'Trial organisation'}
+            </p>
+            {existing?.trial_expires_at && (
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Expiry date: {new Date(existing.trial_expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border ${
+          toast.type === 'success'
+            ? 'bg-emerald-900/30 border-emerald-800 text-emerald-300'
+            : 'bg-red-900/30 border-red-800 text-red-300'
+        }`}>
+          {toast.type === 'success' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+          {toast.msg}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Account status */}
+        <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Account Status</h3>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">Company Access</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {accountStatus === 'active'
+                  ? 'Users can log in and use the platform normally.'
+                  : 'All users are blocked from accessing the platform. No data is deleted.'}
+              </p>
+            </div>
+            <Toggle value={accountStatus === 'active'} onChange={v => setAccountStatus(v ? 'active' : 'disabled')} />
+          </div>
+          {accountStatus === 'disabled' && (
+            <div className="mt-3 flex items-start gap-2 p-3 bg-red-900/20 border border-red-900/40 rounded-lg">
+              <AlertCircle size={14} className="text-red-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-red-300">Disabling this account will prevent all users in this company from logging in. All data is preserved and can be re-enabled at any time.</p>
+            </div>
+          )}
+        </div>
+
+        {/* User Allowance */}
+        <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">User Allowance</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">Enforce User Limit</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Current active users: <span className="text-white font-semibold">{org.userCount}</span>
+                </p>
+              </div>
+              <Toggle value={userLimitEnabled} onChange={setUserLimitEnabled} />
+            </div>
+
+            {userLimitEnabled && (
+              <>
+                <div className="h-px bg-[#1e2d4a]" />
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-white">User Limit</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Maximum active users for this organisation</p>
+                  </div>
+                  <input
+                    type="number"
+                    min={1}
+                    max={9999}
+                    value={userLimit}
+                    onChange={e => setUserLimit(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-20 text-center bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#f97316] transition-colors"
+                  />
+                </div>
+                {org.userCount >= userLimit && (
+                  <div className="flex items-start gap-2 p-3 bg-amber-900/20 border border-amber-900/40 rounded-lg">
+                    <AlertCircle size={14} className="text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-300">
+                      This organisation currently has {org.userCount} active user{org.userCount !== 1 ? 's' : ''}, which meets or exceeds the limit of {userLimit}. New invitations will be blocked until users are removed or the limit is raised.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!userLimitEnabled && (
+              <p className="text-xs text-slate-600 italic">No limit set — unlimited users allowed.</p>
+            )}
+          </div>
+        </div>
+
+        {/* AI Settings */}
+        <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">AI Settings</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">AI Access</p>
+                <p className="text-xs text-slate-500 mt-0.5">Enable AI Tender Assistant and review features</p>
+              </div>
+              <Toggle value={aiEnabled} onChange={setAiEnabled} />
+            </div>
+
+            <div className="h-px bg-[#1e2d4a]" />
+
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-white">Monthly AI Limit</p>
+                <p className="text-xs text-slate-500 mt-0.5">Max AI reviews per calendar month</p>
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={9999}
+                value={aiLimit}
+                onChange={e => setAiLimit(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-20 text-center bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#f97316] transition-colors"
+              />
+            </div>
+
+            <div className="h-px bg-[#1e2d4a]" />
+
+            <div>
+              <div className="flex items-center justify-between gap-4 mb-2">
+                <div>
+                  <p className="text-sm font-semibold text-white">Add Bonus Credits</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Current: <span className="text-white">{existing?.ai_used_this_month ?? 0}</span> used ·{' '}
+                    <span className="text-[#f97316]">{existing?.ai_bonus_credits ?? 0}</span> bonus banked
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setBonusToAdd(b => Math.max(0, b - 1))}
+                    className="w-7 h-7 flex items-center justify-center rounded bg-[#0d1628] border border-[#1e2d4a] text-slate-400 hover:text-white transition-colors text-sm font-bold"
+                  >−</button>
+                  <input
+                    type="number"
+                    min={0}
+                    max={999}
+                    value={bonusToAdd}
+                    onChange={e => setBonusToAdd(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-16 text-center bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-[#f97316] transition-colors"
+                  />
+                  <button
+                    onClick={() => setBonusToAdd(b => b + 1)}
+                    className="w-7 h-7 flex items-center justify-center rounded bg-[#0d1628] border border-[#1e2d4a] text-slate-400 hover:text-white transition-colors text-sm font-bold"
+                  >+</button>
+                </div>
+              </div>
+              {bonusToAdd > 0 && (
+                <p className="text-xs text-[#f97316]">+{bonusToAdd} credits will be added on save (total will be {(existing?.ai_bonus_credits ?? 0) + bonusToAdd})</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Module toggles */}
+        <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5 lg:col-span-2">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Enabled Modules</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {MODULES.map(m => (
+              <div
+                key={m.key}
+                className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border transition-colors cursor-pointer ${
+                  modules[m.key]
+                    ? 'border-[#f97316]/30 bg-[#f97316]/5'
+                    : 'border-[#1e2d4a] bg-[#0d1628]/40'
+                }`}
+                onClick={() => setModules(prev => ({ ...prev, [m.key]: !prev[m.key] }))}
+              >
+                <span className={`text-xs font-semibold ${modules[m.key] ? 'text-white' : 'text-slate-600'}`}>
+                  {m.label}
+                </span>
+                {modules[m.key]
+                  ? <ToggleRight size={20} className="text-[#f97316] shrink-0" />
+                  : <ToggleLeft size={20} className="text-slate-700 shrink-0" />}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Save */}
+      <div className="flex justify-end gap-3">
+        <button onClick={onBack} className="px-4 py-2 text-sm text-slate-400 hover:text-white border border-[#1e2d4a] rounded-lg transition-colors">
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-5 py-2 bg-[#f97316] hover:bg-orange-600 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
+        >
+          {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+          {saving ? 'Saving…' : 'Save Changes'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Super Admin Management tab ───────────────────────────────────────────────
+
+function SuperAdminManagement({ currentUserId }: { currentUserId: string }) {
+  const [admins, setAdmins] = useState<SuperAdminRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ id: string; name: string; action: 'disable' | 'remove' } | null>(null);
+  const [actioning, setActioning] = useState(false);
+
+  function showToast(type: 'success' | 'error', msg: string) {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 4000);
+  }
+
+  const loadAdmins = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('vy_super_admins')
+      .select('id, auth_user_id, email, name, status, created_at')
+      .order('created_at', { ascending: true });
+    if (!error) setAdmins((data ?? []) as SuperAdminRow[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadAdmins(); }, [loadAdmins]);
+
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim() || !inviteName.trim()) return;
+    setInviting(true);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    try {
+      const res = await fetch(
+        `${env.supabaseUrl}/functions/v1/admin-invite-super-admin`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ email: inviteEmail.trim(), name: inviteName.trim() }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        showToast('error', json.error ?? 'Invite failed');
+      } else {
+        showToast('success', json.note ?? `Invite sent to ${inviteEmail.trim()}`);
+        setInviteEmail('');
+        setInviteName('');
+        loadAdmins();
+      }
+    } catch {
+      showToast('error', 'Network error — invite not sent');
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function handleAction() {
+    if (!confirmAction) return;
+    setActioning(true);
+    const { id, action } = confirmAction;
+
+    if (action === 'disable') {
+      const { error } = await supabase
+        .from('vy_super_admins')
+        .update({ status: 'disabled' })
+        .eq('id', id);
+      if (error) showToast('error', error.message);
+      else { showToast('success', 'Super admin disabled.'); loadAdmins(); }
+    } else {
+      const { error } = await supabase
+        .from('vy_super_admins')
+        .delete()
+        .eq('id', id);
+      if (error) showToast('error', error.message);
+      else { showToast('success', 'Super admin removed.'); loadAdmins(); }
+    }
+
+    setConfirmAction(null);
+    setActioning(false);
+  }
+
+  async function handleReEnable(id: string) {
+    const { error } = await supabase
+      .from('vy_super_admins')
+      .update({ status: 'active' })
+      .eq('id', id);
+    if (error) showToast('error', error.message);
+    else { showToast('success', 'Super admin re-enabled.'); loadAdmins(); }
+  }
+
+  return (
+    <div className="space-y-5">
+      {toast && (
+        <div className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border ${
+          toast.type === 'success'
+            ? 'bg-emerald-900/30 border-emerald-800 text-emerald-300'
+            : 'bg-red-900/30 border-red-800 text-red-300'
+        }`}>
+          {toast.type === 'success' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+          {toast.msg}
+        </div>
+      )}
+
+      {/* Confirm modal */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a2236] border border-[#1e2d4a] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-3">
+              {confirmAction.action === 'remove'
+                ? <Trash2 size={18} className="text-red-400" />
+                : <Ban size={18} className="text-amber-400" />}
+              <h3 className="text-sm font-bold text-white">
+                {confirmAction.action === 'remove' ? 'Remove Super Admin' : 'Disable Super Admin'}
+              </h3>
+            </div>
+            <p className="text-sm text-slate-400 mb-5">
+              {confirmAction.action === 'remove'
+                ? `Remove ${confirmAction.name} as a super admin? They will immediately lose all platform admin access. This cannot be undone without re-inviting.`
+                : `Disable ${confirmAction.name}? They will lose platform admin access but can be re-enabled later.`}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="px-4 py-2 text-sm text-slate-400 hover:text-white border border-[#1e2d4a] rounded-lg transition-colors"
+              >Cancel</button>
+              <button
+                onClick={handleAction}
+                disabled={actioning}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg transition-colors disabled:opacity-50 ${
+                  confirmAction.action === 'remove'
+                    ? 'bg-red-700 hover:bg-red-600'
+                    : 'bg-amber-700 hover:bg-amber-600'
+                }`}
+              >
+                {actioning && <RefreshCw size={13} className="animate-spin" />}
+                {confirmAction.action === 'remove' ? 'Remove' : 'Disable'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite form */}
+      <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5">
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <UserPlus size={13} />Invite New Super Admin
+        </h3>
+        <form onSubmit={handleInvite} className="flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            placeholder="Full name"
+            value={inviteName}
+            onChange={e => setInviteName(e.target.value)}
+            required
+            className="flex-1 bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#f97316] transition-colors"
+          />
+          <input
+            type="email"
+            placeholder="Email address"
+            value={inviteEmail}
+            onChange={e => setInviteEmail(e.target.value)}
+            required
+            className="flex-1 bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#f97316] transition-colors"
+          />
+          <button
+            type="submit"
+            disabled={inviting || !inviteEmail.trim() || !inviteName.trim()}
+            className="flex items-center gap-2 px-5 py-2 bg-[#f97316] hover:bg-orange-600 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+          >
+            {inviting ? <RefreshCw size={13} className="animate-spin" /> : <UserPlus size={13} />}
+            {inviting ? 'Sending…' : 'Send Invite'}
+          </button>
+        </form>
+        <p className="text-[11px] text-slate-600 mt-2">
+          An email invite will be sent. The recipient sets their own password and gains platform admin access on first sign-in.
+        </p>
+      </div>
+
+      {/* Admin list */}
+      <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden">
+        <div className="grid grid-cols-[1fr_1fr_100px_130px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] bg-[#0d1628]/60">
+          {['Name', 'Email', 'Status', ''].map(h => (
+            <span key={h} className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{h}</span>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="py-10 flex justify-center">
+            <RefreshCw size={18} className="text-slate-600 animate-spin" />
+          </div>
+        ) : admins.length === 0 ? (
+          <div className="py-10 text-center text-sm text-slate-500">No super admins found.</div>
+        ) : (
+          admins.map(admin => {
+            const isYou = admin.auth_user_id === currentUserId;
+            const isActive = admin.status === 'active';
+            return (
+              <div key={admin.id} className="grid grid-cols-[1fr_1fr_100px_130px] gap-3 items-center px-4 py-3 border-b border-[#1e2d4a] last:border-0 hover:bg-[#0d1628]/40 transition-colors">
+                <div>
+                  <p className="text-sm font-semibold text-white">{admin.name}</p>
+                  {isYou && <span className="text-[10px] text-[#f97316] font-bold">You</span>}
+                </div>
+                <p className="text-sm text-slate-400">{admin.email}</p>
+                <div>
+                  <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                    isActive ? 'bg-emerald-900/60 text-emerald-400' : 'bg-amber-900/60 text-amber-400'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                    {isActive ? 'Active' : 'Disabled'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!isYou && isActive && (
+                    <button
+                      onClick={() => setConfirmAction({ id: admin.id, name: admin.name, action: 'disable' })}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-amber-400 border border-amber-900/50 hover:bg-amber-900/20 rounded-lg transition-colors"
+                      title="Disable"
+                    >
+                      <Ban size={11} />Disable
+                    </button>
+                  )}
+                  {!isYou && !isActive && (
+                    <button
+                      onClick={() => handleReEnable(admin.id)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-400 border border-emerald-900/50 hover:bg-emerald-900/20 rounded-lg transition-colors"
+                    >
+                      <CheckCircle size={11} />Enable
+                    </button>
+                  )}
+                  {!isYou && (
+                    <button
+                      onClick={() => setConfirmAction({ id: admin.id, name: admin.name, action: 'remove' })}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-red-400 border border-red-900/50 hover:bg-red-900/20 rounded-lg transition-colors"
+                      title="Remove"
+                    >
+                      <Trash2 size={11} />Remove
+                    </button>
+                  )}
+                  {isYou && <span className="text-[11px] text-slate-600 italic">Cannot modify own account</span>}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="flex items-start gap-2 p-3 bg-[#0d1628] border border-[#1e2d4a] rounded-lg">
+        <Shield size={13} className="text-slate-600 mt-0.5 shrink-0" />
+        <p className="text-[11px] text-slate-600 leading-relaxed">
+          Super admins have full platform access. Only existing super admins can invite or remove others.
+          You cannot modify your own account to prevent accidental lockout.
+          Removing a super admin revokes their access immediately — they must be re-invited to regain it.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main SuperAdmin page ──────────────────────────────────────────────────────
+
+export default function SuperAdmin() {
+  const { user } = useAuth();
+  const [orgs, setOrgs] = useState<OrgWithSettings[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [managing, setManaging] = useState<OrgWithSettings | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
+  const [activeTab, setActiveTab] = useState<'companies' | 'admins'>('companies');
+  const [companySearch, setCompanySearch] = useState('');
+  const [showNewTrialModal, setShowNewTrialModal] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase.rpc('is_super_admin');
+      setIsSuperAdmin(data === true);
+    })();
+  }, [user]);
+
+  const loadOrgs = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    const { data: orgData, error: orgErr } = await supabase
+      .from('organisations')
+      .select('id, name, slug, created_at')
+      .order('name');
+
+    if (orgErr) { setError(orgErr.message); setLoading(false); return; }
+
+    const { data: settingsData } = await supabase
+      .from('org_settings')
+      .select('*');
+
+    const { data: userCountData } = await supabase
+      .from('user_orgs')
+      .select('org_id')
+      .eq('status', 'active');
+
+    const settingsMap: Record<string, OrgSettings> = {};
+    (settingsData ?? []).forEach((s: OrgSettings) => { settingsMap[s.org_id] = s; });
+
+    const userCountMap: Record<string, number> = {};
+    (userCountData ?? []).forEach((u: { org_id: string }) => {
+      userCountMap[u.org_id] = (userCountMap[u.org_id] ?? 0) + 1;
+    });
+
+    const combined: OrgWithSettings[] = (orgData ?? []).map((o: OrgRow) => ({
+      ...o,
+      settings: settingsMap[o.id] ?? null,
+      userCount: userCountMap[o.id] ?? 0,
+    }));
+
+    setOrgs(combined);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (isSuperAdmin) loadOrgs();
+  }, [isSuperAdmin, loadOrgs]);
+
+  if (isSuperAdmin === false) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-[#1a2236] border border-[#1e2d4a] flex items-center justify-center mb-4">
+          <Shield size={24} className="text-red-400" />
+        </div>
+        <h2 className="text-lg font-bold text-white mb-1">Super Admin Access Required</h2>
+        <p className="text-sm text-slate-500 max-w-xs">
+          This area is restricted to VYSITE platform administrators. Your account does not have super admin access.
+        </p>
+      </div>
+    );
+  }
+
+  if (isSuperAdmin === null || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="text-center">
+          <RefreshCw size={24} className="text-slate-600 animate-spin mx-auto mb-3" />
+          <p className="text-sm text-slate-500">Loading Super Admin…</p>
+        </div>
+      </div>
+    );
+  }
+
+  const adminEmail = user?.email ?? '';
+
+  const trialOrgs   = orgs.filter(o => o.settings?.account_type === 'trial');
+  const expiredTrials = trialOrgs.filter(o => {
+    const d = trialDaysRemaining(o.settings?.trial_expires_at ?? null);
+    return d !== null && d <= 0;
+  });
+
+  if (managing) {
+    return (
+      <div className="p-4 lg:p-6">
+        <div className="flex items-center gap-2 mb-6">
+          <Shield size={16} className="text-[#f97316]" />
+          <span className="text-xs font-bold text-[#f97316] uppercase tracking-widest">VYSITE Super Admin</span>
+        </div>
+        <ManagePanel
+          org={managing}
+          onBack={() => setManaging(null)}
+          adminEmail={adminEmail}
+          onSaved={(updated) => {
+            setOrgs(prev => prev.map(o =>
+              o.id === updated.org_id ? { ...o, settings: updated } : o
+            ));
+            setManaging(prev => prev ? { ...prev, settings: updated } : prev);
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 lg:p-6">
+      {showNewTrialModal && (
+        <NewTrialModal
+          onClose={() => setShowNewTrialModal(false)}
+          onCreated={loadOrgs}
+        />
+      )}
+
+      {/* Page header */}
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Shield size={18} className="text-[#f97316]" />
+            <span className="text-xs font-bold text-[#f97316] uppercase tracking-widest">VYSITE Platform Administration</span>
+          </div>
+          <h1 className="text-xl font-bold text-white">
+            {activeTab === 'companies' ? 'Company Management' : 'Super Admin Management'}
+          </h1>
+        </div>
+        {activeTab === 'companies' && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadOrgs}
+              className="flex items-center gap-1.5 px-3 py-2 border border-[#1e2d4a] text-slate-400 hover:text-white hover:border-[#f97316] rounded-lg text-xs font-semibold transition-colors"
+            >
+              <RefreshCw size={13} />Refresh
+            </button>
+            <button
+              onClick={() => setShowNewTrialModal(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold transition-colors"
+            >
+              <FlaskConical size={13} />New Trial
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 bg-[#0d1628] border border-[#1e2d4a] rounded-xl mb-5 w-fit">
+        {([
+          { id: 'companies', label: 'Companies' },
+          { id: 'admins',    label: 'Super Admins' },
+        ] as const).map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              activeTab === tab.id
+                ? 'bg-[#f97316] text-white shadow'
+                : 'text-slate-500 hover:text-white'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'admins' && (
+        <SuperAdminManagement currentUserId={user?.id ?? ''} />
+      )}
+
+      {activeTab === 'companies' && (
+        <>
+          {error && (
+            <div className="flex items-center gap-2 p-4 bg-red-900/20 border border-red-900/40 rounded-xl text-sm text-red-300 mb-4">
+              <AlertCircle size={16} />
+              {error}
+            </div>
+          )}
+
+          {/* Stats bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+            {[
+              { label: 'Total Companies',  value: orgs.length },
+              { label: 'Active',           value: orgs.filter(o => o.settings?.account_status !== 'disabled').length, color: 'text-emerald-400' },
+              { label: 'Disabled',         value: orgs.filter(o => o.settings?.account_status === 'disabled').length, color: 'text-red-400' },
+              { label: 'AI Enabled',       value: orgs.filter(o => o.settings?.ai_enabled !== false).length, color: 'text-[#f97316]' },
+              { label: 'Active Trials',    value: trialOrgs.length, color: 'text-sky-400' },
+              { label: 'Expired Trials',   value: expiredTrials.length, color: expiredTrials.length > 0 ? 'text-red-400' : 'text-slate-600' },
+            ].map(stat => (
+              <div key={stat.label} className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl p-4">
+                <p className={`text-2xl font-black ${stat.color ?? 'text-white'}`}>{stat.value}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Search */}
+          {(() => {
+            const filtered = orgs.filter(o =>
+              o.name.toLowerCase().includes(companySearch.toLowerCase())
+            );
+            return (
+              <>
+                <div className="relative mb-4">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search companies…"
+                    value={companySearch}
+                    onChange={e => setCompanySearch(e.target.value)}
+                    className="w-full sm:w-72 bg-[#1a2236] border border-[#1e2d4a] rounded-lg pl-8 pr-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#f97316] transition-colors"
+                  />
+                </div>
+
+                {/* Table */}
+                <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden">
+                  <div className="grid grid-cols-[1fr_140px_1fr_80px_150px_110px_70px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] bg-[#0d1628]/60">
+                    {['Company', 'Status', 'Modules', 'AI', 'AI Usage', 'Users', ''].map(h => (
+                      <span key={h} className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{h}</span>
+                    ))}
+                  </div>
+
+                  {filtered.length === 0 ? (
+                    <div className="py-14 text-center">
+                      <Building2 size={32} className="text-slate-700 mx-auto mb-2" />
+                      <p className="text-sm text-slate-500">
+                        {companySearch ? `No companies matching "${companySearch}"` : 'No companies found'}
+                      </p>
+                    </div>
+                  ) : (
+                    filtered.map(org => (
+                      <CompanyRow key={org.id} org={org} onManage={() => setManaging(org)} />
+                    ))
+                  )}
+                </div>
+              </>
+            );
+          })()}
+
+          <p className="text-[11px] text-slate-700 mt-4 text-center">
+            Logged in as super admin · {adminEmail} · Changes are saved immediately to the database
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
