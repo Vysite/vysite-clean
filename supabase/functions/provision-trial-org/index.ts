@@ -67,57 +67,151 @@ function initialsFrom(name: string): string {
     .join("");
 }
 
-// Send a plain notification email via Supabase's built-in auth.admin.generateLink
-// trick is not suitable here — instead we use the Supabase email OTP endpoint as a
-// simple relay, or just log the notification. For production use, wire this to your
-// mail provider (Resend, SendGrid, etc.) via an environment variable.
+async function sendViaResend(
+  to: string,
+  subject: string,
+  html: string,
+  text: string,
+): Promise<void> {
+  const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+  if (!RESEND_API_KEY) {
+    console.log(`[provision-trial-org] No RESEND_API_KEY — skipping email to ${to}: ${subject}`);
+    return;
+  }
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "VYSITE <noreply@vysite.com>",
+        to: [to],
+        subject,
+        html,
+        text,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error(`[provision-trial-org] Resend error for ${to}:`, err);
+    }
+  } catch (e) {
+    console.error(`[provision-trial-org] Resend fetch failed:`, e);
+  }
+}
+
+async function sendOnboardingEmail(
+  inviteUrl: string,
+  adminName: string,
+  adminEmail: string,
+  companyName: string,
+  trialExpiresAt: string,
+): Promise<void> {
+  const firstName = adminName.split(/\s+/)[0];
+  const expiryFormatted = new Date(trialExpiresAt).toLocaleDateString("en-GB", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <tr>
+          <td style="background:#111827;padding:28px 40px;">
+            <span style="font-size:20px;font-weight:900;color:#fff;letter-spacing:-0.5px;">VY<span style="color:#f97316;">SITE</span></span>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 40px 28px;">
+            <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
+              Welcome to VYSITE, ${firstName}.
+            </h1>
+            <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+              Your 14-day free trial for <strong>${companyName}</strong> is ready. Click the button below to set your password and access your account.
+            </p>
+            <p style="margin:0 0 28px;font-size:14px;color:#6b7280;">
+              Your trial is active until <strong>${expiryFormatted}</strong>. All modules are enabled — no restrictions.
+            </p>
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="border-radius:8px;background:#f97316;">
+                  <a href="${inviteUrl}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#fff;text-decoration:none;border-radius:8px;">
+                    Set Password &amp; Sign In
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:24px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
+              This link expires in 24 hours. If you didn't request this, you can ignore this email.<br>
+              Or copy this URL into your browser:<br>
+              <span style="color:#6b7280;word-break:break-all;">${inviteUrl}</span>
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 40px;border-top:1px solid #f3f4f6;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">
+              VYSITE &mdash; Built for construction professionals &mdash;
+              <a href="mailto:hello@vysite.com" style="color:#f97316;text-decoration:none;">hello@vysite.com</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = [
+    `Welcome to VYSITE, ${firstName}.`,
+    ``,
+    `Your 14-day free trial for ${companyName} is ready.`,
+    ``,
+    `Set your password and sign in here:`,
+    inviteUrl,
+    ``,
+    `Trial active until: ${expiryFormatted}`,
+    `All modules are enabled — no restrictions.`,
+    ``,
+    `This link expires in 24 hours.`,
+    `Questions? Email hello@vysite.com`,
+  ].join("\n");
+
+  await sendViaResend(adminEmail, `Your VYSITE trial is ready — set your password`, html, text);
+}
+
 async function sendNotificationEmail(
-  adminClient: ReturnType<typeof createClient>,
   companyName: string,
   adminName: string,
   adminEmail: string,
   trialExpiresAt: string,
   source: string,
 ): Promise<void> {
+  const expiryFormatted = new Date(trialExpiresAt).toLocaleDateString("en-GB", {
+    day: "numeric", month: "long", year: "numeric",
+  });
   const subject = `New VYSITE trial: ${companyName}`;
-  const body = [
+  const text = [
     `A new trial organisation has been provisioned on VYSITE.`,
     ``,
     `Company: ${companyName}`,
     `Admin: ${adminName} <${adminEmail}>`,
     `Source: ${source}`,
-    `Trial expires: ${new Date(trialExpiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
+    `Trial expires: ${expiryFormatted}`,
     ``,
     `You can manage this organisation from the VYSITE Admin Panel.`,
   ].join("\n");
-
-  const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-  if (RESEND_API_KEY) {
-    try {
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: "VYSITE <noreply@vysite.com>",
-          to: [NOTIFY_EMAIL],
-          subject,
-          text: body,
-        }),
-      });
-    } catch {
-      // Non-fatal — trial is already provisioned
-    }
-    return;
-  }
-
-  // Fallback: use Supabase's auth admin to send a magic link email as a proxy.
-  // This is best-effort and only works if the notify address is registered.
-  // In production always set RESEND_API_KEY.
-  console.log("[provision-trial-org] Notification (no mail provider configured):", subject);
-  console.log(body);
+  const html = `<pre style="font-family:monospace;font-size:14px;">${text}</pre>`;
+  await sendViaResend(NOTIFY_EMAIL, subject, html, text);
 }
 
 Deno.serve(async (req: Request) => {
@@ -266,28 +360,46 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 8. Create the auth user (invite — user sets their own password) ───────
-    const { data: inviteData, error: inviteErr } = await adminClient.auth.admin.inviteUserByEmail(
-      adminEmail,
-      {
-        data: {
-          trial_org_id: org.id,
-          full_name: adminName,
-        },
-        redirectTo: `${Deno.env.get("SITE_URL") ?? "https://app.vysite.com"}/`,
+    // ── 8. Create auth user and generate a password-setup link via Resend ───────
+    // We use createUser (no email sent) + generateLink (signup type) so we control
+    // delivery through Resend rather than relying on Supabase's built-in SMTP.
+    const { data: newUserData, error: createUserErr } = await adminClient.auth.admin.createUser({
+      email: adminEmail,
+      email_confirm: false,
+      user_metadata: {
+        trial_org_id: org.id,
+        full_name: adminName,
       },
-    );
+    });
 
-    if (inviteErr || !inviteData?.user) {
-      // Roll back org and settings
+    if (createUserErr || !newUserData?.user) {
       await adminClient.from("org_settings").delete().eq("org_id", org.id);
       await adminClient.from("organisations").delete().eq("id", org.id);
-      return new Response(JSON.stringify({ error: `Failed to create user account: ${inviteErr?.message}` }), {
+      return new Response(JSON.stringify({ error: `Failed to create user account: ${createUserErr?.message}` }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const authUserId = inviteData.user.id;
+    const authUserId = newUserData.user.id;
+    const siteUrl = Deno.env.get("SITE_URL") ?? "https://app.vysite.com";
+
+    // Generate a one-time invite link the user clicks to set their password
+    const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
+      type: "invite",
+      email: adminEmail,
+      options: {
+        redirectTo: `${siteUrl}/`,
+        data: { trial_org_id: org.id, full_name: adminName },
+      },
+    });
+
+    if (linkErr || !linkData?.properties?.action_link) {
+      // User created but link generation failed — still proceed, we'll log the issue.
+      // The user can use "forgot password" to gain access.
+      console.error("[provision-trial-org] generateLink failed:", linkErr?.message);
+    }
+
+    const inviteUrl = linkData?.properties?.action_link ?? `${siteUrl}/`;
 
     // ── 9. Create vy_platform_users row ───────────────────────────────────────
     const { error: puErr } = await adminClient
@@ -336,8 +448,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 11. Send notification to hello@vysite.com ─────────────────────────────
-    await sendNotificationEmail(adminClient, companyName, adminName, adminEmail, trialExpiresAt, source);
+    // ── 11. Send onboarding email to trial user + notification to hello@vysite.com
+    await Promise.all([
+      sendOnboardingEmail(inviteUrl, adminName, adminEmail, companyName, trialExpiresAt),
+      sendNotificationEmail(companyName, adminName, adminEmail, trialExpiresAt, source),
+    ]);
 
     // ── 12. Return success ────────────────────────────────────────────────────
     return new Response(
