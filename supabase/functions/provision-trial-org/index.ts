@@ -293,6 +293,7 @@ Deno.serve(async (req: Request) => {
     const { error: puErr } = await adminClient
       .from("vy_platform_users")
       .insert({
+        id: crypto.randomUUID(),
         name: adminName,
         email: adminEmail,
         role: "Admin",
