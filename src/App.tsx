@@ -16,6 +16,7 @@ import Settings from './pages/Settings';
 import TestingCommissioning from './pages/TestingCommissioning';
 import MaintenanceServicing from './pages/MaintenanceServicing';
 import Login from './pages/Login';
+import SetPassword from './pages/SetPassword';
 import { StoreContext, usePermissions } from './lib/StoreContext';
 import { useStore } from './lib/store';
 import { useAuth } from './lib/AuthContext';
@@ -296,6 +297,17 @@ export default function App() {
       <>
         {debugPanel}
         <Login />
+      </>
+    );
+  }
+
+  // Session exists but user arrived via an invite/password-reset link —
+  // show the password setup screen before entering the app.
+  if (auth.needsPasswordSetup) {
+    return (
+      <>
+        {debugPanel}
+        <SetPassword />
       </>
     );
   }
