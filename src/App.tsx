@@ -291,23 +291,24 @@ export default function App() {
     );
   }
 
+  // Invite/recovery link was clicked — always show SetPassword regardless of
+  // whether another session exists. AuthContext signs out the old session before
+  // exchanging the token, so this fires cleanly for new trial users.
+  if (auth.needsPasswordSetup) {
+    return (
+      <>
+        {debugPanel}
+        <SetPassword />
+      </>
+    );
+  }
+
   // Unauthenticated — show login gate immediately, no need to wait for org
   if (!auth.session) {
     return (
       <>
         {debugPanel}
         <Login />
-      </>
-    );
-  }
-
-  // Session exists but user arrived via an invite/password-reset link —
-  // show the password setup screen before entering the app.
-  if (auth.needsPasswordSetup) {
-    return (
-      <>
-        {debugPanel}
-        <SetPassword />
       </>
     );
   }

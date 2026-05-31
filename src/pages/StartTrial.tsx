@@ -42,6 +42,9 @@ export default function StartTrial() {
             adminEmail: adminEmail.trim().toLowerCase(),
             trialDays: 14,
             source: 'website',
+            // Pass the current origin so the invite link always points back to
+            // whichever environment submitted the form (dev, staging, or production).
+            redirectUrl: window.location.origin,
           }),
         }
       );

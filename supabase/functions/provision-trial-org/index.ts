@@ -227,6 +227,7 @@ Deno.serve(async (req: Request) => {
       adminEmail?: string;
       trialDays?: number;
       source?: string; // 'super-admin' | 'website'
+      redirectUrl?: string; // optional override for dev/staging — must end with /
     };
     try {
       body = await req.json();
@@ -241,6 +242,9 @@ Deno.serve(async (req: Request) => {
     const adminEmail  = (body.adminEmail  ?? "").trim().toLowerCase();
     const trialDays   = typeof body.trialDays === "number" && body.trialDays > 0 ? body.trialDays : TRIAL_DAYS;
     const source      = (body.source ?? "website") as string;
+    // redirectUrl lets the caller pass the exact app origin for dev/staging environments
+    // where SITE_URL may differ from the current preview URL.
+    const redirectUrlOverride = (body.redirectUrl ?? "").trim().replace(/\/$/, "");
 
     if (!companyName || companyName.length < 2) {
       return new Response(JSON.stringify({ error: "Company name must be at least 2 characters" }), {
@@ -385,7 +389,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const authUserId = newUserData.user.id;
-    const siteUrl = (Deno.env.get("SITE_URL") ?? "https://app.vysite.com").replace(/\/$/, "");
+    const siteUrl = redirectUrlOverride || (Deno.env.get("SITE_URL") ?? "https://app.vysite.com").replace(/\/$/, "");
 
     // Generate a password-recovery link so the user lands on SetPassword.
     // redirectTo must end with / to match Supabase's allowed redirect URL list.
