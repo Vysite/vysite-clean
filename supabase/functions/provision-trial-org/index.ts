@@ -361,11 +361,15 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 8. Create auth user and generate a password-setup link via Resend ───────
-    // We use createUser (no email sent) + generateLink (signup type) so we control
-    // delivery through Resend rather than relying on Supabase's built-in SMTP.
+    // createUser with email_confirm:true so the account is immediately usable.
+    // We generate a "recovery" link (not "invite") because:
+    //   - "invite" tokens embed the Supabase project URL and are redirect-allowlist
+    //     sensitive; they fail silently when the redirectTo isn't whitelisted.
+    //   - "recovery" links fire PASSWORD_RECOVERY in the client, which our
+    //     AuthContext already handles, routing the user to SetPassword.
     const { data: newUserData, error: createUserErr } = await adminClient.auth.admin.createUser({
       email: adminEmail,
-      email_confirm: false,
+      email_confirm: true,
       user_metadata: {
         trial_org_id: org.id,
         full_name: adminName,
@@ -381,21 +385,19 @@ Deno.serve(async (req: Request) => {
     }
 
     const authUserId = newUserData.user.id;
-    const siteUrl = Deno.env.get("SITE_URL") ?? "https://app.vysite.com";
+    const siteUrl = (Deno.env.get("SITE_URL") ?? "https://app.vysite.com").replace(/\/$/, "");
 
-    // Generate a one-time invite link the user clicks to set their password
+    // Generate a password-recovery link so the user lands on SetPassword.
+    // redirectTo must end with / to match Supabase's allowed redirect URL list.
     const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
-      type: "invite",
+      type: "recovery",
       email: adminEmail,
       options: {
         redirectTo: `${siteUrl}/`,
-        data: { trial_org_id: org.id, full_name: adminName },
       },
     });
 
     if (linkErr || !linkData?.properties?.action_link) {
-      // User created but link generation failed — still proceed, we'll log the issue.
-      // The user can use "forgot password" to gain access.
       console.error("[provision-trial-org] generateLink failed:", linkErr?.message);
     }
 
