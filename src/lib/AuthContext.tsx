@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCurrentOrgId(null);
         setOrgLoading(false);
       }
-      // TOKEN_REFRESHED, USER_UPDATED, PASSWORD_RECOVERY — resolveOrg skip guard handles these
+      // TOKEN_REFRESHED — resolveOrg skip guard handles these as no-ops
     });
 
     return () => subscription.unsubscribe();
