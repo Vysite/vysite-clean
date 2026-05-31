@@ -249,6 +249,12 @@ function OrgGatedApp({
 }
 
 export default function App() {
+  // /set-password is a standalone route — render it immediately before any
+  // auth checks so it works regardless of existing session state.
+  if (typeof window !== 'undefined' && window.location.pathname === '/set-password') {
+    return <SetPassword />;
+  }
+
   const auth = useAuth();
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -287,18 +293,6 @@ export default function App() {
             <p className="text-slate-400 text-sm">Loading VYSITE...</p>
           </div>
         </div>
-      </>
-    );
-  }
-
-  // Invite/recovery link was clicked — always show SetPassword regardless of
-  // whether another session exists. AuthContext signs out the old session before
-  // exchanging the token, so this fires cleanly for new trial users.
-  if (auth.needsPasswordSetup) {
-    return (
-      <>
-        {debugPanel}
-        <SetPassword />
       </>
     );
   }

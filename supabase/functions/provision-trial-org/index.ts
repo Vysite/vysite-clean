@@ -364,13 +364,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 8. Create auth user and generate a password-setup link via Resend ───────
-    // createUser with email_confirm:true so the account is immediately usable.
-    // We generate a "recovery" link (not "invite") because:
-    //   - "invite" tokens embed the Supabase project URL and are redirect-allowlist
-    //     sensitive; they fail silently when the redirectTo isn't whitelisted.
-    //   - "recovery" links fire PASSWORD_RECOVERY in the client, which our
-    //     AuthContext already handles, routing the user to SetPassword.
+    // ── 8. Create auth user and build a direct /set-password link ───────────────
+    // Strategy: create the user, generate a recovery token, then extract the
+    // token_hash from the generated link and build our own direct URL to
+    // /set-password?token_hash=XXX&type=recovery
+    //
+    // This bypasses Supabase's redirect chain entirely — no redirect allowlist,
+    // no PKCE code exchange, no existing-session interference. The SetPassword
+    // page calls supabase.auth.verifyOtp({ token_hash, type: 'recovery' }) to
+    // exchange the token and get a session, then calls updateUser({ password }).
     const { data: newUserData, error: createUserErr } = await adminClient.auth.admin.createUser({
       email: adminEmail,
       email_confirm: true,
@@ -389,23 +391,33 @@ Deno.serve(async (req: Request) => {
     }
 
     const authUserId = newUserData.user.id;
-    const siteUrl = redirectUrlOverride || (Deno.env.get("SITE_URL") ?? "https://app.vysite.com").replace(/\/$/, "");
+    const siteUrl = (redirectUrlOverride || (Deno.env.get("SITE_URL") ?? "https://app.vysite.com")).replace(/\/$/, "");
 
-    // Generate a password-recovery link so the user lands on SetPassword.
-    // redirectTo must end with / to match Supabase's allowed redirect URL list.
+    // generateLink produces: https://<project>.supabase.co/auth/v1/verify?token=XXX&type=recovery&redirect_to=...
+    // We extract the token_hash (or token) from that URL and build our own link.
     const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
       type: "recovery",
       email: adminEmail,
-      options: {
-        redirectTo: `${siteUrl}/`,
-      },
     });
+
+    let inviteUrl = `${siteUrl}/set-password`;
 
     if (linkErr || !linkData?.properties?.action_link) {
       console.error("[provision-trial-org] generateLink failed:", linkErr?.message);
-    }
+    } else {
+      // Extract token_hash from the Supabase action link query string
+      const actionUrl = new URL(linkData.properties.action_link);
+      const tokenHash = actionUrl.searchParams.get("token_hash")
+        ?? actionUrl.searchParams.get("token")
+        ?? linkData.properties.hashed_token
+        ?? "";
 
-    const inviteUrl = linkData?.properties?.action_link ?? `${siteUrl}/`;
+      if (tokenHash) {
+        inviteUrl = `${siteUrl}/set-password?token_hash=${encodeURIComponent(tokenHash)}&type=recovery&email=${encodeURIComponent(adminEmail)}`;
+      } else {
+        console.error("[provision-trial-org] Could not extract token_hash from action link:", linkData.properties.action_link);
+      }
+    }
 
     // ── 9. Create vy_platform_users row ───────────────────────────────────────
     const { error: puErr } = await adminClient
