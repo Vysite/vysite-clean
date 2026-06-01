@@ -71,11 +71,13 @@ export default function StartTrial() {
 
       {/* Nav */}
       <nav className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-[#1e2d4a]/60">
-        <a href="/" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-[#f97316] flex items-center justify-center font-black text-white text-base shadow-lg shadow-orange-900/30 transition-transform group-hover:scale-105">
-            V
-          </div>
-          <span className="font-black text-white tracking-tight">VY<span className="text-[#f97316]">SITE</span></span>
+        <a href="/" className="flex items-center group">
+          <img
+            src="/VYSITE_Logo_Long.png"
+            alt="VYSITE"
+            className="h-9 w-auto object-contain transition-opacity group-hover:opacity-80"
+            style={{ mixBlendMode: 'lighten' }}
+          />
         </a>
         <a
           href="/"
@@ -132,7 +134,14 @@ export default function StartTrial() {
                   <span className="text-xs font-semibold text-sky-300">14-day free trial · No card required</span>
                 </div>
                 <h1 className="text-3xl lg:text-4xl font-black text-white leading-tight mb-4">
-                  Try VYSITE free<br />
+                  Try
+                  <img
+                    src="/VYSITE_Logo_Long.png"
+                    alt="VYSITE"
+                    className="inline-block align-middle object-contain mx-2"
+                    style={{ height: '1.1em', mixBlendMode: 'lighten' }}
+                  />
+                  free<br />
                   <span className="text-[#f97316]">for 14 days</span>
                 </h1>
                 <p className="text-slate-400 text-base leading-relaxed mb-8">
