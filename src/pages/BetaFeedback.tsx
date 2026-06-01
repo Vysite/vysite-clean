@@ -1,6 +1,35 @@
-import { useState, useRef } from 'react';
+import { useRef, useState } from 'react';
 import { MessageSquare, Bug, Paperclip, Send, Info } from 'lucide-react';
 import type { LucideIcon } from '../data/types';
+import { useAppStore } from '../lib/StoreContext';
+import { supabase } from '../lib/supabase';
+
+// ─── Edge function caller ─────────────────────────────────────────────────────
+
+async function sendFeedbackEmail(payload: {
+  org_id: string | null;
+  user_name: string;
+  user_email: string;
+  feedback_type: 'bug' | 'suggestion' | 'other';
+  message: string;
+}): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) return;
+
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-feedback-email`;
+  await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  // Fire-and-forget — submission succeeds regardless of email delivery
+}
+
+// ─── Generic suggestion card ──────────────────────────────────────────────────
 
 function TextareaCard({
   title,
@@ -17,16 +46,19 @@ function TextareaCard({
   iconColor: string;
   placeholder: string;
   submitLabel: string;
-  onSubmit: (text: string, file?: File | null) => void;
+  onSubmit: (text: string) => Promise<void>;
   allowAttachment?: boolean;
 }) {
   const [text, setText] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!text.trim()) return;
-    onSubmit(text.trim());
+    setSubmitting(true);
+    await onSubmit(text.trim());
     setText('');
+    setSubmitting(false);
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 3000);
   }
@@ -54,7 +86,7 @@ function TextareaCard({
           <span className="text-[11px] text-slate-600">{text.length > 0 ? `${text.length} characters` : ''}</span>
           <button
             onClick={handleSubmit}
-            disabled={!text.trim()}
+            disabled={!text.trim() || submitting}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
               submitted
                 ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 cursor-default'
@@ -64,7 +96,7 @@ function TextareaCard({
             }`}
           >
             <Send size={12} />
-            {submitted ? 'Submitted!' : submitLabel}
+            {submitted ? 'Submitted!' : submitting ? 'Sending…' : submitLabel}
           </button>
         </div>
       </div>
@@ -72,21 +104,22 @@ function TextareaCard({
   );
 }
 
-function BugReportCard({
-  onSubmit,
-}: {
-  onSubmit: (text: string, file?: File | null) => void;
-}) {
+// ─── Bug report card ──────────────────────────────────────────────────────────
+
+function BugReportCard({ onSubmit }: { onSubmit: (text: string, file?: File | null) => Promise<void> }) {
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!text.trim()) return;
-    onSubmit(text.trim(), file);
+    setSubmitting(true);
+    await onSubmit(text.trim(), file);
     setText('');
     setFile(null);
+    setSubmitting(false);
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 3000);
   }
@@ -111,7 +144,6 @@ function BugReportCard({
           className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-[#f97316] transition-colors resize-none"
         />
 
-        {/* Attachment area */}
         <div>
           <input
             ref={fileRef}
@@ -141,7 +173,7 @@ function BugReportCard({
           <span className="text-[11px] text-slate-600">{text.length > 0 ? `${text.length} characters` : ''}</span>
           <button
             onClick={handleSubmit}
-            disabled={!text.trim()}
+            disabled={!text.trim() || submitting}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
               submitted
                 ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 cursor-default'
@@ -151,7 +183,7 @@ function BugReportCard({
             }`}
           >
             <Send size={12} />
-            {submitted ? 'Submitted!' : 'Submit Bug Report'}
+            {submitted ? 'Submitted!' : submitting ? 'Sending…' : 'Submit Bug Report'}
           </button>
         </div>
       </div>
@@ -159,24 +191,36 @@ function BugReportCard({
   );
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function BetaFeedback() {
-  function handleSuggestion(text: string) {
-    console.log('[BETA] Feature suggestion:', text);
+  const store = useAppStore();
+  const user = store.currentUser;
+  const orgId = store.currentOrgId;
+
+  function senderContext() {
+    return {
+      org_id: orgId,
+      user_name: user?.name ?? 'Unknown',
+      user_email: user?.email ?? '',
+    };
   }
 
-  function handleBugReport(text: string, file?: File | null) {
-    console.log('[BETA] Bug report:', text, file ?? 'no attachment');
+  async function handleSuggestion(text: string) {
+    await sendFeedbackEmail({ ...senderContext(), feedback_type: 'suggestion', message: text });
+  }
+
+  async function handleBugReport(text: string) {
+    await sendFeedbackEmail({ ...senderContext(), feedback_type: 'bug', message: text });
   }
 
   return (
     <div className="p-4 lg:p-6 max-w-3xl">
-      {/* Page header */}
       <div className="mb-6">
         <h2 className="text-lg font-bold text-white">BETA Feedback</h2>
         <p className="text-sm text-slate-500">Help improve VYSITE by reporting bugs, issues and feature suggestions.</p>
       </div>
 
-      {/* Beta disclaimer banner */}
       <div className="mb-6 flex items-start gap-3 px-4 py-3.5 rounded-xl border border-blue-500/30 bg-blue-500/10">
         <Info size={16} className="text-blue-400 shrink-0 mt-0.5" />
         <p className="text-sm text-blue-300 leading-relaxed">
@@ -184,7 +228,6 @@ export default function BetaFeedback() {
         </p>
       </div>
 
-      {/* Feedback cards */}
       <div className="flex flex-col gap-5">
         <TextareaCard
           title="Feature Suggestions"
