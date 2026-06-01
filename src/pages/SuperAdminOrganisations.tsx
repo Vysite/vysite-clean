@@ -296,6 +296,10 @@ export default function SuperAdminOrganisations() {
         <div className="flex items-center justify-center py-20">
           <div className="w-7 h-7 border-2 border-[#f97316] border-t-transparent rounded-full animate-spin" />
         </div>
+      ) : error ? (
+        <div className="flex items-center justify-center py-20">
+          <p className="text-sm text-red-400">{error}</p>
+        </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-slate-500">
           <Building2 size={32} className="mx-auto mb-3 opacity-30" />
