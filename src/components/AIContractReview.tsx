@@ -13,6 +13,7 @@ import type {
 } from '../data/types';
 import { splitPdfIntoChunks, getPdfPageCount } from '../lib/pdfChunker';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../lib/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -832,6 +833,7 @@ function ReviewDetailPanel({
 
 export default function AIContractReview({ tender, currentUser, onUpdateReviews, onAddDocument: _onAddDocument }: Props) {
   const reviews: ContractReviewRecord[] = tender.contractReviews ?? [];
+  const { currentOrgId, user: authUser } = useAuth();
 
   const [view, setView] = useState<View>('list');
   const [activeRecord, setActiveRecord] = useState<ContractReviewRecord | null>(null);
@@ -937,7 +939,11 @@ export default function AIContractReview({ tender, currentUser, onUpdateReviews,
     const res = await fetch(edgeFnUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': authHeader, 'Apikey': anonKey },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...body,
+        ...(currentOrgId ? { orgId: currentOrgId } : {}),
+        ...(authUser?.id ? { userId: authUser.id } : {}),
+      }),
     });
     const json = await res.json();
     if (!res.ok || json.error) {

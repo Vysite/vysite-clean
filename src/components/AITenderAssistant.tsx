@@ -5,6 +5,7 @@ import type { TenderRFI, TenderScopeEntry, RFIStatus, StoredAIReview, AIReviewRF
 import { splitPdfIntoChunks, getPdfPageCount, type PdfChunk } from '../lib/pdfChunker';
 import ReconcileFindings, { type ReconcileApplyResult } from './ReconcileFindings';
 import ChatGPTImport from './ChatGPTImport';
+import { useAuth } from '../lib/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -851,6 +852,7 @@ function makeStoredReview(result: DocumentReviewResult, documentName: string): S
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function AITenderAssistant({ tender, currentUser, onCommit, onClose }: Props) {
+  const { currentOrgId, user: authUser } = useAuth();
   const [selectedTask, setSelectedTask] = useState<AITask>('review-document');
   const [context, setContext] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1211,7 +1213,11 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     const res = await fetch(`${supabaseUrl}/functions/v1/ai-tender-assistant`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...body,
+        ...(currentOrgId ? { orgId: currentOrgId } : {}),
+        ...(authUser?.id ? { userId: authUser.id } : {}),
+      }),
     });
     const data = await res.json();
     if (!res.ok || data.error) throwFromResponse(data, 'AI request failed');
@@ -1246,6 +1252,9 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
         chunkIndex,
         chunkTotal,
         chunkInfo: `This is section ${chunkIndex + 1} of ${chunkTotal} (pages ${chunk.startPage}–${chunk.endPage} of ${pageCount} total pages).`,
+        pagesProcessed: chunk.endPage - chunk.startPage + 1,
+        ...(currentOrgId ? { orgId: currentOrgId } : {}),
+        ...(authUser?.id ? { userId: authUser.id } : {}),
       }),
     });
     const data = await res.json();
@@ -1276,6 +1285,8 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
         mergedResult: merged,
         totalPages: pageCount,
         chunkCount,
+        ...(currentOrgId ? { orgId: currentOrgId } : {}),
+        ...(authUser?.id ? { userId: authUser.id } : {}),
       }),
     });
     const data = await res.json();
@@ -1647,7 +1658,14 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
         const res = await fetch(`${supabaseUrl}/functions/v1/ai-tender-assistant`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-          body: JSON.stringify({ task: selectedTask, tenderName: tender.name, tenderClient: tender.client, context }),
+          body: JSON.stringify({
+            task: selectedTask,
+            tenderName: tender.name,
+            tenderClient: tender.client,
+            context,
+            ...(currentOrgId ? { orgId: currentOrgId } : {}),
+            ...(authUser?.id ? { userId: authUser.id } : {}),
+          }),
         });
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error ?? 'AI request failed');

@@ -1,11 +1,18 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.30.1";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+// Pricing per 1M tokens (claude-opus-4-5 as of 2025)
+const COST_PER_1M_INPUT  = 15.0;
+const COST_PER_1M_OUTPUT = 75.0;
+const COST_PER_1M_CACHE_READ    = 1.5;
+const COST_PER_1M_CACHE_WRITE   = 18.75;
 
 interface RequestBody {
   tenderName?: string;
@@ -17,6 +24,11 @@ interface RequestBody {
   chunkIndex?: number;
   chunkTotal?: number;
   chunkPageRange?: string;
+  // Usage tracking fields from frontend
+  orgId?: string;
+  userId?: string;
+  pagesProcessed?: number;
+  documentSizeKb?: number;
 }
 
 // ─── System prompt ────────────────────────────────────────────────────────────
@@ -45,16 +57,11 @@ Do NOT include:
 Your response must start with { and end with } and be parseable by JSON.parse() with zero preprocessing.`;
 
 // ─── JSON sanitisation ────────────────────────────────────────────────────────
-// Strips markdown fences, trims leading/trailing non-JSON text, recovers the
-// outermost JSON object. Matches the pattern used in ai-tender-assistant.
 
 function sanitizeJsonResponse(raw: string): string {
   let s = raw.trim();
-
-  // Strip markdown code fences
   s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
 
-  // Find outermost { ... }
   const firstBrace = s.indexOf("{");
   const firstBracket = s.indexOf("[");
   let start = -1;
@@ -76,9 +83,6 @@ function sanitizeJsonResponse(raw: string): string {
 }
 
 // ─── Partial JSON recovery ────────────────────────────────────────────────────
-// When max_tokens truncates the response, the JSON is cut mid-object.
-// Attempt to recover: extract executiveSummary and all complete findings
-// from the fragment before the truncation point.
 
 function tryRecoverTruncated(raw: string): Record<string, unknown> | null {
   const result: Record<string, unknown> = {
@@ -88,19 +92,16 @@ function tryRecoverTruncated(raw: string): Record<string, unknown> | null {
   };
   let recovered = 0;
 
-  // Try to extract executiveSummary (string field)
   const summaryMatch = raw.match(/"executiveSummary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
   if (summaryMatch) {
     try { result.executiveSummary = JSON.parse(`"${summaryMatch[1]}"`); } catch { /* ignore */ }
   }
 
-  // Try to extract commercialHandoverNotes (string field)
   const handoverMatch = raw.match(/"commercialHandoverNotes"\s*:\s*"((?:[^"\\]|\\.)*)"/);
   if (handoverMatch) {
     try { result.commercialHandoverNotes = JSON.parse(`"${handoverMatch[1]}"`); } catch { /* ignore */ }
   }
 
-  // Try to extract complete findings objects from the findings array
   const findingsStart = raw.indexOf('"findings"');
   if (findingsStart >= 0) {
     const bracketIdx = raw.indexOf("[", findingsStart);
@@ -139,7 +140,6 @@ function tryRecoverTruncated(raw: string): Record<string, unknown> | null {
 }
 
 // ─── Schema validation & normalisation ───────────────────────────────────────
-// Never crash on a missing/wrong field — log and use safe defaults.
 
 function normalizeFinding(raw: unknown, index: number): Record<string, unknown> {
   const f = (typeof raw === "object" && raw !== null && !Array.isArray(raw))
@@ -154,7 +154,6 @@ function normalizeFinding(raw: unknown, index: number): Record<string, unknown> 
   const risk = (["low", "medium", "high"] as const).includes(rawRisk as "low" | "medium" | "high") ? rawRisk : "medium";
   const recommendation = typeof f["recommendation"] === "string" ? f["recommendation"].trim() : "";
 
-  // Source traceability — all fields optional
   let source: Record<string, string> | undefined;
   if (typeof f["source"] === "object" && f["source"] !== null && !Array.isArray(f["source"])) {
     const s = f["source"] as Record<string, unknown>;
@@ -208,8 +207,6 @@ function buildPrompt(body: RequestBody): string {
 
   const docCtx = body.documentName ? `Contract document: ${body.documentName}\n` : "";
 
-  // Keep section list concise — injecting the full list inflates the prompt and
-  // wastes tokens before the AI even starts reading the contract.
   const sections = [
     "Key Commercial Risks", "Payment Terms", "Valuation / Application Process",
     "Notice Requirements", "Delay / Hold-Up Procedures", "Variation Procedures",
@@ -248,12 +245,28 @@ Respond with ONLY this JSON object — start with { and end with } — nothing e
 Include 5-15 findings. Only include findings for clauses actually in the document. Do not output anything outside the JSON object.`;
 }
 
+// ─── Cost calculator ──────────────────────────────────────────────────────────
+
+function calcCost(usage: Anthropic.Usage): number {
+  return (
+    ((usage.input_tokens ?? 0) / 1_000_000) * COST_PER_1M_INPUT +
+    ((usage.output_tokens ?? 0) / 1_000_000) * COST_PER_1M_OUTPUT +
+    (((usage as Record<string, unknown>)["cache_read_input_tokens"] as number ?? 0) / 1_000_000) * COST_PER_1M_CACHE_READ +
+    (((usage as Record<string, unknown>)["cache_creation_input_tokens"] as number ?? 0) / 1_000_000) * COST_PER_1M_CACHE_WRITE
+  );
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
+
+  // Build service-role Supabase client for DB operations (allowance check + logging)
+  const supabaseUrl  = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
   try {
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -285,17 +298,95 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // ── Server-side allowance check ───────────────────────────────────────────
+    const orgId  = body.orgId;
+    const userId = body.userId;
+
+    if (orgId) {
+      const { data: allowance, error: allowanceErr } = await db
+        .rpc("check_ai_allowance", { p_org_id: orgId })
+        .single();
+
+      if (allowanceErr) {
+        console.warn(`[contract-review] Allowance check error (org=${orgId}): ${allowanceErr.message}`);
+        // On DB error we allow the call through rather than blocking users
+      } else if (allowance) {
+        if (!allowance.ai_enabled) {
+          // Log blocked call
+          if (orgId) {
+            await db.from("ai_usage_log").insert({
+              org_id: orgId,
+              user_id: userId ?? null,
+              feature: "contract-review",
+              call_type: "contract-review",
+              model: "claude-opus-4-5",
+              input_tokens: 0,
+              output_tokens: 0,
+              cache_read_tokens: 0,
+              cache_creation_tokens: 0,
+              estimated_cost_usd: 0,
+              status: "blocked",
+              error_code: "ai_disabled",
+              document_name: docName,
+              document_size_kb: body.documentSizeKb ?? null,
+              pages_processed: body.pagesProcessed ?? null,
+              chunks_total: body.chunkTotal ?? null,
+              chunk_index: body.chunkIndex ?? null,
+            });
+          }
+          return new Response(
+            JSON.stringify({ error: "AI features are not enabled for your organisation. Please contact your administrator.", code: "ai_disabled" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (!allowance.allowed) {
+          if (orgId) {
+            await db.from("ai_usage_log").insert({
+              org_id: orgId,
+              user_id: userId ?? null,
+              feature: "contract-review",
+              call_type: "contract-review",
+              model: "claude-opus-4-5",
+              input_tokens: 0,
+              output_tokens: 0,
+              cache_read_tokens: 0,
+              cache_creation_tokens: 0,
+              estimated_cost_usd: 0,
+              status: "blocked",
+              error_code: "allowance_exceeded",
+              document_name: docName,
+              document_size_kb: body.documentSizeKb ?? null,
+              pages_processed: body.pagesProcessed ?? null,
+              chunks_total: body.chunkTotal ?? null,
+              chunk_index: body.chunkIndex ?? null,
+            });
+          }
+          return new Response(
+            JSON.stringify({
+              error: `Your organisation has used all ${allowance.monthly_limit + allowance.bonus_credits} AI reviews available this month. Please contact your administrator to increase your allowance.`,
+              code: "allowance_exceeded",
+              used: allowance.used,
+              limit: allowance.monthly_limit,
+              bonus: allowance.bonus_credits,
+              remaining: 0,
+            }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        console.log(`[contract-review] Allowance OK: org=${orgId} used=${allowance.used} remaining=${allowance.remaining}`);
+      }
+    }
+
+    // ── Call Claude ───────────────────────────────────────────────────────────
     const client = new Anthropic({ apiKey });
     const prompt = buildPrompt(body);
-
-    // Use 8192 tokens — contract review JSON schema is large.
-    // Mirror the max_tokens used by ai-tender-assistant for document review.
     const MAX_TOKENS = 8192;
 
     let message: Anthropic.Message;
 
     if (body.documentBase64 && body.documentMimeType === "application/pdf") {
-      // PDF: use document block — same pattern as ai-tender-assistant
       message = await client.messages.create({
         model: "claude-opus-4-5",
         max_tokens: MAX_TOKENS,
@@ -316,7 +407,6 @@ Deno.serve(async (req: Request) => {
         }],
       });
     } else {
-      // Non-PDF (text, docx extracted text, etc.) — embed in prompt string
       const textContent = body.documentText ?? "";
       message = await client.messages.create({
         model: "claude-opus-4-5",
@@ -328,9 +418,9 @@ Deno.serve(async (req: Request) => {
 
     const rawText = message.content[0]?.type === "text" ? message.content[0].text : "";
     const stopReason = message.stop_reason;
+    const usage = message.usage;
 
-    // Always log response stats — essential for diagnosing parse failures
-    console.log(`[contract-review]${chunkLabel}: raw_len=${rawText.length} stop_reason=${stopReason}`);
+    console.log(`[contract-review]${chunkLabel}: raw_len=${rawText.length} stop_reason=${stopReason} input_tokens=${usage.input_tokens} output_tokens=${usage.output_tokens}`);
 
     if (stopReason === "max_tokens") {
       console.warn(`[contract-review]${chunkLabel}: TRUNCATED at max_tokens=${MAX_TOKENS}. Will attempt partial recovery.`);
@@ -340,13 +430,10 @@ Deno.serve(async (req: Request) => {
       console.warn(`[contract-review]${chunkLabel}: Very short response (${rawText.length} chars): "${rawText}"`);
     }
 
-    // Log the first 300 chars of the raw response to help diagnose formatting issues
     console.log(`[contract-review]${chunkLabel}: raw_start="${rawText.slice(0, 300).replace(/\n/g, "\\n")}"`);
 
     // ── Parse ──────────────────────────────────────────────────────────────────
-
     const sanitized = sanitizeJsonResponse(rawText);
-
     let parsed: unknown;
     let recovered = false;
 
@@ -355,11 +442,9 @@ Deno.serve(async (req: Request) => {
     } catch (primaryErr) {
       console.warn(
         `[contract-review]${chunkLabel}: Primary JSON.parse failed (${primaryErr instanceof Error ? primaryErr.message : primaryErr}). ` +
-        `sanitized_len=${sanitized.length} sanitized_start="${sanitized.slice(0, 200).replace(/\n/g, "\\n")}". ` +
-        `Attempting partial recovery...`
+        `sanitized_len=${sanitized.length}. Attempting partial recovery...`
       );
 
-      // Attempt partial recovery from truncated JSON
       const partial = tryRecoverTruncated(rawText);
       if (partial && (
         (partial.findings as unknown[]).length > 0 ||
@@ -369,6 +454,31 @@ Deno.serve(async (req: Request) => {
         recovered = true;
         console.log(`[contract-review]${chunkLabel}: Partial recovery succeeded. findings=${(partial.findings as unknown[]).length}`);
       } else {
+        // Log failed call
+        if (orgId) {
+          const cacheRead = (usage as Record<string, unknown>)["cache_read_input_tokens"] as number ?? 0;
+          const cacheCreate = (usage as Record<string, unknown>)["cache_creation_input_tokens"] as number ?? 0;
+          await db.from("ai_usage_log").insert({
+            org_id: orgId,
+            user_id: userId ?? null,
+            feature: "contract-review",
+            call_type: "contract-review",
+            model: "claude-opus-4-5",
+            input_tokens: usage.input_tokens ?? 0,
+            output_tokens: usage.output_tokens ?? 0,
+            cache_read_tokens: cacheRead,
+            cache_creation_tokens: cacheCreate,
+            estimated_cost_usd: calcCost(usage),
+            status: "failed",
+            error_code: "parse_error",
+            document_name: docName,
+            document_size_kb: body.documentSizeKb ?? null,
+            pages_processed: body.pagesProcessed ?? null,
+            chunks_total: body.chunkTotal ?? null,
+            chunk_index: body.chunkIndex ?? null,
+          });
+        }
+
         console.error(
           `[contract-review]${chunkLabel}: All parse attempts failed. ` +
           `raw_len=${rawText.length} stop_reason=${stopReason} ` +
@@ -389,7 +499,6 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Normalise ──────────────────────────────────────────────────────────────
-
     const normalized = normalizeReviewResult(parsed, docName);
 
     if (normalized.findings.length === 0 && !normalized.executiveSummary) {
@@ -400,6 +509,37 @@ Deno.serve(async (req: Request) => {
       `[contract-review]${chunkLabel}: ` +
       `findings=${normalized.findings.length} recovered=${recovered} stop_reason=${stopReason}`
     );
+
+    // ── Log usage + increment counter ─────────────────────────────────────────
+    if (orgId) {
+      const cacheRead = (usage as Record<string, unknown>)["cache_read_input_tokens"] as number ?? 0;
+      const cacheCreate = (usage as Record<string, unknown>)["cache_creation_input_tokens"] as number ?? 0;
+      const costUsd = calcCost(usage);
+
+      await Promise.all([
+        db.from("ai_usage_log").insert({
+          org_id: orgId,
+          user_id: userId ?? null,
+          feature: "contract-review",
+          call_type: "contract-review",
+          model: "claude-opus-4-5",
+          input_tokens: usage.input_tokens ?? 0,
+          output_tokens: usage.output_tokens ?? 0,
+          cache_read_tokens: cacheRead,
+          cache_creation_tokens: cacheCreate,
+          estimated_cost_usd: costUsd,
+          status: "success",
+          document_name: docName,
+          document_size_kb: body.documentSizeKb ?? null,
+          pages_processed: body.pagesProcessed ?? null,
+          chunks_total: body.chunkTotal ?? null,
+          chunk_index: body.chunkIndex ?? null,
+        }),
+        db.rpc("increment_ai_usage", { p_org_id: orgId }),
+      ]);
+
+      console.log(`[contract-review]${chunkLabel}: logged usage org=${orgId} tokens=${usage.input_tokens}+${usage.output_tokens} cost=$${costUsd.toFixed(6)}`);
+    }
 
     return new Response(
       JSON.stringify({ ...normalized, _recovered: recovered }),

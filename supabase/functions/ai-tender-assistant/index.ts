@@ -1,11 +1,18 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.30.1";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
+
+// Pricing per 1M tokens (claude-opus-4-5 as of 2025)
+const COST_PER_1M_INPUT        = 15.0;
+const COST_PER_1M_OUTPUT       = 75.0;
+const COST_PER_1M_CACHE_READ   = 1.5;
+const COST_PER_1M_CACHE_WRITE  = 18.75;
 
 type AITask =
   | "draft-rfi"
@@ -34,6 +41,11 @@ interface RequestBody {
   totalPages?: number;
   chunkCount?: number;
   allFindings?: unknown;
+  // Usage tracking fields from frontend
+  orgId?: string;
+  userId?: string;
+  pagesProcessed?: number;
+  documentSizeKb?: number;
 }
 
 // ─── System prompt ────────────────────────────────────────────────────────────
@@ -83,13 +95,8 @@ function sanitizeJsonResponse(raw: string): string {
 }
 
 // ─── Partial JSON recovery ────────────────────────────────────────────────────
-// When the AI response is truncated (max_tokens), the JSON will be cut off mid-object.
-// This function attempts to recover as many complete top-level array items as possible
-// from each category field before the truncation point.
 
 function tryRecoverTruncatedJson(raw: string): Record<string, unknown[]> | null {
-  // Extract content of each named array field by scanning for the field and collecting
-  // complete array items up to the last complete closing brace/bracket before truncation.
   const result: Record<string, unknown[]> = {
     rfis: [], assumptions: [], exclusions: [], scopeNotes: [], risks: [],
   };
@@ -104,7 +111,6 @@ function tryRecoverTruncatedJson(raw: string): Record<string, unknown[]> | null 
   ];
 
   for (const { key, altKeys } of fields) {
-    // Find the array start for this field
     const searchKeys = [key, ...(altKeys ?? [])];
     let arrayStart = -1;
     let foundKey = key;
@@ -114,11 +120,9 @@ function tryRecoverTruncatedJson(raw: string): Record<string, unknown[]> | null 
     }
     if (arrayStart < 0) continue;
 
-    // Find the opening bracket after the key
     const bracketIdx = raw.indexOf("[", arrayStart + foundKey.length + 2);
     if (bracketIdx < 0) continue;
 
-    // Walk forward collecting complete items (objects or quoted strings)
     const items: unknown[] = [];
     let pos = bracketIdx + 1;
     let depth = 0;
@@ -132,16 +136,14 @@ function tryRecoverTruncatedJson(raw: string): Record<string, unknown[]> | null 
       } else if (ch === "}" || ch === "]") {
         depth--;
         if (depth === 0 && itemStart >= 0) {
-          // Complete item found
           try {
             const item = JSON.parse(raw.slice(itemStart, pos + 1));
             items.push(item);
           } catch { /* skip malformed item */ }
           itemStart = -1;
         }
-        if (depth < 0) break; // hit the closing ] of this array
+        if (depth < 0) break;
       } else if (ch === '"' && depth === 0) {
-        // Plain string item
         let strEnd = pos + 1;
         while (strEnd < raw.length && !(raw[strEnd] === '"' && raw[strEnd - 1] !== "\\")) strEnd++;
         if (strEnd < raw.length) {
@@ -167,8 +169,6 @@ function tryRecoverTruncatedJson(raw: string): Record<string, unknown[]> | null 
 }
 
 // ─── Normalisation helpers ────────────────────────────────────────────────────
-// PHILOSOPHY: Never discard a finding due to missing metadata.
-// Log every discard decision with a reason so it appears in edge function logs.
 
 function normalizeSource(src: unknown): Record<string, string> | undefined {
   if (!src || typeof src !== "object" || Array.isArray(src)) return undefined;
@@ -181,8 +181,6 @@ function normalizeSource(src: unknown): Record<string, string> | undefined {
   };
 }
 
-// Accepts: plain strings, {text} objects, {text, source} objects.
-// Never discards due to missing source.
 function safeTextArray(val: unknown, fieldName: string): unknown[] {
   if (!Array.isArray(val)) {
     if (val !== undefined && val !== null) {
@@ -198,7 +196,6 @@ function safeTextArray(val: unknown, fieldName: string): unknown[] {
         kept.push(x.trim());
       } else {
         discarded++;
-        console.warn(`[normalise] ${fieldName}: DISCARD empty string`);
       }
     } else if (typeof x === "object" && x !== null && !Array.isArray(x)) {
       const obj = x as Record<string, unknown>;
@@ -207,44 +204,31 @@ function safeTextArray(val: unknown, fieldName: string): unknown[] {
         kept.push(source ? { text: obj["text"].trim(), source } : obj["text"].trim());
       } else if (typeof obj["text"] === "string") {
         discarded++;
-        console.warn(`[normalise] ${fieldName}: DISCARD object with empty "text" field`);
       } else {
-        // Object without a "text" key — check for common misformats
         const keys = Object.keys(obj);
-        // If the object has "subject"/"query" it might be an RFI accidentally in the wrong field
         const hasRfiKeys = keys.includes("subject") || keys.includes("query");
         if (hasRfiKeys) {
-          // Salvage: extract a text summary from the RFI fields
           const text = [obj["subject"], obj["query"]].filter(v => typeof v === "string").join(" — ");
-          if (text.trim()) {
-            console.warn(`[normalise] ${fieldName}: SALVAGE object with RFI keys as text. Keys: ${keys.join(",")}`);
-            kept.push(text.trim());
-          } else {
-            discarded++;
-            console.warn(`[normalise] ${fieldName}: DISCARD object with no usable text. Keys: ${keys.join(",")}`);
-          }
+          if (text.trim()) kept.push(text.trim());
+          else discarded++;
         } else {
           discarded++;
-          console.warn(`[normalise] ${fieldName}: DISCARD object with unexpected shape. Keys: ${keys.join(",")}`);
         }
       }
     } else {
       discarded++;
-      console.warn(`[normalise] ${fieldName}: DISCARD item of type ${typeof x}`);
     }
   }
   if (discarded > 0 || kept.length > 0) {
-    console.log(`[normalise] ${fieldName}: kept=${kept.length} discarded=${discarded} total_in=${val.length}`);
+    console.log(`[normalise] ${fieldName}: kept=${kept.length} discarded=${discarded}`);
   }
   return kept;
 }
 
-// Accepts objects with the required key. Missing source is fine.
-// Salvages plain strings by wrapping them.
 function safeObjectArray(val: unknown, fieldName: string, requiredKey: string): unknown[] {
   if (!Array.isArray(val)) {
     if (val !== undefined && val !== null) {
-      console.warn(`[normalise] ${fieldName}: expected array, got ${typeof val} — skipping field`);
+      console.warn(`[normalise] ${fieldName}: expected array, got ${typeof val}`);
     }
     return [];
   }
@@ -255,36 +239,26 @@ function safeObjectArray(val: unknown, fieldName: string, requiredKey: string): 
       const obj = x as Record<string, unknown>;
       const keyVal = obj[requiredKey];
       if (typeof keyVal === "string" && keyVal.trim().length > 0) {
-        if (obj["source"] !== undefined) {
-          kept.push({ ...obj, source: normalizeSource(obj["source"]) });
-        } else {
-          kept.push(obj);
-        }
+        kept.push(obj["source"] !== undefined ? { ...obj, source: normalizeSource(obj["source"]) } : obj);
       } else if (keyVal !== undefined) {
         discarded++;
-        console.warn(`[normalise] ${fieldName}: DISCARD object — "${requiredKey}" is ${typeof keyVal} (empty or wrong type). Keys: ${Object.keys(obj).join(",")}`);
       } else {
-        // Object missing the required key entirely — try to salvage if it has useful text
         const keys = Object.keys(obj);
         const firstStringKey = keys.find(k => typeof obj[k] === "string" && (obj[k] as string).trim().length > 0);
         if (firstStringKey) {
-          console.warn(`[normalise] ${fieldName}: SALVAGE object missing "${requiredKey}" — using "${firstStringKey}" as fallback. Keys: ${keys.join(",")}`);
           kept.push({ ...obj, [requiredKey]: obj[firstStringKey] });
         } else {
           discarded++;
-          console.warn(`[normalise] ${fieldName}: DISCARD object missing "${requiredKey}" with no usable fallback. Keys: ${keys.join(",")}`);
         }
       }
     } else if (typeof x === "string" && x.trim().length > 0) {
-      console.warn(`[normalise] ${fieldName}: SALVAGE plain string as ${requiredKey}`);
       kept.push({ [requiredKey]: x.trim() });
     } else {
       discarded++;
-      console.warn(`[normalise] ${fieldName}: DISCARD item of type ${typeof x}`);
     }
   }
   if (discarded > 0 || kept.length > 0) {
-    console.log(`[normalise] ${fieldName}: kept=${kept.length} discarded=${discarded} total_in=${val.length}`);
+    console.log(`[normalise] ${fieldName}: kept=${kept.length} discarded=${discarded}`);
   }
   return kept;
 }
@@ -296,10 +270,6 @@ function normalizeReviewResult(parsed: unknown): {
   scopeNotes: unknown[];
   risks: unknown[];
 } {
-  if (Array.isArray(parsed)) {
-    console.warn(`[normalise] AI returned top-level array instead of object — result will be empty`);
-  }
-
   const obj = (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed))
     ? parsed as Record<string, unknown>
     : {};
@@ -325,7 +295,6 @@ function parseReviewResponse(raw: string): { result: ReturnType<typeof normalize
     const parsed = JSON.parse(sanitized);
     return { result: normalizeReviewResult(parsed), recovered: false };
   } catch (parseErr) {
-    // Primary parse failed — attempt partial recovery from truncated JSON
     console.warn(`[parse] Primary JSON.parse failed: ${parseErr instanceof Error ? parseErr.message : parseErr}. Attempting partial recovery from ${raw.length} chars.`);
     const partial = tryRecoverTruncatedJson(raw);
     if (partial) {
@@ -345,6 +314,17 @@ function countFindings(result: ReturnType<typeof normalizeReviewResult>): Record
     total: result.rfis.length + result.assumptions.length + result.exclusions.length +
            result.scopeNotes.length + result.risks.length,
   };
+}
+
+// ─── Cost calculator ──────────────────────────────────────────────────────────
+
+function calcCost(usage: Anthropic.Usage): number {
+  return (
+    ((usage.input_tokens ?? 0) / 1_000_000) * COST_PER_1M_INPUT +
+    ((usage.output_tokens ?? 0) / 1_000_000) * COST_PER_1M_OUTPUT +
+    (((usage as Record<string, unknown>)["cache_read_input_tokens"] as number ?? 0) / 1_000_000) * COST_PER_1M_CACHE_READ +
+    (((usage as Record<string, unknown>)["cache_creation_input_tokens"] as number ?? 0) / 1_000_000) * COST_PER_1M_CACHE_WRITE
+  );
 }
 
 // ─── Prompt builders ──────────────────────────────────────────────────────────
@@ -501,6 +481,10 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
   try {
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
@@ -557,14 +541,83 @@ Deno.serve(async (req: Request) => {
         : body.documentText
           ? `text=${body.documentText.length}chars`
           : "no-content";
-      console.log(`[ai-tender-assistant] review-document${chunkLabel}: doc="${body.documentName ?? "unnamed"}" size=${docSize} mime=${body.documentMimeType ?? "none"}`);
+      console.log(`[ai-tender-assistant] review-document${chunkLabel}: doc="${body.documentName ?? "unnamed"}" size=${docSize}`);
     }
 
+    // ── Server-side allowance check ───────────────────────────────────────────
+    const orgId  = body.orgId;
+    const userId = body.userId;
+
+    if (orgId) {
+      const { data: allowance, error: allowanceErr } = await db
+        .rpc("check_ai_allowance", { p_org_id: orgId })
+        .single();
+
+      if (allowanceErr) {
+        console.warn(`[ai-tender-assistant] Allowance check error (org=${orgId}): ${allowanceErr.message}`);
+      } else if (allowance) {
+        if (!allowance.ai_enabled) {
+          await db.from("ai_usage_log").insert({
+            org_id: orgId,
+            user_id: userId ?? null,
+            feature: "tender-assistant",
+            call_type: task,
+            model: "claude-opus-4-5",
+            input_tokens: 0, output_tokens: 0,
+            cache_read_tokens: 0, cache_creation_tokens: 0,
+            estimated_cost_usd: 0,
+            status: "blocked",
+            error_code: "ai_disabled",
+            document_name: body.documentName ?? null,
+            document_size_kb: body.documentSizeKb ?? null,
+            pages_processed: body.pagesProcessed ?? null,
+            chunks_total: body.chunkTotal ?? null,
+            chunk_index: body.chunkIndex ?? null,
+          });
+          return new Response(
+            JSON.stringify({ error: "AI features are not enabled for your organisation. Please contact your administrator.", code: "ai_disabled" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (!allowance.allowed) {
+          await db.from("ai_usage_log").insert({
+            org_id: orgId,
+            user_id: userId ?? null,
+            feature: "tender-assistant",
+            call_type: task,
+            model: "claude-opus-4-5",
+            input_tokens: 0, output_tokens: 0,
+            cache_read_tokens: 0, cache_creation_tokens: 0,
+            estimated_cost_usd: 0,
+            status: "blocked",
+            error_code: "allowance_exceeded",
+            document_name: body.documentName ?? null,
+            document_size_kb: body.documentSizeKb ?? null,
+            pages_processed: body.pagesProcessed ?? null,
+            chunks_total: body.chunkTotal ?? null,
+            chunk_index: body.chunkIndex ?? null,
+          });
+          return new Response(
+            JSON.stringify({
+              error: `Your organisation has used all ${allowance.monthly_limit + allowance.bonus_credits} AI reviews available this month. Please contact your administrator to increase your allowance.`,
+              code: "allowance_exceeded",
+              used: allowance.used,
+              limit: allowance.monthly_limit,
+              bonus: allowance.bonus_credits,
+              remaining: 0,
+            }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        console.log(`[ai-tender-assistant] Allowance OK: org=${orgId} used=${allowance.used} remaining=${allowance.remaining}`);
+      }
+    }
+
+    // ── Call Claude ───────────────────────────────────────────────────────────
     const client = new Anthropic({ apiKey });
     const prompt = buildPrompt(task, body);
-
-    // Use 8192 tokens for all document review tasks — MEP specs generate large outputs.
-    // Single-task (draft-rfi, etc.) only need 1024.
     const maxTokens = isDocumentTask || task === "reconcile-findings" ? 8192 : 1024;
 
     let message: Anthropic.Message;
@@ -579,11 +632,7 @@ Deno.serve(async (req: Request) => {
           content: [
             {
               type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: body.documentBase64,
-              },
+              source: { type: "base64", media_type: "application/pdf", data: body.documentBase64 },
             } as Anthropic.DocumentBlockParam,
             { type: "text", text: prompt },
           ],
@@ -597,7 +646,6 @@ Deno.serve(async (req: Request) => {
         messages: [{ role: "user", content: `${prompt}\n\n--- DOCUMENT CONTENT ---\n${body.documentText}` }],
       });
     } else if (task === "review-document" && body.documentBase64 && body.documentMimeType) {
-      // Non-PDF binary — treat as text if documentText provided, otherwise fallback
       const textContent = body.documentText ?? "Document content not available for this file type.";
       message = await client.messages.create({
         model: "claude-opus-4-5",
@@ -616,34 +664,86 @@ Deno.serve(async (req: Request) => {
 
     const rawText = message.content[0]?.type === "text" ? message.content[0].text : "";
     const stopReason = message.stop_reason;
+    const usage = message.usage;
+    const cacheRead = (usage as Record<string, unknown>)["cache_read_input_tokens"] as number ?? 0;
+    const cacheCreate = (usage as Record<string, unknown>)["cache_creation_input_tokens"] as number ?? 0;
+    const costUsd = calcCost(usage);
 
-    // Always log raw response stats for document review
     if (task === "review-document") {
       const chunkLabel = (body.chunkIndex !== undefined && body.chunkTotal !== undefined)
         ? ` chunk ${body.chunkIndex + 1}/${body.chunkTotal}`
         : " (single)";
-      console.log(`[ai-tender-assistant] review-document${chunkLabel}: raw_len=${rawText.length} stop_reason=${stopReason}`);
+      console.log(`[ai-tender-assistant] review-document${chunkLabel}: raw_len=${rawText.length} stop_reason=${stopReason} input_tokens=${usage.input_tokens} output_tokens=${usage.output_tokens}`);
       if (stopReason === "max_tokens") {
-        console.warn(`[ai-tender-assistant] review-document${chunkLabel}: TRUNCATED at max_tokens=${maxTokens}. Partial recovery will be attempted.`);
-      }
-      if (rawText.length < 50) {
-        console.warn(`[ai-tender-assistant] review-document${chunkLabel}: VERY SHORT response (${rawText.length} chars). Full response: "${rawText}"`);
+        console.warn(`[ai-tender-assistant] review-document${chunkLabel}: TRUNCATED at max_tokens=${maxTokens}.`);
       }
     }
 
-    // reconcile-findings returns a plain array
+    // ── Helper: log and increment after success ───────────────────────────────
+    async function logSuccess(callType: string) {
+      if (!orgId) return;
+      await Promise.all([
+        db.from("ai_usage_log").insert({
+          org_id: orgId,
+          user_id: userId ?? null,
+          feature: "tender-assistant",
+          call_type: callType,
+          model: "claude-opus-4-5",
+          input_tokens: usage.input_tokens ?? 0,
+          output_tokens: usage.output_tokens ?? 0,
+          cache_read_tokens: cacheRead,
+          cache_creation_tokens: cacheCreate,
+          estimated_cost_usd: costUsd,
+          status: "success",
+          document_name: body.documentName ?? null,
+          document_size_kb: body.documentSizeKb ?? null,
+          pages_processed: body.pagesProcessed ?? null,
+          chunks_total: body.chunkTotal ?? null,
+          chunk_index: body.chunkIndex ?? null,
+        }),
+        db.rpc("increment_ai_usage", { p_org_id: orgId }),
+      ]);
+      console.log(`[ai-tender-assistant] logged usage org=${orgId} task=${callType} tokens=${usage.input_tokens}+${usage.output_tokens} cost=$${costUsd.toFixed(6)}`);
+    }
+
+    async function logFailed(callType: string, errorCode: string) {
+      if (!orgId) return;
+      await db.from("ai_usage_log").insert({
+        org_id: orgId,
+        user_id: userId ?? null,
+        feature: "tender-assistant",
+        call_type: callType,
+        model: "claude-opus-4-5",
+        input_tokens: usage.input_tokens ?? 0,
+        output_tokens: usage.output_tokens ?? 0,
+        cache_read_tokens: cacheRead,
+        cache_creation_tokens: cacheCreate,
+        estimated_cost_usd: costUsd,
+        status: "failed",
+        error_code: errorCode,
+        document_name: body.documentName ?? null,
+        document_size_kb: body.documentSizeKb ?? null,
+        pages_processed: body.pagesProcessed ?? null,
+        chunks_total: body.chunkTotal ?? null,
+        chunk_index: body.chunkIndex ?? null,
+      });
+    }
+
+    // ── reconcile-findings ────────────────────────────────────────────────────
     if (task === "reconcile-findings") {
       try {
         const sanitized = sanitizeJsonResponse(rawText);
         const suggestions = JSON.parse(sanitized);
         if (!Array.isArray(suggestions)) throw new Error("Expected array");
-        console.log(`[ai-tender-assistant] reconcile-findings: ${suggestions.length} suggestions stop_reason=${stopReason}`);
+        console.log(`[ai-tender-assistant] reconcile-findings: ${suggestions.length} suggestions`);
+        await logSuccess(task);
         return new Response(
           JSON.stringify({ result: suggestions }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       } catch (parseErr) {
         console.error(`[ai-tender-assistant] reconcile-findings: parse failed. ${parseErr instanceof Error ? parseErr.message : parseErr}`);
+        await logFailed(task, "parse_error");
         return new Response(
           JSON.stringify({ error: "Reconciliation response could not be parsed.", errorCode: "RECONCILE_PARSE_FAILED" }),
           { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -651,6 +751,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ── Document tasks ────────────────────────────────────────────────────────
     if (isDocumentTask) {
       let normalized: ReturnType<typeof normalizeReviewResult>;
       let recovered = false;
@@ -660,19 +761,20 @@ Deno.serve(async (req: Request) => {
         normalized = parsed.result;
         recovered = parsed.recovered;
       } catch (parseErr) {
-        // Complete parse failure — log full raw response for diagnosis
-        console.error(`[ai-tender-assistant] ${task}: JSON parse FAILED completely. stop_reason=${stopReason} raw_len=${rawText.length}`);
-        console.error(`[ai-tender-assistant] ${task}: FULL RAW RESPONSE: ${rawText}`);
+        console.error(`[ai-tender-assistant] ${task}: JSON parse FAILED. stop_reason=${stopReason}`);
 
         if (task === "consolidate-review") {
+          await logFailed(task, "parse_error");
           return new Response(
             JSON.stringify({ error: "Consolidation response could not be parsed.", errorCode: "CONSOLIDATION_PARSE_FAILED" }),
             { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
-        // For chunk extraction: return empty so processing continues for other chunks
+        // For chunk extraction: return empty so processing continues
         const empty = normalizeReviewResult({});
+        // Note: don't increment counter for empty/failed parse on chunk
+        await logFailed(task, "parse_error");
         return new Response(
           JSON.stringify({
             result: empty,
@@ -690,41 +792,41 @@ Deno.serve(async (req: Request) => {
           ? ` chunk ${body.chunkIndex + 1}/${body.chunkTotal}`
           : " (single)";
         if (counts.total === 0) {
-          console.warn(`[ai-tender-assistant] review-document${chunkLabel}: ZERO findings. doc="${body.documentName ?? "unnamed"}" raw_len=${rawText.length} stop_reason=${stopReason} recovered=${recovered}`);
-          console.warn(`[ai-tender-assistant] review-document${chunkLabel}: RAW RESPONSE (first 500): ${rawText.slice(0, 500)}`);
+          console.warn(`[ai-tender-assistant] review-document${chunkLabel}: ZERO findings.`);
         } else {
-          console.log(`[ai-tender-assistant] review-document${chunkLabel}: rfis=${counts.rfis} assumptions=${counts.assumptions} exclusions=${counts.exclusions} scopeNotes=${counts.scopeNotes} risks=${counts.risks} TOTAL=${counts.total} stop_reason=${stopReason} recovered=${recovered}`);
+          console.log(`[ai-tender-assistant] review-document${chunkLabel}: total=${counts.total} stop_reason=${stopReason} recovered=${recovered}`);
         }
       }
 
-      if (task === "consolidate-review") {
-        if (counts.total === 0) {
-          console.error(`[ai-tender-assistant] consolidate-review: EMPTY output. stop_reason=${stopReason} raw_len=${rawText.length}`);
-          return new Response(
-            JSON.stringify({ error: "Consolidation produced no output.", errorCode: "CONSOLIDATION_EMPTY" }),
-            { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        console.log(`[ai-tender-assistant] consolidate-review: rfis=${counts.rfis} assumptions=${counts.assumptions} exclusions=${counts.exclusions} scopeNotes=${counts.scopeNotes} risks=${counts.risks} TOTAL=${counts.total}`);
+      if (task === "consolidate-review" && counts.total === 0) {
+        console.error(`[ai-tender-assistant] consolidate-review: EMPTY output.`);
+        await logFailed(task, "empty_output");
+        return new Response(
+          JSON.stringify({ error: "Consolidation produced no output.", errorCode: "CONSOLIDATION_EMPTY" }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
+      await logSuccess(task);
       return new Response(
         JSON.stringify({ result: normalized, findings: counts }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Non-document single tasks
+    // ── Single tasks ──────────────────────────────────────────────────────────
     let parsed: unknown;
     try {
       parsed = JSON.parse(sanitizeJsonResponse(rawText));
     } catch {
+      await logFailed(task, "parse_error");
       return new Response(
         JSON.stringify({ error: "AI returned an unexpected response format. Please try again." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    await logSuccess(task);
     return new Response(
       JSON.stringify({ result: parsed }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -746,7 +848,7 @@ Deno.serve(async (req: Request) => {
       console.error(`[ai-tender-assistant] Auth error HTTP=${errStatus ?? "unknown"}: ${message}`);
       return new Response(
         JSON.stringify({
-          error: "Anthropic API authentication failed. The ANTHROPIC_API_KEY secret is invalid or has expired. Please update the key in the Supabase project secrets and redeploy.",
+          error: "Anthropic API authentication failed. The ANTHROPIC_API_KEY secret is invalid or has expired.",
           errorCode: "INVALID_API_KEY",
         }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }

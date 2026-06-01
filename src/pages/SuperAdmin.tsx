@@ -9,6 +9,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { env } from '../lib/env';
 import { useAuth } from '../lib/AuthContext';
+import SuperAdminAIBilling from './SuperAdminAIBilling';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1368,7 +1369,7 @@ export default function SuperAdmin() {
   const [error, setError] = useState<string | null>(null);
   const [managing, setManaging] = useState<OrgWithSettings | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<'companies' | 'admins'>('companies');
+  const [activeTab, setActiveTab] = useState<'companies' | 'admins' | 'ai-billing'>('companies');
   const [companySearch, setCompanySearch] = useState('');
   const [showNewTrialModal, setShowNewTrialModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
@@ -1539,7 +1540,7 @@ export default function SuperAdmin() {
             <span className="text-xs font-bold text-[#f97316] uppercase tracking-widest">VYSITE Platform Administration</span>
           </div>
           <h1 className="text-xl font-bold text-white">
-            {activeTab === 'companies' ? 'Company Management' : 'Super Admin Management'}
+            {activeTab === 'companies' ? 'Company Management' : activeTab === 'admins' ? 'Super Admin Management' : 'AI & Billing'}
           </h1>
         </div>
         {activeTab === 'companies' && (
@@ -1563,8 +1564,9 @@ export default function SuperAdmin() {
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-[#0d1628] border border-[#1e2d4a] rounded-xl mb-5 w-fit">
         {([
-          { id: 'companies', label: 'Companies' },
-          { id: 'admins',    label: 'Super Admins' },
+          { id: 'companies',  label: 'Companies' },
+          { id: 'admins',     label: 'Super Admins' },
+          { id: 'ai-billing', label: 'AI & Billing' },
         ] as const).map(tab => (
           <button
             key={tab.id}
@@ -1582,6 +1584,10 @@ export default function SuperAdmin() {
 
       {activeTab === 'admins' && (
         <SuperAdminManagement currentUserId={user?.id ?? ''} />
+      )}
+
+      {activeTab === 'ai-billing' && (
+        <SuperAdminAIBilling />
       )}
 
       {activeTab === 'companies' && (
