@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import {
   Shield, Building2, ChevronRight, ChevronLeft, ToggleLeft, ToggleRight,
   Save, AlertCircle, CheckCircle, RefreshCw, UserPlus, Trash2, Ban, Search,
@@ -426,6 +427,8 @@ function CompanyRow({
   actionLoading: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const s = org.settings;
   const isTrial  = s?.account_type === 'trial';
@@ -436,15 +439,40 @@ function CompanyRow({
   const userLimit = s?.user_limit ?? null;
   const atUserLimit = userLimit !== null && org.userCount >= userLimit;
 
+  // Close on outside click
   useEffect(() => {
+    if (!menuOpen) return;
     function handler(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      const t = e.target as Node;
+      if (
+        menuRef.current && !menuRef.current.contains(t) &&
+        triggerRef.current && !triggerRef.current.contains(t)
+      ) {
         setMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [menuOpen]);
+
+  function openMenu() {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const menuHeight = 130; // approx px for 3 items
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpward = spaceBelow < menuHeight + 8;
+
+    setMenuStyle({
+      position: 'fixed',
+      right: window.innerWidth - rect.right,
+      width: 208,
+      zIndex: 9999,
+      ...(openUpward
+        ? { bottom: window.innerHeight - rect.top + 4 }
+        : { top: rect.bottom + 4 }),
+    });
+    setMenuOpen(v => !v);
+  }
 
   return (
     <div className="grid grid-cols-[1fr_140px_1fr_80px_150px_110px_110px] gap-3 items-center px-4 py-3 border-b border-[#1e2d4a] hover:bg-[#0d1628]/40 transition-colors">
@@ -501,7 +529,7 @@ function CompanyRow({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1.5" ref={menuRef}>
+      <div className="flex items-center gap-1.5">
         {/* Manage button — hidden for archived orgs */}
         {org.status === 'active' && (
           <button
@@ -512,50 +540,55 @@ function CompanyRow({
           </button>
         )}
 
-        {/* Lifecycle dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => setMenuOpen(v => !v)}
-            disabled={actionLoading}
-            className="flex items-center gap-1 px-2 py-1.5 bg-[#1a2236] border border-[#1e2d4a] hover:border-[#2e3d5a] text-slate-400 hover:text-white rounded-lg text-xs transition-colors disabled:opacity-50"
-            title="Lifecycle actions"
-          >
-            {actionLoading
-              ? <RefreshCw size={12} className="animate-spin" />
-              : <ChevronDown size={12} />}
-          </button>
+        {/* Lifecycle dropdown trigger */}
+        <button
+          ref={triggerRef}
+          onClick={openMenu}
+          disabled={actionLoading}
+          className="flex items-center gap-1 px-2 py-1.5 bg-[#1a2236] border border-[#1e2d4a] hover:border-[#2e3d5a] text-slate-400 hover:text-white rounded-lg text-xs transition-colors disabled:opacity-50"
+          title="Lifecycle actions"
+        >
+          {actionLoading
+            ? <RefreshCw size={12} className="animate-spin" />
+            : <ChevronDown size={12} />}
+        </button>
 
-          {menuOpen && (
-            <div className="absolute right-0 top-full mt-1 w-52 bg-[#0d1628] border border-[#1e2d4a] rounded-xl shadow-2xl z-50 py-1">
-              {org.status === 'active' && (
-                <button
-                  onClick={() => { onArchive(); setMenuOpen(false); }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-amber-400 hover:bg-amber-900/20 transition-colors"
-                >
-                  <Archive size={13} />
-                  Archive Organisation
-                </button>
-              )}
-              {org.status === 'archived' && (
-                <button
-                  onClick={() => { onRestore(); setMenuOpen(false); }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-emerald-400 hover:bg-emerald-900/20 transition-colors"
-                >
-                  <RotateCcw size={13} />
-                  Restore Organisation
-                </button>
-              )}
-              <div className="border-t border-[#1e2d4a] my-1" />
+        {/* Portal menu — escapes overflow:hidden and clips */}
+        {menuOpen && ReactDOM.createPortal(
+          <div
+            ref={menuRef}
+            style={menuStyle}
+            className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl shadow-2xl shadow-black/60 py-1"
+          >
+            {org.status === 'active' && (
               <button
-                onClick={() => { onDelete(); setMenuOpen(false); }}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-red-400 hover:bg-red-900/20 transition-colors"
+                onClick={() => { onArchive(); setMenuOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-amber-400 hover:bg-amber-900/20 transition-colors"
               >
-                <Trash2 size={13} />
-                Permanently Delete
+                <Archive size={13} />
+                Archive Organisation
               </button>
-            </div>
-          )}
-        </div>
+            )}
+            {org.status === 'archived' && (
+              <button
+                onClick={() => { onRestore(); setMenuOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-emerald-400 hover:bg-emerald-900/20 transition-colors"
+              >
+                <RotateCcw size={13} />
+                Restore Organisation
+              </button>
+            )}
+            <div className="border-t border-[#1e2d4a] my-1" />
+            <button
+              onClick={() => { onDelete(); setMenuOpen(false); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-red-400 hover:bg-red-900/20 transition-colors"
+            >
+              <Trash2 size={13} />
+              Permanently Delete
+            </button>
+          </div>,
+          document.body
+        )}
       </div>
     </div>
   );
