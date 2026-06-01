@@ -249,6 +249,8 @@ const pageTitles: Record<Page, string> = {
   users: 'Users',
   'beta-feedback': 'BETA Feedback',
   settings: 'Settings',
+  'super-admin': 'Super Admin',
+  'super-admin-orgs': 'Organisations',
 };
 
 function notifIcon(type: string) {

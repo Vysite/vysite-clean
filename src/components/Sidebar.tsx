@@ -166,3 +166,20 @@ export default function Sidebar({
     </>
   );
 }
+
+// Standalone mobile hamburger button exported for use in Header
+export function MobileMenuButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="lg:hidden flex items-center justify-center w-9 h-9 rounded-lg text-slate-400 hover:text-white hover:bg-[#1e2d4a] transition-colors"
+      aria-label="Open menu"
+    >
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+        <rect x="2" y="4" width="16" height="2" rx="1" />
+        <rect x="2" y="9" width="16" height="2" rx="1" />
+        <rect x="2" y="14" width="16" height="2" rx="1" />
+      </svg>
+    </button>
+  );
+}
