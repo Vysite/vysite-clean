@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Lock } from 'lucide-react';
 import Sidebar, { type Page } from './components/Sidebar';
 import Header from './components/Header';
@@ -17,10 +17,13 @@ import TestingCommissioning from './pages/TestingCommissioning';
 import MaintenanceServicing from './pages/MaintenanceServicing';
 import Login from './pages/Login';
 import SetPassword from './pages/SetPassword';
+import SuperAdmin from './pages/SuperAdmin';
+import SuperAdminOrganisations from './pages/SuperAdminOrganisations';
 import { StoreContext, usePermissions } from './lib/StoreContext';
 import { useStore } from './lib/store';
 import { useAuth } from './lib/AuthContext';
 import { OrgSettingsProvider, useOrgSettings } from './lib/OrgSettingsContext';
+import { supabase } from './lib/supabase';
 
 function AccessRestricted({ label }: { label: string }) {
   return (
@@ -36,7 +39,7 @@ function AccessRestricted({ label }: { label: string }) {
   );
 }
 
-function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pendingFilter, setPendingFilter, pendingProjectId, setPendingProjectId }: {
+function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pendingFilter, setPendingFilter, pendingProjectId, setPendingProjectId, isSuperAdmin }: {
   activePage: Page;
   navigateTo: (page: Page, filter?: import('./App').PendingFilter, open?: import('./App').PendingOpen) => void;
   pendingOpen: import('./App').PendingOpen | null;
@@ -45,6 +48,7 @@ function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pending
   setPendingFilter: (v: import('./App').PendingFilter | null) => void;
   pendingProjectId: string | null;
   setPendingProjectId: (v: string | null) => void;
+  isSuperAdmin: boolean;
 }) {
   const perms = usePermissions();
   const { isModuleEnabled } = useOrgSettings();
@@ -94,12 +98,15 @@ function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pending
       return perms['admin.manage_settings']
         ? <Settings />
         : <AccessRestricted label="Settings" />;
+    case 'super-admin':
+      return isSuperAdmin ? <SuperAdmin /> : <AccessRestricted label="Super Admin" />;
+    case 'super-admin-orgs':
+      return isSuperAdmin ? <SuperAdminOrganisations /> : <AccessRestricted label="Super Admin" />;
     default:
       return null;
   }
 }
 
-// Maps notification linked_type to a Page
 function linkedTypeToPage(linkedType: string): Page | null {
   switch (linkedType) {
     case 'action': return 'actions';
@@ -118,8 +125,8 @@ export interface PendingOpen {
 }
 
 export interface PendingFilter {
-  filterKey: string;   // e.g. 'status', 'priority'
-  filterValue: string; // e.g. 'Overdue', 'Critical'
+  filterKey: string;
+  filterValue: string;
 }
 
 const SHOW_DEBUG = typeof window !== 'undefined' && window.location.search.includes('debug');
@@ -146,11 +153,6 @@ function DebugPanel({ auth, store }: {
   );
 }
 
-// ─── Inner component that reads OrgSettingsContext ────────────────────────────
-// Rendered inside both StoreContext.Provider and OrgSettingsProvider so it can
-// safely call useOrgSettings(). Handles the account-disabled gate and the full
-// authenticated app shell.
-
 interface OrgGatedAppProps {
   debugPanel: React.ReactNode;
   activePage: Page;
@@ -168,13 +170,14 @@ interface OrgGatedAppProps {
   pendingProjectId: string | null;
   setPendingProjectId: (v: string | null) => void;
   handleNotificationNavigate: (linkedType: string, linkedId: string) => void;
+  isSuperAdmin: boolean;
 }
 
 function OrgGatedApp({
   debugPanel, activePage, setActivePage, sidebarCollapsed, setSidebarCollapsed,
   mobileMenuOpen, setMobileMenuOpen, sidebarWidth,
   navigateTo, pendingOpen, setPendingOpen, pendingFilter, setPendingFilter,
-  pendingProjectId, setPendingProjectId, handleNotificationNavigate,
+  pendingProjectId, setPendingProjectId, handleNotificationNavigate, isSuperAdmin,
 }: OrgGatedAppProps) {
   const { orgSettings, isModuleEnabled } = useOrgSettings();
   const { signOut } = useAuth();
@@ -219,6 +222,7 @@ function OrgGatedApp({
           mobileOpen={mobileMenuOpen}
           onCloseMobile={() => setMobileMenuOpen(false)}
           isModuleEnabled={isModuleEnabled}
+          isSuperAdmin={isSuperAdmin}
         />
         <div
           className="flex-1 flex flex-col min-h-screen min-w-0 transition-all duration-300 ml-0 lg:ml-[var(--sidebar-width)]"
@@ -240,6 +244,7 @@ function OrgGatedApp({
               setPendingFilter={setPendingFilter}
               pendingProjectId={pendingProjectId}
               setPendingProjectId={setPendingProjectId}
+              isSuperAdmin={isSuperAdmin}
             />
           </main>
         </div>
@@ -249,12 +254,15 @@ function OrgGatedApp({
 }
 
 export default function App() {
-  // /set-password is a standalone route — render it immediately before any
-  // auth checks so it works regardless of existing session state.
+  // /set-password is a standalone route rendered before any auth/hook logic.
+  // This wrapper exists so hooks inside AppInner are not called conditionally.
   if (typeof window !== 'undefined' && window.location.pathname === '/set-password') {
     return <SetPassword />;
   }
+  return <AppInner />;
+}
 
+function AppInner() {
   const auth = useAuth();
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -262,7 +270,16 @@ export default function App() {
   const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null);
   const [pendingFilter, setPendingFilter] = useState<PendingFilter | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const store = useStore(auth.currentOrgId, auth.user?.id ?? null);
+
+  // Check super admin status once we have a session
+  useEffect(() => {
+    if (!auth.user) { setIsSuperAdmin(false); return; }
+    supabase.rpc('is_super_admin').then(({ data }) => {
+      setIsSuperAdmin(!!data);
+    });
+  }, [auth.user?.id]);
 
   function navigateTo(page: Page, filter?: PendingFilter, open?: PendingOpen) {
     setActivePage(page);
@@ -282,7 +299,6 @@ export default function App() {
 
   const debugPanel = <DebugPanel auth={auth} store={store} />;
 
-  // Waiting for Supabase to confirm whether a session exists
   if (auth.loading) {
     return (
       <>
@@ -297,7 +313,6 @@ export default function App() {
     );
   }
 
-  // Unauthenticated — show login gate immediately, no need to wait for org
   if (!auth.session) {
     return (
       <>
@@ -307,8 +322,6 @@ export default function App() {
     );
   }
 
-  // Session exists but org membership is still being resolved — hold here so
-  // currentOrgId is guaranteed non-null before any write-capable UI is shown
   if (auth.orgLoading) {
     return (
       <>
@@ -357,6 +370,7 @@ export default function App() {
           pendingProjectId={pendingProjectId}
           setPendingProjectId={setPendingProjectId}
           handleNotificationNavigate={handleNotificationNavigate}
+          isSuperAdmin={isSuperAdmin}
         />
       </OrgSettingsProvider>
     </StoreContext.Provider>

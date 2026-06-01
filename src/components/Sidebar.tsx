@@ -1,27 +1,11 @@
-import { useState } from 'react';
 import {
-  LayoutDashboard,
-  FolderOpen,
-  ClipboardList,
-  AlertTriangle,
-  CheckSquare,
-  BarChart3,
-  Users,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  Menu,
-  FileSpreadsheet,
-  FlaskConical,
-  MessageSquareDot,
-  Wrench,
+  LayoutDashboard, FileText, FolderKanban, ClipboardList,
+  AlertOctagon, Zap, FlaskConical, BarChart2, Users,
+  Settings, MessageSquare, Wrench, ChevronLeft,
+  ChevronRight, Shield, Building2, X,
 } from 'lucide-react';
-import type { LucideIcon } from '../data/types';
-import { useAppStore, usePermissions } from '../lib/StoreContext';
-import { switchUser } from '../lib/store';
 
-type Page =
+export type Page =
   | 'dashboard'
   | 'tenders'
   | 'projects'
@@ -33,7 +17,37 @@ type Page =
   | 'reports'
   | 'users'
   | 'beta-feedback'
-  | 'settings';
+  | 'settings'
+  | 'super-admin'
+  | 'super-admin-orgs';
+
+interface NavItem {
+  page: Page;
+  label: string;
+  icon: React.ReactNode;
+  moduleKey?: string;
+  superAdminOnly?: boolean;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { page: 'dashboard',     label: 'Dashboard',          icon: <LayoutDashboard size={18} /> },
+  { page: 'tenders',       label: 'Tender & Estimating', icon: <FileText size={18} />,        moduleKey: 'tenders' },
+  { page: 'projects',      label: 'Projects',            icon: <FolderKanban size={18} />,    moduleKey: 'projects' },
+  { page: 'maintenance',   label: 'Maintenance',         icon: <Wrench size={18} />,          moduleKey: 'maintenance' },
+  { page: 'site-forms',    label: 'Site Forms',          icon: <ClipboardList size={18} />,   moduleKey: 'site-forms' },
+  { page: 'snagging',      label: 'Snagging',            icon: <AlertOctagon size={18} />,    moduleKey: 'snagging' },
+  { page: 'actions',       label: 'Actions',             icon: <Zap size={18} />,             moduleKey: 'actions' },
+  { page: 'testing',       label: 'Testing',             icon: <FlaskConical size={18} />,    moduleKey: 'testing' },
+  { page: 'reports',       label: 'Reports',             icon: <BarChart2 size={18} />,       moduleKey: 'reports' },
+  { page: 'users',         label: 'Users',               icon: <Users size={18} /> },
+  { page: 'beta-feedback', label: 'Feedback',            icon: <MessageSquare size={18} /> },
+  { page: 'settings',      label: 'Settings',            icon: <Settings size={18} /> },
+];
+
+const SUPER_ADMIN_NAV: NavItem[] = [
+  { page: 'super-admin',      label: 'Admin Panel',      icon: <Shield size={18} />,    superAdminOnly: true },
+  { page: 'super-admin-orgs', label: 'Organisations',    icon: <Building2 size={18} />, superAdminOnly: true },
+];
 
 interface SidebarProps {
   activePage: Page;
@@ -42,231 +56,113 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
-  // Org-level module gate from OrgSettingsContext — defaults to all-enabled
-  isModuleEnabled?: (key: string) => boolean;
+  isModuleEnabled: (key: string) => boolean;
+  isSuperAdmin?: boolean;
 }
 
-const navItems: { id: Page; label: string; icon: LucideIcon }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'tenders', label: 'Tender & Estimating', icon: FileSpreadsheet },
-  { id: 'projects', label: 'Projects', icon: FolderOpen },
-  { id: 'maintenance', label: 'Maintenance & Servicing', icon: Wrench },
-  { id: 'site-forms', label: 'Site Forms', icon: ClipboardList },
-  { id: 'snagging', label: 'Snagging', icon: AlertTriangle },
-  { id: 'actions', label: 'Actions Tracker', icon: CheckSquare },
-  { id: 'testing', label: 'Testing & Commissioning', icon: FlaskConical },
-  { id: 'reports', label: 'Reports', icon: BarChart3 },
-  { id: 'users', label: 'Users', icon: Users },
-  { id: 'beta-feedback', label: 'BETA Feedback', icon: MessageSquareDot },
-  { id: 'settings', label: 'Settings', icon: Settings },
-];
+export default function Sidebar({
+  activePage, onNavigate, collapsed, onToggleCollapse,
+  mobileOpen, onCloseMobile, isModuleEnabled, isSuperAdmin,
+}: SidebarProps) {
+  const width = collapsed ? 72 : 256;
 
-export default function Sidebar({ activePage, onNavigate, collapsed, onToggleCollapse, mobileOpen, onCloseMobile, isModuleEnabled }: SidebarProps) {
-  const store = useAppStore();
-  const perms = usePermissions();
-  const isAdmin = store.currentUser?.role === 'Admin';
-  const [showUserSwitch, setShowUserSwitch] = useState(false);
+  function NavLink({ item }: { item: NavItem }) {
+    const active = activePage === item.page;
+    const hidden = item.moduleKey && !isModuleEnabled(item.moduleKey);
+    if (hidden) return null;
 
-  // orgEnabled: org-level module gate (Super Admin). Falls back to true when
-  // not provided so the sidebar works normally without OrgSettingsContext.
-  const orgEnabled = (key: string) => isModuleEnabled ? isModuleEnabled(key) : true;
+    return (
+      <button
+        onClick={() => { onNavigate(item.page); onCloseMobile(); }}
+        title={collapsed ? item.label : undefined}
+        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 group ${
+          active
+            ? 'bg-[#f97316] text-white shadow-lg shadow-orange-900/30'
+            : 'text-slate-400 hover:text-slate-100 hover:bg-[#1e2d4a]/60'
+        }`}
+      >
+        <span className="shrink-0">{item.icon}</span>
+        {!collapsed && <span className="text-sm font-medium truncate">{item.label}</span>}
+      </button>
+    );
+  }
 
-  // Derive page visibility: user permission AND org-level module gate must both pass.
-  // Existing permission logic is unchanged — org gate is additive on top.
-  const hiddenPages = new Set<Page>();
-  if (!perms['modules.projects'] && !perms['projects.view_all'] && !perms['projects.view_assigned']) hiddenPages.add('projects');
-  if (!orgEnabled('projects')) hiddenPages.add('projects');
-  if (!perms['tender.view']) hiddenPages.add('tenders');
-  if (!orgEnabled('tenders')) hiddenPages.add('tenders');
-  if (!perms['admin.manage_settings']) hiddenPages.add('settings');
-  if (!perms['admin.edit_users'] && !perms['admin.invite_users']) hiddenPages.add('users');
-  if (!perms['modules.reports']) hiddenPages.add('reports');
-  if (!orgEnabled('reports')) hiddenPages.add('reports');
-  if (!perms['modules.snagging']) hiddenPages.add('snagging');
-  if (!orgEnabled('snagging')) hiddenPages.add('snagging');
-  if (!perms['modules.site_forms']) hiddenPages.add('site-forms');
-  if (!orgEnabled('site-forms')) hiddenPages.add('site-forms');
-  if (!perms['modules.actions']) hiddenPages.add('actions');
-  if (!orgEnabled('actions')) hiddenPages.add('actions');
-  if (!perms['modules.testing']) hiddenPages.add('testing');
-  if (!orgEnabled('testing')) hiddenPages.add('testing');
-  if (!perms['maintenance.view']) hiddenPages.add('maintenance');
-  if (!orgEnabled('maintenance')) hiddenPages.add('maintenance');
+  const sidebarContent = (
+    <div className="flex flex-col h-full bg-[#0d1628] border-r border-[#1e2d4a]" style={{ width }}>
+      {/* Logo */}
+      <div className={`flex items-center h-14 border-b border-[#1e2d4a] shrink-0 ${collapsed ? 'justify-center px-2' : 'px-4 gap-3'}`}>
+        <div className="w-8 h-8 rounded-lg bg-[#f97316] flex items-center justify-center font-black text-white text-base shadow-lg shadow-orange-900/30 shrink-0">
+          V
+        </div>
+        {!collapsed && (
+          <span className="font-black text-white tracking-tight text-lg">
+            VY<span className="text-[#f97316]">SITE</span>
+          </span>
+        )}
+      </div>
 
-  const visibleNavItems = navItems.filter(item => !hiddenPages.has(item.id));
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
+        {NAV_ITEMS.map(item => <NavLink key={item.page} item={item} />)}
 
-  const handleNav = (page: Page) => {
-    onNavigate(page);
-    onCloseMobile();
-  };
+        {isSuperAdmin && (
+          <>
+            <div className={`pt-3 pb-1 ${collapsed ? 'px-1' : 'px-1'}`}>
+              <div className="border-t border-[#1e2d4a]" />
+              {!collapsed && (
+                <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-widest px-2 pt-2">
+                  Super Admin
+                </p>
+              )}
+            </div>
+            {SUPER_ADMIN_NAV.map(item => <NavLink key={item.page} item={item} />)}
+          </>
+        )}
+      </nav>
+
+      {/* Collapse toggle — desktop only */}
+      <div className="hidden lg:flex shrink-0 border-t border-[#1e2d4a] p-2">
+        <button
+          onClick={onToggleCollapse}
+          className="w-full flex items-center justify-center py-2 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a]/60 transition-colors"
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <>
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
-          onClick={onCloseMobile}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={[
-          'fixed top-0 left-0 h-full z-50 flex flex-col',
-          'bg-black border-r border-[#1a1a1a]',
-          'transition-[width,transform] duration-300 ease-in-out',
-          collapsed ? 'w-[72px]' : 'w-64',
-          // Mobile: hidden off-screen by default, slides in when mobileOpen.
-          // Desktop (lg+): always visible via lg:translate-x-0 regardless of mobileOpen.
-          mobileOpen ? 'translate-x-0' : '-translate-x-full',
-          'lg:translate-x-0',
-        ].join(' ')}
+      {/* Desktop sidebar */}
+      <div
+        className="hidden lg:flex fixed inset-y-0 left-0 z-30 flex-col transition-all duration-300"
+        style={{ width }}
       >
-        {/* Logo area */}
-        <div className={`flex items-center h-24 px-4 border-b border-[#1a1a1a] shrink-0 ${collapsed ? 'justify-center' : 'justify-between'}`}>
-          {!collapsed && (
-            <img
-              src="/VYSITE_Logo_Long.png"
-              alt="VYSITE"
-              className="h-16 w-auto object-contain"
-            />
-          )}
-          {collapsed && (
-            <div className="w-8 h-8 bg-[#f97316] rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">V</span>
-            </div>
-          )}
-          <button
-            onClick={onToggleCollapse}
-            className="hidden lg:flex items-center justify-center w-6 h-6 rounded text-slate-400 hover:text-white hover:bg-[#1a1a1a] transition-colors"
-          >
-            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-          </button>
-        </div>
+        {sidebarContent}
+      </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto scrollbar-thin py-4 px-2">
-          {!collapsed && (
-            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-3 mb-2">
-              Main Menu
-            </p>
-          )}
-          <ul className="space-y-1">
-            {visibleNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activePage === item.id;
-              return (
-                <li key={item.id}>
-                  <button
-                    onClick={() => handleNav(item.id)}
-                    className={`
-                      w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
-                      transition-all duration-150 group relative
-                      ${isActive
-                        ? 'bg-[#f97316] text-white shadow-lg shadow-orange-900/30'
-                        : 'text-slate-400 hover:text-white hover:bg-[#1a1a1a]'
-                      }
-                      ${collapsed ? 'justify-center' : ''}
-                    `}
-                    title={collapsed ? item.label : undefined}
-                  >
-                    <Icon size={18} className="shrink-0" />
-                    {!collapsed && <span>{item.label}</span>}
-                    {collapsed && (
-                      <div className="absolute left-full ml-2 px-2 py-1 bg-[#1e2d4a] text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity">
-                        {item.label}
-                      </div>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        {/* Support link */}
-        {!collapsed && (
-          <div className="shrink-0 px-4 pb-2">
-            <a
-              href="mailto:support@vysite.co.uk"
-              className="flex items-center gap-2 text-[10px] text-slate-600 hover:text-slate-400 transition-colors"
-            >
-              <span className="w-1 h-1 rounded-full bg-slate-700 shrink-0" />
-              Help & Support
-            </a>
-          </div>
-        )}
-
-        {/* User area */}
-        <div className={`shrink-0 border-t border-[#1a1a1a] p-3 relative ${collapsed ? 'flex justify-center' : ''}`}>
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-40 flex">
           <div
-            className={`flex items-center gap-3 ${!collapsed && isAdmin ? 'cursor-pointer hover:bg-[#1a1a1a] rounded-lg px-1 py-0.5 -mx-1 transition-colors' : ''}`}
-            onClick={() => !collapsed && isAdmin && setShowUserSwitch(v => !v)}
-          >
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${
-              store.currentUser?.role === 'Admin' ? 'bg-[#f97316]' :
-              store.currentUser?.role === 'Manager' ? 'bg-blue-600' :
-              store.currentUser?.role === 'Client User' ? 'bg-teal-600' : 'bg-slate-600'
-            }`}>
-              {store.currentUser?.avatar_initials ?? '?'}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={onCloseMobile}
+          />
+          <div className="relative z-10 flex flex-col" style={{ width: 256 }}>
+            <button
+              onClick={onCloseMobile}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white z-50"
+            >
+              <X size={20} />
+            </button>
+            <div style={{ width: 256 }}>
+              {sidebarContent}
             </div>
-            {!collapsed && (
-              <>
-                <div className="min-w-0 flex-1">
-                  <p className="text-white text-xs font-semibold truncate">{store.currentUser?.name ?? 'No user set up'}</p>
-                  <p className="text-slate-500 text-[10px] truncate">{store.currentUser?.role ?? 'Go to Users to add'}</p>
-                </div>
-                {isAdmin && <ChevronDown size={12} className={`text-slate-600 shrink-0 transition-transform ${showUserSwitch ? 'rotate-180' : ''}`} />}
-              </>
-            )}
           </div>
-
-          {/* User switcher dropdown — Admin only */}
-          {showUserSwitch && !collapsed && isAdmin && (
-            <div className="absolute bottom-full left-3 right-3 mb-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl shadow-2xl overflow-hidden z-50">
-              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider px-3 pt-2.5 pb-1.5">Simulate As User</p>
-              <div className="max-h-48 overflow-y-auto">
-                {store.platformUsers.filter(u => u.status === 'Active').map(u => (
-                  <button
-                    key={u.id}
-                    onClick={() => { setShowUserSwitch(false); switchUser(u.name); }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[#2a2a2a] transition-colors ${store.currentUser?.id === u.id ? 'bg-[#f97316]/10' : ''}`}
-                  >
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 ${
-                      u.role === 'Admin' ? 'bg-[#f97316]' :
-                      u.role === 'Manager' ? 'bg-blue-600' :
-                      u.role === 'Client User' ? 'bg-teal-600' : 'bg-slate-600'
-                    }`}>{u.avatar_initials}</div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-slate-300 truncate">{u.name}</p>
-                      <p className="text-[10px] text-slate-600">{u.role}</p>
-                    </div>
-                    {store.currentUser?.id === u.id && <span className="text-[9px] text-[#f97316] font-bold shrink-0">Active</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
-      </aside>
+      )}
     </>
-  );
-}
-
-export type { Page };
-
-interface MobileMenuButtonProps {
-  onClick: () => void;
-}
-
-export function MobileMenuButton({ onClick }: MobileMenuButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      className="lg:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-    >
-      <Menu size={20} />
-    </button>
   );
 }

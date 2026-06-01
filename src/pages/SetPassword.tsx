@@ -3,11 +3,11 @@ import { Eye, EyeOff, Lock, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type Stage =
-  | 'exchanging'   // verifying the token_hash from URL
-  | 'ready'        // token exchanged, show password form
-  | 'saving'       // updateUser in progress
-  | 'done'         // password set, redirecting
-  | 'error';       // unrecoverable error (bad/expired token)
+  | 'exchanging'
+  | 'ready'
+  | 'saving'
+  | 'done'
+  | 'error';
 
 export default function SetPassword() {
   const [stage, setStage] = useState<Stage>('exchanging');
@@ -20,8 +20,6 @@ export default function SetPassword() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    // Extract token_hash and type from the URL query string.
-    // The edge function builds: /set-password?token_hash=XXX&type=recovery&email=YYY
     const params = new URLSearchParams(window.location.search);
     const tokenHash = params.get('token_hash');
     const type = (params.get('type') ?? 'recovery') as 'recovery' | 'invite';
@@ -34,7 +32,6 @@ export default function SetPassword() {
       return;
     }
 
-    // Sign out any existing session so the token exchange is clean.
     supabase.auth.signOut({ scope: 'local' }).finally(() => {
       supabase.auth
         .verifyOtp({ token_hash: tokenHash, type })
@@ -48,7 +45,6 @@ export default function SetPassword() {
             setStage('error');
             return;
           }
-          // Strip the token from the URL so a refresh doesn't re-attempt the exchange.
           window.history.replaceState({}, '', window.location.pathname);
           if (data.user?.email) setUserEmail(data.user.email);
           setStage('ready');
@@ -60,25 +56,14 @@ export default function SetPassword() {
     e.preventDefault();
     setFormError(null);
 
-    if (password.length < 8) {
-      setFormError('Password must be at least 8 characters.');
-      return;
-    }
-    if (password !== confirm) {
-      setFormError('Passwords do not match.');
-      return;
-    }
+    if (password.length < 8) { setFormError('Password must be at least 8 characters.'); return; }
+    if (password !== confirm) { setFormError('Passwords do not match.'); return; }
 
     setStage('saving');
     const { error } = await supabase.auth.updateUser({ password });
-    if (error) {
-      setFormError(error.message);
-      setStage('ready');
-      return;
-    }
+    if (error) { setFormError(error.message); setStage('ready'); return; }
 
     setStage('done');
-    // Brief success pause then reload — App.tsx picks up the new session and resolves the org.
     setTimeout(() => { window.location.href = '/'; }, 1800);
   }
 
@@ -140,12 +125,8 @@ export default function SetPassword() {
       <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl overflow-hidden">
         <div className="px-8 pt-8 pb-6 border-b border-[#1e2d4a]">
           <h1 className="text-lg font-bold text-white">Create your password</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Choose a secure password to activate your VYSITE account.
-          </p>
-          {userEmail && (
-            <p className="text-xs text-[#f97316] mt-2 font-medium">{userEmail}</p>
-          )}
+          <p className="text-xs text-slate-500 mt-1">Choose a secure password to activate your VYSITE account.</p>
+          {userEmail && <p className="text-xs text-[#f97316] mt-2 font-medium">{userEmail}</p>}
         </div>
 
         <form onSubmit={handleSubmit} className="px-8 py-6 flex flex-col gap-4">
@@ -169,12 +150,7 @@ export default function SetPassword() {
                 placeholder="Min. 8 characters"
                 className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg pl-9 pr-10 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-[#f97316] transition-colors"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
-                tabIndex={-1}
-              >
+              <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors" tabIndex={-1}>
                 {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
@@ -194,23 +170,12 @@ export default function SetPassword() {
                 placeholder="Repeat password"
                 className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg pl-9 pr-10 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-[#f97316] transition-colors"
               />
-              <button
-                type="button"
-                onClick={() => setShowConfirm(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
-                tabIndex={-1}
-              >
+              <button type="button" onClick={() => setShowConfirm(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors" tabIndex={-1}>
                 {showConfirm ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
-            {confirm.length > 0 && password !== confirm && (
-              <p className="text-[11px] text-red-400">Passwords do not match</p>
-            )}
-            {confirm.length > 0 && password === confirm && (
-              <p className="text-[11px] text-emerald-400 flex items-center gap-1">
-                <CheckCircle size={11} /> Passwords match
-              </p>
-            )}
+            {confirm.length > 0 && password !== confirm && <p className="text-[11px] text-red-400">Passwords do not match</p>}
+            {confirm.length > 0 && password === confirm && <p className="text-[11px] text-emerald-400 flex items-center gap-1"><CheckCircle size={11} /> Passwords match</p>}
           </div>
 
           <button
@@ -230,10 +195,7 @@ export default function SetPassword() {
           </button>
         </form>
       </div>
-
-      <p className="text-center text-[11px] text-slate-600 mt-6">
-        VYSITE &copy; {new Date().getFullYear()} — Authorised access only
-      </p>
+      <p className="text-center text-[11px] text-slate-600 mt-6">VYSITE &copy; {new Date().getFullYear()} — Authorised access only</p>
     </Screen>
   );
 }
@@ -274,21 +236,14 @@ function getStrength(password: string): 'weak' | 'fair' | 'strong' {
 }
 
 function StrengthBar({ strength }: { strength: 'weak' | 'fair' | 'strong' }) {
-  const bars = [
-    { active: true },
-    { active: strength === 'fair' || strength === 'strong' },
-    { active: strength === 'strong' },
-  ];
+  const bars = [{ active: true }, { active: strength !== 'weak' }, { active: strength === 'strong' }];
   const color = strength === 'weak' ? 'bg-red-500' : strength === 'fair' ? 'bg-amber-400' : 'bg-emerald-500';
   const label = strength === 'weak' ? 'Weak' : strength === 'fair' ? 'Fair' : 'Strong';
   const labelColor = strength === 'weak' ? 'text-red-400' : strength === 'fair' ? 'text-amber-400' : 'text-emerald-400';
-
   return (
     <div className="flex items-center gap-2 mt-1">
       <div className="flex gap-1 flex-1">
-        {bars.map((b, i) => (
-          <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${b.active ? color : 'bg-slate-700'}`} />
-        ))}
+        {bars.map((b, i) => <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${b.active ? color : 'bg-slate-700'}`} />)}
       </div>
       <span className={`text-[11px] font-medium ${labelColor}`}>{label}</span>
     </div>
