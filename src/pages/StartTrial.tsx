@@ -73,7 +73,7 @@ export default function StartTrial() {
       <nav className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-[#1e2d4a]/60">
         <a href="/" className="flex items-center group">
           <img
-            src="/VYSITE_Logo_Long.png"
+            src="/ChatGPT_Image_Jun_1,_2026,_07_35_12_PM.png"
             alt="VYSITE"
             className="h-9 w-auto object-contain transition-opacity group-hover:opacity-80"
             style={{ mixBlendMode: 'lighten' }}
@@ -136,7 +136,7 @@ export default function StartTrial() {
                 <h1 className="text-3xl lg:text-4xl font-black text-white leading-tight mb-4">
                   Try
                   <img
-                    src="/VYSITE_Logo_Long.png"
+                    src="/ChatGPT_Image_Jun_1,_2026,_07_35_12_PM.png"
                     alt="VYSITE"
                     className="inline-block align-middle object-contain mx-2"
                     style={{ height: '1.1em', mixBlendMode: 'lighten' }}
