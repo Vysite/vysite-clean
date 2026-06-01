@@ -2429,9 +2429,11 @@ interface TenderDetailProps {
   onBack: () => void;
   onUpdate: (t: Tender) => void;
   onConvertToProject: (t: Tender) => void;
+  convertLoading?: boolean;
+  convertError?: string | null;
 }
 
-function TenderDetail({ tender, onBack, onUpdate, onConvertToProject }: TenderDetailProps) {
+function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoading, convertError }: TenderDetailProps) {
   const store = useAppStore();
   const perms = usePermissions();
   const isAdmin = store.currentUser?.role === 'Admin';
@@ -3176,12 +3178,20 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject }: TenderDe
                   <Trophy size={40} className="text-[#f97316] mb-3" />
                   <p className="text-white font-bold text-lg mb-1">Tender Won!</p>
                   <p className="text-sm text-slate-400 mb-5">Convert this tender to a live project to begin operational tracking.</p>
+                  {convertError && (
+                    <p className="text-sm text-red-400 mb-3">{convertError}</p>
+                  )}
                   <button
                     onClick={() => onConvertToProject(tender)}
-                    className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-500 transition-colors"
+                    disabled={convertLoading}
+                    className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <FolderOpen size={16} />
-                    Convert to Project
+                    {convertLoading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <FolderOpen size={16} />
+                    )}
+                    {convertLoading ? 'Converting…' : 'Convert to Project'}
                   </button>
                 </>
               )}
@@ -3558,7 +3568,12 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
     setSelectedTender(updated);
   };
 
-  const handleConvert = (tender: Tender) => {
+  const [convertError, setConvertError] = useState<string | null>(null);
+  const [convertLoading, setConvertLoading] = useState(false);
+
+  const handleConvert = async (tender: Tender) => {
+    setConvertError(null);
+    setConvertLoading(true);
     const newProject = {
       id: `p${Date.now()}`,
       name: tender.name,
@@ -3566,15 +3581,22 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
       location: tender.location,
       projectManager: tender.owner,
       status: 'Active' as const,
-      startDate: '2026-05-19',
+      startDate: new Date().toISOString().slice(0, 10),
       completionDate: '',
       openActions: 0,
       openSnags: 0,
       progress: 0,
       value: formatValue(tender.estimatedValue),
     };
+    const err = await store.addProject(newProject);
+    if (err) {
+      setConvertError(err);
+      setConvertLoading(false);
+      return;
+    }
     const updated = { ...tender, convertedProjectId: newProject.id };
     updateTender(updated);
+    setConvertLoading(false);
     onConvertToProject(updated);
   };
 
@@ -3585,6 +3607,8 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
         onBack={() => setSelectedTender(null)}
         onUpdate={updateTender}
         onConvertToProject={handleConvert}
+        convertLoading={convertLoading}
+        convertError={convertError}
       />
     );
   }
