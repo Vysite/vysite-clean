@@ -4,6 +4,7 @@ import {
   Shield, Building2, ChevronRight, ChevronLeft, ToggleLeft, ToggleRight,
   Save, AlertCircle, CheckCircle, RefreshCw, UserPlus, Trash2, Ban, Search,
   FlaskConical, X, Clock, Archive, RotateCcw, AlertTriangle, ChevronDown,
+  Upload, Mail, Phone, Globe, Hash,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { env } from '../lib/env';
@@ -594,6 +595,178 @@ function CompanyRow({
   );
 }
 
+// ─── Company Profile section (embedded in ManagePanel) ────────────────────────
+
+interface OrgProfile {
+  company_name: string;
+  company_address: string;
+  company_phone: string;
+  company_email: string;
+  company_website: string;
+  company_vat_number: string;
+  company_number: string;
+  logo_data_url: string;
+}
+
+const EMPTY_PROFILE: OrgProfile = {
+  company_name: '', company_address: '', company_phone: '',
+  company_email: '', company_website: '', company_vat_number: '',
+  company_number: '', logo_data_url: '',
+};
+
+const profileInputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] transition-colors';
+const profileLabelCls = 'text-xs font-semibold text-slate-500 uppercase tracking-wider';
+
+function CompanyProfileSection({ orgId }: { orgId: string }) {
+  const [form, setForm] = useState<OrgProfile>(EMPTY_PROFILE);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setProfileError(null);
+      const { data, error } = await supabase
+        .from('vy_settings')
+        .select('company_name,company_address,company_phone,company_email,company_website,company_vat_number,company_number,logo_data_url')
+        .eq('org_id', orgId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) { setProfileError(error.message); }
+      else if (data) {
+        setForm({
+          company_name: data.company_name ?? '',
+          company_address: data.company_address ?? '',
+          company_phone: data.company_phone ?? '',
+          company_email: data.company_email ?? '',
+          company_website: data.company_website ?? '',
+          company_vat_number: data.company_vat_number ?? '',
+          company_number: data.company_number ?? '',
+          logo_data_url: data.logo_data_url ?? '',
+        });
+      }
+      setLoading(false);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [orgId]);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setProfileError('Logo must be under 2 MB'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => setForm(f => ({ ...f, logo_data_url: ev.target?.result as string }));
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setProfileError(null);
+    const { error } = await supabase
+      .from('vy_settings')
+      .upsert(
+        { ...form, org_id: orgId, id: orgId, updated_at: new Date().toISOString() },
+        { onConflict: 'org_id' }
+      );
+    if (error) {
+      setProfileError(error.message);
+    } else {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    }
+    setSaving(false);
+  };
+
+  const fields: { key: keyof OrgProfile; label: string; icon: React.ReactNode; multiline?: boolean; placeholder?: string }[] = [
+    { key: 'company_name',       label: 'Company Name',           icon: <Building2 size={12} />, placeholder: 'e.g. Acme Construction Ltd' },
+    { key: 'company_number',     label: 'Companies House Number', icon: <Hash size={12} />,      placeholder: '12345678' },
+    { key: 'company_vat_number', label: 'VAT Number',             icon: <Hash size={12} />,      placeholder: 'GB 123 4567 89' },
+    { key: 'company_address',    label: 'Registered Address',     icon: <Building2 size={12} />, multiline: true, placeholder: '14 Broad Street, London EC2M 1QS' },
+    { key: 'company_email',      label: 'Email Address',          icon: <Mail size={12} />,      placeholder: 'info@company.co.uk' },
+    { key: 'company_phone',      label: 'Telephone',              icon: <Phone size={12} />,     placeholder: '020 7123 4567' },
+    { key: 'company_website',    label: 'Website',                icon: <Globe size={12} />,     placeholder: 'www.company.co.uk' },
+  ];
+
+  return (
+    <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5">
+      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Company Profile</h3>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-5 h-5 border-2 border-[#f97316] border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {/* Logo */}
+          <div>
+            <label className={profileLabelCls}>Company Logo</label>
+            <div className="mt-2 flex items-center gap-4 flex-wrap">
+              <div className="w-28 h-16 bg-[#0d1628] rounded-xl flex items-center justify-center border border-[#1e2d4a] overflow-hidden shrink-0">
+                {form.logo_data_url
+                  ? <img src={form.logo_data_url} alt="Logo" className="w-full h-full object-contain p-1.5" />
+                  : <Building2 size={22} className="text-slate-700" />}
+              </div>
+              <div className="space-y-1.5">
+                <button onClick={() => fileRef.current?.click()}
+                  className="flex items-center gap-2 px-3 py-1.5 border border-[#1e2d4a] rounded-lg text-xs text-slate-400 hover:bg-[#1e2d4a] hover:text-slate-200 transition-colors">
+                  <Upload size={12} />Upload Logo
+                </button>
+                <p className="text-[11px] text-slate-600">PNG, SVG or JPEG · Max 2 MB</p>
+                {form.logo_data_url && (
+                  <button onClick={() => setForm(f => ({ ...f, logo_data_url: '' }))}
+                    className="text-[11px] text-red-500 hover:text-red-400 transition-colors">
+                    Remove logo
+                  </button>
+                )}
+              </div>
+              <input ref={fileRef} type="file" accept="image/png,image/svg+xml,image/jpeg"
+                className="hidden" onChange={handleLogoUpload} />
+            </div>
+          </div>
+
+          {/* Fields */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {fields.map(({ key, label, icon, multiline, placeholder }) => (
+              <div key={key} className={multiline ? 'sm:col-span-2' : ''}>
+                <label className={profileLabelCls}>
+                  <span className="inline-flex items-center gap-1 align-middle">{icon}{label}</span>
+                </label>
+                {multiline ? (
+                  <textarea value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    rows={2} placeholder={placeholder} className={`${profileInputCls} resize-none`} />
+                ) : (
+                  <input value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    placeholder={placeholder} className={profileInputCls} />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {profileError && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-900/20 border border-red-800/40">
+              <AlertCircle size={13} className="text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-300">{profileError}</p>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button onClick={handleSave} disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 bg-[#f97316] text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors disabled:opacity-60">
+              <Save size={13} />{saving ? 'Saving…' : 'Save Profile'}
+            </button>
+            {saved && <span className="text-xs text-emerald-400 font-semibold">Saved</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Manage panel ─────────────────────────────────────────────────────────────
 
 function ManagePanel({
@@ -896,6 +1069,9 @@ function ManagePanel({
           </div>
         </div>
       </div>
+
+      {/* ── Company Profile ──────────────────────────────────────────────────── */}
+      <CompanyProfileSection orgId={org.id} />
 
       {/* Save */}
       <div className="flex justify-end gap-3">
