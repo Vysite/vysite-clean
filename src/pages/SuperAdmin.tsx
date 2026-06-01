@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Shield, Building2, ChevronRight, ChevronLeft, ToggleLeft, ToggleRight,
   Save, AlertCircle, CheckCircle, RefreshCw, UserPlus, Trash2, Ban, Search,
-  FlaskConical, X, Clock,
+  FlaskConical, X, Clock, Archive, RotateCcw, AlertTriangle, ChevronDown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { env } from '../lib/env';
@@ -15,6 +15,9 @@ interface OrgRow {
   name: string;
   slug: string;
   created_at: string;
+  status: 'active' | 'archived' | 'deleted';
+  archived_at: string | null;
+  deleted_at: string | null;
 }
 
 interface OrgSettings {
@@ -94,6 +97,125 @@ function TrialBadge({ expiresAt }: { expiresAt: string | null }) {
         ? 'TRIAL'
         : `TRIAL · ${days}d`}
     </span>
+  );
+}
+
+// ─── Status badge for org lifecycle ──────────────────────────────────────────
+
+function OrgStatusBadge({ status }: { status: OrgRow['status'] }) {
+  if (status === 'active') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-400">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Active
+      </span>
+    );
+  }
+  if (status === 'archived') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-900/60 text-amber-400">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Archived
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-900/60 text-red-400">
+      <span className="w-1.5 h-1.5 rounded-full bg-red-400" />Deleted
+    </span>
+  );
+}
+
+// ─── Typed-name delete confirmation modal ─────────────────────────────────────
+
+function ConfirmDeleteOrgModal({
+  org,
+  onConfirm,
+  onCancel,
+}: {
+  org: OrgWithSettings;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const [typed, setTyped] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setTimeout(() => inputRef.current?.focus(), 50);
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onCancel(); }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  const isMatch = typed === org.name;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-[#0d1628] border border-red-900/60 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="px-6 pt-6 pb-5 border-b border-[#1e2d4a]">
+          <div className="flex items-start gap-4">
+            <div className="w-11 h-11 rounded-xl bg-red-900/30 border border-red-800/40 flex items-center justify-center shrink-0">
+              <AlertTriangle size={20} className="text-red-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-base font-bold text-white">Permanently delete organisation</h2>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                This will <span className="text-red-400 font-semibold">permanently delete all data</span> for{' '}
+                <span className="text-white font-semibold">{org.name}</span> including all projects, tenders, users, and records.
+                This action <span className="text-red-400 font-semibold">cannot be undone</span>.
+              </p>
+            </div>
+            <button onClick={onCancel} className="shrink-0 text-slate-500 hover:text-slate-300 transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {org.userCount > 0 && (
+          <div className="mx-6 mt-4 px-3.5 py-2.5 rounded-lg bg-red-900/20 border border-red-800/40">
+            <p className="text-xs text-red-300 flex items-center gap-2">
+              <AlertTriangle size={12} className="shrink-0" />
+              This organisation has <strong className="text-red-200">{org.userCount} active user{org.userCount !== 1 ? 's' : ''}</strong> who will lose all access.
+            </p>
+          </div>
+        )}
+
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+              Type the organisation name to confirm
+            </label>
+            <div className="text-sm text-slate-300 font-mono bg-[#1a2236] border border-[#1e2d4a] rounded-lg px-3 py-2 mb-3 select-all">
+              {org.name}
+            </div>
+            <input
+              ref={inputRef}
+              type="text"
+              value={typed}
+              onChange={e => setTyped(e.target.value)}
+              placeholder={`Type "${org.name}" to confirm`}
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full bg-[#1a2236] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-slate-500 transition-colors"
+            />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button
+              onClick={onCancel}
+              className="flex-1 px-4 py-2.5 rounded-lg border border-[#1e2d4a] text-slate-400 hover:text-white text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => { if (isMatch) onConfirm(); }}
+              disabled={!isMatch}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:bg-red-900/40 disabled:text-red-700 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all"
+            >
+              <Trash2 size={14} />
+              Delete Permanently
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -288,9 +410,24 @@ function NewTrialModal({ onClose, onCreated }: NewTrialModalProps) {
 
 // ─── Company list row ─────────────────────────────────────────────────────────
 
-function CompanyRow({ org, onManage }: { org: OrgWithSettings; onManage: () => void }) {
+function CompanyRow({
+  org,
+  onManage,
+  onArchive,
+  onRestore,
+  onDelete,
+  actionLoading,
+}: {
+  org: OrgWithSettings;
+  onManage: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
+  onDelete: () => void;
+  actionLoading: boolean;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const s = org.settings;
-  const isActive = s?.account_status !== 'disabled';
   const isTrial  = s?.account_type === 'trial';
   const aiOn = s?.ai_enabled ?? true;
   const limit = s?.ai_monthly_limit ?? 50;
@@ -299,25 +436,35 @@ function CompanyRow({ org, onManage }: { org: OrgWithSettings; onManage: () => v
   const userLimit = s?.user_limit ?? null;
   const atUserLimit = userLimit !== null && org.userCount >= userLimit;
 
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   return (
-    <div className="grid grid-cols-[1fr_140px_1fr_80px_150px_110px_70px] gap-3 items-center px-4 py-3 border-b border-[#1e2d4a] hover:bg-[#0d1628]/40 transition-colors">
+    <div className="grid grid-cols-[1fr_140px_1fr_80px_150px_110px_110px] gap-3 items-center px-4 py-3 border-b border-[#1e2d4a] hover:bg-[#0d1628]/40 transition-colors">
       {/* Company */}
       <div>
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-semibold text-white">{org.name}</p>
+          <p className={`text-sm font-semibold ${org.status === 'archived' ? 'text-slate-400' : 'text-white'}`}>{org.name}</p>
           {isTrial && <TrialBadge expiresAt={s?.trial_expires_at ?? null} />}
         </div>
         <p className="text-[11px] text-slate-500">{org.slug}</p>
       </div>
 
-      {/* Status */}
-      <div>
-        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-          isActive ? 'bg-emerald-900/60 text-emerald-400' : 'bg-red-900/60 text-red-400'
-        }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-red-400'}`} />
-          {isActive ? 'Active' : 'Disabled'}
-        </span>
+      {/* Status — now shows org lifecycle status */}
+      <div className="flex flex-col gap-1">
+        <OrgStatusBadge status={org.status} />
+        {org.status === 'archived' && org.archived_at && (
+          <span className="text-[10px] text-slate-600">
+            {new Date(org.archived_at).toLocaleDateString('en-GB')}
+          </span>
+        )}
       </div>
 
       {/* Modules */}
@@ -353,14 +500,62 @@ function CompanyRow({ org, onManage }: { org: OrgWithSettings; onManage: () => v
         {atUserLimit && <span className="ml-1 text-[9px] font-bold text-red-400 bg-red-900/30 px-1 py-0.5 rounded">FULL</span>}
       </div>
 
-      {/* Action */}
-      <div>
-        <button
-          onClick={onManage}
-          className="flex items-center gap-1 px-3 py-1.5 bg-[#f97316] hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition-colors"
-        >
-          Manage <ChevronRight size={12} />
-        </button>
+      {/* Actions */}
+      <div className="flex items-center gap-1.5" ref={menuRef}>
+        {/* Manage button — hidden for archived orgs */}
+        {org.status === 'active' && (
+          <button
+            onClick={onManage}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-[#f97316] hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition-colors"
+          >
+            Manage <ChevronRight size={11} />
+          </button>
+        )}
+
+        {/* Lifecycle dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            disabled={actionLoading}
+            className="flex items-center gap-1 px-2 py-1.5 bg-[#1a2236] border border-[#1e2d4a] hover:border-[#2e3d5a] text-slate-400 hover:text-white rounded-lg text-xs transition-colors disabled:opacity-50"
+            title="Lifecycle actions"
+          >
+            {actionLoading
+              ? <RefreshCw size={12} className="animate-spin" />
+              : <ChevronDown size={12} />}
+          </button>
+
+          {menuOpen && (
+            <div className="absolute right-0 top-full mt-1 w-52 bg-[#0d1628] border border-[#1e2d4a] rounded-xl shadow-2xl z-50 py-1">
+              {org.status === 'active' && (
+                <button
+                  onClick={() => { onArchive(); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-amber-400 hover:bg-amber-900/20 transition-colors"
+                >
+                  <Archive size={13} />
+                  Archive Organisation
+                </button>
+              )}
+              {org.status === 'archived' && (
+                <button
+                  onClick={() => { onRestore(); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-emerald-400 hover:bg-emerald-900/20 transition-colors"
+                >
+                  <RotateCcw size={13} />
+                  Restore Organisation
+                </button>
+              )}
+              <div className="border-t border-[#1e2d4a] my-1" />
+              <button
+                onClick={() => { onDelete(); setMenuOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-red-400 hover:bg-red-900/20 transition-colors"
+              >
+                <Trash2 size={13} />
+                Permanently Delete
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -967,6 +1162,10 @@ export default function SuperAdmin() {
   const [activeTab, setActiveTab] = useState<'companies' | 'admins'>('companies');
   const [companySearch, setCompanySearch] = useState('');
   const [showNewTrialModal, setShowNewTrialModal] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<OrgWithSettings | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -982,7 +1181,7 @@ export default function SuperAdmin() {
 
     const { data: orgData, error: orgErr } = await supabase
       .from('organisations')
-      .select('id, name, slug, created_at')
+      .select('id, name, slug, created_at, status, archived_at, deleted_at')
       .order('name');
 
     if (orgErr) { setError(orgErr.message); setLoading(false); return; }
@@ -1018,6 +1217,46 @@ export default function SuperAdmin() {
     if (isSuperAdmin) loadOrgs();
   }, [isSuperAdmin, loadOrgs]);
 
+  async function handleArchive(org: OrgWithSettings) {
+    setActionLoading(org.id);
+    setActionError(null);
+    const { error: orgErr } = await supabase
+      .from('organisations')
+      .update({ status: 'archived', archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', org.id);
+    if (orgErr) { setActionError(orgErr.message); setActionLoading(null); return; }
+    await supabase.from('org_settings')
+      .update({ account_status: 'disabled', updated_by: 'super-admin:archive' })
+      .eq('org_id', org.id);
+    await loadOrgs();
+    setActionLoading(null);
+  }
+
+  async function handleRestore(org: OrgWithSettings) {
+    setActionLoading(org.id);
+    setActionError(null);
+    const { error: orgErr } = await supabase
+      .from('organisations')
+      .update({ status: 'active', archived_at: null, updated_at: new Date().toISOString() })
+      .eq('id', org.id);
+    if (orgErr) { setActionError(orgErr.message); setActionLoading(null); return; }
+    await supabase.from('org_settings')
+      .update({ account_status: 'active', updated_by: 'super-admin:restore' })
+      .eq('org_id', org.id);
+    await loadOrgs();
+    setActionLoading(null);
+  }
+
+  async function handleDeleteConfirmed(org: OrgWithSettings) {
+    setActionLoading(org.id);
+    setActionError(null);
+    setDeleteTarget(null);
+    const { error: delErr } = await supabase.rpc('super_admin_delete_org', { p_org_id: org.id });
+    if (delErr) { setActionError(`Delete failed: ${delErr.message}`); }
+    else { await loadOrgs(); }
+    setActionLoading(null);
+  }
+
   if (isSuperAdmin === false) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
@@ -1050,6 +1289,7 @@ export default function SuperAdmin() {
     const d = trialDaysRemaining(o.settings?.trial_expires_at ?? null);
     return d !== null && d <= 0;
   });
+  const archivedOrgs = orgs.filter(o => o.status === 'archived');
 
   if (managing) {
     return (
@@ -1137,10 +1377,11 @@ export default function SuperAdmin() {
 
       {activeTab === 'companies' && (
         <>
-          {error && (
+          {(error || actionError) && (
             <div className="flex items-center gap-2 p-4 bg-red-900/20 border border-red-900/40 rounded-xl text-sm text-red-300 mb-4">
               <AlertCircle size={16} />
-              {error}
+              {error || actionError}
+              <button onClick={() => { setError(null); setActionError(null); }} className="ml-auto text-red-500 hover:text-red-300">✕</button>
             </div>
           )}
 
@@ -1148,8 +1389,8 @@ export default function SuperAdmin() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
             {[
               { label: 'Total Companies',  value: orgs.length },
-              { label: 'Active',           value: orgs.filter(o => o.settings?.account_status !== 'disabled').length, color: 'text-emerald-400' },
-              { label: 'Disabled',         value: orgs.filter(o => o.settings?.account_status === 'disabled').length, color: 'text-red-400' },
+              { label: 'Active',           value: orgs.filter(o => o.status === 'active').length, color: 'text-emerald-400' },
+              { label: 'Archived',         value: archivedOrgs.length, color: archivedOrgs.length > 0 ? 'text-amber-400' : 'text-slate-600' },
               { label: 'AI Enabled',       value: orgs.filter(o => o.settings?.ai_enabled !== false).length, color: 'text-[#f97316]' },
               { label: 'Active Trials',    value: trialOrgs.length, color: 'text-sky-400' },
               { label: 'Expired Trials',   value: expiredTrials.length, color: expiredTrials.length > 0 ? 'text-red-400' : 'text-slate-600' },
@@ -1161,52 +1402,83 @@ export default function SuperAdmin() {
             ))}
           </div>
 
-          {/* Search */}
+          {/* Search + status filter */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="relative flex-1 max-w-sm">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search companies…"
+                value={companySearch}
+                onChange={e => setCompanySearch(e.target.value)}
+                className="w-full bg-[#1a2236] border border-[#1e2d4a] rounded-lg pl-8 pr-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#f97316] transition-colors"
+              />
+            </div>
+            <div className="flex gap-1 bg-[#0d1628] border border-[#1e2d4a] rounded-lg p-1 h-fit">
+              {(['all', 'active', 'archived'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setStatusFilter(f)}
+                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors capitalize ${
+                    statusFilter === f ? 'bg-[#f97316] text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Table */}
           {(() => {
-            const filtered = orgs.filter(o =>
-              o.name.toLowerCase().includes(companySearch.toLowerCase())
-            );
+            const filtered = orgs.filter(o => {
+              if (statusFilter !== 'all' && o.status !== statusFilter) return false;
+              return o.name.toLowerCase().includes(companySearch.toLowerCase());
+            });
             return (
-              <>
-                <div className="relative mb-4">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Search companies…"
-                    value={companySearch}
-                    onChange={e => setCompanySearch(e.target.value)}
-                    className="w-full sm:w-72 bg-[#1a2236] border border-[#1e2d4a] rounded-lg pl-8 pr-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-[#f97316] transition-colors"
-                  />
+              <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden">
+                <div className="grid grid-cols-[1fr_140px_1fr_80px_150px_110px_110px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] bg-[#0d1628]/60">
+                  {['Company', 'Status', 'Modules', 'AI', 'AI Usage', 'Users', 'Actions'].map(h => (
+                    <span key={h} className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{h}</span>
+                  ))}
                 </div>
 
-                {/* Table */}
-                <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden">
-                  <div className="grid grid-cols-[1fr_140px_1fr_80px_150px_110px_70px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] bg-[#0d1628]/60">
-                    {['Company', 'Status', 'Modules', 'AI', 'AI Usage', 'Users', ''].map(h => (
-                      <span key={h} className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{h}</span>
-                    ))}
+                {filtered.length === 0 ? (
+                  <div className="py-14 text-center">
+                    <Building2 size={32} className="text-slate-700 mx-auto mb-2" />
+                    <p className="text-sm text-slate-500">
+                      {companySearch ? `No companies matching "${companySearch}"` : 'No companies found'}
+                    </p>
                   </div>
-
-                  {filtered.length === 0 ? (
-                    <div className="py-14 text-center">
-                      <Building2 size={32} className="text-slate-700 mx-auto mb-2" />
-                      <p className="text-sm text-slate-500">
-                        {companySearch ? `No companies matching "${companySearch}"` : 'No companies found'}
-                      </p>
-                    </div>
-                  ) : (
-                    filtered.map(org => (
-                      <CompanyRow key={org.id} org={org} onManage={() => setManaging(org)} />
-                    ))
-                  )}
-                </div>
-              </>
+                ) : (
+                  filtered.map(org => (
+                    <CompanyRow
+                      key={org.id}
+                      org={org}
+                      onManage={() => setManaging(org)}
+                      onArchive={() => handleArchive(org)}
+                      onRestore={() => handleRestore(org)}
+                      onDelete={() => setDeleteTarget(org)}
+                      actionLoading={actionLoading === org.id}
+                    />
+                  ))
+                )}
+              </div>
             );
           })()}
 
           <p className="text-[11px] text-slate-700 mt-4 text-center">
             Logged in as super admin · {adminEmail} · Changes are saved immediately to the database
           </p>
+
+          {/* Delete confirmation modal */}
+          {deleteTarget && (
+            <ConfirmDeleteOrgModal
+              org={deleteTarget}
+              onConfirm={() => handleDeleteConfirmed(deleteTarget)}
+              onCancel={() => setDeleteTarget(null)}
+            />
+          )}
         </>
       )}
     </div>
