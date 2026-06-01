@@ -84,19 +84,23 @@ export default function Sidebar({
   const sidebarContent = (
     <div className="flex flex-col h-full bg-[#0d1628] border-r border-[#1e2d4a]" style={{ width }}>
       {/* Logo */}
-      <div className={`flex items-center h-16 border-b border-[#1e2d4a] shrink-0 ${collapsed ? 'justify-center px-3' : 'px-3'}`}>
+      <div
+        className={`flex items-center shrink-0 border-b border-[#1e2d4a] ${
+          collapsed ? 'justify-center px-2 h-16' : 'px-3 h-20'
+        }`}
+      >
         {collapsed ? (
           <img
             src="/image_(3).png"
             alt="VYSITE"
-            className="w-10 h-10 rounded-xl object-cover shrink-0"
+            className="w-11 h-11 rounded-xl object-cover shrink-0"
           />
         ) : (
           <img
-            src="/ChatGPT_Image_Jun_1,_2026,_07_35_12_PM.png"
+            src="/VYSITE_Logo_Long.png"
             alt="VYSITE"
-            className="h-11 w-auto max-w-full object-contain"
-            style={{ mixBlendMode: 'lighten' }}
+            className="w-full object-contain"
+            style={{ maxHeight: '64px', mixBlendMode: 'lighten' }}
           />
         )}
       </div>
