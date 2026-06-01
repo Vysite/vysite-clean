@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Zap, TrendingUp, DollarSign, Building2, ChevronDown, ChevronUp,
-  RefreshCw, ArrowUpDown, Calendar, Search, X, BarChart2, AlertCircle,
-  ChevronRight, Clock, FileText, CheckCircle, XCircle, Ban,
+  RefreshCw, ArrowUpDown, Search, X, BarChart2, AlertCircle,
+  ChevronRight, FileText, CheckCircle, XCircle, Ban,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -53,6 +53,10 @@ type DateRange = '7d' | '30d' | '90d' | 'all';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+// Approximate USD → GBP conversion for display purposes only.
+// No calculation changes — the database stores USD; this is purely a display conversion.
+const USD_TO_GBP = 0.79;
+
 const DATE_RANGE_LABELS: Record<DateRange, string> = {
   '7d':  'Last 7 days',
   '30d': 'Last 30 days',
@@ -69,8 +73,9 @@ function dateRangeCutoff(range: DateRange): string | null {
 }
 
 function fmtCost(usd: number): string {
-  if (usd < 0.01) return `$${usd.toFixed(4)}`;
-  return `$${usd.toFixed(2)}`;
+  const gbp = usd * USD_TO_GBP;
+  if (gbp < 0.01) return `£${gbp.toFixed(4)}`;
+  return `£${gbp.toFixed(2)}`;
 }
 
 function fmtTokens(n: number): string {
@@ -88,15 +93,15 @@ function fmtDateTime(iso: string): string {
 
 function callTypeName(ct: string): string {
   const map: Record<string, string> = {
-    'contract-review':    'Contract Review',
-    'review-document':    'Document Review',
-    'consolidate-review': 'Consolidate',
-    'reconcile-findings': 'Reconcile',
-    'draft-rfi':          'Draft RFI',
-    'suggest-assumptions':'Suggestions',
-    'suggest-exclusions': 'Exclusions',
-    'draft-scope-note':   'Scope Note',
-    'identify-risks':     'Risk Identification',
+    'contract-review':     'Contract Review',
+    'review-document':     'Document Review',
+    'consolidate-review':  'Consolidate',
+    'reconcile-findings':  'Reconcile',
+    'draft-rfi':           'Draft RFI',
+    'suggest-assumptions': 'Suggestions',
+    'suggest-exclusions':  'Exclusions',
+    'draft-scope-note':    'Scope Note',
+    'identify-risks':      'Risk Identification',
   };
   return map[ct] ?? ct;
 }
@@ -215,7 +220,7 @@ function OrgDrillDown({
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-[#0d1628] border-b border-[#1e2d4a] z-10">
                 <tr>
-                  {['Date', 'Type', 'Model', 'Tokens In', 'Tokens Out', 'Cost', 'Pages', 'Status'].map(h => (
+                  {['Date', 'Type', 'Model', 'Tokens In', 'Tokens Out', 'Est. Cost', 'Pages', 'Status'].map(h => (
                     <th key={h} className="text-left px-4 py-2.5 text-[11px] font-semibold text-slate-500 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -273,7 +278,6 @@ export default function SuperAdminAIBilling() {
   const [search, setSearch] = useState('');
   const [drillOrg, setDrillOrg] = useState<OrgUsageSummary | null>(null);
 
-  // Platform-level totals
   const [platformTotals, setPlatformTotals] = useState({
     totalCalls: 0,
     totalInputTokens: 0,
@@ -289,7 +293,6 @@ export default function SuperAdminAIBilling() {
     try {
       const cutoff = dateRangeCutoff(dateRange);
 
-      // Load orgs + their org_settings
       const { data: orgs, error: orgErr } = await supabase
         .from('organisations')
         .select('id, name')
@@ -303,7 +306,6 @@ export default function SuperAdminAIBilling() {
 
       const settingsMap = Object.fromEntries((settings ?? []).map(s => [s.org_id, s]));
 
-      // Load all usage logs in range
       let query = supabase
         .from('ai_usage_log')
         .select('org_id, input_tokens, output_tokens, estimated_cost_usd, status');
@@ -313,7 +315,6 @@ export default function SuperAdminAIBilling() {
       const { data: logs, error: logErr } = await query;
       if (logErr) throw new Error(logErr.message);
 
-      // Aggregate per org
       const orgAgg: Record<string, {
         total_calls: number;
         successful_calls: number;
@@ -358,7 +359,6 @@ export default function SuperAdminAIBilling() {
 
       setOrgSummaries(summaries);
 
-      // Platform totals
       const active = summaries.filter(s => s.ai_enabled);
       setPlatformTotals({
         totalCalls: summaries.reduce((a, s) => a + s.total_calls, 0),
@@ -376,7 +376,6 @@ export default function SuperAdminAIBilling() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Sort + filter
   const filtered = orgSummaries
     .filter(s => s.org_name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
@@ -414,7 +413,6 @@ export default function SuperAdminAIBilling() {
           <p className="text-xs text-slate-500 mt-0.5">Platform-wide AI usage, token consumption and estimated Anthropic API costs</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Date range selector */}
           <div className="flex items-center gap-1 bg-[#0d1628] border border-[#1e2d4a] rounded-lg p-1">
             {(Object.keys(DATE_RANGE_LABELS) as DateRange[]).map(r => (
               <button
@@ -446,11 +444,11 @@ export default function SuperAdminAIBilling() {
       {/* Platform-level stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {[
-          { label: 'Total AI Calls', value: platformTotals.totalCalls.toLocaleString(), icon: Zap, color: 'text-[#f97316]' },
-          { label: 'Input Tokens', value: fmtTokens(platformTotals.totalInputTokens), icon: BarChart2, color: 'text-sky-400' },
-          { label: 'Output Tokens', value: fmtTokens(platformTotals.totalOutputTokens), icon: TrendingUp, color: 'text-blue-400' },
-          { label: 'Est. API Cost', value: fmtCost(platformTotals.totalCostUsd), icon: DollarSign, color: 'text-emerald-400' },
-          { label: 'AI-Enabled Orgs', value: platformTotals.activeAiOrgs.toLocaleString(), icon: Building2, color: 'text-white' },
+          { label: 'Total AI Calls',   value: platformTotals.totalCalls.toLocaleString(),                                     icon: Zap,       color: 'text-[#f97316]' },
+          { label: 'Input Tokens',     value: fmtTokens(platformTotals.totalInputTokens),                                     icon: BarChart2, color: 'text-sky-400'   },
+          { label: 'Output Tokens',    value: fmtTokens(platformTotals.totalOutputTokens),                                    icon: TrendingUp, color: 'text-blue-400' },
+          { label: 'Est. API Cost',    value: fmtCost(platformTotals.totalCostUsd),                                           icon: DollarSign, color: 'text-emerald-400' },
+          { label: 'AI-Enabled Orgs',  value: platformTotals.activeAiOrgs.toLocaleString(),                                   icon: Building2, color: 'text-white'     },
         ].map(stat => (
           <div key={stat.label} className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl p-4">
             <div className="flex items-center gap-2 mb-1.5">
@@ -462,18 +460,18 @@ export default function SuperAdminAIBilling() {
         ))}
       </div>
 
-      {/* Model pricing reference */}
+      {/* Pricing reference note */}
       <div className="flex items-start gap-2 p-3 bg-[#1a2236] border border-[#1e2d4a] rounded-xl mb-5 text-xs text-slate-400">
         <FileText size={12} className="text-slate-600 mt-0.5 shrink-0" />
         <span>
-          Cost estimates use Claude Opus pricing: <span className="text-slate-300">$15/1M input · $75/1M output · $1.50/1M cache read · $18.75/1M cache write</span>.
-          Verify against your Anthropic billing dashboard for exact charges.
+          Cost estimates use Claude Opus pricing converted to GBP at an approximate rate of £1 = $1.27:{' '}
+          <span className="text-slate-300">£11.85/1M input · £59.25/1M output · £1.19/1M cache read · £14.81/1M cache write</span>.
+          Verify against your Anthropic billing dashboard for exact USD charges.
         </span>
       </div>
 
       {/* Org table */}
       <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl overflow-hidden">
-        {/* Table toolbar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-[#1e2d4a]">
           <div className="relative flex-1 max-w-xs">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
