@@ -75,7 +75,7 @@ export default function StartTrial() {
           <img
             src="/ChatGPT_Image_Jun_1,_2026,_07_35_12_PM.png"
             alt="VYSITE"
-            className="h-9 w-auto object-contain transition-opacity group-hover:opacity-80"
+            className="h-[108px] w-auto object-contain transition-opacity group-hover:opacity-80"
             style={{ mixBlendMode: 'lighten' }}
           />
         </a>
@@ -139,7 +139,7 @@ export default function StartTrial() {
                     src="/ChatGPT_Image_Jun_1,_2026,_07_35_12_PM.png"
                     alt="VYSITE"
                     className="inline-block align-middle object-contain mx-2"
-                    style={{ height: '1.1em', mixBlendMode: 'lighten' }}
+                    style={{ height: '1.65em', mixBlendMode: 'lighten' }}
                   />
                   free<br />
                   <span className="text-[#f97316]">for 14 days</span>
