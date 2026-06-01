@@ -2,7 +2,7 @@ import {
   LayoutDashboard, FileText, FolderKanban, ClipboardList,
   AlertOctagon, Zap, FlaskConical, BarChart2, Users,
   Settings, MessageSquare, Wrench, ChevronLeft,
-  ChevronRight, Shield, Building2, X,
+  ChevronRight, X,
 } from 'lucide-react';
 
 export type Page =
@@ -44,11 +44,6 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'settings',      label: 'Settings',            icon: <Settings size={18} /> },
 ];
 
-const SUPER_ADMIN_NAV: NavItem[] = [
-  { page: 'super-admin',      label: 'Admin Panel',      icon: <Shield size={18} />,    superAdminOnly: true },
-  { page: 'super-admin-orgs', label: 'Organisations',    icon: <Building2 size={18} />, superAdminOnly: true },
-];
-
 interface SidebarProps {
   activePage: Page;
   onNavigate: (page: Page) => void;
@@ -57,12 +52,11 @@ interface SidebarProps {
   mobileOpen: boolean;
   onCloseMobile: () => void;
   isModuleEnabled: (key: string) => boolean;
-  isSuperAdmin?: boolean;
 }
 
 export default function Sidebar({
   activePage, onNavigate, collapsed, onToggleCollapse,
-  mobileOpen, onCloseMobile, isModuleEnabled, isSuperAdmin,
+  mobileOpen, onCloseMobile, isModuleEnabled,
 }: SidebarProps) {
   const width = collapsed ? 72 : 256;
 
@@ -104,20 +98,6 @@ export default function Sidebar({
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
         {NAV_ITEMS.map(item => <NavLink key={item.page} item={item} />)}
-
-        {isSuperAdmin && (
-          <>
-            <div className={`pt-3 pb-1 ${collapsed ? 'px-1' : 'px-1'}`}>
-              <div className="border-t border-[#1e2d4a]" />
-              {!collapsed && (
-                <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-widest px-2 pt-2">
-                  Super Admin
-                </p>
-              )}
-            </div>
-            {SUPER_ADMIN_NAV.map(item => <NavLink key={item.page} item={item} />)}
-          </>
-        )}
       </nav>
 
       {/* Collapse toggle — desktop only */}
