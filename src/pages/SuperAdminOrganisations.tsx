@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Building2, Search, Archive, RotateCcw, Trash2,
-  AlertCircle, ChevronDown, Calendar, Users,
+  AlertCircle, ChevronDown, Calendar, Users, ArrowLeft,
+  Save, Upload, Mail, Phone, Globe, Hash,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import ConfirmDeleteOrgModal from '../components/ConfirmDeleteOrgModal';
@@ -24,11 +25,36 @@ interface Org {
   user_count?: number;
 }
 
+interface OrgProfile {
+  company_name: string;
+  company_address: string;
+  company_phone: string;
+  company_email: string;
+  company_website: string;
+  company_vat_number: string;
+  company_number: string;
+  logo_data_url: string;
+}
+
+const EMPTY_PROFILE: OrgProfile = {
+  company_name: '',
+  company_address: '',
+  company_phone: '',
+  company_email: '',
+  company_website: '',
+  company_vat_number: '',
+  company_number: '',
+  logo_data_url: '',
+};
+
 const STATUS_FILTERS: { label: string; value: OrgStatus | 'all' }[] = [
   { label: 'All', value: 'all' },
   { label: 'Active', value: 'active' },
   { label: 'Archived', value: 'archived' },
 ];
+
+const inputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] transition-colors';
+const labelCls = 'text-xs font-semibold text-slate-500 uppercase tracking-wider';
 
 function StatusBadge({ status }: { status: OrgStatus }) {
   if (status === 'active') {
@@ -77,6 +103,217 @@ function AccountTypeBadge({ type }: { type?: string }) {
   );
 }
 
+// ─── Company Profile Panel ─────────────────────────────────────────────────────
+
+function CompanyProfilePanel({ org, onBack }: { org: Org; onBack: () => void }) {
+  const [form, setForm] = useState<OrgProfile>(EMPTY_PROFILE);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setError(null);
+      const { data, error: err } = await supabase
+        .from('vy_settings')
+        .select('company_name,company_address,company_phone,company_email,company_website,company_vat_number,company_number,logo_data_url')
+        .eq('org_id', org.id)
+        .maybeSingle();
+      if (err) {
+        setError(err.message);
+      } else if (data) {
+        setForm({
+          company_name: data.company_name ?? '',
+          company_address: data.company_address ?? '',
+          company_phone: data.company_phone ?? '',
+          company_email: data.company_email ?? '',
+          company_website: data.company_website ?? '',
+          company_vat_number: data.company_vat_number ?? '',
+          company_number: data.company_number ?? '',
+          logo_data_url: data.logo_data_url ?? '',
+        });
+      }
+      setLoading(false);
+    }
+    load();
+  }, [org.id]);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Logo must be under 2 MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = ev => setForm(f => ({ ...f, logo_data_url: ev.target?.result as string }));
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    const { error: err } = await supabase
+      .from('vy_settings')
+      .upsert(
+        { ...form, org_id: org.id, id: org.id, updated_at: new Date().toISOString() },
+        { onConflict: 'org_id' }
+      );
+    if (err) {
+      setError(err.message);
+    } else {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    }
+    setSaving(false);
+  };
+
+  const fields: { key: keyof OrgProfile; label: string; icon?: React.ReactNode; multiline?: boolean; placeholder?: string }[] = [
+    { key: 'company_name',     label: 'Company Name',              icon: <Building2 size={13} />, placeholder: 'e.g. Acme Construction Ltd' },
+    { key: 'company_number',   label: 'Companies House Number',    icon: <Hash size={13} />,      placeholder: '12345678' },
+    { key: 'company_vat_number', label: 'VAT Number',              icon: <Hash size={13} />,      placeholder: 'GB 123 4567 89' },
+    { key: 'company_address',  label: 'Registered Address',        multiline: true,               placeholder: '14 Broad Street, London EC2M 1QS' },
+    { key: 'company_email',    label: 'Email Address',             icon: <Mail size={13} />,      placeholder: 'info@company.co.uk' },
+    { key: 'company_phone',    label: 'Telephone',                 icon: <Phone size={13} />,     placeholder: '020 7123 4567' },
+    { key: 'company_website',  label: 'Website',                   icon: <Globe size={13} />,     placeholder: 'www.company.co.uk' },
+  ];
+
+  return (
+    <div className="flex-1 min-w-0">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-200 transition-colors"
+        >
+          <ArrowLeft size={14} />
+          Organisations
+        </button>
+        <span className="text-slate-700">/</span>
+        <span className="text-sm font-semibold text-slate-300">{org.name}</span>
+        <span className="text-slate-700">/</span>
+        <span className="text-sm text-slate-500">Company Profile</span>
+      </div>
+
+      <div className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl p-6">
+        {/* Panel title */}
+        <div className="flex items-center gap-3 mb-6 pb-5 border-b border-[#1e2d4a]">
+          <div className="w-10 h-10 rounded-xl bg-orange-900/30 border border-orange-800/40 flex items-center justify-center shrink-0">
+            <Building2 size={18} className="text-[#f97316]" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-white">Company Profile</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Organisation identity used on PDFs, reports and exports.</p>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <StatusBadge status={org.status} />
+            <AccountTypeBadge type={org.account_type} />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-[#f97316] border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Logo */}
+            <div>
+              <label className={labelCls}>Company Logo</label>
+              <div className="mt-2 flex items-center gap-4 flex-wrap">
+                <div className="w-28 h-16 bg-[#0d1628] rounded-xl flex items-center justify-center border border-[#1e2d4a] overflow-hidden shrink-0">
+                  {form.logo_data_url ? (
+                    <img src={form.logo_data_url} alt="Logo" className="w-full h-full object-contain p-1.5" />
+                  ) : (
+                    <Building2 size={24} className="text-slate-700" />
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <button
+                    onClick={() => fileRef.current?.click()}
+                    className="flex items-center gap-2 px-4 py-2 border border-[#1e2d4a] rounded-lg text-sm text-slate-400 hover:bg-[#1e2d4a] hover:text-slate-200 transition-colors"
+                  >
+                    <Upload size={13} />Upload Logo
+                  </button>
+                  <p className="text-xs text-slate-600">PNG, SVG or JPEG · Max 2 MB · Recommended 240×80px</p>
+                  {form.logo_data_url && (
+                    <button
+                      onClick={() => setForm(f => ({ ...f, logo_data_url: '' }))}
+                      className="text-xs text-red-500 hover:text-red-400 transition-colors"
+                    >
+                      Remove logo
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/png,image/svg+xml,image/jpeg"
+                  className="hidden"
+                  onChange={handleLogoUpload}
+                />
+              </div>
+            </div>
+
+            {/* Fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {fields.map(({ key, label, icon, multiline, placeholder }) => (
+                <div key={key} className={multiline ? 'sm:col-span-2' : ''}>
+                  <label className={labelCls}>
+                    {icon && <span className="inline-flex items-center gap-1 align-middle">{icon} {label}</span>}
+                    {!icon && label}
+                  </label>
+                  {multiline ? (
+                    <textarea
+                      value={form[key]}
+                      onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                      rows={2}
+                      placeholder={placeholder}
+                      className={`${inputCls} resize-none`}
+                    />
+                  ) : (
+                    <input
+                      value={form[key]}
+                      onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                      placeholder={placeholder}
+                      className={inputCls}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-900/20 border border-red-800/40">
+                <AlertCircle size={13} className="text-red-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-red-300">{error}</p>
+              </div>
+            )}
+
+            {/* Save */}
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors disabled:opacity-60"
+              >
+                <Save size={14} />{saving ? 'Saving…' : 'Save Profile'}
+              </button>
+              {saved && <span className="text-xs text-emerald-400 font-semibold">Saved</span>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Organisations list ───────────────────────────────────────────────────
+
 export default function SuperAdminOrganisations() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +324,7 @@ export default function SuperAdminOrganisations() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Org | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [profileOrg, setProfileOrg] = useState<Org | null>(null);
 
   useEffect(() => { loadOrgs(); }, []);
 
@@ -114,7 +352,6 @@ export default function SuperAdminOrganisations() {
 
       const orgIds = (orgRows ?? []).map(o => o.id);
 
-      // Fetch org_settings in parallel with user counts
       const [settingsRes, userCountRes] = await Promise.all([
         supabase
           .from('org_settings')
@@ -131,7 +368,6 @@ export default function SuperAdminOrganisations() {
         (settingsRes.data ?? []).map(s => [s.org_id, s])
       );
 
-      // Count users per org
       const userCountMap = new Map<string, number>();
       for (const row of userCountRes.data ?? []) {
         userCountMap.set(row.org_id, (userCountMap.get(row.org_id) ?? 0) + 1);
@@ -166,7 +402,6 @@ export default function SuperAdminOrganisations() {
     if (error) {
       setActionError(error.message);
     } else {
-      // Also disable account access
       await supabase
         .from('org_settings')
         .update({ account_status: 'disabled', updated_by: 'super-admin:archive' })
@@ -216,6 +451,15 @@ export default function SuperAdminOrganisations() {
       await loadOrgs();
       setActionLoading(null);
     }
+  }
+
+  // Show Company Profile panel when an org is selected
+  if (profileOrg) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto flex">
+        <CompanyProfilePanel org={profileOrg} onBack={() => setProfileOrg(null)} />
+      </div>
+    );
   }
 
   const filtered = orgs.filter(o => {
@@ -320,7 +564,11 @@ export default function SuperAdminOrganisations() {
             </thead>
             <tbody className="divide-y divide-[#1e2d4a]/60">
               {filtered.map(org => (
-                <tr key={org.id} className="hover:bg-[#0d1628]/40 transition-colors">
+                <tr
+                  key={org.id}
+                  className="hover:bg-[#0d1628]/40 transition-colors cursor-pointer"
+                  onClick={() => setProfileOrg(org)}
+                >
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-[#0d1628] border border-[#1e2d4a] flex items-center justify-center shrink-0">
@@ -375,7 +623,7 @@ export default function SuperAdminOrganisations() {
                       })}
                     </span>
                   </td>
-                  <td className="px-4 py-3.5 text-right">
+                  <td className="px-4 py-3.5 text-right" onClick={e => e.stopPropagation()}>
                     <div className="relative inline-block" data-org-menu>
                       <button
                         onClick={() => setOpenMenuId(openMenuId === org.id ? null : org.id)}
@@ -391,6 +639,14 @@ export default function SuperAdminOrganisations() {
 
                       {openMenuId === org.id && (
                         <div className="absolute right-0 top-full mt-1 w-52 bg-[#0d1628] border border-[#1e2d4a] rounded-xl shadow-2xl shadow-black/50 z-50 py-1 overflow-hidden">
+                          <button
+                            onClick={() => { setProfileOrg(org); setOpenMenuId(null); }}
+                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-300 hover:bg-[#1e2d4a] transition-colors"
+                          >
+                            <Building2 size={13} />
+                            Company Profile
+                          </button>
+                          <div className="border-t border-[#1e2d4a] my-1" />
                           {org.status === 'active' && (
                             <button
                               onClick={() => archiveOrg(org)}
@@ -439,5 +695,3 @@ export default function SuperAdminOrganisations() {
     </div>
   );
 }
-
-
