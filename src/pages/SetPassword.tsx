@@ -9,7 +9,13 @@ type Stage =
   | 'done'
   | 'error';
 
-export default function SetPassword() {
+interface Props {
+  // Called after password is successfully set; used when rendered inside the
+  // AuthProvider gate (AppInner) to clear the needsPasswordSetup flag.
+  onSetupComplete?: () => void;
+}
+
+export default function SetPassword({ onSetupComplete }: Props = {}) {
   const [stage, setStage] = useState<Stage>('exchanging');
   const [exchangeError, setExchangeError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
@@ -21,10 +27,6 @@ export default function SetPassword() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-
-    // Support both delivery modes:
-    // 1. Query-param  — redirectTo flow:  ?token_hash=XXX&type=invite
-    // 2. Hash-fragment — fallback flow:   #access_token=XXX&type=invite
     const hash = window.location.hash;
     const hashParams = hash ? new URLSearchParams(hash.replace(/^#/, '')) : null;
 
@@ -43,30 +45,41 @@ export default function SetPassword() {
     const emailHint = params.get('email') ?? hashParams?.get('email');
     if (emailHint) setUserEmail(decodeURIComponent(emailHint));
 
-    if (!tokenHash) {
-      setExchangeError('This link is missing the required token. Please request a new invite.');
-      setStage('error');
-      return;
-    }
-
-    supabase.auth.signOut({ scope: 'local' }).finally(() => {
-      supabase.auth
-        .verifyOtp({ token_hash: tokenHash, type })
-        .then(({ data, error }) => {
-          if (error) {
-            setExchangeError(
-              error.message.toLowerCase().includes('expired') || error.message.toLowerCase().includes('invalid')
-                ? 'This link has expired or already been used. Please request a new invite.'
-                : error.message,
-            );
-            setStage('error');
-            return;
-          }
-          window.history.replaceState({}, '', window.location.pathname);
-          if (data.user?.email) setUserEmail(data.user.email);
+    if (tokenHash) {
+      // Token present — exchange it to establish/refresh the session.
+      // Sign out first so any stale session doesn't interfere.
+      supabase.auth.signOut({ scope: 'local' }).finally(() => {
+        supabase.auth
+          .verifyOtp({ token_hash: tokenHash, type })
+          .then(({ data, error }) => {
+            if (error) {
+              setExchangeError(
+                error.message.toLowerCase().includes('expired') || error.message.toLowerCase().includes('invalid')
+                  ? 'This link has expired or already been used. Please request a new invite.'
+                  : error.message,
+              );
+              setStage('error');
+              return;
+            }
+            window.history.replaceState({}, '', window.location.pathname);
+            if (data.user?.email) setUserEmail(data.user.email);
+            setStage('ready');
+          });
+      });
+    } else {
+      // No token in URL — session was already established by Supabase before
+      // we could redirect (invite hash was auto-exchanged). The AppInner gate
+      // sent us here via the needsPasswordSetup flag. Use the existing session.
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session?.user) {
+          if (data.session.user.email) setUserEmail(data.session.user.email);
           setStage('ready');
-        });
-    });
+        } else {
+          setExchangeError('No active session found. Please request a new invite link.');
+          setStage('error');
+        }
+      });
+    }
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -79,6 +92,8 @@ export default function SetPassword() {
     setStage('saving');
     const { error } = await supabase.auth.updateUser({ password });
     if (error) { setFormError(error.message); setStage('ready'); return; }
+
+    onSetupComplete?.();
 
     setStage('done');
     setTimeout(() => { window.location.href = '/'; }, 1800);
