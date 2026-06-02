@@ -2,6 +2,13 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Lock, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
+// Must match the key in AuthContext — cleared here on success so the gate
+// in AppInner does not loop the user back to this page after redirect.
+const NEEDS_SETUP_KEY = 'vysite_needs_password_setup';
+function clearNeedsSetupFlag() {
+  try { sessionStorage.removeItem(NEEDS_SETUP_KEY); } catch { /* */ }
+}
+
 type Stage =
   | 'exchanging'
   | 'ready'
@@ -93,10 +100,18 @@ export default function SetPassword({ onSetupComplete }: Props = {}) {
     const { error } = await supabase.auth.updateUser({ password });
     if (error) { setFormError(error.message); setStage('ready'); return; }
 
+    // Clear the needs-setup gate so AppInner does not redirect back here.
+    // This must happen before the page navigation, whether or not onSetupComplete
+    // is provided (standalone route has no prop but still needs the flag cleared).
+    clearNeedsSetupFlag();
     onSetupComplete?.();
 
     setStage('done');
-    setTimeout(() => { window.location.href = '/'; }, 1800);
+
+    // Give the success screen a moment to show, then do a full page reload to /.
+    // A full reload (rather than client-side nav) ensures AuthContext reinitialises
+    // cleanly from the refreshed session that updateUser wrote to localStorage.
+    setTimeout(() => { window.location.href = '/'; }, 1500);
   }
 
   const strength = getStrength(password);
