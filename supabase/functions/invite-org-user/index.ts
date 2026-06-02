@@ -22,34 +22,10 @@ function jsonOk(body: Record<string, unknown>) {
   });
 }
 
-// Production URL used for all invite links unless the request comes from a
-// known VYSITE domain. This is the URL that will appear in the invite email.
-const PRODUCTION_URL = "https://app.vysite.com";
-
-// Domains whose Origin header is trusted to set the invite base URL.
-// Any other Origin (Vercel previews, unknown hosts, etc.) falls back to
-// PRODUCTION_URL so the invite always points to the canonical app.
-const TRUSTED_ORIGINS: Record<string, string> = {
-  "https://app.vysite.com": "https://app.vysite.com",
-  "https://dev.vysite.com": "https://dev.vysite.com",
-  "http://localhost:5173":  "http://localhost:5173",
-  "http://localhost:3000":  "http://localhost:3000",
-};
-
-function resolveBaseUrl(req: Request): string {
-  const originHeader = req.headers.get("Origin") ?? req.headers.get("Referer");
-  if (originHeader) {
-    try {
-      const candidate = `${new URL(originHeader).protocol}//${new URL(originHeader).host}`;
-      const trusted = TRUSTED_ORIGINS[candidate];
-      if (trusted) return trusted;
-      console.warn(`[invite-org-user] Origin '${candidate}' not trusted — using production fallback`);
-    } catch { /* ignore malformed origin */ }
-  }
-  // Always fall back to production — never use SITE_URL which may point to
-  // a Vercel preview deployment or other non-canonical URL.
-  return PRODUCTION_URL;
-}
+// Invite links are sent to external recipients who must always land on the
+// public production app. dev.vysite.com and localhost are internal environments
+// behind Vercel protection — recipients cannot access them.
+const INVITE_BASE_URL = "https://app.vysite.com";
 
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -226,9 +202,8 @@ Deno.serve(async (req: Request) => {
     const orgId = callerOrgId;
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Resolve base URL — Origin header (if VYSITE domain) > SITE_URL secret > production fallback
-    const baseUrl = resolveBaseUrl(req);
-    console.log(`[invite-org-user] Base URL resolved to: ${baseUrl} (Origin: ${req.headers.get("Origin") ?? "none"})`);
+    const baseUrl = INVITE_BASE_URL;
+    console.log(`[invite-org-user] Base URL: ${baseUrl} (Origin: ${req.headers.get("Origin") ?? "none"})`);
 
     // ── 5. Check org user limit ─────────────────────────────────────────────
     const { data: orgSettings } = await adminClient
