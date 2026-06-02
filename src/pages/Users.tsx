@@ -694,7 +694,6 @@ function UserFormModal({ existing, mode = existing ? 'edit' : 'invite', onClose,
               company: form.company,
               assigned_project_ids: form.assigned_project_ids,
               permissions: Object.keys(permOverrides).length > 0 ? permOverrides : null,
-              app_url: env.appUrl,
             }),
           }
         );

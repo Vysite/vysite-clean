@@ -22,31 +22,33 @@ function jsonOk(body: Record<string, unknown>) {
   });
 }
 
-// Only accept these domains as valid invite base URLs.
-// Prevents an attacker passing a malicious Origin to phish token links.
-const ALLOWED_ORIGINS = [
-  "https://app.vysite.com",
-  "https://dev.vysite.com",
-  "http://localhost:5173",
-  "http://localhost:3000",
-];
+// Production URL used for all invite links unless the request comes from a
+// known VYSITE domain. This is the URL that will appear in the invite email.
+const PRODUCTION_URL = "https://app.vysite.com";
+
+// Domains whose Origin header is trusted to set the invite base URL.
+// Any other Origin (Vercel previews, unknown hosts, etc.) falls back to
+// PRODUCTION_URL so the invite always points to the canonical app.
+const TRUSTED_ORIGINS: Record<string, string> = {
+  "https://app.vysite.com": "https://app.vysite.com",
+  "https://dev.vysite.com": "https://dev.vysite.com",
+  "http://localhost:5173":  "http://localhost:5173",
+  "http://localhost:3000":  "http://localhost:3000",
+};
 
 function resolveBaseUrl(req: Request): string {
-  const fallback = Deno.env.get("SITE_URL")?.replace(/\/$/, "") ?? "https://app.vysite.com";
-
   const originHeader = req.headers.get("Origin") ?? req.headers.get("Referer");
   if (originHeader) {
     try {
-      const u = new URL(originHeader);
-      const candidate = `${u.protocol}//${u.host}`;
-      if (ALLOWED_ORIGINS.includes(candidate)) {
-        return candidate;
-      }
-      console.warn(`[invite-org-user] Origin '${candidate}' not in allowed list — using SITE_URL fallback`);
+      const candidate = `${new URL(originHeader).protocol}//${new URL(originHeader).host}`;
+      const trusted = TRUSTED_ORIGINS[candidate];
+      if (trusted) return trusted;
+      console.warn(`[invite-org-user] Origin '${candidate}' not trusted — using production fallback`);
     } catch { /* ignore malformed origin */ }
   }
-
-  return fallback;
+  // Always fall back to production — never use SITE_URL which may point to
+  // a Vercel preview deployment or other non-canonical URL.
+  return PRODUCTION_URL;
 }
 
 function escHtml(s: string): string {
