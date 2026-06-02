@@ -2,6 +2,26 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
+// Capture the URL at module load — BEFORE the Supabase client clears the hash
+// when it exchanges an invite/recovery token. ES module imports are evaluated
+// synchronously; the Supabase client schedules its token exchange via a
+// microtask/setTimeout, so these captures run first.
+const INITIAL_HASH = typeof window !== 'undefined' ? window.location.hash : '';
+const INITIAL_SEARCH = typeof window !== 'undefined' ? window.location.search : '';
+const INITIAL_PATHNAME = typeof window !== 'undefined' ? window.location.pathname : '';
+
+function isInviteOrRecoveryUrl(): boolean {
+  return INITIAL_HASH.includes('type=invite') ||
+    INITIAL_HASH.includes('type=recovery') ||
+    INITIAL_SEARCH.includes('type=invite') ||
+    INITIAL_SEARCH.includes('type=recovery');
+}
+
+console.log('[VYSITE] AuthContext init | path:', INITIAL_PATHNAME,
+  '| hash:', INITIAL_HASH || '(none)',
+  '| search:', INITIAL_SEARCH || '(none)',
+  '| isInviteOrRecovery:', isInviteOrRecoveryUrl());
+
 interface AuthState {
   session: Session | null;
   user: User | null;
@@ -17,8 +37,6 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-// Persisted across renders but cleared on tab close (sessionStorage).
-// Set when Supabase establishes a session from an invite or recovery link.
 const NEEDS_SETUP_KEY = 'vysite_needs_password_setup';
 
 function setNeedsSetup() {
@@ -27,7 +45,7 @@ function setNeedsSetup() {
 function clearNeedsSetup() {
   try { sessionStorage.removeItem(NEEDS_SETUP_KEY); } catch { /* */ }
 }
-function checkNeedsSetup() {
+function checkNeedsSetup(): boolean {
   try { return sessionStorage.getItem(NEEDS_SETUP_KEY) === '1'; } catch { return false; }
 }
 
@@ -36,7 +54,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
   const [orgLoading, setOrgLoading] = useState(true);
-  const [needsPasswordSetup, setNeedsPasswordSetup] = useState(checkNeedsSetup);
+
+  // Initialise from sessionStorage so the gate survives a React re-render;
+  // also pre-flag immediately if the page loaded with an invite/recovery URL.
+  const [needsPasswordSetup, setNeedsPasswordSetup] = useState<boolean>(() => {
+    if (isInviteOrRecoveryUrl()) {
+      setNeedsSetup();
+      console.log('[VYSITE] Initial state: needsPasswordSetup=true (invite/recovery URL detected)');
+      return true;
+    }
+    return checkNeedsSetup();
+  });
 
   const resolvedForRef = useRef<string | null>(null);
   const currentOrgIdRef = useRef<string | null>(null);
@@ -47,7 +75,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[VYSITE] resolveOrg() skipped — already resolved for:', userId, 'orgId:', currentOrgIdRef.current);
       return;
     }
-
     console.log('[VYSITE] resolveOrg() for user:', userId);
     setOrgLoading(true);
 
@@ -71,7 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      console.log('[VYSITE] getSession() user:', data.session?.user?.id ?? 'none');
+      console.log('[VYSITE] getSession() user:', data.session?.user?.id ?? 'none',
+        '| needsSetup:', checkNeedsSetup());
       setSession(data.session);
       setLoading(false);
       if (data.session?.user) {
@@ -82,32 +110,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
-      console.log('[VYSITE] onAuthStateChange:', event, newSession?.user?.id ?? 'none');
+      // By the time this fires, Supabase has already cleared the URL hash.
+      // Use INITIAL_HASH/INITIAL_SEARCH captured at module load instead.
+      console.log('[VYSITE] onAuthStateChange:', event,
+        '| user:', newSession?.user?.id ?? 'none',
+        '| hash now:', window.location.hash || '(cleared)',
+        '| initialHash:', INITIAL_HASH || '(none)',
+        '| needsSetup:', checkNeedsSetup());
 
-      // Detect invite/recovery sessions — Supabase fires SIGNED_IN for invites
-      // and PASSWORD_RECOVERY for password reset links. In both cases we must
-      // route the user to /set-password before they enter the dashboard.
       if (event === 'PASSWORD_RECOVERY') {
+        console.log('[VYSITE] PASSWORD_RECOVERY — flagging needs password setup');
         setNeedsSetup();
         setNeedsPasswordSetup(true);
-        console.log('[VYSITE] PASSWORD_RECOVERY — flagging needs password setup');
       } else if (event === 'SIGNED_IN') {
-        // Check URL hash at fire time — it still contains type=invite because
-        // Supabase fires onAuthStateChange synchronously during token exchange.
-        const hash = typeof window !== 'undefined' ? window.location.hash : '';
-        if (hash.includes('type=invite') || hash.includes('type=recovery')) {
+        // Supabase fires SIGNED_IN for both normal logins and invite token
+        // exchanges. Distinguish by checking the URL that was present at load.
+        if (isInviteOrRecoveryUrl()) {
+          console.log('[VYSITE] SIGNED_IN from invite/recovery URL — flagging needs password setup');
           setNeedsSetup();
           setNeedsPasswordSetup(true);
-          console.log('[VYSITE] SIGNED_IN via invite/recovery hash — flagging needs password setup');
+        } else {
+          console.log('[VYSITE] SIGNED_IN — normal login, no password setup needed');
         }
       }
 
       setSession(newSession);
 
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-        if (newSession?.user) {
-          resolveOrg(newSession.user.id);
-        }
+        if (newSession?.user) resolveOrg(newSession.user.id);
       } else if (event === 'USER_UPDATED') {
         if (newSession?.user) resolveOrg(newSession.user.id);
       } else if (event === 'SIGNED_OUT') {
@@ -140,11 +170,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setOrgLoading(false);
     clearNeedsSetup();
     setNeedsPasswordSetup(false);
-
     const { error } = await supabase.auth.signOut({ scope: 'local' });
-    if (error) {
-      console.error('[VYSITE] signOut() error:', error.message);
-    }
+    if (error) console.error('[VYSITE] signOut() error:', error.message);
   }
 
   function clearPasswordSetupFlag() {
@@ -153,7 +180,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, currentOrgId, orgLoading, needsPasswordSetup, signIn, signOut, updatePassword, clearPasswordSetupFlag }}>
+    <AuthContext.Provider value={{
+      session, user: session?.user ?? null, loading,
+      currentOrgId, orgLoading,
+      needsPasswordSetup,
+      signIn, signOut, updatePassword, clearPasswordSetupFlag,
+    }}>
       {children}
     </AuthContext.Provider>
   );

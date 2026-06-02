@@ -254,28 +254,10 @@ function OrgGatedApp({
 
 export default function App() {
   if (typeof window !== 'undefined') {
-    const path = window.location.pathname;
-
-    // /set-password is a standalone route — render before any auth/hook logic.
-    if (path === '/set-password') {
+    // /set-password is a standalone route — rendered outside AuthProvider.
+    // Handles the redirectTo path: /set-password?token_hash=XXX&type=invite
+    if (window.location.pathname === '/set-password') {
       return <SetPassword />;
-    }
-
-    // If Supabase delivers the invite/recovery token as a hash fragment
-    // (e.g. #access_token=...&type=invite), redirect to /set-password so
-    // the user is forced to set a password before entering the dashboard.
-    // Note: even though Supabase will have already established a session by
-    // the time this runs, we still redirect — the needsPasswordSetup flag in
-    // AuthContext (set via onAuthStateChange) acts as the authoritative gate.
-    const hash = window.location.hash;
-    if (hash && (hash.includes('type=invite') || hash.includes('type=recovery'))) {
-      const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
-      const tokenHash = hashParams.get('token_hash') ?? hashParams.get('access_token');
-      const type = hashParams.get('type') ?? 'invite';
-      if (tokenHash) {
-        window.location.replace(`/set-password?token_hash=${encodeURIComponent(tokenHash)}&type=${type}`);
-        return null;
-      }
     }
   }
   return <AppInner />;
@@ -317,6 +299,12 @@ function AppInner() {
   }
 
   const debugPanel = <DebugPanel auth={auth} store={store} />;
+
+  console.log('[VYSITE] AppInner render | loading:', auth.loading,
+    '| session:', auth.session ? 'set' : 'null',
+    '| needsPasswordSetup:', auth.needsPasswordSetup,
+    '| pathname:', window.location.pathname,
+    '| hash:', window.location.hash || '(none)');
 
   if (auth.loading) {
     return (

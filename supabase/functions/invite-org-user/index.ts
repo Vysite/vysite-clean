@@ -154,7 +154,22 @@ Deno.serve(async (req: Request) => {
 
     const orgId = callerOrgId;
     const normalizedEmail = email.trim().toLowerCase();
-    const redirectUrl = `${(app_url ?? "https://app.vysite.com").replace(/\/$/, "")}/set-password`;
+
+    // Derive the redirect URL from the request Origin header — this is the
+    // actual domain the browser is on, so it is always correct regardless of
+    // what VITE_APP_URL is set to in the frontend build.
+    // Fallback chain: Origin header → app_url body param → production URL.
+    const originHeader = req.headers.get("Origin") ?? req.headers.get("Referer") ?? null;
+    let baseUrl = "https://app.vysite.com";
+    if (originHeader) {
+      try {
+        const u = new URL(originHeader);
+        baseUrl = `${u.protocol}//${u.host}`;
+      } catch { /* ignore malformed origin */ }
+    } else if (app_url && typeof app_url === "string") {
+      baseUrl = app_url.replace(/\/$/, "");
+    }
+    const redirectUrl = `${baseUrl}/set-password`;
 
     console.log(`[invite-org-user] Invite params:`, {
       invitee_email: normalizedEmail,
