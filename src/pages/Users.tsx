@@ -39,7 +39,7 @@ const ROLE_COLORS: Record<string, string> = {
 const ROLE_DESCRIPTIONS: Partial<Record<PlatformUserRole, string>> = {
   Admin:                    'Full system access. Manages users, settings, and all commercial data.',
   'Commercial Lead':        'Full commercial access. View and edit all tenders, pricing, and AI tools.',
-  'Project Manager':        'Manages assigned projects. Can create RFIs, scope notes, and risks. Pricing access optional.',
+  'Project Manager':        'Manages assigned projects. Can create RFIs, qualifications, and risks. Pricing access optional.',
   'Site Manager':           'View-only on site-relevant items. Can create queries and upload site documents.',
   Engineer:                 'Technical access. Can create RFIs and upload/view technical documents.',
   'Estimator / QS':         'Full tender and commercial access. Runs AI reviews and exports clarification packs.',
@@ -78,7 +78,7 @@ const PERM_GROUPS: PermGroup[] = [
       { key: 'tender.rfi.delete',         label: 'Delete RFIs' },
       { key: 'tender.assumptions.edit',   label: 'Create/edit assumptions' },
       { key: 'tender.exclusions.edit',    label: 'Create/edit exclusions' },
-      { key: 'tender.scope_notes.edit',   label: 'Create/edit scope notes' },
+      { key: 'tender.scope_notes.edit',   label: 'Create/edit qualifications' },
       { key: 'tender.risks.edit',         label: 'Create/edit risks' },
       { key: 'tender.reclassify',         label: 'Reclassify items' },
       { key: 'tender.reconcile',          label: 'Reconcile findings' },

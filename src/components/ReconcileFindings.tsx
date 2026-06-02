@@ -56,7 +56,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   rfi:        'RFI',
   assumption: 'Assumption',
   exclusion:  'Exclusion',
-  scopeNote:  'Scope Note',
+  scopeNote:  'Qualification',
   risk:       'Risk',
 };
 
@@ -491,7 +491,7 @@ export default function ReconcileFindings({
                     { label: 'RFIs', count: (review.editedRfis ?? review.rfis).length, color: 'text-blue-400' },
                     { label: 'Assumptions', count: (review.editedAssumptions ?? review.assumptions).length, color: 'text-emerald-400' },
                     { label: 'Exclusions', count: (review.editedExclusions ?? review.exclusions).length, color: 'text-orange-400' },
-                    { label: 'Scope Notes', count: (review.editedScopeNotes ?? review.scopeNotes).length, color: 'text-teal-400' },
+                    { label: 'Qualifications', count: (review.editedScopeNotes ?? review.scopeNotes).length, color: 'text-teal-400' },
                     { label: 'Risks', count: review.risks.length, color: 'text-red-400' },
                     { label: 'Total', count: totalFindings, color: 'text-white' },
                   ].map(({ label, count, color }) => (

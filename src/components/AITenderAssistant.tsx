@@ -85,7 +85,7 @@ const TASKS: { id: AITask; label: string; description: string; icon: LucideIcon 
   { id: 'draft-rfi',           label: 'Draft RFI',            description: 'Convert rough notes into a professional RFI',            icon: HelpCircle   },
   { id: 'suggest-assumptions', label: 'Suggest Assumptions',  description: 'Generate practical pricing & programme assumptions',     icon: CheckCircle  },
   { id: 'suggest-exclusions',  label: 'Suggest Exclusions',   description: 'Identify items to exclude from scope and price',         icon: AlertTriangle},
-  { id: 'draft-scope-note',    label: 'Draft Scope Note',     description: 'Convert rough wording into a professional scope note',   icon: FileText     },
+  { id: 'draft-scope-note',    label: 'Draft Qualification',     description: 'Convert rough wording into a professional qualification',   icon: FileText     },
   { id: 'identify-risks',      label: 'Identify Risks',       description: 'Review notes and flag commercial & programme risks',     icon: AlertTriangle},
 ];
 
@@ -428,7 +428,7 @@ function RisksOutput({ risks, convertedIndices, onConvert }: {
   return (
     <div className="space-y-2.5">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-xs text-slate-500">Review identified risks. Use "Convert" to create an RFI, Assumption, Exclusion or Scope Note.</p>
+        <p className="text-xs text-slate-500">Review identified risks. Use "Convert" to create an RFI, Assumption, Exclusion or Qualification.</p>
         {convertedIndices.length > 0 && (
           <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-900/30 border border-emerald-800/40 px-2 py-0.5 rounded-full shrink-0">
             {convertedIndices.length} converted
@@ -463,8 +463,8 @@ function ScopeNoteOutput({ scopeNote, onSave }: { scopeNote: string; onSave: (te
   const [edited, setEdited] = useState(scopeNote);
   return (
     <div className="space-y-3">
-      <Field label="Scope Note" value={edited} onChange={setEdited} rows={5} />
-      <SaveBar label="Save to Scope Notes" onSave={() => onSave(edited)} />
+      <Field label="Qualification" value={edited} onChange={setEdited} rows={5} />
+      <SaveBar label="Save to Qualifications" onSave={() => onSave(edited)} />
     </div>
   );
 }
@@ -508,7 +508,7 @@ function DocumentReviewOutput({
     { id: 'rfis' as ReviewTab,        label: 'RFIs',        count: rfis.length,        saved: review.savedRfiIndices.length,         color: 'blue'    },
     { id: 'assumptions' as ReviewTab, label: 'Assumptions',  count: assumptions.length,  saved: review.savedAssumptionIndices.length,  color: 'emerald' },
     { id: 'exclusions' as ReviewTab,  label: 'Exclusions',   count: exclusions.length,   saved: review.savedExclusionIndices.length,   color: 'orange'  },
-    { id: 'scopeNotes' as ReviewTab,  label: 'Scope Notes',  count: scopeNotes.length,   saved: review.savedScopeNoteIndices.length,   color: 'teal'    },
+    { id: 'scopeNotes' as ReviewTab,  label: 'Qualifications',   count: scopeNotes.length,   saved: review.savedScopeNoteIndices.length,   color: 'teal'    },
     { id: 'risks' as ReviewTab,       label: 'Risks',        count: review.risks.length, saved: review.convertedRiskIndices.length,    color: 'red'     },
   ] as { id: ReviewTab; label: string; count: number; saved: number; color: string }[]).filter(t => t.count > 0);
 
@@ -607,8 +607,8 @@ function DocumentReviewOutput({
         {activeTab === 'scopeNotes' && (
           <ListOutput
             items={scopeNotes}
-            category="Scope Notes"
-            singularLabel="Scope Note"
+            category="Qualifications"
+            singularLabel="Qualification"
             savedIndices={review.savedScopeNoteIndices}
             onSave={(indices, texts) => onSaveList(indices, texts, 'Scope Note')}
             onEditItem={(i, text) => onEditListItem('scopeNotes', i, text)}
@@ -1868,7 +1868,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
               )}
 
               <p className="text-[10px] text-slate-600 mt-2">
-                Supported: PDF (native), plain text, Word documents. AI will extract commercial information and organise it into RFIs, Assumptions, Exclusions, Scope Notes and Risks for your review.
+                Supported: PDF (native), plain text, Word documents. AI will extract commercial information and organise it into RFIs, Assumptions, Exclusions, Qualifications and Risks for your review.
               </p>
             </div>
           )}
@@ -1891,7 +1891,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                 {selectedTask === 'draft-rfi' ? 'Your Rough Notes' :
                  selectedTask === 'identify-risks' ? 'Tender Notes / Scope Text' :
-                 selectedTask === 'draft-scope-note' ? 'Rough Scope Wording' : 'Tender Context'}
+                 selectedTask === 'draft-scope-note' ? 'Rough Qualification Wording' : 'Tender Context'}
               </p>
               <textarea rows={5} value={context} onChange={e => setContext(e.target.value)}
                 placeholder={inputPlaceholders[selectedTask]}

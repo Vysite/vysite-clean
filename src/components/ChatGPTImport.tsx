@@ -118,17 +118,17 @@ function parseImportFile(text: string): { rows: ImportRow[]; unknownHeaders: str
 // ─── Category → tender tab mapping ───────────────────────────────────────────
 
 const CATEGORY_TAB_MAP: Record<string, string> = {
-  'Scope Note':             'Scope Notes',
+  'Scope Note':             'Qualifications',
   'Assumption':             'Assumptions',
   'Exclusion':              'Exclusions',
   'RFI':                    'RFIs',
   'Risk':                   'Risks',
-  'Clarification':          'Scope Notes',
-  'Subcontractor':          'Scope Notes',
-  'Commercial Note':        'Scope Notes',
-  'Design Responsibility':  'Scope Notes',
-  'Programme / Logistics':  'Scope Notes',
-  'Compliance Requirement': 'Scope Notes',
+  'Clarification':          'Qualifications',
+  'Subcontractor':          'Qualifications',
+  'Commercial Note':        'Qualifications',
+  'Design Responsibility':  'Qualifications',
+  'Programme / Logistics':  'Qualifications',
+  'Compliance Requirement': 'Qualifications',
 };
 
 const categoryBadge: Record<string, string> = {
@@ -212,7 +212,7 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
 
     rows.filter(r => r._selected).forEach((r, _i) => {
       const cat = resolveCategory(r, rows.indexOf(r));
-      const tab = CATEGORY_TAB_MAP[cat] ?? 'Scope Notes';
+      const tab = CATEGORY_TAB_MAP[cat] ?? 'Qualifications';
       const text = r.suggestedWording || r.finding || r.title;
 
       if (cat === 'RFI') {

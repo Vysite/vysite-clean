@@ -93,13 +93,13 @@ function renderMentions(text: string) {
 
 // ─── Tab component ────────────────────────────────────────────────────────────
 
-const TABS = ['Overview', 'Estimating', 'Scope Notes', 'Assumptions', 'Exclusions', 'Discussion', 'Subcontractors', 'RFIs', 'Documents', 'Contract Review', 'Outcome'] as const;
+const TABS = ['Overview', 'Estimating', 'Qualifications', 'Assumptions', 'Exclusions', 'Discussion', 'Subcontractors', 'RFIs', 'Documents', 'Contract Review', 'Outcome'] as const;
 type Tab = typeof TABS[number];
 
 const tabIcons: Record<Tab, LucideIcon> = {
   Overview:          TrendingUp,
   Estimating:        Calculator,
-  'Scope Notes':     FileText,
+  'Qualifications':  FileText,
   Assumptions:       CheckCircle,
   Exclusions:        AlertTriangle,
   Discussion:        MessageSquare,
@@ -1372,7 +1372,7 @@ function EditTenderModal({ tender, onClose, onSave, onDelete }: EditTenderModalP
               <span className="font-semibold text-slate-200">{tender.name}</span>
             </p>
             <p className="text-sm text-slate-500 text-center mb-6">
-              This permanently removes the tender from the system. All associated RFIs, scope notes, and documents will also be deleted.
+              This permanently removes the tender from the system. All associated RFIs, qualifications, and documents will also be deleted.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors">Cancel</button>
@@ -1519,7 +1519,7 @@ function EditScopeEntryModal({ entry, onClose, onSave }: EditScopeEntryModalProp
   const inputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600';
   const labelCls = 'text-xs font-semibold text-slate-500 uppercase tracking-wider';
 
-  const CATEGORIES = ['Assumptions', 'Exclusions', 'Scope Note'];
+  const CATEGORIES = ['Assumptions', 'Exclusions', 'Qualification'];
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -1546,7 +1546,7 @@ function EditScopeEntryModal({ entry, onClose, onSave }: EditScopeEntryModalProp
     <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-lg my-4">
         <div className="flex items-center justify-between p-5 border-b border-[#1e2d4a]">
-          <h2 className="text-base font-bold text-white">Edit {entry.category === 'Scope Note' ? 'Scope Note' : entry.category.slice(0, -1)}</h2>
+          <h2 className="text-base font-bold text-white">Edit {entry.category === 'Scope Note' ? 'Qualification' : entry.category.slice(0, -1)}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a] transition-colors"><X size={16} /></button>
         </div>
         <form onSubmit={handleSave} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
@@ -1631,7 +1631,7 @@ function EditScopeEntryModal({ entry, onClose, onSave }: EditScopeEntryModalProp
   );
 }
 
-// ─── Scope Entry Tab (Assumptions / Exclusions / Scope Notes) ─────────────────
+// ─── Scope Entry Tab (Assumptions / Exclusions / Qualifications) ──────────────
 
 function ScopeEntryTab({ category, entries, sectionCls, onAdd, onEdit, onDelete }: {
   category: string;
@@ -1648,7 +1648,7 @@ function ScopeEntryTab({ category, entries, sectionCls, onAdd, onEdit, onDelete 
 
   const singularLabel = category === 'Assumptions' ? 'Assumption'
     : category === 'Exclusions' ? 'Exclusion'
-    : 'Scope Note';
+    : 'Qualification';
 
   const emptyIcon = category === 'Assumptions'
     ? <CheckCircle size={32} className="text-slate-700 mx-auto mb-2" />
@@ -1660,7 +1660,7 @@ function ScopeEntryTab({ category, entries, sectionCls, onAdd, onEdit, onDelete 
     ? 'State a pricing or programme assumption...'
     : category === 'Exclusions'
     ? 'State what is excluded from the tender scope or price...'
-    : 'Record a scope note, commercial observation or key decision...';
+    : 'Record a qualification, commercial observation or key decision...';
 
   function handleAdd() {
     if (!text.trim()) return;
@@ -1749,7 +1749,7 @@ const EXPORT_OPTIONS: { id: ExportType; label: string; icon: string; description
   { id: 'rfi',          label: 'RFI Schedule',          icon: '?', description: 'All tender RFIs with status and details' },
   { id: 'assumptions',  label: 'Assumptions Schedule',  icon: '✓', description: 'All pricing and programme assumptions' },
   { id: 'exclusions',   label: 'Exclusions Schedule',   icon: '✕', description: 'All exclusions from scope and price' },
-  { id: 'scope-notes',  label: 'Scope Notes Schedule',  icon: '≡', description: 'All scope notes and commercial observations' },
+  { id: 'scope-notes',  label: 'Qualifications Schedule',  icon: '≡', description: 'All qualifications and commercial observations' },
 ];
 
 function TenderExportModal({ tender, companyName, onClose }: TenderExportModalProps) {
@@ -1824,9 +1824,10 @@ function TenderExportModal({ tender, companyName, onClose }: TenderExportModalPr
         tableHTML = `<table><thead><tr><th>Ref</th><th>Subject</th><th>Question / Detail</th><th>Assigned To</th><th>Date Raised</th><th>Status</th></tr></thead><tbody>${rfiRows}</tbody></table>`;
       } else {
         const cat = opt.id === 'assumptions' ? 'Assumptions' : opt.id === 'exclusions' ? 'Exclusions' : 'Scope Note';
+        const catLabel = opt.id === 'assumptions' ? 'Assumptions' : opt.id === 'exclusions' ? 'Exclusions' : 'Qualifications';
         const entries = (tender.scopeEntries ?? []).filter((e: TenderScopeEntry) => e.category === cat);
         const entryRows = entries.length === 0
-          ? `<tr><td colspan="3" style="padding:16px;text-align:center;color:#94a3b8;font-style:italic">No ${cat.toLowerCase()}s recorded for this tender.</td></tr>`
+          ? `<tr><td colspan="3" style="padding:16px;text-align:center;color:#94a3b8;font-style:italic">No ${catLabel.toLowerCase()} recorded for this tender.</td></tr>`
           : entries.map((e: TenderScopeEntry, i: number) => {
               const srcParts = [
                 e.sourceDocument ? `Doc: ${e.sourceDocument}` : '',
@@ -2671,8 +2672,8 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
         <button onClick={() => setActiveTab('Exclusions')} className={quickBtnCls}>
           <Plus size={13} />Add Exclusion
         </button>
-        <button onClick={() => setActiveTab('Scope Notes')} className={quickBtnCls}>
-          <Plus size={13} />Add Scope Note
+        <button onClick={() => setActiveTab('Qualifications')} className={quickBtnCls}>
+          <Plus size={13} />Add Qualification
         </button>
         <button onClick={() => setActiveTab('Discussion')} className={quickBtnCls}>
           <MessageSquare size={13} />Discussion
@@ -2685,7 +2686,7 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
           'RFIs':          tender.rfis.length,
           'Assumptions':   scopeEntries.filter(e => e.category === 'Assumptions').length,
           'Exclusions':    scopeEntries.filter(e => e.category === 'Exclusions').length,
-          'Scope Notes':   scopeEntries.filter(e => e.category === 'Scope Note').length,
+          'Qualifications':   scopeEntries.filter(e => e.category === 'Scope Note').length,
           'Discussion':    tender.comments.length,
           'Documents':     tender.documents.length,
           'Subcontractors': tender.subcontractors.length,
@@ -2851,8 +2852,8 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
         <EstimatingTab tender={tender} onUpdate={onUpdate} />
       )}
 
-      {/* ── SCOPE NOTES ── */}
-      {activeTab === 'Scope Notes' && (
+      {/* ── QUALIFICATIONS ── */}
+      {activeTab === 'Qualifications' && (
         <ScopeEntryTab
           category="Scope Note"
           entries={scopeEntries}

@@ -100,7 +100,7 @@ function callTypeName(ct: string): string {
     'draft-rfi':           'Draft RFI',
     'suggest-assumptions': 'Suggestions',
     'suggest-exclusions':  'Exclusions',
-    'draft-scope-note':    'Scope Note',
+    'draft-scope-note':    'Qualification',
     'identify-risks':      'Risk Identification',
   };
   return map[ct] ?? ct;
