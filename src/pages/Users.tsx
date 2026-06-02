@@ -3,8 +3,12 @@ import {
   Plus, Mail, Building2, X, User, Calendar, CheckSquare, Shield,
   Search, CreditCard as Edit2, Trash2, ChevronDown, Eye,
   Lock, Unlock, Info, ChevronRight, ChevronUp, FlaskConical, AlertTriangle,
+  Loader,
 } from 'lucide-react';
 import { useAppStore } from '../lib/StoreContext';
+import { useAuth } from '../lib/AuthContext';
+import { env } from '../lib/env';
+import { supabase } from '../lib/supabase';
 import type { DBPlatformUser, PlatformUserRole, PermissionKey, UserPermissions } from '../lib/store';
 import { ROLE_PERMISSIONS, resolvePermissions } from '../lib/store';
 
@@ -606,10 +610,12 @@ interface UserFormModalProps {
   mode?: 'invite' | 'add' | 'edit';
   onClose: () => void;
   onSave: (u: DBPlatformUser) => void;
+  onInviteSuccess?: (u: DBPlatformUser, authUserId: string) => void;
 }
 
-function UserFormModal({ existing, mode = existing ? 'edit' : 'invite', onClose, onSave }: UserFormModalProps) {
+function UserFormModal({ existing, mode = existing ? 'edit' : 'invite', onClose, onSave, onInviteSuccess }: UserFormModalProps) {
   const store = useAppStore();
+  const auth = useAuth();
   const isEdit = mode === 'edit';
   const [activeTab, setActiveTab] = useState<FormTab>('details');
 
@@ -623,6 +629,8 @@ function UserFormModal({ existing, mode = existing ? 'edit' : 'invite', onClose,
   });
   const [permOverrides, setPermOverrides] = useState<UserPermissions>(existing?.permissions ?? {});
   const [sent, setSent] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const inputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600';
   const labelCls = 'text-xs font-semibold text-slate-500 uppercase tracking-wider';
@@ -636,14 +644,14 @@ function UserFormModal({ existing, mode = existing ? 'edit' : 'invite', onClose,
     }));
   };
 
-  // Reset overrides when role changes (keep custom if editing)
   function handleRoleChange(role: PlatformUserRole) {
     setForm(f => ({ ...f, role }));
     if (!isEdit) setPermOverrides({});
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setInviteError(null);
     const initials = form.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
     const user: DBPlatformUser = {
       id: existing?.id ?? `pu-${Date.now()}`,
@@ -659,13 +667,64 @@ function UserFormModal({ existing, mode = existing ? 'edit' : 'invite', onClose,
       org_id: existing?.org_id ?? null,
       auth_user_id: existing?.auth_user_id ?? null,
     };
-    onSave(user);
+
     if (mode === 'invite') {
-      setSent(true);
-      setTimeout(() => onClose(), 2000);
-    } else {
-      onClose();
+      setInviting(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token ?? auth.session?.access_token;
+        if (!token) {
+          setInviteError('You must be logged in to invite users.');
+          setInviting(false);
+          return;
+        }
+
+        const res = await fetch(
+          `${env.supabaseUrl}/functions/v1/invite-org-user`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: form.email.trim().toLowerCase(),
+              name: form.name.trim(),
+              role: form.role,
+              company: form.company,
+              assigned_project_ids: form.assigned_project_ids,
+              permissions: Object.keys(permOverrides).length > 0 ? permOverrides : null,
+              app_url: env.appUrl,
+            }),
+          }
+        );
+
+        const json = await res.json();
+
+        if (!res.ok) {
+          setInviteError(json.error ?? 'Invite failed. Please try again.');
+          setInviting(false);
+          return;
+        }
+
+        // Invite succeeded — notify parent with the created user data
+        const invitedUser: DBPlatformUser = {
+          ...user,
+          id: `pu-${json.auth_user_id}`,
+          auth_user_id: json.auth_user_id,
+        };
+        onInviteSuccess?.(invitedUser, json.auth_user_id);
+        setSent(true);
+        setTimeout(() => onClose(), 3000);
+      } catch {
+        setInviteError('Network error — invite not sent. Please check your connection and try again.');
+        setInviting(false);
+      }
+      return;
     }
+
+    onSave(user);
+    onClose();
   };
 
   const overrideCount = Object.keys(permOverrides).length;
@@ -695,6 +754,7 @@ function UserFormModal({ existing, mode = existing ? 'edit' : 'invite', onClose,
             </div>
             <p className="text-white font-bold mb-1">Invitation Sent</p>
             <p className="text-sm text-slate-400">An invitation email has been sent to <span className="text-[#f97316]">{form.email}</span></p>
+            <p className="text-xs text-slate-600 mt-2">They will receive a link to create their password and access VYSITE.</p>
           </div>
         ) : (
           <>
@@ -817,11 +877,24 @@ function UserFormModal({ existing, mode = existing ? 'edit' : 'invite', onClose,
               )}
 
               {/* Footer */}
-              <div className="flex gap-3 p-5 border-t border-[#1e2d4a] shrink-0">
-                <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors">Cancel</button>
-                <button type="submit" className="flex items-center justify-center gap-2 flex-1 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">
-                  {mode === 'edit' ? <><Edit2 size={14} />Save Changes</> : mode === 'add' ? <><Plus size={14} />Add User</> : <><Mail size={14} />Send Invitation</>}
-                </button>
+              <div className="px-5 pb-5 space-y-3">
+                {inviteError && (
+                  <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg bg-red-900/20 border border-red-800/40">
+                    <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-300 leading-relaxed">{inviteError}</p>
+                  </div>
+                )}
+                <div className="flex gap-3 border-t border-[#1e2d4a] pt-4">
+                  <button type="button" onClick={onClose} disabled={inviting} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors disabled:opacity-50">Cancel</button>
+                  <button type="submit" disabled={inviting} className="flex items-center justify-center gap-2 flex-1 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors disabled:opacity-60">
+                    {inviting
+                      ? <><Loader size={14} className="animate-spin" />Sending…</>
+                      : mode === 'edit' ? <><Edit2 size={14} />Save Changes</>
+                      : mode === 'add' ? <><Plus size={14} />Add User</>
+                      : <><Mail size={14} />Send Invitation</>
+                    }
+                  </button>
+                </div>
               </div>
             </form>
           </>
@@ -1159,7 +1232,8 @@ export default function Users() {
         <UserFormModal
           mode="invite"
           onClose={() => setShowInvite(false)}
-          onSave={async (u) => { await handleSaveUser(u); }}
+          onSave={() => {/* not used for invite mode */}}
+          onInviteSuccess={async (u) => { await store.addPlatformUser(u); }}
         />
       )}
       {showAdd && (
