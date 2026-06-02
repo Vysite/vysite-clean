@@ -263,10 +263,26 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 9. Insert user_orgs row to link auth user → org ─────────────────────
+    // user_orgs.role constraint: platform_admin | company_owner | manager | user | viewer
+    // Map from the VYSITE platform display role to the constrained user_orgs role.
+    const USER_ORGS_ROLE_MAP: Record<string, string> = {
+      "Admin": "company_owner",
+      "Commercial Lead": "manager",
+      "Project Manager": "manager",
+      "Site Manager": "manager",
+      "Engineer": "manager",
+      "Estimator / QS": "manager",
+      "Client": "viewer",
+      "Client User": "viewer",
+      "External / Subcontractor": "viewer",
+    };
+    const userOrgRole = USER_ORGS_ROLE_MAP[role] ?? "user";
+    console.log(`[invite-org-user] user_orgs role mapping: "${role}" -> "${userOrgRole}"`);
+
     const { error: userOrgErr } = await adminClient
       .from("user_orgs")
       .upsert(
-        { user_id: authUserId, org_id: orgId, role: "member", status: "active" },
+        { user_id: authUserId, org_id: orgId, role: userOrgRole, status: "active" },
         { onConflict: "user_id,org_id" }
       );
 
