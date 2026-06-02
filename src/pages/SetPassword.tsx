@@ -21,9 +21,26 @@ export default function SetPassword() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const tokenHash = params.get('token_hash');
-    const type = (params.get('type') ?? 'recovery') as 'recovery' | 'invite';
-    const emailHint = params.get('email');
+
+    // Support both delivery modes:
+    // 1. Query-param  — redirectTo flow:  ?token_hash=XXX&type=invite
+    // 2. Hash-fragment — fallback flow:   #access_token=XXX&type=invite
+    const hash = window.location.hash;
+    const hashParams = hash ? new URLSearchParams(hash.replace(/^#/, '')) : null;
+
+    const tokenHash =
+      params.get('token_hash') ??
+      hashParams?.get('token_hash') ??
+      hashParams?.get('access_token') ??
+      null;
+
+    const type = (
+      params.get('type') ??
+      hashParams?.get('type') ??
+      'invite'
+    ) as 'recovery' | 'invite';
+
+    const emailHint = params.get('email') ?? hashParams?.get('email');
     if (emailHint) setUserEmail(decodeURIComponent(emailHint));
 
     if (!tokenHash) {

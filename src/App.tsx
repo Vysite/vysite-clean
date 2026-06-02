@@ -253,10 +253,30 @@ function OrgGatedApp({
 }
 
 export default function App() {
-  // /set-password is a standalone route rendered before any auth/hook logic.
-  // This wrapper exists so hooks inside AppInner are not called conditionally.
-  if (typeof window !== 'undefined' && window.location.pathname === '/set-password') {
-    return <SetPassword />;
+  if (typeof window !== 'undefined') {
+    const path = window.location.pathname;
+
+    // If Supabase delivers the invite/recovery token as a hash fragment
+    // (e.g. #access_token=...&type=invite), intercept it here before the
+    // Supabase client auto-exchanges it and silently creates a session that
+    // bypasses the password-setup screen.
+    const hash = window.location.hash;
+    if (hash && (hash.includes('type=invite') || hash.includes('type=recovery'))) {
+      // Parse the hash into query params and redirect to /set-password
+      // carrying them as query params so SetPassword.tsx can handle them.
+      const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
+      const tokenHash = hashParams.get('token_hash') ?? hashParams.get('access_token');
+      const type = hashParams.get('type') ?? 'invite';
+      if (tokenHash && path !== '/set-password') {
+        window.location.replace(`/set-password?token_hash=${encodeURIComponent(tokenHash)}&type=${type}`);
+        return null;
+      }
+    }
+
+    // /set-password is a standalone route — render before any auth/hook logic.
+    if (path === '/set-password') {
+      return <SetPassword />;
+    }
   }
   return <AppInner />;
 }
