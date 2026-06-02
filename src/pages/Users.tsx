@@ -974,7 +974,27 @@ export default function Users() {
 
   const handleDeleteUser = async () => {
     if (!deleteTarget) return;
-    await store.removePlatformUser(deleteTarget.id);
+    const session = (await supabase.auth.getSession()).data.session;
+    const res = await fetch(
+      `${env.supabaseUrl}/functions/v1/remove-org-user`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token ?? ''}`,
+          'Apikey': env.supabaseAnonKey,
+        },
+        body: JSON.stringify({ platform_user_id: deleteTarget.id }),
+      }
+    );
+    if (res.ok) {
+      // Optimistically remove from local store view
+      store.removePlatformUser(deleteTarget.id);
+    } else {
+      const body = await res.json().catch(() => ({}));
+      console.error('[Users] remove-org-user failed:', body);
+      alert(`Failed to delete user: ${body.error ?? res.statusText}`);
+    }
     setDeleteTarget(null);
   };
 
@@ -982,9 +1002,27 @@ export default function Users() {
 
   const handleDeleteAllTestUsers = async () => {
     setDeletingTests(true);
+    const session = (await supabase.auth.getSession()).data.session;
     const testUsers = platformUsers.filter(isTestUser);
     for (const u of testUsers) {
-      await store.removePlatformUser(u.id);
+      const res = await fetch(
+        `${env.supabaseUrl}/functions/v1/remove-org-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token ?? ''}`,
+            'Apikey': env.supabaseAnonKey,
+          },
+          body: JSON.stringify({ platform_user_id: u.id }),
+        }
+      );
+      if (res.ok) {
+        store.removePlatformUser(u.id);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        console.error('[Users] remove-org-user failed for test user:', u.email, body);
+      }
     }
     setDeletingTests(false);
     setShowDeleteTestConfirm(false);

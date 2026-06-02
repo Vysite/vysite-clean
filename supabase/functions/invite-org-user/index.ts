@@ -198,44 +198,61 @@ Deno.serve(async (req: Request) => {
       return jsonError("This email address is already a member of your organisation", 409);
     }
 
-    // ── 7. Send the Supabase invite email ───────────────────────────────────
-    const { data: inviteData, error: inviteErr } = await adminClient.auth.admin.inviteUserByEmail(
-      normalizedEmail,
-      {
-        redirectTo: redirectUrl,
-        data: {
-          invited_to_org: orgId,
-          invited_name: name.trim(),
-        },
-      }
-    );
+    // ── 7. Resolve any pre-existing auth user for this email ───────────────
+    // Look up before calling inviteUserByEmail so we know exactly what state
+    // the account is in. Supabase's inviteUserByEmail behaves differently for:
+    //   - New user (no auth account):    creates account + sends invite email
+    //   - Unconfirmed invited user:      resends invite email
+    //   - Confirmed user (has password): silently succeeds but sends NO email
+    // We must handle the confirmed case ourselves using resetPasswordForEmail.
+    const { data: userList } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+    const existingAuthUser = userList?.users?.find(
+      (u: { email?: string }) => u.email?.toLowerCase() === normalizedEmail
+    ) ?? null;
 
     let authUserId: string;
+    let emailMethod: string;
 
-    if (inviteErr) {
-      console.error(`[invite-org-user] inviteUserByEmail error:`, inviteErr);
+    if (existingAuthUser && existingAuthUser.confirmed_at) {
+      // Confirmed user: inviteUserByEmail will NOT send an email.
+      // Use resetPasswordForEmail which always sends a fresh email with a
+      // link the user can use to set a new password on /set-password.
+      console.log(`[invite-org-user] Existing confirmed user detected (${existingAuthUser.id}) — using resetPasswordForEmail`);
 
-      // Email already has an auth account — reuse existing auth user id
-      if (
-        inviteErr.message?.includes("already been registered") ||
-        (inviteErr as { code?: string }).code === "email_exists"
-      ) {
-        const { data: userList } = await adminClient.auth.admin.listUsers();
-        const existingAuthUser = userList?.users?.find(
-          (u: { email?: string }) => u.email?.toLowerCase() === normalizedEmail
-        );
-        if (!existingAuthUser) {
-          return jsonError(`Invite failed: ${inviteErr.message}`, 500);
+      const { error: resetErr } = await adminClient.auth.resetPasswordForEmail(
+        normalizedEmail,
+        { redirectTo: redirectUrl }
+      );
+
+      if (resetErr) {
+        return jsonError(`Failed to send password setup email: ${resetErr.message}`, 500);
+      }
+
+      authUserId = existingAuthUser.id;
+      emailMethod = "resetPasswordForEmail";
+    } else {
+      // New or previously-invited-but-never-confirmed user: standard invite.
+      const { data: inviteData, error: inviteErr } = await adminClient.auth.admin.inviteUserByEmail(
+        normalizedEmail,
+        {
+          redirectTo: redirectUrl,
+          data: {
+            invited_to_org: orgId,
+            invited_name: name.trim(),
+          },
         }
-        authUserId = existingAuthUser.id;
-        console.log(`[invite-org-user] Reusing existing auth user: ${authUserId}`);
-      } else {
+      );
+
+      if (inviteErr) {
+        console.error(`[invite-org-user] inviteUserByEmail error:`, inviteErr);
         return jsonError(`Invite failed: ${inviteErr.message}`, 500);
       }
-    } else {
+
       authUserId = inviteData.user.id;
-      console.log(`[invite-org-user] Auth user created/invited: ${authUserId}`);
+      emailMethod = "inviteUserByEmail";
     }
+
+    console.log(`[invite-org-user] Email sent via ${emailMethod} to ${normalizedEmail}, auth_user_id=${authUserId}`);
 
     // ── 8. Upsert the vy_platform_users row ─────────────────────────────────
     const initials = name.trim().split(" ").map((w: string) => w[0] ?? "").join("").toUpperCase().slice(0, 2);
