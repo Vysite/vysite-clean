@@ -78,11 +78,12 @@ async function sendViaResend(
   subject: string,
   html: string,
   text: string,
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string }> {
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!RESEND_API_KEY) {
-    console.log(`[provision-trial-org] No RESEND_API_KEY — skipping email to ${to}: ${subject}`);
-    return;
+    const msg = `No RESEND_API_KEY configured`;
+    console.error(`[provision-trial-org] ${msg}`);
+    return { ok: false, error: msg };
   }
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -100,11 +101,15 @@ async function sendViaResend(
       }),
     });
     if (!res.ok) {
-      const err = await res.text();
-      console.error(`[provision-trial-org] Resend error for ${to}:`, err);
+      const errText = await res.text();
+      console.error(`[provision-trial-org] Resend error for ${to}:`, errText);
+      return { ok: false, error: errText };
     }
+    return { ok: true };
   } catch (e) {
-    console.error(`[provision-trial-org] Resend fetch failed:`, e);
+    const msg = String(e);
+    console.error(`[provision-trial-org] Resend fetch failed:`, msg);
+    return { ok: false, error: msg };
   }
 }
 
@@ -114,7 +119,7 @@ async function sendOnboardingEmail(
   adminEmail: string,
   companyName: string,
   trialExpiresAt: string,
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string }> {
   const firstName = adminName.split(/\s+/)[0];
   const expiryFormatted = new Date(trialExpiresAt).toLocaleDateString("en-GB", {
     day: "numeric", month: "long", year: "numeric",
@@ -192,7 +197,7 @@ async function sendOnboardingEmail(
     `Questions? Email hello@vysite.com`,
   ].join("\n");
 
-  await sendViaResend(adminEmail, `Your VYSITE trial is ready — set your password`, html, text);
+  return sendViaResend(adminEmail, `Your VYSITE trial is ready — set your password`, html, text);
 }
 
 async function sendNotificationEmail(
@@ -398,51 +403,35 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 8. Create auth user and build a direct /set-password link ───────────────
-    // Strategy: create the user, generate a recovery token, then extract the
-    // token_hash from the generated link and build our own direct URL to
-    // /set-password?token_hash=XXX&type=recovery
-    //
-    // This bypasses Supabase's redirect chain entirely — no redirect allowlist,
-    // no PKCE code exchange, no existing-session interference. The SetPassword
-    // page calls supabase.auth.verifyOtp({ token_hash, type: 'recovery' }) to
-    // exchange the token and get a session, then calls updateUser({ password }).
-    const { data: newUserData, error: createUserErr } = await adminClient.auth.admin.createUser({
+    // ── 8. Generate invite link using the same proven mechanism as invite-org-user ──
+    // generateLink with type 'invite' creates the auth user (or re-uses an
+    // existing unconfirmed one) and returns a hashed_token we build into our
+    // own direct URL to /set-password — no redirect allowlist, no PKCE, no
+    // existing-session interference. Mirrors invite-org-user exactly.
+    const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
+      type: "invite",
       email: adminEmail,
-      email_confirm: true,
-      user_metadata: {
-        trial_org_id: org.id,
-        full_name: adminName,
+      options: {
+        data: {
+          trial_org_id: org.id,
+          full_name: adminName,
+        },
       },
     });
 
-    if (createUserErr || !newUserData?.user) {
+    if (linkErr || !linkData?.properties?.hashed_token) {
       await adminClient.from("org_settings").delete().eq("org_id", org.id);
       await adminClient.from("organisations").delete().eq("id", org.id);
-      return new Response(JSON.stringify({ error: `Failed to create user account: ${createUserErr?.message}` }), {
+      return new Response(JSON.stringify({ error: `Failed to generate invite link: ${linkErr?.message ?? "no token returned"}` }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const authUserId = newUserData.user.id;
+    const token = linkData.properties.hashed_token;
+    const inviteUrl = `${INVITE_BASE_URL}/set-password?token_hash=${encodeURIComponent(token)}&type=invite`;
+    const authUserId = linkData.user.id;
 
-    // generateLink produces a hashed_token we use to build our own direct URL.
-    // This bypasses Supabase's redirect chain and allow-list entirely.
-    const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
-      type: "recovery",
-      email: adminEmail,
-    });
-
-    let inviteUrl = `${INVITE_BASE_URL}/set-password`;
-
-    if (linkErr || !linkData?.properties?.hashed_token) {
-      console.error("[provision-trial-org] generateLink failed:", linkErr?.message);
-    } else {
-      const token = linkData.properties.hashed_token;
-      inviteUrl = `${INVITE_BASE_URL}/set-password?token_hash=${encodeURIComponent(token)}&type=recovery&email=${encodeURIComponent(adminEmail)}`;
-    }
-
-    console.log(`[provision-trial-org] Invite URL: ${inviteUrl}`);
+    console.log(`[provision-trial-org] Invite URL: ${inviteUrl} | auth_user_id=${authUserId}`);
 
     // ── 9. Create vy_platform_users row ───────────────────────────────────────
     const { error: puErr } = await adminClient
@@ -491,11 +480,26 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 11. Send onboarding email to trial user + notification to hello@vysite.com
-    await Promise.all([
-      sendOnboardingEmail(inviteUrl, adminName, adminEmail, companyName, trialExpiresAt),
-      sendNotificationEmail(companyName, adminName, adminEmail, trialExpiresAt, source),
-    ]);
+    // ── 11. Send onboarding email — must succeed before returning success ────────
+    const emailResult = await sendOnboardingEmail(inviteUrl, adminName, adminEmail, companyName, trialExpiresAt);
+    if (!emailResult.ok) {
+      // Roll back everything — do not leave orphaned records when email fails
+      await adminClient.auth.admin.deleteUser(authUserId);
+      await adminClient.from("user_orgs").delete().eq("user_id", authUserId).eq("org_id", org.id);
+      await adminClient.from("vy_platform_users").delete().eq("auth_user_id", authUserId);
+      await adminClient.from("org_settings").delete().eq("org_id", org.id);
+      await adminClient.from("organisations").delete().eq("id", org.id);
+      return new Response(JSON.stringify({ error: `Failed to send invite email: ${emailResult.error}` }), {
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Fire-and-forget internal notification — failure does not block success
+    sendNotificationEmail(companyName, adminName, adminEmail, trialExpiresAt, source).catch(e =>
+      console.error("[provision-trial-org] notification email failed:", e)
+    );
+
+    console.log(`[provision-trial-org] Complete — org=${org.id} auth_user=${authUserId} email sent to ${adminEmail}`);
 
     // ── 12. Return success ────────────────────────────────────────────────────
     return new Response(
