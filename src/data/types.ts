@@ -299,6 +299,14 @@ export interface ReviewProcessingMeta {
 // List findings can be plain strings (legacy) or {text, source} objects (new AI extraction format)
 export type AIReviewListItem = string | AIReviewFinding;
 
+// Completed page range from a single reviewed batch
+export interface BatchPageRange {
+  startPage: number;
+  endPage: number;
+  chunkIndex: number;
+  completedAt: string;
+}
+
 export interface StoredAIReview {
   documentName: string;
   reviewedAt: string;
@@ -320,6 +328,11 @@ export interface StoredAIReview {
   draftChunks?: DraftChunk[];
   processingState?: ReviewProcessingState;
   processingMeta?: ReviewProcessingMeta;
+  // Batch-resume workflow: tracks which page ranges have been fully reviewed
+  batchReviewedRanges?: BatchPageRange[];
+  // Total chunks in the document — set on first batch so resume knows full scope
+  totalDocumentChunks?: number;
+  totalDocumentPages?: number;
   // Reconciliation (Feature 3)
   reconciliationSuggestions?: ReconciliationSuggestion[];
   reconciliationRunAt?: string;

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, Loader, AlertTriangle, CheckCircle, FileText, HelpCircle, Plus, Save, RotateCcw, Upload, FileSearch, File, Layers, RefreshCw, Trash2, Copy, Check, Info, ZapOff, GitMerge, Download } from 'lucide-react';
-import type { TenderRFI, TenderScopeEntry, RFIStatus, StoredAIReview, AIReviewRFI, AIReviewRisk, LucideIcon, DraftChunk, FindingSource, AIReviewListItem } from '../data/types';
+import { X, Sparkles, Loader, AlertTriangle, CheckCircle, FileText, HelpCircle, Plus, Save, RotateCcw, Upload, FileSearch, File, Layers, RefreshCw, Trash2, Copy, Check, ZapOff, GitMerge, Download, PlayCircle, ChevronRight } from 'lucide-react';
+import type { TenderRFI, TenderScopeEntry, RFIStatus, StoredAIReview, AIReviewRFI, AIReviewRisk, LucideIcon, FindingSource, AIReviewListItem, BatchPageRange } from '../data/types';
 import { splitPdfIntoChunks, getPdfPageCount, type PdfChunk } from '../lib/pdfChunker';
 import ReconcileFindings, { type ReconcileApplyResult } from './ReconcileFindings';
 import ChatGPTImport from './ChatGPTImport';
@@ -114,8 +114,6 @@ const actionColors: Record<string, string> = {
 const ACCEPTED_TYPES = '.pdf,.txt,.doc,.docx,.rtf,.csv';
 const MAX_FILE_MB = 50;
 const PDF_CHUNK_THRESHOLD = 50;
-const LARGE_DOC_WARNING_PAGES = 300; // show cost warning above this
-const LARGE_DOC_SKIP_LLM_CONSOLIDATION = 200; // use deterministic merge above this (avoids consolidation token overflow)
 
 // ─── Shared UI primitives ─────────────────────────────────────────────────────
 
@@ -254,62 +252,6 @@ function ErrorBanner({ message, variant, onDismiss }: { message: string; variant
       </div>
       <div className="flex items-center gap-2 pl-6">
         {copyBtn('text-red-500 hover:text-red-300', 'border-red-800/50 hover:border-red-700/70')}
-      </div>
-    </div>
-  );
-}
-
-function LargeDocWarningModal({ pageCount, chunkCount, onConfirm, onCancel }: {
-  pageCount: number;
-  chunkCount: number;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const estimatedMinutes = Math.ceil(chunkCount * 1.5);
-  return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onCancel}>
-      <div className="bg-[#1a2236] border border-amber-700/40 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-900/30 border border-amber-700/40 flex items-center justify-center shrink-0">
-            <Info size={18} className="text-amber-400" />
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-200 text-sm">Large document — confirm before processing</h3>
-            <p className="text-xs text-slate-500 mt-0.5">This document is {pageCount} pages and will require significant AI processing.</p>
-          </div>
-        </div>
-        <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-4 space-y-2.5">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-500">Document size</span>
-            <span className="text-slate-300 font-semibold">{pageCount} pages</span>
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-500">Sections to analyse</span>
-            <span className="text-slate-300 font-semibold">{chunkCount} sections of 40 pages</span>
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-500">Estimated time</span>
-            <span className="text-slate-300 font-semibold">{estimatedMinutes}–{estimatedMinutes + 3} minutes</span>
-          </div>
-          <div className="border-t border-[#1e2d4a] pt-2.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500">Strategy</span>
-              <span className="text-emerald-400 font-semibold">Section-by-section extraction + merge</span>
-            </div>
-            <p className="text-[10px] text-slate-600 mt-1">Each 40-page section is analysed independently. Findings are merged and deduplicated without a lossy consolidation step.</p>
-          </div>
-        </div>
-        <p className="text-xs text-amber-300/80 leading-relaxed">
-          Each section uses one AI call. For a {pageCount}-page document this is {chunkCount} API calls. This will consume Anthropic API credit. Make sure you are happy to proceed.
-        </p>
-        <div className="flex gap-2 justify-end pt-1">
-          <button onClick={onCancel} className="px-4 py-2 border border-[#1e2d4a] rounded-lg text-xs font-semibold text-slate-400 hover:bg-[#1e2d4a] hover:text-slate-200 transition-colors">
-            Cancel
-          </button>
-          <button onClick={onConfirm} className="flex items-center gap-2 px-5 py-2 bg-[#f97316] hover:bg-orange-600 text-white rounded-lg text-xs font-bold transition-colors">
-            <Sparkles size={12} />Process {chunkCount} sections
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -822,16 +764,6 @@ function isValidListItem(x: unknown): x is ListItem {
   return false;
 }
 
-function mergeChunkResults(results: DocumentReviewResult[]): DocumentReviewResult {
-  return {
-    rfis: results.flatMap(r => Array.isArray(r.rfis) ? r.rfis : []),
-    assumptions: results.flatMap(r => Array.isArray(r.assumptions) ? r.assumptions.filter(isValidListItem) : []),
-    exclusions: results.flatMap(r => Array.isArray(r.exclusions) ? r.exclusions.filter(isValidListItem) : []),
-    scopeNotes: results.flatMap(r => Array.isArray(r.scopeNotes) ? r.scopeNotes.filter(isValidListItem) : []),
-    risks: results.flatMap(r => Array.isArray(r.risks) ? r.risks : []),
-  };
-}
-
 function makeStoredReview(result: DocumentReviewResult, documentName: string): StoredAIReview {
   return {
     documentName,
@@ -881,11 +813,6 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
   const [retrying, setRetrying] = useState(false);
   const chunksRef = useRef<PdfChunk[]>([]);
   const chunkResultsRef = useRef<(DocumentReviewResult | null)[]>([]);
-
-  // Large document warning modal
-  const [showLargeDocWarning, setShowLargeDocWarning] = useState(false);
-  const [pendingChunkCount, setPendingChunkCount] = useState(0);
-  const pendingGenerateRef = useRef<(() => Promise<void>) | null>(null);
 
   // Feature 3: Reconcile modal
   const [showReconcile, setShowReconcile] = useState(false);
@@ -1174,6 +1101,42 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     setErrorVariant('generic');
   }
 
+  // ─── Batch-resume workflow ───────────────────────────────────────────────────
+
+  // Returns true if the review is a chunked review with more batches to process
+  function isPartialBatchReview(r: StoredAIReview | null): boolean {
+    if (!r) return false;
+    if (!r.totalDocumentChunks) return false;
+    const done = r.batchReviewedRanges?.length ?? 0;
+    return done < r.totalDocumentChunks;
+  }
+
+  function batchProgress(r: StoredAIReview | null): { done: number; total: number } {
+    if (!r) return { done: 0, total: 0 };
+    return {
+      done: r.batchReviewedRanges?.length ?? 0,
+      total: r.totalDocumentChunks ?? 0,
+    };
+  }
+
+  async function handleContinueReview() {
+    if (!uploadedFile || !pdfPageCount) {
+      setError('Please re-upload the document to continue the review.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setChunkStatuses([]);
+    setCurrentStep('');
+    try {
+      await processChunkedPdf(uploadedFile, pdfPageCount);
+    } catch (e) {
+      setAIError(e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // ─── File handling ───────────────────────────────────────────────────────────
 
   async function handleFileSelect(file: File) {
@@ -1274,174 +1237,109 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     return { result, findings };
   }
 
-  async function llmConsolidateResults(merged: DocumentReviewResult, pageCount: number, chunkCount: number): Promise<DocumentReviewResult> {
-    const res = await fetch(`${supabaseUrl}/functions/v1/ai-tender-assistant`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-      body: JSON.stringify({
-        task: 'consolidate-review',
-        tenderName: tender.name,
-        tenderClient: tender.client,
-        mergedResult: merged,
-        totalPages: pageCount,
-        chunkCount,
-        ...(currentOrgId ? { orgId: currentOrgId } : {}),
-        ...(authUser?.id ? { userId: authUser.id } : {}),
-      }),
-    });
-    const data = await res.json();
-    // Both CONSOLIDATION_EMPTY and CONSOLIDATION_PARSE_FAILED are signals to fall back to merged
-    if (data.errorCode === 'CONSOLIDATION_EMPTY' || data.errorCode === 'CONSOLIDATION_PARSE_FAILED') {
-      console.warn('[AITenderAssistant] LLM consolidation failed/empty — using deterministic merged result');
-      throw new Error('consolidation_fallback');
-    }
-    if (!res.ok && !data.result) throwFromResponse(data, 'Consolidation failed');
-    return data.result as DocumentReviewResult;
-  }
-
-  // Deterministic deduplication — removes only exact text duplicates
-  function deterministicMerge(results: DocumentReviewResult[]): DocumentReviewResult {
-    const merged = mergeChunkResults(results);
-
-    // For list items (strings or {text,source} objects): deduplicate by normalised text only.
-    // Using text-only key means different source refs for the same sentence don't create duplicates,
-    // and {text,source} objects are correctly deduplicated against plain strings.
-    const dedupListItems = (arr: ListItem[]): ListItem[] => {
-      const seen = new Set<string>();
-      return arr.filter(x => {
-        const k = (typeof x === 'string' ? x : x.text).trim().toLowerCase();
-        if (!k || seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
-    };
-
-    // For objects (RFIs): deduplicate by subject+query fingerprint so source field doesn't create false duplicates
-    const dedupRFIs = (arr: RFIResult[]): RFIResult[] => {
-      const seen = new Set<string>();
-      return arr.filter(x => {
-        const k = `${x.subject?.trim().toLowerCase()}|${x.query?.trim().toLowerCase()}`;
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
-    };
-
-    // For risks: deduplicate by risk text
-    const dedupRisks = (arr: RiskResult[]): RiskResult[] => {
-      const seen = new Set<string>();
-      return arr.filter(x => {
-        const k = x.risk?.trim().toLowerCase() ?? '';
-        if (!k || seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
-    };
-
-    const result = {
-      rfis: dedupRFIs(merged.rfis),
-      assumptions: dedupListItems(merged.assumptions),
-      exclusions: dedupListItems(merged.exclusions),
-      scopeNotes: dedupListItems(merged.scopeNotes),
-      risks: dedupRisks(merged.risks),
-    };
-
-    console.log(`[AITenderAssistant] deterministicMerge: rfis:${merged.rfis.length}→${result.rfis.length} assumptions:${merged.assumptions.length}→${result.assumptions.length} exclusions:${merged.exclusions.length}→${result.exclusions.length} scopeNotes:${merged.scopeNotes.length}→${result.scopeNotes.length} risks:${merged.risks.length}→${result.risks.length}`);
-    return result;
-  }
-
-  // Autosave draft chunks to review state after each completed chunk
-  function saveDraftChunk(
-    chunkIndex: number,
-    chunk: PdfChunk,
-    result: DocumentReviewResult,
-    fileName: string,
-    totalChunks: number,
-    pageCount: number,
-  ) {
-    const draftChunk: DraftChunk = {
-      chunkIndex,
-      chunkLabel: chunk.label,
-      startPage: chunk.startPage,
-      endPage: chunk.endPage,
-      findings: {
-        rfis: result.rfis ?? [],
-        assumptions: result.assumptions ?? [],
-        exclusions: result.exclusions ?? [],
-        scopeNotes: result.scopeNotes ?? [],
-        risks: result.risks ?? [],
-      },
-      completedAt: new Date().toISOString(),
-    };
-
-    const existing = review?.draftChunks ?? [];
-    const updated = [...existing.filter(d => d.chunkIndex !== chunkIndex), draftChunk];
-    const updatedReview: StoredAIReview = {
-      ...(review ?? {
-        documentName: fileName,
-        reviewedAt: new Date().toISOString(),
-        rfis: [], assumptions: [], exclusions: [], scopeNotes: [], risks: [],
-        savedRfiIndices: [], savedAssumptionIndices: [], savedExclusionIndices: [],
-        savedScopeNoteIndices: [], convertedRiskIndices: [],
-      }),
-      draftChunks: updated,
-      processingState: 'running',
-      processingMeta: {
-        fileName,
-        totalPages: pageCount,
-        totalChunks,
-        completedChunks: updated.length,
-        startedAt: review?.processingMeta?.startedAt ?? new Date().toISOString(),
-      },
-    };
-    // Persist draft state without disturbing the main review result
-    onCommit({ review: updatedReview });
-    setReview(updatedReview);
-  }
-
   async function processChunkedPdf(file: File, pageCount: number) {
     setCurrentStep('Splitting document into sections...');
     const chunks: PdfChunk[] = await splitPdfIntoChunks(file, pageCount);
     chunksRef.current = chunks;
     chunkResultsRef.current = new Array(chunks.length).fill(null);
 
-    // Check if we have a resumable draft from a previous interrupted run
-    const existingDrafts = review?.draftChunks ?? [];
-    const resumableIndices = new Set(existingDrafts.map(d => d.chunkIndex));
+    // Which chunks have already been reviewed in prior batches?
+    const reviewedRanges = review?.batchReviewedRanges ?? [];
+    const reviewedChunkIndices = new Set(reviewedRanges.map(r => r.chunkIndex));
 
-    const mergeLabel = 'Merging findings';
+    // Find the first unreviewed chunk
+    const nextChunkIndex = chunks.findIndex((_, i) => !reviewedChunkIndices.has(i));
+    if (nextChunkIndex === -1) {
+      // All chunks already reviewed — nothing to do
+      setCurrentStep('All sections already reviewed.');
+      return;
+    }
+
+    // Show progress UI — all chunks, green = done, pending = grey
     setChunkStatuses([
       ...chunks.map((c, i) => ({
         label: c.label,
-        status: resumableIndices.has(i) ? 'done' as const : 'pending' as const,
+        status: reviewedChunkIndices.has(i) ? 'done' as const : (i === nextChunkIndex ? 'processing' as const : 'pending' as const),
         canRetry: false,
-        findings: resumableIndices.has(i)
-          ? existingDrafts.find(d => d.chunkIndex === i)
-              ? Object.values(existingDrafts.find(d => d.chunkIndex === i)!.findings).reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0)
-              : undefined
+        findings: reviewedChunkIndices.has(i)
+          ? reviewedRanges.find(r => r.chunkIndex === i) ? undefined : undefined
           : undefined,
       })),
-      { label: mergeLabel, status: 'pending' as const, canRetry: false },
     ]);
 
-    console.log(`[AITenderAssistant] Starting large document processing: "${file.name}" — ${pageCount} pages, ${chunks.length} chunks`);
+    console.log(`[AITenderAssistant] Processing batch ${nextChunkIndex + 1}/${chunks.length} (pages ${chunks[nextChunkIndex].startPage}–${chunks[nextChunkIndex].endPage})`);
 
-    // Restore any completed chunk results from draft
-    for (const draft of existingDrafts) {
-      if (draft.chunkIndex < chunks.length) {
-        chunkResultsRef.current[draft.chunkIndex] = draft.findings as unknown as DocumentReviewResult;
-      }
+    await runChunk(file, chunks, nextChunkIndex, pageCount, chunkResultsRef.current);
+
+    const chunkResult = chunkResultsRef.current[nextChunkIndex];
+    if (!chunkResult) {
+      // Chunk errored — stop, leave UI showing error state so user can retry
+      return;
     }
 
-    for (let i = 0; i < chunks.length; i++) {
-      if (resumableIndices.has(i)) {
-        console.log(`[AITenderAssistant] Skipping chunk ${i + 1}/${chunks.length} — already completed in draft`);
-        continue;
-      }
-      await runChunk(file, chunks, i, pageCount, chunkResultsRef.current, file.name);
-    }
+    // Mark this chunk as done in progress UI
+    const chunkFindings = (chunkResult.rfis?.length ?? 0) + (chunkResult.assumptions?.length ?? 0) +
+      (chunkResult.exclusions?.length ?? 0) + (chunkResult.scopeNotes?.length ?? 0) + (chunkResult.risks?.length ?? 0);
+    setChunkStatuses(prev => prev.map((s, j) =>
+      j === nextChunkIndex ? { ...s, status: chunkFindings === 0 ? 'warning' : 'done', findings: chunkFindings } : s
+    ));
 
-    return await runMerge(file.name, chunks, pageCount);
+    // Merge this batch's findings on top of any previously accumulated findings
+    const prevRfis = review?.rfis ?? [];
+    const prevAssumptions = review?.assumptions ?? [];
+    const prevExclusions = review?.exclusions ?? [];
+    const prevScopeNotes = review?.scopeNotes ?? [];
+    const prevRisks = review?.risks ?? [];
+
+    const mergedResult: DocumentReviewResult = {
+      rfis: [...prevRfis, ...(chunkResult.rfis ?? [])],
+      assumptions: [...prevAssumptions, ...(chunkResult.assumptions ?? []).filter(isValidListItem)],
+      exclusions: [...prevExclusions, ...(chunkResult.exclusions ?? []).filter(isValidListItem)],
+      scopeNotes: [...prevScopeNotes, ...(chunkResult.scopeNotes ?? []).filter(isValidListItem)],
+      risks: [...prevRisks, ...(chunkResult.risks ?? [])],
+    };
+
+    const newRange: BatchPageRange = {
+      startPage: chunks[nextChunkIndex].startPage,
+      endPage: chunks[nextChunkIndex].endPage,
+      chunkIndex: nextChunkIndex,
+      completedAt: new Date().toISOString(),
+    };
+    const updatedRanges = [...reviewedRanges, newRange];
+    const allDone = updatedRanges.length === chunks.length;
+
+    const updatedReview: StoredAIReview = {
+      ...(review ?? {
+        documentName: file.name,
+        reviewedAt: new Date().toISOString(),
+        savedRfiIndices: [], savedAssumptionIndices: [], savedExclusionIndices: [],
+        savedScopeNoteIndices: [], convertedRiskIndices: [],
+      }),
+      documentName: file.name,
+      reviewedAt: review?.reviewedAt ?? new Date().toISOString(),
+      rfis: mergedResult.rfis,
+      assumptions: mergedResult.assumptions,
+      exclusions: mergedResult.exclusions,
+      scopeNotes: mergedResult.scopeNotes,
+      risks: mergedResult.risks,
+      batchReviewedRanges: updatedRanges,
+      totalDocumentChunks: chunks.length,
+      totalDocumentPages: pageCount,
+      processingState: allDone ? 'complete' : 'paused',
+      // Clear draft chunks — we use batchReviewedRanges for resume now
+      draftChunks: undefined,
+      processingMeta: undefined,
+    };
+
+    const totalFindings = (mergedResult.rfis.length) + (mergedResult.assumptions.length) +
+      (mergedResult.exclusions.length) + (mergedResult.scopeNotes.length) + (mergedResult.risks.length);
+
+    setCurrentStep(allDone
+      ? `Complete — all ${chunks.length} sections reviewed. ${totalFindings} findings total.`
+      : `Section ${nextChunkIndex + 1} of ${chunks.length} complete. ${chunkFindings} findings added.`
+    );
+
+    persistReviewOnly(updatedReview);
   }
 
   async function runChunk(
@@ -1450,7 +1348,6 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     i: number,
     pageCount: number,
     results: (DocumentReviewResult | null)[],
-    fileName?: string,
   ) {
     setChunkStatuses(prev => prev.map((s, j) => j === i ? { ...s, status: 'processing', canRetry: false } : s));
     setCurrentStep(`Analysing section ${i + 1} of ${chunks.length} (pages ${chunks[i].startPage}–${chunks[i].endPage})...`);
@@ -1461,10 +1358,6 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
       setChunkStatuses(prev => prev.map((s, j) =>
         j === i ? { ...s, status: isEmpty ? 'warning' : 'done', canRetry: false, findings: isEmpty ? 0 : findings } : s
       ));
-      // Feature 1: autosave this chunk's findings as a draft
-      if (!isEmpty && fileName) {
-        saveDraftChunk(i, chunks[i], result, fileName, chunks.length, pageCount);
-      }
     } catch (err) {
       const code = (err as Error & { errorCode?: string }).errorCode;
       const isFatal = code === 'INSUFFICIENT_CREDIT' || code === 'INVALID_API_KEY';
@@ -1477,77 +1370,13 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     }
   }
 
-  async function runMerge(_fileName: string, chunks: PdfChunk[], pageCount: number): Promise<DocumentReviewResult> {
-    const mergeIdx = chunks.length;
-    const successfulResults = (chunkResultsRef.current).filter((r): r is DocumentReviewResult => r !== null);
-
-    if (successfulResults.length === 0) {
-      throw new Error('All document sections failed to process. Please check your API key and try again.');
-    }
-
-    setChunkStatuses(prev => prev.map((s, j) =>
-      j === mergeIdx ? { ...s, status: 'processing', canRetry: false } : s
-    ));
-
-    const totalChunkFindings = successfulResults.reduce((sum, r) =>
-      sum + (r.rfis?.length ?? 0) + (r.assumptions?.length ?? 0) +
-      (r.exclusions?.length ?? 0) + (r.scopeNotes?.length ?? 0) + (r.risks?.length ?? 0), 0
-    );
-    console.log(`[AITenderAssistant] Merging ${successfulResults.length}/${chunks.length} successful chunks. Total pre-merge findings: ${totalChunkFindings}`);
-
-    // For large documents, skip LLM consolidation entirely — it silently drops results when
-    // the merged payload is too large. Use deterministic dedup instead.
-    const skipLLM = pageCount >= LARGE_DOC_SKIP_LLM_CONSOLIDATION || chunks.length > 5;
-    let finalResult: DocumentReviewResult;
-
-    if (skipLLM) {
-      setCurrentStep('Merging and deduplicating findings...');
-      finalResult = deterministicMerge(successfulResults);
-      console.log(`[AITenderAssistant] Deterministic merge complete. Final findings: rfis:${finalResult.rfis.length} assumptions:${finalResult.assumptions.length} exclusions:${finalResult.exclusions.length} scopeNotes:${finalResult.scopeNotes.length} risks:${finalResult.risks.length}`);
-    } else {
-      setCurrentStep('Deduplicating and consolidating findings...');
-      try {
-        finalResult = await llmConsolidateResults(mergeChunkResults(successfulResults), pageCount, chunks.length);
-        const outTotal = (finalResult.rfis?.length ?? 0) + (finalResult.assumptions?.length ?? 0) +
-          (finalResult.exclusions?.length ?? 0) + (finalResult.scopeNotes?.length ?? 0) + (finalResult.risks?.length ?? 0);
-        // If LLM consolidation dropped more than 60% of findings, fall back to deterministic
-        if (outTotal < totalChunkFindings * 0.4 && totalChunkFindings > 10) {
-          console.warn(`[AITenderAssistant] LLM consolidation dropped too many findings (${totalChunkFindings} → ${outTotal}). Falling back to deterministic merge.`);
-          finalResult = deterministicMerge(successfulResults);
-        }
-        console.log(`[AITenderAssistant] LLM consolidation complete. Final findings: rfis:${finalResult.rfis.length} assumptions:${finalResult.assumptions.length} exclusions:${finalResult.exclusions.length} scopeNotes:${finalResult.scopeNotes.length} risks:${finalResult.risks.length}`);
-      } catch {
-        finalResult = deterministicMerge(successfulResults);
-        console.log(`[AITenderAssistant] Fell back to deterministic merge. Final findings: rfis:${finalResult.rfis.length} assumptions:${finalResult.assumptions.length} exclusions:${finalResult.exclusions.length} scopeNotes:${finalResult.scopeNotes.length} risks:${finalResult.risks.length}`);
-      }
-    }
-
-    const finalTotal = (finalResult.rfis?.length ?? 0) + (finalResult.assumptions?.length ?? 0) +
-      (finalResult.exclusions?.length ?? 0) + (finalResult.scopeNotes?.length ?? 0) + (finalResult.risks?.length ?? 0);
-
-    if (finalTotal === 0 && totalChunkFindings > 0) {
-      // Merge/consolidation destroyed all findings — this is a critical failure
-      console.error(`[AITenderAssistant] CRITICAL: merge produced zero results despite ${totalChunkFindings} chunk-level findings. Using raw merged result as last resort.`);
-      finalResult = mergeChunkResults(successfulResults);
-    }
-
-    setChunkStatuses(prev => prev.map((s, j) =>
-      j === mergeIdx ? { ...s, status: 'done', canRetry: false, findings: finalTotal } : s
-    ));
-    setCurrentStep(`Complete — ${finalTotal} findings extracted.`);
-    return finalResult;
-  }
-
-  async function handleRetryChunk(chunkIndex: number) {
+  async function handleRetryChunk(_chunkIndex: number) {
     if (!uploadedFile || !pdfPageCount) return;
     setRetrying(true);
-    const chunks = chunksRef.current;
-    const results = chunkResultsRef.current;
     try {
-      await runChunk(uploadedFile, chunks, chunkIndex, pdfPageCount, results, uploadedFile.name);
-      const finalResult = await runMerge(uploadedFile.name, chunks, pdfPageCount);
-      const stored = makeStoredReview(finalResult, uploadedFile.name);
-      persistReviewOnly(stored);
+      // Re-run the failed single chunk — processChunkedPdf will pick up from batchReviewedRanges
+      // and treat the failed chunk as unreviewed (since it was never saved to batchReviewedRanges)
+      await processChunkedPdf(uploadedFile, pdfPageCount);
     } catch (e) {
       setAIError(e);
     } finally {
@@ -1569,10 +1398,12 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
       const isPDF = mime === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       const isText = mime.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.csv');
 
-      let finalResult: DocumentReviewResult;
+      let finalResult: DocumentReviewResult | null = null;
 
       if (isPDF && pageCount !== null && pageCount > PDF_CHUNK_THRESHOLD) {
-        finalResult = await processChunkedPdf(file, pageCount);
+        await processChunkedPdf(file, pageCount);
+        // processChunkedPdf handles its own review persistence — return early
+        return;
       } else if (isPDF) {
         setCurrentStep('Sending document to AI...');
         const base64 = await readBlobAsBase64(file);
@@ -1611,15 +1442,15 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
         setCurrentStep('');
       }
 
-      const totalFindings = (finalResult.rfis?.length ?? 0) + (finalResult.assumptions?.length ?? 0) +
-        (finalResult.exclusions?.length ?? 0) + (finalResult.scopeNotes?.length ?? 0) + (finalResult.risks?.length ?? 0);
+      const totalFindings = (finalResult!.rfis?.length ?? 0) + (finalResult!.assumptions?.length ?? 0) +
+        (finalResult!.exclusions?.length ?? 0) + (finalResult!.scopeNotes?.length ?? 0) + (finalResult!.risks?.length ?? 0);
 
       console.log(
-        `[AITenderAssistant] executeGenerate FINAL: rfis:${finalResult.rfis?.length ?? 0}` +
-        ` assumptions:${finalResult.assumptions?.length ?? 0}` +
-        ` exclusions:${finalResult.exclusions?.length ?? 0}` +
-        ` scopeNotes:${finalResult.scopeNotes?.length ?? 0}` +
-        ` risks:${finalResult.risks?.length ?? 0}` +
+        `[AITenderAssistant] executeGenerate FINAL: rfis:${finalResult!.rfis?.length ?? 0}` +
+        ` assumptions:${finalResult!.assumptions?.length ?? 0}` +
+        ` exclusions:${finalResult!.exclusions?.length ?? 0}` +
+        ` scopeNotes:${finalResult!.scopeNotes?.length ?? 0}` +
+        ` risks:${finalResult!.risks?.length ?? 0}` +
         ` total:${totalFindings} pages:${pageCount ?? 'unknown'}`
       );
 
@@ -1636,7 +1467,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
         }
       }
 
-      const stored = makeStoredReview(finalResult, file.name);
+      const stored = makeStoredReview(finalResult!, file.name);
       // Clear draft/processing state now that review is complete
       persistReviewOnly({ ...stored, processingState: 'complete', draftChunks: undefined, processingMeta: undefined });
     } catch (e) {
@@ -1679,16 +1510,6 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     }
 
     if (!uploadedFile) { setError('Please upload a document first.'); return; }
-
-    // Show large-doc warning before starting expensive run
-    if (pdfPageCount !== null && pdfPageCount >= LARGE_DOC_WARNING_PAGES) {
-      const chunks = Math.ceil(pdfPageCount / 40);
-      pendingGenerateRef.current = () => executeGenerate(uploadedFile, pdfPageCount);
-      setShowLargeDocWarning(true);
-      // Store chunk count for the modal
-      setPendingChunkCount(chunks);
-      return;
-    }
 
     await executeGenerate(uploadedFile, pdfPageCount);
   }
@@ -1753,8 +1574,95 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
           {/* Persisted review results — shown when review-document is selected and review exists */}
           {selectedTask === 'review-document' && review && !loading && !isChunking && (
             <div className="space-y-3">
+              {/* Batch progress banner — shown while review is incomplete */}
+              {isPartialBatchReview(review) && (() => {
+                const { done, total } = batchProgress(review);
+                const ranges = review.batchReviewedRanges ?? [];
+                return (
+                  <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Layers size={14} className="text-blue-400 shrink-0" />
+                        <p className="text-xs font-semibold text-slate-300">
+                          Review in progress — {done} of {total} sections complete
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-bold text-blue-300 bg-blue-900/30 border border-blue-800/40 px-2 py-0.5 rounded-full">
+                        {Math.round((done / total) * 100)}%
+                      </span>
+                    </div>
+
+                    {/* Section progress dots */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {Array.from({ length: total }, (_, i) => {
+                        const r = ranges.find(x => x.chunkIndex === i);
+                        return (
+                          <div
+                            key={i}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold transition-colors ${
+                              r ? 'bg-emerald-900/20 border-emerald-800/40 text-emerald-300' : 'bg-[#111827] border-[#1e2d4a] text-slate-600'
+                            }`}
+                          >
+                            {r ? <CheckCircle size={10} className="text-emerald-400" /> : <div className="w-2.5 h-2.5 rounded-full border border-slate-600" />}
+                            {r ? `pp.${r.startPage}–${r.endPage}` : `Section ${i + 1}`}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Document upload for resume */}
+                    {!uploadedFile ? (
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-amber-400/90 font-semibold">
+                          Re-upload <span className="font-bold">{review.documentName}</span> to continue reviewing the next section.
+                        </p>
+                        <div
+                          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                          onDragLeave={() => setDragOver(false)}
+                          onDrop={handleDrop}
+                          onClick={() => fileInputRef.current?.click()}
+                          className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all ${dragOver ? 'border-[#f97316] bg-[#f97316]/5' : 'border-[#1e2d4a] hover:border-[#2a3d5a] hover:bg-[#0d1628]/60'}`}
+                        >
+                          <Upload size={18} className="text-slate-600 mx-auto mb-2" />
+                          <p className="text-xs font-semibold text-slate-400">Drop document here or click to browse</p>
+                          <p className="text-[10px] text-slate-600 mt-1">PDF — up to {MAX_FILE_MB}MB</p>
+                          <input ref={fileInputRef} type="file" accept={ACCEPTED_TYPES} className="hidden"
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ''; }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 bg-[#111827] border border-emerald-800/30 rounded-xl px-3 py-2.5">
+                        <File size={14} className="text-emerald-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-white truncate">{uploadedFile.name}</p>
+                          <p className="text-[10px] text-slate-500">{pdfPageCount !== null ? `${pdfPageCount} pages` : formatFileSize(uploadedFile.size)} · ready to continue</p>
+                        </div>
+                        <CheckCircle size={14} className="text-emerald-400 shrink-0" />
+                      </div>
+                    )}
+
+                    {/* Continue Review CTA */}
+                    <button
+                      onClick={handleContinueReview}
+                      disabled={!uploadedFile || loading}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#f97316] hover:bg-orange-600 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-orange-900/20"
+                    >
+                      {loading ? <Loader size={14} className="animate-spin" /> : <PlayCircle size={14} />}
+                      {loading ? 'Reviewing section...' : `Continue Review — Section ${done + 1} of ${total}`}
+                      {!loading && <ChevronRight size={14} />}
+                    </button>
+                  </div>
+                );
+              })()}
+
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">AI Review Results — Review &amp; Save</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  AI Review Results — Review &amp; Save
+                  {isPartialBatchReview(review) && (
+                    <span className="ml-2 text-blue-400 normal-case font-normal">(findings so far)</span>
+                  )}
+                </p>
                 <div className="flex items-center gap-2">
                   {/* Feature 4: ChatGPT import button */}
                   <button
@@ -1764,17 +1672,19 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
                   >
                     <Download size={11} />Import
                   </button>
-                  {/* Feature 3: Reconcile button */}
-                  <button
-                    onClick={() => setShowReconcile(true)}
-                    className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 hover:text-[#f97316] transition-colors px-2 py-1 rounded border border-slate-700 hover:border-[#f97316]/50"
-                    title="Run second-pass reconciliation review"
-                  >
-                    <GitMerge size={11} />Reconcile
-                    {review.reconciliationRunAt && (
-                      <span className="text-emerald-500 ml-0.5">✓</span>
-                    )}
-                  </button>
+                  {/* Feature 3: Reconcile button — only when review is complete */}
+                  {!isPartialBatchReview(review) && (
+                    <button
+                      onClick={() => setShowReconcile(true)}
+                      className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 hover:text-[#f97316] transition-colors px-2 py-1 rounded border border-slate-700 hover:border-[#f97316]/50"
+                      title="Run second-pass reconciliation review"
+                    >
+                      <GitMerge size={11} />Reconcile
+                      {review.reconciliationRunAt && (
+                        <span className="text-emerald-500 ml-0.5">✓</span>
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => setShowClearConfirm(true)}
                     className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-red-400 transition-colors"
@@ -1856,10 +1766,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
                           Large tender pack — {pdfPageCount} pages · {Math.ceil(pdfPageCount / 40)} sections
                         </p>
                         <p className="text-xs text-blue-400/80 leading-relaxed">
-                          Each 40-page section will be analysed independently. Findings are merged deterministically — no lossy consolidation step for large documents.
-                          {pdfPageCount >= LARGE_DOC_WARNING_PAGES && (
-                            <span className="block mt-1 text-amber-400/80">You will be asked to confirm before the {Math.ceil(pdfPageCount / 40)}-section run begins.</span>
-                          )}
+                          This document will be reviewed one 40-page section at a time. After each section you can review and save findings, then continue to the next section.
                         </p>
                       </div>
                     </div>
@@ -1873,8 +1780,8 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
             </div>
           )}
 
-          {/* Chunk progress */}
-          {chunkStatuses.length > 0 && !review && (
+          {/* Chunk progress — shown during batch processing */}
+          {chunkStatuses.length > 0 && (loading || retrying) && (
             <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-4">
               <ChunkProgressUI
                 chunks={chunkStatuses}
@@ -1923,7 +1830,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
           )}
         </div>
 
-        {/* Footer — generate button */}
+        {/* Footer — generate button (no review yet, not chunking) */}
         {!review && !isChunking && singleResult === null && (
           <div className="flex items-center justify-between px-5 py-4 border-t border-[#1e2d4a] shrink-0 bg-[#0d1628]/50">
             <p className="text-[10px] text-slate-600 max-w-xs leading-snug">
@@ -1938,17 +1845,17 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
               {loading
                 ? selectedTask === 'review-document' ? 'Reviewing...' : 'Generating...'
                 : selectedTask === 'review-document'
-                  ? isLargePdf ? 'Review in Sections' : 'Review Document'
+                  ? isLargePdf ? 'Review Section 1' : 'Review Document'
                   : `Generate ${task.label}`}
             </button>
           </div>
         )}
 
-        {/* Footer — re-review button when review exists */}
-        {selectedTask === 'review-document' && review && !loading && !isChunking && (
+        {/* Footer — complete review: only Run New Review */}
+        {selectedTask === 'review-document' && review && !loading && !isChunking && !isPartialBatchReview(review) && (
           <div className="flex items-center justify-between px-5 py-4 border-t border-[#1e2d4a] shrink-0 bg-[#0d1628]/50">
             <p className="text-[10px] text-slate-600 max-w-xs leading-snug">
-              Review results are saved to this tender and will persist between sessions.
+              Review complete. Results saved to this tender and will persist between sessions.
             </p>
             <button
               onClick={() => setShowClearConfirm(true)}
@@ -1959,11 +1866,11 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
           </div>
         )}
 
-        {/* Footer during chunk processing */}
-        {(isChunking || (retrying && chunkStatuses.length > 0 && !review)) && (
+        {/* Footer during active batch processing */}
+        {(loading || retrying) && chunkStatuses.length > 0 && (
           <div className="flex items-center justify-between px-5 py-4 border-t border-[#1e2d4a] shrink-0 bg-[#0d1628]/50">
             <p className="text-[10px] text-slate-600 max-w-xs leading-snug">
-              {retrying ? 'Retrying section and re-merging...' : 'Each section is analysed independently. Findings are preserved even if later sections fail.'}
+              {retrying ? 'Retrying section...' : 'Analysing section. Findings are saved automatically when each section completes.'}
             </p>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <Loader size={13} className="animate-spin text-[#f97316]" />
@@ -1972,24 +1879,6 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
           </div>
         )}
       </div>
-
-      {/* Large doc warning modal */}
-      {showLargeDocWarning && pdfPageCount !== null && (
-        <LargeDocWarningModal
-          pageCount={pdfPageCount}
-          chunkCount={pendingChunkCount}
-          onConfirm={() => {
-            setShowLargeDocWarning(false);
-            const fn = pendingGenerateRef.current;
-            pendingGenerateRef.current = null;
-            if (fn) fn();
-          }}
-          onCancel={() => {
-            setShowLargeDocWarning(false);
-            pendingGenerateRef.current = null;
-          }}
-        />
-      )}
 
       {/* Feature 3: Reconcile modal */}
       {showReconcile && review && (
