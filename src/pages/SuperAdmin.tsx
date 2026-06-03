@@ -4,7 +4,7 @@ import {
   Shield, Building2, ChevronRight, ChevronLeft, ToggleLeft, ToggleRight,
   Save, AlertCircle, CheckCircle, RefreshCw, UserPlus, Trash2, Ban, Search,
   FlaskConical, X, Clock, Archive, RotateCcw, AlertTriangle, ChevronDown,
-  Upload, Mail, Phone, Globe, Hash,
+  Upload, Mail, Phone, Globe, Hash, Send,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { env } from '../lib/env';
@@ -419,6 +419,7 @@ function CompanyRow({
   onArchive,
   onRestore,
   onDelete,
+  onResendInvite,
   actionLoading,
 }: {
   org: OrgWithSettings;
@@ -426,6 +427,7 @@ function CompanyRow({
   onArchive: () => void;
   onRestore: () => void;
   onDelete: () => void;
+  onResendInvite: () => void;
   actionLoading: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -578,6 +580,15 @@ function CompanyRow({
               >
                 <RotateCcw size={13} />
                 Restore Organisation
+              </button>
+            )}
+            {org.settings?.account_type === 'trial' && org.status === 'active' && (
+              <button
+                onClick={() => { onResendInvite(); setMenuOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-sky-400 hover:bg-sky-900/20 transition-colors"
+              >
+                <Send size={13} />
+                Resend Trial Invite
               </button>
             )}
             <div className="border-t border-[#1e2d4a] my-1" />
@@ -1376,6 +1387,7 @@ export default function SuperAdmin() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OrgWithSettings | null>(null);
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -1461,10 +1473,92 @@ export default function SuperAdmin() {
     setActionLoading(org.id);
     setActionError(null);
     setDeleteTarget(null);
-    const { error: delErr } = await supabase.rpc('super_admin_delete_org', { p_org_id: org.id });
-    if (delErr) { setActionError(`Delete failed: ${delErr.message}`); }
-    else { await loadOrgs(); }
-    setActionLoading(null);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    try {
+      const res = await fetch(
+        `${env.supabaseUrl}/functions/v1/delete-org`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ org_id: org.id }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        setActionError(`Delete failed: ${json.error ?? 'Unknown error'}`);
+      } else {
+        await loadOrgs();
+      }
+    } catch {
+      setActionError('Network error during deletion — please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleResendInvite(org: OrgWithSettings) {
+    setActionLoading(org.id);
+    setActionError(null);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    // Look up the admin user for this org to get their name and email
+    const { data: adminUser } = await supabase
+      .from('vy_platform_users')
+      .select('name, email')
+      .eq('org_id', org.id)
+      .eq('role', 'Admin')
+      .eq('status', 'Active')
+      .maybeSingle();
+
+    if (!adminUser?.email) {
+      setActionError('Could not find admin user email for this organisation.');
+      setActionLoading(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `${env.supabaseUrl}/functions/v1/provision-trial-org`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            companyName: org.name,
+            adminName: adminUser.name,
+            adminEmail: adminUser.email,
+            trialDays: 14,
+            source: 'super-admin-resend',
+          }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        setActionError(`Resend failed: ${json.error ?? 'Unknown error'}`);
+      } else {
+        setActionError(null);
+        // Show a brief success toast by reusing actionError state with a special prefix
+        // Use a transient success message in the page
+        setResendSuccess(`Invite resent to ${adminUser.email}`);
+        setTimeout(() => setResendSuccess(null), 4000);
+      }
+    } catch {
+      setActionError('Network error — please try again.');
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   if (isSuperAdmin === false) {
@@ -1599,6 +1693,12 @@ export default function SuperAdmin() {
               <button onClick={() => { setError(null); setActionError(null); }} className="ml-auto text-red-500 hover:text-red-300">✕</button>
             </div>
           )}
+          {resendSuccess && (
+            <div className="flex items-center gap-2 p-4 bg-emerald-900/20 border border-emerald-900/40 rounded-xl text-sm text-emerald-300 mb-4">
+              <CheckCircle size={16} />
+              {resendSuccess}
+            </div>
+          )}
 
           {/* Stats bar */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
@@ -1674,6 +1774,7 @@ export default function SuperAdmin() {
                       onArchive={() => handleArchive(org)}
                       onRestore={() => handleRestore(org)}
                       onDelete={() => setDeleteTarget(org)}
+                      onResendInvite={() => handleResendInvite(org)}
                       actionLoading={actionLoading === org.id}
                     />
                   ))

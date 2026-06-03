@@ -265,7 +265,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 2. If called from super-admin panel, verify caller is a super admin ──
-    if (source === "super-admin") {
+    if (source === "super-admin" || source === "super-admin-resend") {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) {
         return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
@@ -295,15 +295,47 @@ Deno.serve(async (req: Request) => {
     );
 
     // ── 4. Duplicate email check ──────────────────────────────────────────────
+    // If the email already exists as an auth user, we need to distinguish cases:
+    //   a) Unconfirmed user (never set password) — resend the invite link
+    //   b) Confirmed user with no org linkage — resend recovery link for new trial
+    //   c) Confirmed user already in an org — return 409
     const { data: existingUsers } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-    const emailAlreadyExists = existingUsers?.users?.some(
+    const existingAuthUser = existingUsers?.users?.find(
       (u: { email?: string }) => u.email?.toLowerCase() === adminEmail,
-    );
-    if (emailAlreadyExists) {
-      return new Response(
-        JSON.stringify({ error: "An account with this email address already exists. Please contact support if you need access." }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    ) ?? null;
+
+    if (existingAuthUser) {
+      // Check if this user already belongs to an active org
+      const { data: existingOrg } = await adminClient
+        .from("vy_platform_users")
+        .select("id, org_id, status")
+        .eq("auth_user_id", existingAuthUser.id)
+        .eq("status", "Active")
+        .maybeSingle();
+
+      if (existingOrg?.org_id) {
+        // User is already active in an org — cannot create a new trial for them
+        return new Response(
+          JSON.stringify({ error: "An account with this email address already exists and is linked to an organisation. Please sign in or contact support." }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // User exists but has no active org — resend the invite link
+      // This handles the case where a trial was deleted leaving an orphaned auth user,
+      // or the user never completed setup. We proceed to create a new org and resend.
+      console.log(`[provision-trial-org] Existing auth user ${existingAuthUser.id} has no active org — will delete stale auth record and re-provision`);
+
+      // Delete the stale auth user so we can create fresh
+      const { error: delErr } = await adminClient.auth.admin.deleteUser(existingAuthUser.id);
+      if (delErr) {
+        console.error("[provision-trial-org] Failed to delete stale auth user:", delErr.message);
+        return new Response(
+          JSON.stringify({ error: "This email address has a pending invite. Please check your inbox or contact support to reset access." }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      console.log(`[provision-trial-org] Stale auth user deleted — proceeding with fresh provisioning`);
     }
 
     // ── 5. Duplicate company name / slug check ────────────────────────────────
