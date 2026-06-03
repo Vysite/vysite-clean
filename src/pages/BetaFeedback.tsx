@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { MessageSquare, Bug, Paperclip, Send, Info } from 'lucide-react';
+import { MessageSquare, Bug, Paperclip, Send, Info, AlertCircle } from 'lucide-react';
 import type { LucideIcon } from '../data/types';
 import { useAppStore } from '../lib/StoreContext';
 import { supabase } from '../lib/supabase';
@@ -12,21 +12,30 @@ async function sendFeedbackEmail(payload: {
   user_email: string;
   feedback_type: 'bug' | 'suggestion' | 'other';
   message: string;
-}): Promise<void> {
+  urgent?: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
-  if (!token) return;
+  if (!token) return { ok: false, error: 'Not authenticated.' };
 
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-feedback-email`;
-  await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-  // Fire-and-forget — submission succeeds regardless of email delivery
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      return { ok: false, error: json.error ?? 'Submission failed. Please try again.' };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Network error. Please check your connection and try again.' };
+  }
 }
 
 // ─── Generic suggestion card ──────────────────────────────────────────────────
@@ -46,21 +55,26 @@ function TextareaCard({
   iconColor: string;
   placeholder: string;
   submitLabel: string;
-  onSubmit: (text: string) => Promise<void>;
-  allowAttachment?: boolean;
+  onSubmit: (text: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [text, setText] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit() {
     if (!text.trim()) return;
     setSubmitting(true);
-    await onSubmit(text.trim());
-    setText('');
+    setError(null);
+    const result = await onSubmit(text.trim());
     setSubmitting(false);
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 3000);
+    if (result.ok) {
+      setText('');
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 3000);
+    } else {
+      setError(result.error ?? 'Submission failed. Please try again.');
+    }
   }
 
   return (
@@ -77,11 +91,17 @@ function TextareaCard({
       <div className="p-5 flex flex-col gap-3">
         <textarea
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={e => { setText(e.target.value); setError(null); }}
           placeholder={placeholder}
           rows={5}
           className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-[#f97316] transition-colors resize-none"
         />
+        {error && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-900/20 border border-red-800/40">
+            <AlertCircle size={13} className="text-red-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-300">{error}</p>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3">
           <span className="text-[11px] text-slate-600">{text.length > 0 ? `${text.length} characters` : ''}</span>
           <button
@@ -106,22 +126,32 @@ function TextareaCard({
 
 // ─── Bug report card ──────────────────────────────────────────────────────────
 
-function BugReportCard({ onSubmit }: { onSubmit: (text: string, file?: File | null) => Promise<void> }) {
+function BugReportCard({ onSubmit }: {
+  onSubmit: (text: string, urgent: boolean, file?: File | null) => Promise<{ ok: boolean; error?: string }>;
+}) {
   const [text, setText] = useState('');
+  const [urgent, setUrgent] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit() {
     if (!text.trim()) return;
     setSubmitting(true);
-    await onSubmit(text.trim(), file);
-    setText('');
-    setFile(null);
+    setError(null);
+    const result = await onSubmit(text.trim(), urgent, file);
     setSubmitting(false);
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 3000);
+    if (result.ok) {
+      setText('');
+      setUrgent(false);
+      setFile(null);
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 3000);
+    } else {
+      setError(result.error ?? 'Submission failed. Please try again.');
+    }
   }
 
   return (
@@ -138,11 +168,29 @@ function BugReportCard({ onSubmit }: { onSubmit: (text: string, file?: File | nu
       <div className="p-5 flex flex-col gap-3">
         <textarea
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={e => { setText(e.target.value); setError(null); }}
           placeholder="Describe the issue, bug or unexpected behaviour…"
           rows={5}
           className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-[#f97316] transition-colors resize-none"
         />
+
+        {/* Urgent toggle */}
+        <label className="flex items-center gap-2.5 cursor-pointer w-fit select-none">
+          <input
+            type="checkbox"
+            checked={urgent}
+            onChange={e => setUrgent(e.target.checked)}
+            className="w-3.5 h-3.5 rounded accent-red-500 cursor-pointer"
+          />
+          <span className={`text-xs font-medium transition-colors ${urgent ? 'text-red-400' : 'text-slate-500'}`}>
+            Mark as urgent
+          </span>
+          {urgent && (
+            <span className="text-[10px] font-semibold text-red-400 bg-red-900/30 border border-red-800/40 px-1.5 py-0.5 rounded">
+              HIGH PRIORITY
+            </span>
+          )}
+        </label>
 
         <div>
           <input
@@ -168,6 +216,13 @@ function BugReportCard({ onSubmit }: { onSubmit: (text: string, file?: File | nu
             </button>
           )}
         </div>
+
+        {error && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-900/20 border border-red-800/40">
+            <AlertCircle size={13} className="text-red-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-300">{error}</p>
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-3">
           <span className="text-[11px] text-slate-600">{text.length > 0 ? `${text.length} characters` : ''}</span>
@@ -207,11 +262,11 @@ export default function BetaFeedback() {
   }
 
   async function handleSuggestion(text: string) {
-    await sendFeedbackEmail({ ...senderContext(), feedback_type: 'suggestion', message: text });
+    return sendFeedbackEmail({ ...senderContext(), feedback_type: 'suggestion', message: text });
   }
 
-  async function handleBugReport(text: string) {
-    await sendFeedbackEmail({ ...senderContext(), feedback_type: 'bug', message: text });
+  async function handleBugReport(text: string, urgent: boolean) {
+    return sendFeedbackEmail({ ...senderContext(), feedback_type: 'bug', message: text, urgent });
   }
 
   return (

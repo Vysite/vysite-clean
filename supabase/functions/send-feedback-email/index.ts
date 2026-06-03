@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const CRM_ENDPOINT = "https://arqultkwzbqyjtrfwgay.supabase.co/functions/v1/saas-feedback";
+const CRM_API_KEY = "93298374ec31b83bc0f4af70dc980a9d212039390d95835b406b65c43457bf03";
 const NOTIFY_EMAIL = "hello@vysite.com";
 
 Deno.serve(async (req: Request) => {
@@ -15,7 +17,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Verify the caller is authenticated
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
@@ -23,7 +24,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { org_id, user_name, user_email, feedback_type, message } = await req.json();
+    const { org_id, user_name, user_email, feedback_type, message, urgent } = await req.json();
 
     if (!message || typeof message !== "string" || !message.trim()) {
       return new Response(JSON.stringify({ error: "Message is required" }), {
@@ -31,13 +32,13 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Look up the org name using the service-role client
+    // Look up the org name
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    let orgName = "Unknown Organisation";
+    let orgName = "";
     if (org_id) {
       const { data: orgRow } = await adminClient
         .from("organisations")
@@ -47,15 +48,45 @@ Deno.serve(async (req: Request) => {
       if (orgRow?.name) orgName = orgRow.name;
     }
 
+    const isBug = feedback_type === "bug";
+    const isSuggestion = feedback_type === "suggestion";
+
+    // ── 1. CRM ticket (primary — surface failure to user) ────────────────────
+    const crmPayload: Record<string, string> = {
+      title: isBug ? "Bug Report" : isSuggestion ? "Feature Suggestion" : "Feedback",
+      description: message.trim(),
+      ticket_type: isBug ? "Bug Report" : isSuggestion ? "Feature Request" : "Support Request",
+      priority: isBug ? (urgent ? "High" : "Medium") : "Low",
+    };
+    if (user_name) crmPayload.name = user_name;
+    if (user_email) crmPayload.email = user_email;
+    if (orgName) crmPayload.company_name = orgName;
+
+    const crmRes = await fetch(CRM_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": CRM_API_KEY,
+      },
+      body: JSON.stringify(crmPayload),
+    });
+
+    if (!crmRes.ok) {
+      const errText = await crmRes.text();
+      console.error("[send-feedback-email] CRM error:", crmRes.status, errText);
+      return new Response(
+        JSON.stringify({ error: "Failed to create support ticket. Please try again." }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── 2. Internal notification email (secondary — log failure, don't block) ─
     const submittedAt = new Date().toLocaleString("en-GB", {
       day: "2-digit", month: "long", year: "numeric",
       hour: "2-digit", minute: "2-digit", timeZone: "Europe/London",
     });
 
-    const typeLabel =
-      feedback_type === "bug" ? "Bug Report"
-      : feedback_type === "suggestion" ? "Feature Suggestion"
-      : "Other";
+    const typeLabel = isBug ? "Bug Report" : isSuggestion ? "Feature Suggestion" : "Other";
 
     const htmlBody = `
 <!DOCTYPE html>
@@ -90,7 +121,7 @@ Deno.serve(async (req: Request) => {
     <div class="body">
       <div class="row">
         <div class="row-label">Organisation</div>
-        <div class="row-value">${escHtml(orgName)}</div>
+        <div class="row-value">${escHtml(orgName || "Unknown")}</div>
       </div>
       <div class="row">
         <div class="row-label">Submitted By</div>
@@ -103,9 +134,10 @@ Deno.serve(async (req: Request) => {
       <div class="row">
         <div class="row-label">Type</div>
         <div class="row-value">
-          <span class="type-badge type-${feedback_type === "bug" ? "bug" : feedback_type === "suggestion" ? "suggestion" : "other"}">${escHtml(typeLabel)}</span>
+          <span class="type-badge type-${isBug ? "bug" : isSuggestion ? "suggestion" : "other"}">${escHtml(typeLabel)}</span>
         </div>
       </div>
+      ${isBug && urgent ? `<div class="row"><div class="row-label">Priority</div><div class="row-value" style="color:#dc2626;font-weight:700;">URGENT</div></div>` : ""}
       <div class="row">
         <div class="row-label">Submitted</div>
         <div class="row-value">${escHtml(submittedAt)}</div>
@@ -124,33 +156,26 @@ Deno.serve(async (req: Request) => {
 </html>`;
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendKey) {
-      console.error("[send-feedback-email] RESEND_API_KEY not set");
-      return new Response(JSON.stringify({ error: "Email service not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (resendKey) {
+      const resendRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "VYSITE Feedback <noreply@vysite.com>",
+          to: [NOTIFY_EMAIL],
+          subject: `[VYSITE Feedback] ${typeLabel} from ${orgName || user_email || "Unknown"}`,
+          html: htmlBody,
+        }),
       });
-    }
-
-    const resendRes = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: "VYSITE Feedback <noreply@vysite.com>",
-        to: [NOTIFY_EMAIL],
-        subject: `[VYSITE Feedback] ${typeLabel} from ${orgName}`,
-        html: htmlBody,
-      }),
-    });
-
-    if (!resendRes.ok) {
-      const errText = await resendRes.text();
-      console.error("[send-feedback-email] Resend error:", errText);
-      return new Response(JSON.stringify({ error: "Failed to send notification email" }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      if (!resendRes.ok) {
+        const errText = await resendRes.text();
+        console.error("[send-feedback-email] Resend error:", errText);
+      }
+    } else {
+      console.warn("[send-feedback-email] RESEND_API_KEY not set — skipping notification email");
     }
 
     return new Response(JSON.stringify({ success: true }), {
@@ -158,6 +183,7 @@ Deno.serve(async (req: Request) => {
     });
 
   } catch (err) {
+    console.error("[send-feedback-email] Unexpected error:", err);
     return new Response(JSON.stringify({ error: `Unexpected error: ${String(err)}` }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
