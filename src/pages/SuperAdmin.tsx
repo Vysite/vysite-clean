@@ -1510,24 +1510,9 @@ export default function SuperAdmin() {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
 
-    // Look up the admin user for this org to get their name and email
-    const { data: adminUser } = await supabase
-      .from('vy_platform_users')
-      .select('name, email')
-      .eq('org_id', org.id)
-      .eq('role', 'Admin')
-      .eq('status', 'Active')
-      .maybeSingle();
-
-    if (!adminUser?.email) {
-      setActionError('Could not find admin user email for this organisation.');
-      setActionLoading(null);
-      return;
-    }
-
     try {
       const res = await fetch(
-        `${env.supabaseUrl}/functions/v1/provision-trial-org`,
+        `${env.supabaseUrl}/functions/v1/resend-trial-invite`,
         {
           method: 'POST',
           headers: {
@@ -1535,24 +1520,15 @@ export default function SuperAdmin() {
             'Authorization': `Bearer ${token}`,
             'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
-          body: JSON.stringify({
-            companyName: org.name,
-            adminName: adminUser.name,
-            adminEmail: adminUser.email,
-            trialDays: 14,
-            source: 'super-admin-resend',
-          }),
+          body: JSON.stringify({ org_id: org.id }),
         }
       );
       const json = await res.json();
       if (!res.ok) {
         setActionError(`Resend failed: ${json.error ?? 'Unknown error'}`);
       } else {
-        setActionError(null);
-        // Show a brief success toast by reusing actionError state with a special prefix
-        // Use a transient success message in the page
-        setResendSuccess(`Invite resent to ${adminUser.email}`);
-        setTimeout(() => setResendSuccess(null), 4000);
+        setResendSuccess(`Invite email sent to ${json.sentTo}`);
+        setTimeout(() => setResendSuccess(null), 5000);
       }
     } catch {
       setActionError('Network error — please try again.');

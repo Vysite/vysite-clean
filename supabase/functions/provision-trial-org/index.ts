@@ -270,7 +270,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 2. If called from super-admin panel, verify caller is a super admin ──
-    if (source === "super-admin" || source === "super-admin-resend") {
+    if (source === "super-admin") {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) {
         return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
