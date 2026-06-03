@@ -10,6 +10,12 @@ const corsHeaders = {
 const NOTIFY_EMAIL = "hello@vysite.com";
 const TRIAL_DAYS = 14;
 
+// Invite links go to the public production app — always.
+// dev.vysite.com is behind Vercel protection and external recipients cannot
+// access it. Localhost is obviously not reachable. We never trust SITE_URL
+// from the Supabase environment (it is a project-internal URL, not the app).
+const INVITE_BASE_URL = "https://app.vysite.com";
+
 const DEFAULT_MODULES = {
   tenders: true,
   projects: true,
@@ -227,7 +233,6 @@ Deno.serve(async (req: Request) => {
       adminEmail?: string;
       trialDays?: number;
       source?: string; // 'super-admin' | 'website'
-      redirectUrl?: string; // optional override for dev/staging — must end with /
     };
     try {
       body = await req.json();
@@ -242,9 +247,6 @@ Deno.serve(async (req: Request) => {
     const adminEmail  = (body.adminEmail  ?? "").trim().toLowerCase();
     const trialDays   = typeof body.trialDays === "number" && body.trialDays > 0 ? body.trialDays : TRIAL_DAYS;
     const source      = (body.source ?? "website") as string;
-    // redirectUrl lets the caller pass the exact app origin for dev/staging environments
-    // where SITE_URL may differ from the current preview URL.
-    const redirectUrlOverride = (body.redirectUrl ?? "").trim().replace(/\/$/, "");
 
     if (!companyName || companyName.length < 2) {
       return new Response(JSON.stringify({ error: "Company name must be at least 2 characters" }), {
@@ -391,33 +393,24 @@ Deno.serve(async (req: Request) => {
     }
 
     const authUserId = newUserData.user.id;
-    const siteUrl = (redirectUrlOverride || (Deno.env.get("SITE_URL") ?? "https://app.vysite.com")).replace(/\/$/, "");
 
-    // generateLink produces: https://<project>.supabase.co/auth/v1/verify?token=XXX&type=recovery&redirect_to=...
-    // We extract the token_hash (or token) from that URL and build our own link.
+    // generateLink produces a hashed_token we use to build our own direct URL.
+    // This bypasses Supabase's redirect chain and allow-list entirely.
     const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
       type: "recovery",
       email: adminEmail,
     });
 
-    let inviteUrl = `${siteUrl}/set-password`;
+    let inviteUrl = `${INVITE_BASE_URL}/set-password`;
 
-    if (linkErr || !linkData?.properties?.action_link) {
+    if (linkErr || !linkData?.properties?.hashed_token) {
       console.error("[provision-trial-org] generateLink failed:", linkErr?.message);
     } else {
-      // Extract token_hash from the Supabase action link query string
-      const actionUrl = new URL(linkData.properties.action_link);
-      const tokenHash = actionUrl.searchParams.get("token_hash")
-        ?? actionUrl.searchParams.get("token")
-        ?? linkData.properties.hashed_token
-        ?? "";
-
-      if (tokenHash) {
-        inviteUrl = `${siteUrl}/set-password?token_hash=${encodeURIComponent(tokenHash)}&type=recovery&email=${encodeURIComponent(adminEmail)}`;
-      } else {
-        console.error("[provision-trial-org] Could not extract token_hash from action link:", linkData.properties.action_link);
-      }
+      const token = linkData.properties.hashed_token;
+      inviteUrl = `${INVITE_BASE_URL}/set-password?token_hash=${encodeURIComponent(token)}&type=recovery&email=${encodeURIComponent(adminEmail)}`;
     }
+
+    console.log(`[provision-trial-org] Invite URL: ${inviteUrl}`);
 
     // ── 9. Create vy_platform_users row ───────────────────────────────────────
     const { error: puErr } = await adminClient
