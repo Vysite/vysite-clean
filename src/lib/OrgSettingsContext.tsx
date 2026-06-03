@@ -6,6 +6,8 @@ import { supabase } from './supabase';
 export interface OrgSettings {
   org_id: string;
   account_status: 'active' | 'disabled';
+  account_type: 'trial' | 'paid' | 'internal';
+  trial_expires_at: string | null;
   modules_enabled: Record<string, boolean>;
   ai_enabled: boolean;
   ai_monthly_limit: number;
@@ -29,6 +31,8 @@ const ALL_MODULES_ON: Record<string, boolean> = {
 const DEFAULT_ORG_SETTINGS: OrgSettings = {
   org_id: '',
   account_status: 'active',
+  account_type: 'trial',
+  trial_expires_at: null,
   modules_enabled: ALL_MODULES_ON,
   ai_enabled: true,
   ai_monthly_limit: 50,
@@ -43,10 +47,20 @@ interface OrgSettingsState {
   // Returns true if the module key is enabled at the org level.
   // Defaults to true when org_settings row does not exist.
   isModuleEnabled: (moduleKey: string) => boolean;
+  // True when a trial org's trial_expires_at is in the past.
+  // Checked client-side on every load so expiry is detected immediately
+  // regardless of whether the server has updated account_status yet.
+  isTrialExpired: boolean;
   loading: boolean;
 }
 
 const OrgSettingsContext = createContext<OrgSettingsState | null>(null);
+
+function computeIsTrialExpired(settings: OrgSettings): boolean {
+  if (settings.account_type !== 'trial') return false;
+  if (!settings.trial_expires_at) return false;
+  return new Date(settings.trial_expires_at) < new Date();
+}
 
 export function OrgSettingsProvider({
   orgId,
@@ -69,7 +83,7 @@ export function OrgSettingsProvider({
 
     supabase
       .from('org_settings')
-      .select('org_id,account_status,modules_enabled,ai_enabled,ai_monthly_limit,ai_used_this_month,ai_bonus_credits')
+      .select('org_id,account_status,account_type,trial_expires_at,modules_enabled,ai_enabled,ai_monthly_limit,ai_used_this_month,ai_bonus_credits')
       .eq('org_id', orgId)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -81,6 +95,8 @@ export function OrgSettingsProvider({
           setOrgSettings({
             org_id: data.org_id,
             account_status: data.account_status ?? 'active',
+            account_type: data.account_type ?? 'trial',
+            trial_expires_at: data.trial_expires_at ?? null,
             modules_enabled: { ...ALL_MODULES_ON, ...(data.modules_enabled ?? {}) },
             ai_enabled: data.ai_enabled ?? true,
             ai_monthly_limit: data.ai_monthly_limit ?? 50,
@@ -99,8 +115,10 @@ export function OrgSettingsProvider({
     return orgSettings.modules_enabled[moduleKey] !== false;
   }
 
+  const isTrialExpired = computeIsTrialExpired(orgSettings);
+
   return (
-    <OrgSettingsContext.Provider value={{ orgSettings, isModuleEnabled, loading }}>
+    <OrgSettingsContext.Provider value={{ orgSettings, isModuleEnabled, isTrialExpired, loading }}>
       {children}
     </OrgSettingsContext.Provider>
   );

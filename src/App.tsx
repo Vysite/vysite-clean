@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Lock } from 'lucide-react';
+import { Lock, FlaskConical, Ban } from 'lucide-react';
 import Sidebar, { type Page } from './components/Sidebar';
 import Header from './components/Header';
 import EnvBanner from './components/EnvBanner';
@@ -179,27 +179,66 @@ function OrgGatedApp({
   navigateTo, pendingOpen, setPendingOpen, pendingFilter, setPendingFilter,
   pendingProjectId, setPendingProjectId, handleNotificationNavigate, isSuperAdmin,
 }: OrgGatedAppProps) {
-  const { orgSettings, isModuleEnabled } = useOrgSettings();
+  const { orgSettings, isModuleEnabled, isTrialExpired } = useOrgSettings();
   const { signOut } = useAuth();
 
-  if (orgSettings.account_status === 'disabled') {
+  const isBlocked = isTrialExpired || orgSettings.account_status === 'disabled';
+
+  if (isBlocked) {
+    const isExpiredTrial = isTrialExpired;
+
     return (
       <>
         {debugPanel}
         <div className="min-h-screen bg-[#111827] flex items-center justify-center p-6">
-          <div className="text-center max-w-sm">
-            <div className="w-14 h-14 rounded-2xl bg-[#1a2236] border border-[#1e2d4a] flex items-center justify-center mx-auto mb-5">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-400"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-            </div>
-            <h2 className="text-lg font-bold text-white mb-2">Account Disabled</h2>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              This company account is currently disabled. Please contact{' '}
-              <a href="mailto:support@vysite.co.uk" className="text-[#f97316] hover:underline">VYSITE support</a>
-              {' '}to restore access.
-            </p>
+          <div className="text-center max-w-sm w-full">
+            {isExpiredTrial ? (
+              <>
+                {/* ── Trial expired ── */}
+                <div className="w-16 h-16 rounded-2xl bg-amber-900/30 border border-amber-700/40 flex items-center justify-center mx-auto mb-5">
+                  <FlaskConical size={28} className="text-amber-400" />
+                </div>
+                <h2 className="text-xl font-bold text-white mb-2">Your free trial has ended</h2>
+                <p className="text-sm text-slate-400 leading-relaxed mb-6">
+                  Your 14-day VYSITE trial has expired. Choose a plan to restore access and keep your data.
+                </p>
+
+                {/* Placeholder CTA — will be wired to Stripe Checkout in Phase 2 */}
+                <button
+                  onClick={() => window.location.href = 'mailto:hello@vysite.com?subject=VYSITE Subscription Enquiry'}
+                  className="w-full py-3 rounded-xl bg-[#f97316] hover:bg-orange-400 text-white text-sm font-bold transition-colors shadow-lg shadow-orange-900/30 mb-3"
+                >
+                  Choose a Plan
+                </button>
+
+                <p className="text-xs text-slate-600 mb-6">
+                  Subscription plans coming soon. In the meantime, email{' '}
+                  <a href="mailto:hello@vysite.com" className="text-[#f97316] hover:underline">
+                    hello@vysite.com
+                  </a>
+                  {' '}to activate your account.
+                </p>
+              </>
+            ) : (
+              <>
+                {/* ── Admin-disabled account ── */}
+                <div className="w-16 h-16 rounded-2xl bg-red-900/20 border border-red-800/30 flex items-center justify-center mx-auto mb-5">
+                  <Ban size={28} className="text-red-400" />
+                </div>
+                <h2 className="text-xl font-bold text-white mb-2">Account Disabled</h2>
+                <p className="text-sm text-slate-400 leading-relaxed mb-6">
+                  This company account has been disabled. Please contact{' '}
+                  <a href="mailto:hello@vysite.com" className="text-[#f97316] hover:underline">
+                    VYSITE support
+                  </a>
+                  {' '}to restore access.
+                </p>
+              </>
+            )}
+
             <button
               onClick={signOut}
-              className="mt-6 px-5 py-2 border border-[#1e2d4a] text-slate-400 hover:text-white rounded-lg text-sm transition-colors"
+              className="px-5 py-2 border border-[#1e2d4a] text-slate-400 hover:text-white rounded-lg text-sm transition-colors"
             >
               Sign out
             </button>
