@@ -354,13 +354,16 @@ function buildExportHTML(
 
   const docsHtml = docs.length
     ? `<table class="data-table" style="margin-top:${images.length ? '14px' : '2px'}">
-        <thead><tr><th>File</th><th>Type</th><th>Size</th><th>Uploaded</th></tr></thead>
+        <thead><tr><th>File</th><th>Type</th><th>Size</th><th>Uploaded</th><th>Download / View</th></tr></thead>
         <tbody>
           ${docs.map(d => {
             const tl = d.type ? (d.type.split('/').pop()?.toUpperCase() ?? d.type) : (d.name?.split('.').pop()?.toUpperCase() ?? 'File');
             const sz = d.size ? fmtFileSize(d.size) : '\u2014';
             const up = d.created_at ? fmtD(d.created_at) : '\u2014';
-            return `<tr><td>${esc(d.name)}</td><td>${esc(tl)}</td><td>${esc(sz)}</td><td>${esc(up)}</td></tr>`;
+            const link = d.data_url
+              ? `<a href="${d.data_url}" download="${esc(d.name)}" style="color:#f97316;text-decoration:none;font-weight:600;white-space:nowrap">&#11015; Download</a>`
+              : '\u2014';
+            return `<tr><td>${esc(d.name)}</td><td>${esc(tl)}</td><td>${esc(sz)}</td><td>${esc(up)}</td><td>${link}</td></tr>`;
           }).join('')}
         </tbody>
       </table>`
