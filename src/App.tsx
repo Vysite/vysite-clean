@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Lock, FlaskConical, Ban } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Lock, FlaskConical, Ban, AlertTriangle, CheckCircle } from 'lucide-react';
 import Sidebar, { type Page } from './components/Sidebar';
 import Header from './components/Header';
 import EnvBanner from './components/EnvBanner';
@@ -158,8 +158,124 @@ function DebugPanel({ auth, store }: {
   );
 }
 
+// ─── Plan Selector ────────────────────────────────────────────────────────────
+
+const PLANS = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    description: 'Core project and tender management for small teams.',
+    features: ['Tender & Estimating', 'Projects & Programmes', 'Site Forms & Snagging', 'Actions & Testing', 'Maintenance & Servicing', 'Reports'],
+    highlight: false,
+  },
+  {
+    id: 'professional',
+    name: 'Professional',
+    description: 'Advanced tools and AI features for growing contractors.',
+    features: ['Everything in Starter', 'AI Contract Review', 'AI Tender Assistant', 'Priority Support'],
+    highlight: true,
+  },
+  {
+    id: 'business',
+    name: 'Business',
+    description: 'Full platform access including the Commercial Module.',
+    features: ['Everything in Professional', 'Commercial Module', 'Variations & Compensation Events', 'Delay Notices'],
+    highlight: false,
+  },
+] as const;
+
+function PlanSelector({
+  loading,
+  error,
+  onSelect,
+}: {
+  loading: boolean;
+  error: string | null;
+  onSelect: (plan: string, interval: string) => void;
+}) {
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('monthly');
+  const [selecting, setSelecting] = useState<string | null>(null);
+
+  const handleSelect = (planId: string) => {
+    setSelecting(planId);
+    onSelect(planId, billingInterval);
+  };
+
+  return (
+    <div className="w-full">
+      {/* Billing interval toggle */}
+      <div className="flex items-center justify-center gap-3 mb-6">
+        <span className={`text-sm font-medium ${billingInterval === 'monthly' ? 'text-white' : 'text-slate-500'}`}>Monthly</span>
+        <button
+          onClick={() => setBillingInterval(i => i === 'monthly' ? 'annual' : 'monthly')}
+          className={`relative w-12 h-6 rounded-full transition-colors ${billingInterval === 'annual' ? 'bg-[#f97316]' : 'bg-[#1e2d4a]'}`}
+        >
+          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${billingInterval === 'annual' ? 'translate-x-6' : ''}`} />
+        </button>
+        <span className={`text-sm font-medium ${billingInterval === 'annual' ? 'text-white' : 'text-slate-500'}`}>
+          Annual <span className="text-emerald-400 text-xs font-bold">Save 20%</span>
+        </span>
+      </div>
+
+      {/* Plan cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        {PLANS.map(plan => (
+          <div
+            key={plan.id}
+            className={`relative rounded-2xl border p-5 text-left transition-all ${
+              plan.highlight
+                ? 'border-[#f97316] bg-orange-950/20 shadow-lg shadow-orange-900/20'
+                : 'border-[#1e2d4a] bg-[#1a2236]'
+            }`}
+          >
+            {plan.highlight && (
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-[#f97316] text-white text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
+                Most Popular
+              </div>
+            )}
+            <h3 className="text-base font-bold text-white mb-1">{plan.name}</h3>
+            <p className="text-xs text-slate-400 mb-4 leading-relaxed">{plan.description}</p>
+            <ul className="space-y-1.5 mb-5">
+              {plan.features.map(f => (
+                <li key={f} className="flex items-start gap-2 text-xs text-slate-300">
+                  <span className="text-emerald-400 shrink-0 mt-0.5">✓</span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={() => handleSelect(plan.id)}
+              disabled={loading}
+              className={`w-full py-2.5 rounded-lg text-sm font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                plan.highlight
+                  ? 'bg-[#f97316] hover:bg-orange-400 text-white shadow shadow-orange-900/30'
+                  : 'bg-[#0d1628] border border-[#1e2d4a] hover:border-[#f97316] text-slate-200 hover:text-white'
+              }`}
+            >
+              {loading && selecting === plan.id ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Redirecting…
+                </span>
+              ) : (
+                `Subscribe — ${plan.name}`
+              )}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-400 text-center mt-2">{error}</p>
+      )}
+    </div>
+  );
+}
+
 interface OrgGatedAppProps {
-  debugPanel: React.ReactNode;
   activePage: Page;
   setActivePage: (p: Page) => void;
   sidebarCollapsed: boolean;
@@ -185,65 +301,140 @@ function OrgGatedApp({
   pendingProjectId, setPendingProjectId, handleNotificationNavigate, isSuperAdmin,
 }: OrgGatedAppProps) {
   const { orgSettings, isModuleEnabled, isTrialExpired } = useOrgSettings();
-  const { signOut } = useAuth();
+  const { signOut, session } = useAuth();
 
-  const isBlocked = isTrialExpired || orgSettings.account_status === 'disabled';
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutSuccess, setCheckoutSuccess] = useState(false);
+
+  // Detect ?checkout_success=1 on return from Stripe
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout_success') === '1') {
+      setCheckoutSuccess(true);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const startCheckout = useCallback(async (plan: string, interval: string) => {
+    setCheckoutLoading(true);
+    setCheckoutError(null);
+    try {
+      const token = session?.access_token;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const res = await fetch(`${supabaseUrl}/functions/v1/stripe-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+        },
+        body: JSON.stringify({ plan, interval }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) {
+        setCheckoutError(json.error ?? 'Unable to start checkout. Please try again.');
+        setCheckoutLoading(false);
+        return;
+      }
+      window.location.href = json.url;
+    } catch {
+      setCheckoutError('Network error — please check your connection and try again.');
+      setCheckoutLoading(false);
+    }
+  }, [session]);
+
+  const openPortal = useCallback(async () => {
+    setCheckoutLoading(true);
+    setCheckoutError(null);
+    try {
+      const token = session?.access_token;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const res = await fetch(`${supabaseUrl}/functions/v1/stripe-portal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+        },
+        body: JSON.stringify({ return_url: window.location.origin }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) {
+        setCheckoutError(json.error ?? 'Unable to open billing portal. Please try again.');
+        setCheckoutLoading(false);
+        return;
+      }
+      window.location.href = json.url;
+    } catch {
+      setCheckoutError('Network error — please check your connection and try again.');
+      setCheckoutLoading(false);
+    }
+  }, [session]);
+
+  const subscriptionStatus = orgSettings.subscription_status;
+  const isPaymentFailed = subscriptionStatus === 'past_due';
+  const isSubscriptionEnded = subscriptionStatus === 'canceled' || subscriptionStatus === 'unpaid';
+  const isBlocked = isTrialExpired || orgSettings.account_status === 'disabled' || isSubscriptionEnded;
 
   if (isBlocked) {
-    const isExpiredTrial = isTrialExpired;
+    const isExpiredTrial = isTrialExpired && !isSubscriptionEnded;
+    const isAdminDisabled = orgSettings.account_status === 'disabled';
 
     return (
       <>
         {debugPanel}
         <div className="min-h-screen bg-[#111827] flex items-center justify-center p-6">
-          <div className="text-center max-w-sm w-full">
-            {isExpiredTrial ? (
+          <div className="text-center max-w-2xl w-full">
+            {isAdminDisabled ? (
+              /* ── Admin-disabled ── */
               <>
-                {/* ── Trial expired ── */}
-                <div className="w-16 h-16 rounded-2xl bg-amber-900/30 border border-amber-700/40 flex items-center justify-center mx-auto mb-5">
-                  <FlaskConical size={28} className="text-amber-400" />
-                </div>
-                <h2 className="text-xl font-bold text-white mb-2">Your free trial has ended</h2>
-                <p className="text-sm text-slate-400 leading-relaxed mb-6">
-                  Your 14-day VYSITE trial has expired. Choose a plan to restore access and keep your data.
-                </p>
-
-                {/* Placeholder CTA — will be wired to Stripe Checkout in Phase 2 */}
-                <button
-                  onClick={() => window.location.href = 'mailto:hello@vysite.com?subject=VYSITE Subscription Enquiry'}
-                  className="w-full py-3 rounded-xl bg-[#f97316] hover:bg-orange-400 text-white text-sm font-bold transition-colors shadow-lg shadow-orange-900/30 mb-3"
-                >
-                  Choose a Plan
-                </button>
-
-                <p className="text-xs text-slate-600 mb-6">
-                  Subscription plans coming soon. In the meantime, email{' '}
-                  <a href="mailto:hello@vysite.com" className="text-[#f97316] hover:underline">
-                    hello@vysite.com
-                  </a>
-                  {' '}to activate your account.
-                </p>
-              </>
-            ) : (
-              <>
-                {/* ── Admin-disabled account ── */}
                 <div className="w-16 h-16 rounded-2xl bg-red-900/20 border border-red-800/30 flex items-center justify-center mx-auto mb-5">
                   <Ban size={28} className="text-red-400" />
                 </div>
                 <h2 className="text-xl font-bold text-white mb-2">Account Disabled</h2>
                 <p className="text-sm text-slate-400 leading-relaxed mb-6">
                   This company account has been disabled. Please contact{' '}
-                  <a href="mailto:hello@vysite.com" className="text-[#f97316] hover:underline">
-                    VYSITE support
-                  </a>
-                  {' '}to restore access.
+                  <a href="mailto:hello@vysite.com" className="text-[#f97316] hover:underline">VYSITE support</a> to restore access.
                 </p>
               </>
-            )}
+            ) : isSubscriptionEnded ? (
+              /* ── Subscription cancelled / unpaid ── */
+              <>
+                <div className="w-16 h-16 rounded-2xl bg-red-900/20 border border-red-800/30 flex items-center justify-center mx-auto mb-5">
+                  <Ban size={28} className="text-red-400" />
+                </div>
+                <h2 className="text-xl font-bold text-white mb-2">Subscription Ended</h2>
+                <p className="text-sm text-slate-400 leading-relaxed mb-6">
+                  Your VYSITE subscription has been cancelled or has lapsed. Re-subscribe below to restore access to your account and data.
+                </p>
+                <PlanSelector
+                  loading={checkoutLoading}
+                  error={checkoutError}
+                  onSelect={startCheckout}
+                />
+              </>
+            ) : isExpiredTrial ? (
+              /* ── Trial expired ── */
+              <>
+                <div className="w-16 h-16 rounded-2xl bg-amber-900/30 border border-amber-700/40 flex items-center justify-center mx-auto mb-5">
+                  <FlaskConical size={28} className="text-amber-400" />
+                </div>
+                <h2 className="text-xl font-bold text-white mb-2">Your free trial has ended</h2>
+                <p className="text-sm text-slate-400 leading-relaxed mb-6">
+                  Your 14-day VYSITE trial has expired. Choose a plan below to restore access and keep your data.
+                </p>
+                <PlanSelector
+                  loading={checkoutLoading}
+                  error={checkoutError}
+                  onSelect={startCheckout}
+                />
+              </>
+            ) : null}
 
             <button
               onClick={signOut}
-              className="px-5 py-2 border border-[#1e2d4a] text-slate-400 hover:text-white rounded-lg text-sm transition-colors"
+              className="mt-6 px-5 py-2 border border-[#1e2d4a] text-slate-400 hover:text-white rounded-lg text-sm transition-colors"
             >
               Sign out
             </button>
@@ -256,8 +447,35 @@ function OrgGatedApp({
   return (
     <>
       {debugPanel}
+      {/* Payment warning banner — past_due but not yet hard-blocked */}
+      {isPaymentFailed && (
+        <div className="fixed top-0 left-0 right-0 z-[9999] bg-amber-600 text-white text-xs font-semibold flex items-center justify-center gap-2 px-4 py-2.5">
+          <AlertTriangle size={13} />
+          <span>Payment failed — please update your payment method to avoid losing access.</span>
+          <button
+            onClick={openPortal}
+            disabled={checkoutLoading}
+            className="ml-2 underline hover:no-underline disabled:opacity-60"
+          >
+            {checkoutLoading ? 'Opening…' : 'Update now'}
+          </button>
+        </div>
+      )}
+      {/* Checkout success banner */}
+      {checkoutSuccess && (
+        <div className="fixed top-0 left-0 right-0 z-[9999] bg-emerald-600 text-white text-xs font-semibold flex items-center justify-center gap-2 px-4 py-2.5">
+          <CheckCircle size={13} />
+          <span>Subscription activated — welcome to VYSITE!</span>
+          <button
+            onClick={() => setCheckoutSuccess(false)}
+            className="ml-2 underline hover:no-underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <EnvBanner />
-      <div className="min-h-screen bg-[#111827] flex">
+      <div className={`min-h-screen bg-[#111827] flex ${(isPaymentFailed || checkoutSuccess) ? 'pt-9' : ''}`}>
         <Sidebar
           activePage={activePage}
           onNavigate={setActivePage}

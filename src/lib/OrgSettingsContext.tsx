@@ -13,6 +13,13 @@ export interface OrgSettings {
   ai_monthly_limit: number;
   ai_used_this_month: number;
   ai_bonus_credits: number;
+  // Stripe billing fields
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  plan_name: string | null;
+  billing_interval: string | null;
+  current_period_end: string | null;
+  subscription_status: string | null;
 }
 
 // All modules default to enabled — preserves existing behaviour when no
@@ -39,6 +46,12 @@ const DEFAULT_ORG_SETTINGS: OrgSettings = {
   ai_monthly_limit: 50,
   ai_used_this_month: 0,
   ai_bonus_credits: 0,
+  stripe_customer_id: null,
+  stripe_subscription_id: null,
+  plan_name: null,
+  billing_interval: null,
+  current_period_end: null,
+  subscription_status: null,
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -84,13 +97,12 @@ export function OrgSettingsProvider({
 
     supabase
       .from('org_settings')
-      .select('org_id,account_status,account_type,trial_expires_at,modules_enabled,ai_enabled,ai_monthly_limit,ai_used_this_month,ai_bonus_credits')
+      .select('org_id,account_status,account_type,trial_expires_at,modules_enabled,ai_enabled,ai_monthly_limit,ai_used_this_month,ai_bonus_credits,stripe_customer_id,stripe_subscription_id,plan_name,billing_interval,current_period_end,subscription_status')
       .eq('org_id', orgId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (error) {
           console.error('[VYSITE] OrgSettingsContext load error:', error.message);
-          // On error, default to fully enabled so users are not accidentally locked out
           setOrgSettings({ ...DEFAULT_ORG_SETTINGS, org_id: orgId });
         } else if (data) {
           setOrgSettings({
@@ -103,9 +115,14 @@ export function OrgSettingsProvider({
             ai_monthly_limit: data.ai_monthly_limit ?? 50,
             ai_used_this_month: data.ai_used_this_month ?? 0,
             ai_bonus_credits: data.ai_bonus_credits ?? 0,
+            stripe_customer_id: data.stripe_customer_id ?? null,
+            stripe_subscription_id: data.stripe_subscription_id ?? null,
+            plan_name: data.plan_name ?? null,
+            billing_interval: data.billing_interval ?? null,
+            current_period_end: data.current_period_end ?? null,
+            subscription_status: data.subscription_status ?? null,
           });
         } else {
-          // No row — org has not been configured yet; default everything to on
           setOrgSettings({ ...DEFAULT_ORG_SETTINGS, org_id: orgId });
         }
         setLoading(false);

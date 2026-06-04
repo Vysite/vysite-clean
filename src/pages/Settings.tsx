@@ -3,10 +3,12 @@ import {
   Bell, Shield, Users, Globe,
   ChevronRight, ToggleLeft, ToggleRight, Save,
   Hash, CheckSquare, ArrowLeft, Eye, EyeOff, Lock, CheckCircle, AlertCircle,
+  CreditCard, ExternalLink, Zap,
 } from 'lucide-react';
 import type { LucideIcon } from '../data/types';
 import { useAppStore } from '../lib/StoreContext';
 import { supabase } from '../lib/supabase';
+import { useOrgSettings } from '../lib/OrgSettingsContext';
 import type { DBSettings } from '../lib/store';
 
 type ToggleKey =
@@ -357,6 +359,230 @@ function ChangePasswordSection() {
   );
 }
 
+// ─── Billing Section ──────────────────────────────────────────────────────────
+
+const PLAN_LABELS: Record<string, string> = {
+  starter: 'Starter',
+  professional: 'Professional',
+  business: 'Business',
+};
+
+const PLAN_COLORS: Record<string, string> = {
+  starter: 'bg-sky-900/40 text-sky-300 border-sky-700/50',
+  professional: 'bg-[#f97316]/20 text-orange-300 border-orange-700/40',
+  business: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50',
+};
+
+function BillingSection() {
+  const { orgSettings } = useOrgSettings();
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual'>('monthly');
+  const [selecting, setSelecting] = useState<string | null>(null);
+
+  const isPaid = orgSettings.account_type === 'paid';
+  const planName = orgSettings.plan_name;
+  const status = orgSettings.subscription_status;
+  const periodEnd = orgSettings.current_period_end
+    ? new Date(orgSettings.current_period_end).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
+
+  async function openPortal() {
+    setPortalLoading(true);
+    setPortalError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const res = await fetch(`${supabaseUrl}/functions/v1/stripe-portal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+        },
+        body: JSON.stringify({ return_url: window.location.origin }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) {
+        setPortalError(json.error ?? 'Unable to open billing portal.');
+        setPortalLoading(false);
+        return;
+      }
+      window.location.href = json.url;
+    } catch {
+      setPortalError('Network error — please try again.');
+      setPortalLoading(false);
+    }
+  }
+
+  async function startCheckout(plan: string) {
+    setSelecting(plan);
+    setCheckoutLoading(true);
+    setCheckoutError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const res = await fetch(`${supabaseUrl}/functions/v1/stripe-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+        },
+        body: JSON.stringify({ plan, interval: billingInterval }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) {
+        setCheckoutError(json.error ?? 'Unable to start checkout.');
+        setCheckoutLoading(false);
+        setSelecting(null);
+        return;
+      }
+      window.location.href = json.url;
+    } catch {
+      setCheckoutError('Network error — please try again.');
+      setCheckoutLoading(false);
+      setSelecting(null);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-base font-bold text-white">Billing & Subscription</h3>
+        <p className="text-xs text-slate-500 mt-1">Manage your VYSITE subscription, payment method, and billing details.</p>
+      </div>
+
+      {/* Current plan */}
+      <div className="bg-[#0d1628] rounded-xl border border-[#1e2d4a] divide-y divide-[#1e2d4a]">
+        <div className="flex items-center justify-between px-4 py-3.5">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Current Plan</p>
+            {isPaid && planName ? (
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${PLAN_COLORS[planName] ?? 'bg-slate-700 text-slate-300 border-slate-600'}`}>
+                <Zap size={10} />
+                {PLAN_LABELS[planName] ?? planName}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border bg-amber-900/30 text-amber-300 border-amber-700/40">
+                Trial
+              </span>
+            )}
+          </div>
+          {isPaid && (
+            <div className="text-right">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Billing</p>
+              <p className="text-xs text-slate-300 capitalize">{orgSettings.billing_interval ?? '—'}</p>
+            </div>
+          )}
+        </div>
+
+        {isPaid && periodEnd && (
+          <div className="px-4 py-3.5 flex items-center justify-between">
+            <p className="text-sm text-slate-400">Next renewal</p>
+            <p className="text-sm text-slate-200 font-medium">{periodEnd}</p>
+          </div>
+        )}
+
+        {isPaid && status && status !== 'active' && (
+          <div className="px-4 py-3.5">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-900/20 border border-amber-700/40">
+              <AlertCircle size={13} className="text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-300 leading-relaxed">
+                {status === 'past_due'
+                  ? 'Your last payment failed. Please update your payment method to avoid losing access.'
+                  : status === 'canceled'
+                  ? 'Your subscription has been cancelled.'
+                  : `Subscription status: ${status}`}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Manage billing (paid users) */}
+      {isPaid && orgSettings.stripe_customer_id && (
+        <div>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Manage Billing</p>
+          <div className="bg-[#0d1628] rounded-xl border border-[#1e2d4a] px-4 py-4">
+            <p className="text-sm text-slate-300 mb-3 leading-relaxed">
+              Update your payment method, view invoices, or cancel your subscription through the secure Stripe customer portal.
+            </p>
+            {portalError && (
+              <p className="text-xs text-red-400 mb-3">{portalError}</p>
+            )}
+            <button
+              onClick={openPortal}
+              disabled={portalLoading}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#1a2236] border border-[#1e2d4a] hover:border-[#f97316] text-slate-200 rounded-lg text-sm font-semibold transition-colors disabled:opacity-60"
+            >
+              <CreditCard size={14} />
+              {portalLoading ? 'Opening…' : 'Manage Billing'}
+              <ExternalLink size={12} className="text-slate-500 ml-1" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade / subscribe (trial or non-paid users) */}
+      {!isPaid && (
+        <div>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Subscribe</p>
+
+          {/* Interval toggle */}
+          <div className="flex items-center gap-3 mb-4">
+            <span className={`text-sm font-medium ${billingInterval === 'monthly' ? 'text-white' : 'text-slate-500'}`}>Monthly</span>
+            <button
+              onClick={() => setBillingInterval(i => i === 'monthly' ? 'annual' : 'monthly')}
+              className={`relative w-11 h-6 rounded-full transition-colors ${billingInterval === 'annual' ? 'bg-[#f97316]' : 'bg-[#1e2d4a]'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${billingInterval === 'annual' ? 'translate-x-5' : ''}`} />
+            </button>
+            <span className={`text-sm font-medium ${billingInterval === 'annual' ? 'text-white' : 'text-slate-500'}`}>
+              Annual <span className="text-emerald-400 text-xs font-bold ml-1">Save 20%</span>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { id: 'starter', name: 'Starter', desc: 'Core modules for small teams' },
+              { id: 'professional', name: 'Professional', desc: 'AI features + priority support', popular: true },
+              { id: 'business', name: 'Business', desc: 'Full access + Commercial Module' },
+            ].map(plan => (
+              <div key={plan.id} className={`relative rounded-xl border p-4 ${plan.popular ? 'border-[#f97316] bg-orange-950/10' : 'border-[#1e2d4a] bg-[#0d1628]'}`}>
+                {plan.popular && (
+                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-[#f97316] text-white text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
+                    Popular
+                  </div>
+                )}
+                <p className="text-sm font-bold text-white mb-0.5">{plan.name}</p>
+                <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">{plan.desc}</p>
+                <button
+                  onClick={() => startCheckout(plan.id)}
+                  disabled={checkoutLoading}
+                  className={`w-full py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-60 ${
+                    plan.popular
+                      ? 'bg-[#f97316] hover:bg-orange-400 text-white'
+                      : 'bg-[#1a2236] border border-[#1e2d4a] hover:border-[#f97316] text-slate-200'
+                  }`}
+                >
+                  {checkoutLoading && selecting === plan.id ? 'Redirecting…' : `Subscribe`}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {checkoutError && (
+            <p className="text-xs text-red-400 mt-3">{checkoutError}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Coming Soon placeholder ──────────────────────────────────────────────────
 
 function ComingSoon({ title, icon: Icon }: { title: string; icon: LucideIcon }) {
@@ -376,6 +602,7 @@ function ComingSoon({ title, icon: Icon }: { title: string; icon: LucideIcon }) 
 const settingsSections = [
   { id: 'notifications', title: 'Notifications',        description: 'Operational alerts and preference controls',   icon: Bell,        color: 'bg-amber-900/60 text-amber-400' },
   { id: 'operational',   title: 'Operational Settings', description: 'Defaults, priorities and numbering logic',     icon: CheckSquare, color: 'bg-emerald-900/60 text-emerald-400' },
+  { id: 'billing',       title: 'Billing',              description: 'Subscription, plan and payment management',    icon: CreditCard,  color: 'bg-sky-900/60 text-sky-400' },
   { id: 'users',         title: 'User Management',      description: 'Roles, permissions and access control',       icon: Users,       color: 'bg-teal-900/60 text-teal-400' },
   { id: 'security',      title: 'Security',             description: 'Password policy, 2FA and session control',    icon: Shield,      color: 'bg-red-900/60 text-red-400' },
   { id: 'integrations',  title: 'Integrations',         description: 'Connect to third-party tools and services',  icon: Globe,       color: 'bg-slate-700 text-slate-400' },
@@ -398,6 +625,7 @@ export default function Settings() {
     switch (activeSection) {
       case 'notifications': return <NotificationSettings settings={store.settings} onSave={handleSave} />;
       case 'operational':   return <OperationalSettings settings={store.settings} onSave={handleSave} />;
+      case 'billing':       return <BillingSection />;
       case 'users':         return <ComingSoon title="User Management" icon={Users} />;
       case 'security':      return <ChangePasswordSection />;
       case 'integrations':  return <ComingSoon title="Integrations" icon={Globe} />;
