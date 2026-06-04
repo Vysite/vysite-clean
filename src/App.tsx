@@ -276,6 +276,7 @@ function PlanSelector({
 }
 
 interface OrgGatedAppProps {
+  debugPanel: React.ReactNode;
   activePage: Page;
   setActivePage: (p: Page) => void;
   sidebarCollapsed: boolean;
