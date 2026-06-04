@@ -820,17 +820,27 @@ function DetailModal({
     onDeleted(record.id);
   }
 
-  function handleExport(view: 'internal' | 'client') {
+  async function handleExport(view: 'internal' | 'client') {
     const r = {
       ...record!,
       ...form,
       projectName: projects.find(p => p.id === form.projectId)?.name ?? record?.projectName,
     } as CommercialRecord;
+
+    // Pre-fetch data_url for every attachment — the store omits it on initial load
+    const enriched = await Promise.all(
+      attachments.map(async (att) => {
+        if (att.data_url) return att;
+        const url = await store.fetchAttachmentData(att.id);
+        return { ...att, data_url: url };
+      })
+    );
+
     openPrintTab(buildExportHTML(
       r,
       lineItems,
       view,
-      attachments,
+      enriched,
       store.settings?.logo_data_url,
       store.settings?.company_name,
     ));
@@ -1265,15 +1275,19 @@ function AttachmentRow({
           <p className="text-sm text-white truncate">{att.name}</p>
           {meta && <p className="text-xs text-slate-500">{meta}</p>}
         </div>
+        {!isImage && (
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-orange-900/30 border border-orange-700/40 text-orange-400 hover:bg-orange-900/50 hover:text-orange-300 text-xs font-medium transition-colors shrink-0"
+            title="Download"
+          >
+            <Download size={12} /> Download
+          </button>
+        )}
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button onClick={openPreview} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a]" title={isImage ? 'View image' : 'Preview'}>
             <Eye size={14} />
           </button>
-          {!isImage && (
-            <button onClick={handleDownload} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a]" title="Download">
-              <Download size={14} />
-            </button>
-          )}
           <button onClick={onRemove} className="p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-[#1e2d4a]">
             <Trash2 size={14} />
           </button>
