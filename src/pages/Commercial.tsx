@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   TrendingUp, Plus, Search, Filter, X, Save,
   Paperclip, Trash2, Eye, Download, FileText,
-  DollarSign,
+  Banknote,
   ChevronRight, AlertCircle, CheckCircle2, Clock, CircleDot,
   Printer,
 } from 'lucide-react';
@@ -624,7 +624,7 @@ function DetailModal({
 
   const tabs: { key: ModalTab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview',    label: 'Overview',       icon: <FileText size={14} /> },
-    { key: 'cost',        label: 'Cost Breakdown',  icon: <DollarSign size={14} /> },
+    { key: 'cost',        label: 'Cost Breakdown',  icon: <Banknote size={14} /> },
     { key: 'attachments', label: `Attachments${attachments.length + pendingFiles.length > 0 ? ` (${attachments.length + pendingFiles.length})` : ''}`, icon: <Paperclip size={14} /> },
   ];
 
