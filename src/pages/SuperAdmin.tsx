@@ -57,6 +57,7 @@ interface SuperAdminRow {
 const MODULES = [
   { key: 'tenders',     label: 'Tender & Estimating' },
   { key: 'projects',    label: 'Projects' },
+  { key: 'commercial',  label: 'Commercial' },
   { key: 'maintenance', label: 'Maintenance & Servicing' },
   { key: 'site-forms',  label: 'Site Forms' },
   { key: 'snagging',    label: 'Snagging' },
@@ -65,9 +66,10 @@ const MODULES = [
   { key: 'reports',     label: 'Reports' },
 ];
 
-const DEFAULT_MODULES: Record<string, boolean> = Object.fromEntries(
-  MODULES.map(m => [m.key, true])
-);
+const DEFAULT_MODULES: Record<string, boolean> = {
+  ...Object.fromEntries(MODULES.map(m => [m.key, true])),
+  commercial: false, // off by default — enabled per-org by Super Admin
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
