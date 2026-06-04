@@ -132,28 +132,65 @@ const selectCls = `${inputCls} appearance-none cursor-pointer`;
 
 // ─── Print / Export builders ──────────────────────────────────────────────────
 
+function esc(v: unknown): string {
+  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function fmtFileSize(bytes: number): string {
+  if (!bytes) return '';
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function buildExportHTML(
   record: CommercialRecord,
   lines: CommercialLineItem[],
   view: 'internal' | 'client',
+  attachments: DBAttachment[],
+  logoUrl?: string,
+  companyName?: string,
 ): string {
   const t = typeInfo(record.recordType);
   const s = statusInfo(record.status);
   const totals = recordTotals(lines);
+  const orgName = companyName || 'VYSITE';
+  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const viewLabel = view === 'internal' ? 'Internal Copy — Confidential' : 'Client Copy';
 
+  // ── Branded header ──
+  const logoHtml = logoUrl
+    ? `<img class="doc-logo-img" src="${logoUrl}" alt="${esc(orgName)}" />`
+    : `<div class="doc-logo-text">${esc(orgName)}</div>`;
+
+  const header = `
+    <div class="doc-header">
+      <div>
+        ${logoHtml}
+        <div class="doc-type-label">Commercial Record &mdash; ${esc(t.label)}</div>
+      </div>
+      <div class="doc-header-right">
+        <div class="doc-title">${esc(record.reference ? record.reference + ' — ' : '')}${esc(record.title || 'Untitled')}</div>
+        <div class="doc-dateline">${today}${record.projectName ? ' &nbsp;&middot;&nbsp; ' + esc(record.projectName) : ''}</div>
+        <div class="doc-view-badge">${esc(viewLabel)}</div>
+      </div>
+    </div>`;
+
+  // ── Record detail rows ──
   const headerRows = [
-    ['Reference',       record.reference || '—'],
-    ['Type',            t.label],
-    ['Project',         record.projectName || '—'],
-    ['Client',          record.client || '—'],
-    ['Status',          s.label],
-    ['Date Raised',     record.dateRaised    ? new Date(record.dateRaised).toLocaleDateString('en-GB')    : '—'],
-    ['Date Submitted',  record.dateSubmitted ? new Date(record.dateSubmitted).toLocaleDateString('en-GB') : '—'],
-    ['Date Agreed',     record.dateAgreed    ? new Date(record.dateAgreed).toLocaleDateString('en-GB')    : '—'],
-  ].map(([k, v]) => `<tr><td class="label">${k}</td><td>${v}</td></tr>`).join('');
+    ['Title',          record.title || '—'],
+    ['Reference',      record.reference || '—'],
+    ['Type',           t.label],
+    ['Project',        record.projectName || '—'],
+    ['Client',         record.client || '—'],
+    ['Status',         s.label],
+    ['Date Raised',    record.dateRaised    ? new Date(record.dateRaised).toLocaleDateString('en-GB')    : '—'],
+    ['Date Submitted', record.dateSubmitted ? new Date(record.dateSubmitted).toLocaleDateString('en-GB') : '—'],
+    ['Date Agreed',    record.dateAgreed    ? new Date(record.dateAgreed).toLocaleDateString('en-GB')    : '—'],
+  ].map(([k, v]) => `<tr><td class="label">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
 
+  // ── Cost breakdown ──
   const lineRows = lines.map((l, i) => {
-    const desc    = view === 'internal' ? (l.description || l.clientDescription || '—') : (l.clientDescription || l.description || '—');
+    const desc = view === 'internal' ? (l.description || l.clientDescription || '—') : (l.clientDescription || l.description || '—');
     const internalTotal = lineTotal(l, 'internal');
     const clientTotal   = lineTotal(l, 'client');
     const internalCols  = view === 'internal'
@@ -161,9 +198,9 @@ function buildExportHTML(
       : '';
     return `<tr class="${i % 2 === 0 ? '' : 'alt'}">
       <td class="num">${i + 1}</td>
-      <td>${desc}</td>
+      <td>${esc(desc)}</td>
       <td class="num">${l.quantity}</td>
-      <td>${l.unit}</td>
+      <td>${esc(l.unit)}</td>
       <td class="num">£${fmt(l.clientRate)}</td>
       ${internalCols}
       <td class="num bold">£${fmt(clientTotal)}</td>
@@ -182,21 +219,50 @@ function buildExportHTML(
     <tr><td colspan="3" class="label">Total Client Value</td><td class="num bold">£${fmt(totals.totalClient)}</td></tr>
   `;
 
+  // ── Notes ──
   const noteSection = record.notes
-    ? `<div class="section"><div class="section-title">Notes</div><p class="notes">${record.notes.replace(/\n/g, '<br>')}</p></div>`
+    ? `<div class="section"><div class="section-title">Notes</div><p class="notes">${esc(record.notes).replace(/\n/g, '<br>')}</p></div>`
     : '';
 
-  const viewLabel = view === 'internal' ? 'Internal Copy — Confidential' : 'Client Copy';
+  // ── Attachments ──
+  const attachmentRows = attachments.map(a => {
+    const isImage = a.type?.startsWith('image/');
+    const size = a.size ? ` &nbsp;&middot;&nbsp; ${fmtFileSize(a.size)}` : '';
+    const typeLabel = a.type ? a.type.split('/').pop()?.toUpperCase() ?? a.type : 'File';
+    if (isImage && a.data_url) {
+      return `<div class="att-item">
+        <img class="att-thumb" src="${a.data_url}" alt="${esc(a.name)}" />
+        <div class="att-info"><div class="att-name">${esc(a.name)}</div><div class="att-meta">${esc(typeLabel)}${size}</div></div>
+      </div>`;
+    }
+    return `<div class="att-item att-file">
+      <div class="att-icon">&#128196;</div>
+      <div class="att-info"><div class="att-name">${esc(a.name)}</div><div class="att-meta">${esc(typeLabel)}${size}</div></div>
+      ${a.data_url ? `<a class="att-link" href="${a.data_url}" download="${esc(a.name)}">Download</a>` : ''}
+    </div>`;
+  }).join('');
+
+  const attachSection = attachments.length > 0
+    ? `<div class="section">
+        <div class="section-title">Attachments (${attachments.length})</div>
+        <div class="att-list">${attachmentRows}</div>
+      </div>`
+    : '';
 
   const styles = `
-    h1{font-size:20px;font-weight:700;margin-bottom:2px}
-    h2{font-size:13px;color:#555;margin-bottom:20px}
-    .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:#f0f0f0;color:#333;border:1px solid #ddd;margin-bottom:16px}
-    .meta{border-collapse:collapse;margin-bottom:24px;width:auto}
+    .doc-header{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid #f97316;margin-bottom:24px}
+    .doc-logo-img{height:38px;max-width:160px;display:block;margin-bottom:4px}
+    .doc-logo-text{font-size:22px;font-weight:900;color:#f97316;letter-spacing:.05em}
+    .doc-type-label{font-size:10px;color:#64748b;margin-top:4px}
+    .doc-header-right{text-align:right}
+    .doc-title{font-size:18px;font-weight:900;color:#111;margin-bottom:4px;line-height:1.25;max-width:420px}
+    .doc-dateline{font-size:11px;color:#64748b;margin-bottom:4px}
+    .doc-view-badge{display:inline-block;padding:2px 10px;border-radius:4px;font-size:10px;font-weight:600;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
+    .meta{border-collapse:collapse;margin-bottom:0;width:auto}
     .meta td{padding:4px 12px 4px 0;font-size:12px;vertical-align:top}
-    .meta td.label{color:#666;white-space:nowrap;padding-right:16px}
+    .meta td.label{color:#666;white-space:nowrap;padding-right:16px;font-weight:600}
     .section{margin-bottom:24px}
-    .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #eee}
+    .section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #eee}
     table.lines{width:100%;border-collapse:collapse;font-size:11px}
     table.lines th{text-align:left;padding:6px 8px;background:#f8f8f8;border-bottom:2px solid #ddd;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#666}
     table.lines td{padding:6px 8px;border-bottom:1px solid #f0f0f0;vertical-align:top}
@@ -206,16 +272,23 @@ function buildExportHTML(
     .totals{width:auto;margin-left:auto;border-collapse:collapse;margin-top:12px}
     .totals td{padding:5px 8px;font-size:12px;border-top:1px solid #eee}
     .totals td.label{color:#666;padding-right:24px}
-    .watermark{position:fixed;bottom:20px;right:20px;font-size:10px;color:#ccc}
     .notes{font-size:12px;color:#444;line-height:1.6;white-space:pre-wrap}
-    @media print{.watermark{position:fixed}}
+    .att-list{display:flex;flex-direction:column;gap:8px}
+    .att-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa}
+    .att-file{}
+    .att-thumb{width:80px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;flex-shrink:0}
+    .att-icon{font-size:24px;width:40px;text-align:center;flex-shrink:0}
+    .att-info{flex:1;min-width:0}
+    .att-name{font-size:12px;font-weight:600;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .att-meta{font-size:10px;color:#888;margin-top:1px}
+    .att-link{font-size:10px;color:#f97316;text-decoration:none;flex-shrink:0;border:1px solid #fed7aa;padding:2px 8px;border-radius:4px}
+    .watermark{margin-top:32px;padding-top:12px;border-top:1px solid #eee;font-size:10px;color:#aaa;text-align:center}
+    @media print{.watermark{position:fixed;bottom:12px;left:0;right:0;text-align:center;border-top:none}}
   `;
 
   const body = `
-    <div>
-      <h1>${record.reference ? record.reference + ' — ' : ''}${record.title || 'Untitled'}</h1>
-      <h2>${t.label}</h2>
-      <span class="badge">${viewLabel}</span>
+    <div class="page" style="max-width:860px;margin:0 auto">
+      ${header}
 
       <div class="section">
         <div class="section-title">Record Details</div>
@@ -236,19 +309,19 @@ function buildExportHTML(
               <th class="num">Client Total</th>
             </tr>
           </thead>
-          <tbody>${lineRows || '<tr><td colspan="8" style="color:#999;text-align:center;padding:16px">No line items</td></tr>'}</tbody>
+          <tbody>${lineRows || `<tr><td colspan="${view === 'internal' ? 8 : 5}" style="color:#999;text-align:center;padding:16px">No line items</td></tr>`}</tbody>
         </table>
-        <table class="totals">
-          <tbody>${summaryRows}</tbody>
-        </table>
+        <table class="totals"><tbody>${summaryRows}</tbody></table>
       </div>
 
       ${noteSection}
+      ${attachSection}
+
+      <div class="watermark">Generated by VYSITE &nbsp;&middot;&nbsp; ${today}</div>
     </div>
-    <div class="watermark">Generated by VYSITE • ${new Date().toLocaleDateString('en-GB')}</div>
   `;
 
-  return buildPrintDocument(`${record.reference || 'Commercial'} — ${view === 'internal' ? 'Internal' : 'Client'} Export`, styles, body);
+  return buildPrintDocument(`${record.reference || 'Commercial'} — ${view === 'internal' ? 'Internal' : 'Client'}`, styles, body);
 }
 
 // ─── Line Item Editor ─────────────────────────────────────────────────────────
@@ -619,7 +692,14 @@ function DetailModal({
       ...form,
       projectName: projects.find(p => p.id === form.projectId)?.name ?? record?.projectName,
     } as CommercialRecord;
-    openPrintTab(buildExportHTML(r, lineItems, view));
+    openPrintTab(buildExportHTML(
+      r,
+      lineItems,
+      view,
+      attachments,
+      store.settings?.logo_data_url,
+      store.settings?.company_name,
+    ));
   }
 
   const tabs: { key: ModalTab; label: string; icon: React.ReactNode }[] = [
@@ -895,22 +975,22 @@ function DetailModal({
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-[#1e2d4a] shrink-0 gap-3">
           <div className="flex items-center gap-2">
-            {/* Export buttons — only shown for existing saved records */}
-            {!isNew && tab === 'cost' && (
+            {/* Export buttons — available for any tab on saved records */}
+            {!isNew && (
               <>
                 {canViewPricing && (
                   <button
                     onClick={() => handleExport('internal')}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1e2d4a] text-slate-300 hover:text-white hover:border-[#f97316] text-xs transition-colors"
                   >
-                    <Printer size={13} /> Internal Export
+                    <Printer size={13} /> Internal Print
                   </button>
                 )}
                 <button
                   onClick={() => handleExport('client')}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1e2d4a] text-slate-300 hover:text-white hover:border-[#f97316] text-xs transition-colors"
                 >
-                  <Printer size={13} /> Client Export
+                  <Printer size={13} /> Client Print
                 </button>
               </>
             )}
