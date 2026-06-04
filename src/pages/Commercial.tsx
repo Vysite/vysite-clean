@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   TrendingUp, Plus, Search, Filter, X, Save,
-  Paperclip, Trash2, Eye, Download, FileText,
+  Paperclip, Trash2, Eye, FileText,
   Banknote,
   ChevronRight, AlertCircle, CheckCircle2, Clock, CircleDot,
   Printer,
@@ -1046,6 +1046,21 @@ function DetailModal({
 
 // ─── Attachment row ───────────────────────────────────────────────────────────
 
+function fileTypeLabel(mimeType: string | undefined, name: string): string {
+  if (!mimeType) return name.split('.').pop()?.toUpperCase() ?? 'File';
+  const map: Record<string, string> = {
+    'application/pdf': 'PDF',
+    'application/msword': 'Word',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
+    'application/vnd.ms-excel': 'Excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel',
+    'text/csv': 'CSV',
+    'text/plain': 'Text',
+  };
+  if (mimeType.startsWith('image/')) return mimeType.split('/')[1].toUpperCase();
+  return map[mimeType] ?? mimeType.split('/').pop()?.toUpperCase() ?? 'File';
+}
+
 function AttachmentRow({
   att,
   onRemove,
@@ -1056,37 +1071,57 @@ function AttachmentRow({
   fetchData: (id: string) => Promise<string>;
 }) {
   const [previewing, setPreviewing] = useState(false);
-  const [dataUrl, setDataUrl] = useState<string | null>(att.data_url ?? null);
+  const [dataUrl, setDataUrl] = useState<string | null>(att.data_url || null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  const isImage = att.type?.startsWith('image/');
 
   async function openPreview() {
     if (!dataUrl) {
+      setLoadingPreview(true);
       const url = await fetchData(att.id);
       setDataUrl(url);
+      setLoadingPreview(false);
     }
     setPreviewing(true);
   }
 
-  const isImage = att.type?.startsWith('image/');
   const size = att.size ? (att.size < 1024 * 1024 ? `${(att.size / 1024).toFixed(0)} KB` : `${(att.size / (1024 * 1024)).toFixed(1)} MB`) : '';
+  const typeLabel = fileTypeLabel(att.type, att.name);
+  const uploadDate = att.created_at
+    ? new Date(att.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    : null;
+  const meta = [typeLabel, size, uploadDate ? `Uploaded ${uploadDate}` : null].filter(Boolean).join(' · ');
 
   return (
     <>
       <div className="flex items-center gap-3 p-3 rounded-lg bg-[#0d1628] border border-[#1e2d4a] group">
-        <div className="w-8 h-8 rounded-lg bg-[#1a2236] flex items-center justify-center shrink-0">
-          {isImage ? <Eye size={14} className="text-slate-400" /> : <FileText size={14} className="text-slate-400" />}
-        </div>
+        {isImage ? (
+          <button
+            onClick={openPreview}
+            title="View image"
+            className="w-14 h-10 rounded-lg overflow-hidden shrink-0 border border-[#1e2d4a] bg-[#1a2236] flex items-center justify-center hover:opacity-80 transition-opacity"
+          >
+            {dataUrl ? (
+              <img src={dataUrl} alt={att.name} className="w-full h-full object-cover" />
+            ) : (
+              <Eye size={14} className={`text-slate-400 ${loadingPreview ? 'animate-pulse' : ''}`} />
+            )}
+          </button>
+        ) : (
+          <div className="w-8 h-8 rounded-lg bg-[#1a2236] flex items-center justify-center shrink-0">
+            <FileText size={14} className="text-slate-400" />
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <p className="text-sm text-white truncate">{att.name}</p>
-          {size && <p className="text-xs text-slate-500">{size}</p>}
+          {meta && <p className="text-xs text-slate-500">{meta}</p>}
         </div>
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={openPreview} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a]">
-            <Eye size={14} />
-          </button>
-          {dataUrl && (
-            <a href={dataUrl} download={att.name} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a]">
-              <Download size={14} />
-            </a>
+          {isImage && (
+            <button onClick={openPreview} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a]" title="View image">
+              <Eye size={14} />
+            </button>
           )}
           <button onClick={onRemove} className="p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-[#1e2d4a]">
             <Trash2 size={14} />
@@ -1094,13 +1129,9 @@ function AttachmentRow({
         </div>
       </div>
 
-      {previewing && dataUrl && (
+      {previewing && isImage && dataUrl && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80" onClick={() => setPreviewing(false)}>
-          {isImage ? (
-            <img src={dataUrl} alt={att.name} className="max-w-[90vw] max-h-[90vh] rounded-xl object-contain" onClick={e => e.stopPropagation()} />
-          ) : (
-            <iframe src={dataUrl} title={att.name} className="w-[90vw] h-[90vh] rounded-xl bg-white" onClick={(e: React.MouseEvent) => e.stopPropagation()} />
-          )}
+          <img src={dataUrl} alt={att.name} className="max-w-[90vw] max-h-[90vh] rounded-xl object-contain" onClick={e => e.stopPropagation()} />
           <button onClick={() => setPreviewing(false)} className="absolute top-4 right-4 p-2 bg-black/60 rounded-full text-white hover:bg-black/80">
             <X size={20} />
           </button>
