@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   TrendingUp, Plus, Search, Filter, X, Save,
-  Paperclip, Trash2, Eye, FileText,
+  Paperclip, Trash2, Eye, Download, FileText,
   Banknote,
   ChevronRight, AlertCircle, CheckCircle2, Clock, CircleDot,
   Printer,
@@ -155,13 +155,79 @@ function buildExportHTML(
   const totals = recordTotals(lines);
   const orgName = companyName || 'VYSITE';
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const viewLabel = view === 'internal' ? 'Internal Copy — Confidential' : 'Client Copy';
+  const docRef = record.reference || `COM-${record.id.slice(0, 8).toUpperCase()}`;
+  const viewLabel = view === 'internal' ? 'Internal Copy \u2014 Confidential' : 'Client Copy';
+  const fmtD = (d: string | null | undefined) =>
+    d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '\u2014';
 
-  // ── Branded header ──
+  // ── CSS — matches PDFRenderer standard ──
+  const CSS = `
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #1e293b; background: white; font-size: 11px; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { max-width: 860px; margin: 0 auto; padding: 36px 40px; }
+    .doc-header { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 14px; border-bottom: 3px solid #f97316; margin-bottom: 20px; }
+    .doc-logo-img { height: 38px; max-width: 160px; display: block; margin-bottom: 4px; }
+    .doc-logo-text { font-size: 22px; font-weight: 900; color: #f97316; letter-spacing: 0.05em; }
+    .doc-type-label { font-size: 10px; color: #64748b; margin-top: 4px; }
+    .doc-header-right { text-align: right; }
+    .doc-title { font-size: 18px; font-weight: 900; color: #111; margin-bottom: 4px; line-height: 1.25; max-width: 380px; }
+    .doc-dateline { font-size: 11px; color: #64748b; }
+    .doc-subtitle-bar { font-size: 11px; color: #64748b; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
+    .status-badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 2px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; margin-left: 6px; vertical-align: middle; }
+    .s-draft { background: #f1f5f9; color: #475569; }
+    .s-submitted { background: #dbeafe; color: #1d4ed8; }
+    .s-agreed { background: #d1fae5; color: #065f46; }
+    .s-other { background: #f1f5f9; color: #475569; }
+    .meta-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 20px; }
+    .meta-label { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+    .meta-value { font-size: 11px; font-weight: 600; color: #0f172a; }
+    .section { margin-top: 20px; page-break-inside: avoid; }
+    .section-heading { font-size: 8.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 6px; border-bottom: 1.5px solid #e2e8f0; margin-bottom: 10px; }
+    .section-content { font-size: 11px; color: #334155; line-height: 1.65; white-space: pre-wrap; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 2px; }
+    .data-table th { padding: 8px 10px; text-align: left; font-size: 9px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; background: #f1f5f9; border-bottom: 2px solid #e2e8f0; }
+    .data-table th.num { text-align: right; }
+    .data-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: top; }
+    .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table tr:nth-child(even) td { background: #f8fafc; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .totals-block { border-collapse: collapse; width: auto; margin-left: auto; margin-top: 12px; }
+    .totals-block td { padding: 5px 10px; font-size: 11px; border-top: 1px solid #e2e8f0; }
+    .totals-block td.label { color: #64748b; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding-right: 24px; }
+    .totals-block td.val { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f172a; }
+    .evidence-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 8px; }
+    .evidence-item { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; page-break-inside: avoid; }
+    .evidence-img { width: 100%; max-height: 280px; object-fit: contain; background: #f8fafc; display: block; }
+    .evidence-caption { padding: 6px 10px; font-size: 9px; color: #64748b; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+    .legal-footer { margin-top: 28px; border-top: 2px solid #e2e8f0; page-break-inside: avoid; }
+    .legal-footer-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 0 8px; }
+    .legal-footer-title { font-size: 8px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; }
+    .legal-footer-ref { font-size: 8px; color: #94a3b8; }
+    .legal-notice-bar { background: #fffbf5; border: 1px solid #fed7aa; border-left: 3px solid #f97316; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
+    .legal-notice-label { font-size: 7.5px; font-weight: 800; color: #c2410c; text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 3px; }
+    .legal-notice-text { font-size: 8.5px; color: #92400e; line-height: 1.65; }
+    .legal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .legal-cell { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 5px; padding: 8px 12px; }
+    .legal-cell-label { font-size: 7.5px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+    .legal-cell-text { font-size: 8.5px; color: #475569; line-height: 1.6; }
+    .legal-branding { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0; }
+    .legal-branding-left { font-size: 8px; color: #94a3b8; }
+    .legal-branding-right { font-size: 8px; color: #94a3b8; text-align: right; }
+    @media print { .page { padding: 20px 24px; } .section { page-break-inside: avoid; } }
+  `;
+
+  // ── Logo & status badge ──
   const logoHtml = logoUrl
     ? `<img class="doc-logo-img" src="${logoUrl}" alt="${esc(orgName)}" />`
     : `<div class="doc-logo-text">${esc(orgName)}</div>`;
 
+  const statusCls = ['agreed', 'paid', 'complete', 'added_to_valuation'].includes(record.status) ? 's-agreed'
+    : ['submitted', 'awaiting_agreement'].includes(record.status) ? 's-submitted'
+    : record.status === 'draft' ? 's-draft' : 's-other';
+  const statusBadge = `<span class="status-badge ${statusCls}">${esc(s.label)}</span>`;
+
+  // ── Header ──
   const header = `
     <div class="doc-header">
       <div>
@@ -169,159 +235,227 @@ function buildExportHTML(
         <div class="doc-type-label">Commercial Record &mdash; ${esc(t.label)}</div>
       </div>
       <div class="doc-header-right">
-        <div class="doc-title">${esc(record.reference ? record.reference + ' — ' : '')}${esc(record.title || 'Untitled')}</div>
+        <div class="doc-title">${esc(record.reference ? record.reference + ' \u2014 ' : '')}${esc(record.title || 'Untitled')}</div>
         <div class="doc-dateline">${today}${record.projectName ? ' &nbsp;&middot;&nbsp; ' + esc(record.projectName) : ''}</div>
-        <div class="doc-view-badge">${esc(viewLabel)}</div>
       </div>
+    </div>
+    <div class="doc-subtitle-bar">
+      ${esc(t.label)}${record.reference ? ' &nbsp;&middot;&nbsp; ' + esc(record.reference) : ''}${record.projectName ? ' &nbsp;&middot;&nbsp; ' + esc(record.projectName) : ''}${statusBadge}
+      &nbsp;&middot;&nbsp; <strong>${esc(viewLabel)}</strong>
     </div>`;
 
-  // ── Record detail rows ──
-  const headerRows = [
-    ['Title',          record.title || '—'],
-    ['Reference',      record.reference || '—'],
-    ['Type',           t.label],
-    ['Project',        record.projectName || '—'],
-    ['Client',         record.client || '—'],
+  // ── Meta block ──
+  const metaItems = [
+    ['Reference',      record.reference || '\u2014'],
+    ['Record Type',    t.label],
+    ['Client',         record.client || '\u2014'],
     ['Status',         s.label],
-    ['Date Raised',    record.dateRaised    ? new Date(record.dateRaised).toLocaleDateString('en-GB')    : '—'],
-    ['Date Submitted', record.dateSubmitted ? new Date(record.dateSubmitted).toLocaleDateString('en-GB') : '—'],
-    ['Date Agreed',    record.dateAgreed    ? new Date(record.dateAgreed).toLocaleDateString('en-GB')    : '—'],
-  ].map(([k, v]) => `<tr><td class="label">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+    ['Date Raised',    fmtD(record.dateRaised)],
+    ['Date Submitted', fmtD(record.dateSubmitted)],
+    ['Date Agreed',    fmtD(record.dateAgreed)],
+    ['Document Ref',   docRef],
+    ['Project',        record.projectName || '\u2014'],
+  ].map(([label, value]) =>
+    `<div class="meta-item"><div class="meta-label">${esc(label)}</div><div class="meta-value">${esc(value)}</div></div>`
+  ).join('');
+  const metaBlock = `<div class="meta-block"><div class="meta-grid">${metaItems}</div></div>`;
 
-  // ── Cost breakdown ──
-  const lineRows = lines.map((l, i) => {
-    const desc = view === 'internal' ? (l.description || l.clientDescription || '—') : (l.clientDescription || l.description || '—');
-    const internalTotal = lineTotal(l, 'internal');
-    const clientTotal   = lineTotal(l, 'client');
-    const internalCols  = view === 'internal'
-      ? `<td class="num">£${fmt(l.internalRate)}</td><td class="num">£${fmt(internalTotal)}</td><td class="num">${l.markupPct != null ? l.markupPct.toFixed(1) + '%' : '—'}</td>`
-      : '';
-    return `<tr class="${i % 2 === 0 ? '' : 'alt'}">
-      <td class="num">${i + 1}</td>
-      <td>${esc(desc)}</td>
-      <td class="num">${l.quantity}</td>
-      <td>${esc(l.unit)}</td>
-      <td class="num">£${fmt(l.clientRate)}</td>
-      ${internalCols}
-      <td class="num bold">£${fmt(clientTotal)}</td>
-    </tr>`;
-  }).join('');
-
-  const internalHeaders = view === 'internal'
-    ? '<th class="num">Internal Rate</th><th class="num">Internal Total</th><th class="num">Markup %</th>'
-    : '';
-
-  const summaryRows = view === 'internal' ? `
-    <tr><td colspan="4" class="label">Total Internal Cost</td><td class="num bold">£${fmt(totals.totalInternal)}</td></tr>
-    <tr><td colspan="4" class="label">Total Client Value</td><td class="num bold">£${fmt(totals.totalClient)}</td></tr>
-    <tr><td colspan="4" class="label">Gross Margin</td><td class="num bold">£${fmt(totals.margin)} (${totals.marginPct.toFixed(1)}%)</td></tr>
-  ` : `
-    <tr><td colspan="3" class="label">Total Client Value</td><td class="num bold">£${fmt(totals.totalClient)}</td></tr>
-  `;
-
-  // ── Notes ──
-  const noteSection = record.notes
-    ? `<div class="section"><div class="section-title">Notes</div><p class="notes">${esc(record.notes).replace(/\n/g, '<br>')}</p></div>`
-    : '';
-
-  // ── Attachments ──
-  const attachmentRows = attachments.map(a => {
-    const isImage = a.type?.startsWith('image/');
-    const size = a.size ? ` &nbsp;&middot;&nbsp; ${fmtFileSize(a.size)}` : '';
-    const typeLabel = a.type ? a.type.split('/').pop()?.toUpperCase() ?? a.type : 'File';
-    if (isImage && a.data_url) {
-      return `<div class="att-item">
-        <img class="att-thumb" src="${a.data_url}" alt="${esc(a.name)}" />
-        <div class="att-info"><div class="att-name">${esc(a.name)}</div><div class="att-meta">${esc(typeLabel)}${size}</div></div>
-      </div>`;
-    }
-    return `<div class="att-item att-file">
-      <div class="att-icon">&#128196;</div>
-      <div class="att-info"><div class="att-name">${esc(a.name)}</div><div class="att-meta">${esc(typeLabel)}${size}</div></div>
-      ${a.data_url ? `<a class="att-link" href="${a.data_url}" download="${esc(a.name)}">Download</a>` : ''}
-    </div>`;
-  }).join('');
-
-  const attachSection = attachments.length > 0
+  // ── Commercial details / notes ──
+  const notesSection = record.notes
     ? `<div class="section">
-        <div class="section-title">Attachments (${attachments.length})</div>
-        <div class="att-list">${attachmentRows}</div>
+        <div class="section-heading">Commercial Details &amp; Notes</div>
+        <div class="section-content">${esc(record.notes)}</div>
       </div>`
     : '';
 
-  const styles = `
-    .doc-header{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:14px;border-bottom:3px solid #f97316;margin-bottom:24px}
-    .doc-logo-img{height:38px;max-width:160px;display:block;margin-bottom:4px}
-    .doc-logo-text{font-size:22px;font-weight:900;color:#f97316;letter-spacing:.05em}
-    .doc-type-label{font-size:10px;color:#64748b;margin-top:4px}
-    .doc-header-right{text-align:right}
-    .doc-title{font-size:18px;font-weight:900;color:#111;margin-bottom:4px;line-height:1.25;max-width:420px}
-    .doc-dateline{font-size:11px;color:#64748b;margin-bottom:4px}
-    .doc-view-badge{display:inline-block;padding:2px 10px;border-radius:4px;font-size:10px;font-weight:600;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
-    .meta{border-collapse:collapse;margin-bottom:0;width:auto}
-    .meta td{padding:4px 12px 4px 0;font-size:12px;vertical-align:top}
-    .meta td.label{color:#666;white-space:nowrap;padding-right:16px;font-weight:600}
-    .section{margin-bottom:24px}
-    .section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #eee}
-    table.lines{width:100%;border-collapse:collapse;font-size:11px}
-    table.lines th{text-align:left;padding:6px 8px;background:#f8f8f8;border-bottom:2px solid #ddd;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#666}
-    table.lines td{padding:6px 8px;border-bottom:1px solid #f0f0f0;vertical-align:top}
-    table.lines tr.alt td{background:#fafafa}
-    .num{text-align:right!important;font-variant-numeric:tabular-nums}
-    .bold{font-weight:700}
-    .totals{width:auto;margin-left:auto;border-collapse:collapse;margin-top:12px}
-    .totals td{padding:5px 8px;font-size:12px;border-top:1px solid #eee}
-    .totals td.label{color:#666;padding-right:24px}
-    .notes{font-size:12px;color:#444;line-height:1.6;white-space:pre-wrap}
-    .att-list{display:flex;flex-direction:column;gap:8px}
-    .att-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa}
-    .att-file{}
-    .att-thumb{width:80px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;flex-shrink:0}
-    .att-icon{font-size:24px;width:40px;text-align:center;flex-shrink:0}
-    .att-info{flex:1;min-width:0}
-    .att-name{font-size:12px;font-weight:600;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .att-meta{font-size:10px;color:#888;margin-top:1px}
-    .att-link{font-size:10px;color:#f97316;text-decoration:none;flex-shrink:0;border:1px solid #fed7aa;padding:2px 8px;border-radius:4px}
-    .watermark{margin-top:32px;padding-top:12px;border-top:1px solid #eee;font-size:10px;color:#aaa;text-align:center}
-    @media print{.watermark{position:fixed;bottom:12px;left:0;right:0;text-align:center;border-top:none}}
-  `;
+  // ── Cost breakdown ──
+  const lineMarginPct = (l: CommercialLineItem): string => {
+    const ct = lineTotal(l, 'client');
+    const it = lineTotal(l, 'internal');
+    return ct > 0 ? ((ct - it) / ct * 100).toFixed(1) + '%' : '\u2014';
+  };
+
+  const lineRowsHtml = lines.map((l, i) => {
+    const clientDesc   = l.clientDescription || l.description || '\u2014';
+    const internalDesc = l.description || l.clientDescription || '\u2014';
+    const it = lineTotal(l, 'internal');
+    const ct = lineTotal(l, 'client');
+    if (view === 'internal') {
+      return `<tr>
+        <td class="num" style="color:#94a3b8;font-size:9px">${i + 1}</td>
+        <td>${esc(internalDesc)}</td><td>${esc(clientDesc)}</td>
+        <td class="num">${l.quantity}</td><td>${esc(l.unit)}</td>
+        <td class="num">\u00a3${fmt(l.internalRate)}</td><td class="num">\u00a3${fmt(it)}</td>
+        <td class="num">\u00a3${fmt(l.clientRate)}</td><td class="num">\u00a3${fmt(ct)}</td>
+        <td class="num">${l.markupPct != null ? l.markupPct.toFixed(1) + '%' : '\u2014'}</td>
+        <td class="num">${lineMarginPct(l)}</td>
+      </tr>`;
+    }
+    return `<tr>
+      <td class="num" style="color:#94a3b8;font-size:9px">${i + 1}</td>
+      <td>${esc(clientDesc)}</td>
+      <td class="num">${l.quantity}</td><td>${esc(l.unit)}</td>
+      <td class="num">\u00a3${fmt(l.clientRate)}</td><td class="num">\u00a3${fmt(ct)}</td>
+    </tr>`;
+  }).join('');
+
+  const internalThead = `<tr>
+    <th class="num">#</th><th>Internal Desc.</th><th>Client Desc.</th>
+    <th class="num">Qty</th><th>Unit</th>
+    <th class="num">Int. Rate</th><th class="num">Int. Total</th>
+    <th class="num">Client Rate</th><th class="num">Client Total</th>
+    <th class="num">Markup %</th><th class="num">Margin %</th>
+  </tr>`;
+
+  const clientThead = `<tr>
+    <th class="num">#</th><th>Description</th>
+    <th class="num">Qty</th><th>Unit</th>
+    <th class="num">Rate</th><th class="num">Total</th>
+  </tr>`;
+
+  const emptyColspan = view === 'internal' ? 11 : 6;
+  const totalsHtml = view === 'internal'
+    ? `<table class="totals-block">
+        <tr><td class="label">Total Internal Cost</td><td class="val">\u00a3${fmt(totals.totalInternal)}</td></tr>
+        <tr><td class="label">Total Client Value</td><td class="val">\u00a3${fmt(totals.totalClient)}</td></tr>
+        <tr><td class="label">Gross Margin</td><td class="val">\u00a3${fmt(totals.margin)} (${totals.marginPct.toFixed(1)}%)</td></tr>
+      </table>`
+    : `<table class="totals-block">
+        <tr><td class="label">Total Client Value</td><td class="val">\u00a3${fmt(totals.totalClient)}</td></tr>
+      </table>`;
+
+  const costSection = `
+    <div class="section">
+      <div class="section-heading">Cost Breakdown</div>
+      <table class="data-table">
+        <thead>${view === 'internal' ? internalThead : clientThead}</thead>
+        <tbody>${lineRowsHtml || `<tr><td colspan="${emptyColspan}" style="text-align:center;color:#94a3b8;padding:16px">No line items recorded.</td></tr>`}</tbody>
+      </table>
+      ${totalsHtml}
+    </div>`;
+
+  // ── Evidence & Attachments ──
+  const images = attachments.filter(a =>
+    a.type?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(a.name ?? '')
+  );
+  const docs = attachments.filter(a => !images.includes(a));
+
+  const imagesHtml = images.length
+    ? `<div class="evidence-grid">
+        ${images.map(img => `
+          <div class="evidence-item">
+            ${img.data_url
+              ? `<img class="evidence-img" src="${img.data_url}" alt="${esc(img.name)}" />`
+              : `<div class="evidence-img" style="min-height:120px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px">Image unavailable</div>`}
+            <div class="evidence-caption">${esc(img.name)}${img.created_at ? ' &nbsp;&middot;&nbsp; ' + fmtD(img.created_at) : ''}</div>
+          </div>`).join('')}
+      </div>`
+    : '';
+
+  const docsHtml = docs.length
+    ? `<table class="data-table" style="margin-top:${images.length ? '14px' : '2px'}">
+        <thead><tr><th>File</th><th>Type</th><th>Size</th><th>Uploaded</th></tr></thead>
+        <tbody>
+          ${docs.map(d => {
+            const tl = d.type ? (d.type.split('/').pop()?.toUpperCase() ?? d.type) : (d.name?.split('.').pop()?.toUpperCase() ?? 'File');
+            const sz = d.size ? fmtFileSize(d.size) : '\u2014';
+            const up = d.created_at ? fmtD(d.created_at) : '\u2014';
+            return `<tr><td>${esc(d.name)}</td><td>${esc(tl)}</td><td>${esc(sz)}</td><td>${esc(up)}</td></tr>`;
+          }).join('')}
+        </tbody>
+      </table>`
+    : '';
+
+  const evidenceSection = (images.length || docs.length)
+    ? `<div class="section">
+        <div class="section-heading">Evidence &amp; Attachments (${attachments.length})</div>
+        ${imagesHtml}
+        ${docsHtml}
+      </div>`
+    : '';
+
+  // ── Contractual notice by record type ──
+  const COMMERCIAL_NOTICES: Record<string, string> = {
+    variation:
+      'This variation record has been prepared using the information available at the date of issue. The value contained within this record remains subject to review, substantiation, amendment and agreement until formally accepted by the relevant parties. Nothing within this record shall be construed as agreement of entitlement, liability, quantum or final account position.',
+    delay_notice:
+      'This delay notice has been issued to notify an event which may affect progress, completion or resource requirements. The duration, effects and associated costs of the delaying event remain under review and may be amended whilst the event remains ongoing. This notice is issued without prejudice to any contractual entitlement or future assessment of time and cost.',
+    compensation_event:
+      'This compensation event record has been prepared using the information available at the time of issue. The value and impact recorded may be revised as further information becomes available. This record does not constitute final agreement of entitlement, assessment or valuation.',
+  };
+  const contractualNotice = COMMERCIAL_NOTICES[record.recordType] ?? '';
+  const noticeBar = contractualNotice
+    ? `<div class="legal-notice-bar">
+        <div class="legal-notice-label">Contractual Notice</div>
+        <div class="legal-notice-text">${esc(contractualNotice)}</div>
+      </div>`
+    : '';
+
+  // ── Audit trail ──
+  const auditText = [
+    record.createdBy ? `Created by ${record.createdBy}: ${fmtD(record.createdAt)}` : `Created: ${fmtD(record.createdAt)}`,
+    `Last updated: ${fmtD(record.updatedAt)}`,
+    `Current status: ${s.label}`,
+  ].join('. ');
+
+  // ── Legal & compliance footer ──
+  const legalFooter = `
+    <div class="legal-footer">
+      <div class="legal-footer-header">
+        <div class="legal-footer-title">Document Legal &amp; Compliance Statement</div>
+        <div class="legal-footer-ref">Ref: ${esc(docRef)}</div>
+      </div>
+      ${noticeBar}
+      <div class="legal-grid">
+        <div class="legal-cell">
+          <div class="legal-cell-label">Document Status</div>
+          <div class="legal-cell-text">This document has a current status of <strong>${esc(s.label)}</strong> and is issued as a formal commercial project record.</div>
+        </div>
+        <div class="legal-cell">
+          <div class="legal-cell-label">Evidence Statement</div>
+          <div class="legal-cell-text">This document constitutes a contemporaneous commercial record created on the date stated. It may be used as evidence of project events, commercial notifications, valuation submissions, cost impact, entitlement tracking and related correspondence.</div>
+        </div>
+        <div class="legal-cell">
+          <div class="legal-cell-label">Commercial Audit Trail</div>
+          <div class="legal-cell-text">${esc(auditText)}.</div>
+        </div>
+        <div class="legal-cell">
+          <div class="legal-cell-label">Liability &amp; Record Statement</div>
+          <div class="legal-cell-text">The accuracy of the information contained within this document is the responsibility of the named completing party or issuing organisation. Values, quantities, rates and assessments are based on the information available at the time of preparation and remain subject to substantiation, review and agreement.</div>
+        </div>
+        <div class="legal-cell">
+          <div class="legal-cell-label">Confidentiality</div>
+          <div class="legal-cell-text">This document is issued in confidence for project and commercial management purposes only. Distribution is restricted to the named parties and project team. Unauthorised disclosure to third parties is not permitted without the express written consent of the issuing organisation.</div>
+        </div>
+      </div>
+      <div class="legal-branding">
+        <div class="legal-branding-left">
+          Generated by <strong>${esc(orgName)}</strong> &mdash; powered by <strong>VYSITE</strong> | NEXA Solutions Ltd
+          &nbsp;&middot;&nbsp; ${esc(record.projectName || 'Project Record')}
+          &nbsp;&middot;&nbsp; ${esc(today)}
+        </div>
+        <div class="legal-branding-right">
+          &copy; NEXA Solutions Ltd. All rights reserved.<br/>
+          Document Ref: ${esc(docRef)}
+        </div>
+      </div>
+    </div>`;
 
   const body = `
-    <div class="page" style="max-width:860px;margin:0 auto">
+    <div class="page">
       ${header}
+      ${metaBlock}
+      ${notesSection}
+      ${costSection}
+      ${evidenceSection}
+      ${legalFooter}
+    </div>`;
 
-      <div class="section">
-        <div class="section-title">Record Details</div>
-        <table class="meta">${headerRows}</table>
-      </div>
-
-      <div class="section">
-        <div class="section-title">Cost Breakdown</div>
-        <table class="lines">
-          <thead>
-            <tr>
-              <th class="num">#</th>
-              <th>Description</th>
-              <th class="num">Qty</th>
-              <th>Unit</th>
-              <th class="num">Client Rate</th>
-              ${internalHeaders}
-              <th class="num">Client Total</th>
-            </tr>
-          </thead>
-          <tbody>${lineRows || `<tr><td colspan="${view === 'internal' ? 8 : 5}" style="color:#999;text-align:center;padding:16px">No line items</td></tr>`}</tbody>
-        </table>
-        <table class="totals"><tbody>${summaryRows}</tbody></table>
-      </div>
-
-      ${noteSection}
-      ${attachSection}
-
-      <div class="watermark">Generated by VYSITE &nbsp;&middot;&nbsp; ${today}</div>
-    </div>
-  `;
-
-  return buildPrintDocument(`${record.reference || 'Commercial'} — ${view === 'internal' ? 'Internal' : 'Client'}`, styles, body);
+  return buildPrintDocument(
+    `${record.reference || 'Commercial'} \u2014 ${t.label} \u2014 ${view === 'internal' ? 'Internal' : 'Client'}`,
+    CSS,
+    body,
+  );
 }
 
 // ─── Line Item Editor ─────────────────────────────────────────────────────────
@@ -1074,7 +1208,7 @@ function AttachmentRow({
   const [dataUrl, setDataUrl] = useState<string | null>(att.data_url || null);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
-  const isImage = att.type?.startsWith('image/');
+  const isImage = att.type?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(att.name ?? '');
 
   async function openPreview() {
     if (!dataUrl) {
@@ -1118,10 +1252,13 @@ function AttachmentRow({
           {meta && <p className="text-xs text-slate-500">{meta}</p>}
         </div>
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          {isImage && (
-            <button onClick={openPreview} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a]" title="View image">
-              <Eye size={14} />
-            </button>
+          <button onClick={openPreview} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a]" title={isImage ? 'View image' : 'Preview'}>
+            <Eye size={14} />
+          </button>
+          {dataUrl && (
+            <a href={dataUrl} download={att.name} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a]" title="Download">
+              <Download size={14} />
+            </a>
           )}
           <button onClick={onRemove} className="p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-[#1e2d4a]">
             <Trash2 size={14} />
@@ -1129,9 +1266,13 @@ function AttachmentRow({
         </div>
       </div>
 
-      {previewing && isImage && dataUrl && (
+      {previewing && dataUrl && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80" onClick={() => setPreviewing(false)}>
-          <img src={dataUrl} alt={att.name} className="max-w-[90vw] max-h-[90vh] rounded-xl object-contain" onClick={e => e.stopPropagation()} />
+          {isImage ? (
+            <img src={dataUrl} alt={att.name} className="max-w-[90vw] max-h-[90vh] rounded-xl object-contain" onClick={e => e.stopPropagation()} />
+          ) : (
+            <iframe src={dataUrl} title={att.name} className="w-[90vw] h-[90vh] rounded-xl bg-white" onClick={(e: React.MouseEvent) => e.stopPropagation()} />
+          )}
           <button onClick={() => setPreviewing(false)} className="absolute top-4 right-4 p-2 bg-black/60 rounded-full text-white hover:bg-black/80">
             <X size={20} />
           </button>
