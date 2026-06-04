@@ -131,6 +131,7 @@ const PERM_GROUPS: PermGroup[] = [
       { key: 'modules.testing',     label: 'Access Testing & Commissioning' },
       { key: 'modules.reports',     label: 'Access Reports' },
       { key: 'modules.comments',    label: 'Access Comments / Activity' },
+      { key: 'modules.commercial',  label: 'Access Commercial' },
     ],
   },
   {
