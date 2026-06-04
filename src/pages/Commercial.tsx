@@ -28,7 +28,7 @@ const STATUSES: { value: CommercialRecordStatus; label: string; icon: React.Reac
   { value: 'submitted',           label: 'Submitted',           icon: <ChevronRight size={12} />,  color: 'bg-sky-900/40 text-sky-300 border-sky-700/50' },
   { value: 'awaiting_agreement',  label: 'Awaiting Agreement',  icon: <Clock size={12} />,         color: 'bg-amber-900/40 text-amber-300 border-amber-700/50' },
   { value: 'agreed',              label: 'Agreed',              icon: <CheckCircle2 size={12} />,  color: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50' },
-  { value: 'added_to_valuation',  label: 'Added to Valuation',  icon: <DollarSign size={12} />,   color: 'bg-teal-900/40 text-teal-300 border-teal-700/50' },
+  { value: 'added_to_valuation',  label: 'Added to Valuation',  icon: <Banknote size={12} />,     color: 'bg-teal-900/40 text-teal-300 border-teal-700/50' },
   { value: 'paid',                label: 'Paid',                icon: <CheckCircle2 size={12} />,  color: 'bg-green-900/40 text-green-300 border-green-700/50' },
   { value: 'complete',            label: 'Complete',            icon: <CheckCircle2 size={12} />,  color: 'bg-green-900/60 text-green-200 border-green-700/60' },
   { value: 'rejected',            label: 'Rejected',            icon: <AlertCircle size={12} />,   color: 'bg-red-900/40 text-red-300 border-red-700/50' },
