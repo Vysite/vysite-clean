@@ -1220,6 +1220,20 @@ function AttachmentRow({
     setPreviewing(true);
   }
 
+  async function handleDownload() {
+    let url = dataUrl;
+    if (!url) {
+      setLoadingPreview(true);
+      url = await fetchData(att.id);
+      setDataUrl(url);
+      setLoadingPreview(false);
+    }
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = att.name;
+    a.click();
+  }
+
   const size = att.size ? (att.size < 1024 * 1024 ? `${(att.size / 1024).toFixed(0)} KB` : `${(att.size / (1024 * 1024)).toFixed(1)} MB`) : '';
   const typeLabel = fileTypeLabel(att.type, att.name);
   const uploadDate = att.created_at
@@ -1255,10 +1269,10 @@ function AttachmentRow({
           <button onClick={openPreview} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a]" title={isImage ? 'View image' : 'Preview'}>
             <Eye size={14} />
           </button>
-          {dataUrl && (
-            <a href={dataUrl} download={att.name} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a]" title="Download">
+          {!isImage && (
+            <button onClick={handleDownload} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a]" title="Download">
               <Download size={14} />
-            </a>
+            </button>
           )}
           <button onClick={onRemove} className="p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-[#1e2d4a]">
             <Trash2 size={14} />
