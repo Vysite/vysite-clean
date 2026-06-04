@@ -15,6 +15,7 @@ import BetaFeedback from './pages/BetaFeedback';
 import Settings from './pages/Settings';
 import TestingCommissioning from './pages/TestingCommissioning';
 import MaintenanceServicing from './pages/MaintenanceServicing';
+import Commercial from './pages/Commercial';
 import Login from './pages/Login';
 import SetPassword from './pages/SetPassword';
 import SuperAdmin from './pages/SuperAdmin';
@@ -64,6 +65,10 @@ function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pending
       return ((perms['modules.projects'] || perms['projects.view_all'] || perms['projects.view_assigned']) && isModuleEnabled('projects'))
         ? <Projects onNavigate={(page, open) => { if (open) setPendingOpen(open); navigateTo(page); }} pendingProjectId={pendingProjectId} onPendingProjectConsumed={() => setPendingProjectId(null)} />
         : <AccessRestricted label="Projects" />;
+    case 'commercial':
+      return (perms['modules.commercial'] && isModuleEnabled('commercial'))
+        ? <Commercial />
+        : <AccessRestricted label="Commercial" />;
     case 'maintenance':
       return (perms['maintenance.view'] && isModuleEnabled('maintenance'))
         ? <MaintenanceServicing />

@@ -2,13 +2,14 @@ import {
   LayoutDashboard, FileText, FolderKanban, ClipboardList,
   AlertOctagon, Zap, FlaskConical, BarChart2, Users,
   Settings, MessageSquare, Wrench, ChevronLeft,
-  ChevronRight, X,
+  ChevronRight, X, TrendingUp,
 } from 'lucide-react';
 
 export type Page =
   | 'dashboard'
   | 'tenders'
   | 'projects'
+  | 'commercial'
   | 'maintenance'
   | 'site-forms'
   | 'snagging'
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'dashboard',     label: 'Dashboard',          icon: <LayoutDashboard size={18} /> },
   { page: 'tenders',       label: 'Tender & Estimating', icon: <FileText size={18} />,        moduleKey: 'tenders' },
   { page: 'projects',      label: 'Projects',            icon: <FolderKanban size={18} />,    moduleKey: 'projects' },
+  { page: 'commercial',    label: 'Commercial',          icon: <TrendingUp size={18} />,      moduleKey: 'commercial' },
   { page: 'maintenance',   label: 'Maintenance',         icon: <Wrench size={18} />,          moduleKey: 'maintenance' },
   { page: 'site-forms',    label: 'Site Forms',          icon: <ClipboardList size={18} />,   moduleKey: 'site-forms' },
   { page: 'snagging',      label: 'Snagging',            icon: <AlertOctagon size={18} />,    moduleKey: 'snagging' },

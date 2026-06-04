@@ -44,6 +44,7 @@ const ADMIN_PERMISSIONS = {
   "admin.view_audit_logs": true, "admin.manage_settings": true,
   "modules.projects": true, "modules.snagging": true, "modules.site_forms": true, "modules.testing": true,
   "modules.actions": true, "modules.comments": true, "modules.reports": true,
+  "modules.commercial": true,
   "snagging.create": true, "snagging.edit": true, "snagging.delete": true, "snagging.export": true,
   "actions.create": true, "actions.edit": true, "actions.delete": true, "actions.export": true,
   "site_forms.create": true, "site_forms.edit": true, "site_forms.delete": true, "site_forms.export": true,
@@ -51,6 +52,7 @@ const ADMIN_PERMISSIONS = {
   "maintenance.view": true, "maintenance.create": true, "maintenance.edit": true, "maintenance.delete": true,
   "maintenance.assign": true, "maintenance.export": true, "maintenance.comment": true, "maintenance.upload": true, "maintenance.complete": true,
   "programmes.view": true, "programmes.create": true, "programmes.edit": true, "programmes.delete": true, "programmes.export": true,
+  "commercial.create": true, "commercial.edit": true, "commercial.delete": true,
 };
 
 function slugify(name: string): string {

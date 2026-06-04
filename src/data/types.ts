@@ -216,6 +216,57 @@ export interface EstimateItem {
   markupPct: number;
 }
 
+// ─── Commercial Module ────────────────────────────────────────────────────────
+
+export type CommercialRecordType =
+  | 'variation'
+  | 'delay_notice'
+  | 'compensation_event';
+
+export type CommercialRecordStatus =
+  | 'draft'
+  | 'submitted'
+  | 'awaiting_agreement'
+  | 'agreed'
+  | 'added_to_valuation'
+  | 'paid'
+  | 'complete'
+  | 'rejected';
+
+export interface CommercialRecord {
+  id: string;
+  orgId: string;
+  projectId: string | null;
+  projectName?: string;
+  recordType: CommercialRecordType;
+  reference: string;
+  title: string;
+  client: string;
+  status: CommercialRecordStatus;
+  dateRaised: string | null;
+  dateSubmitted: string | null;
+  dateAgreed: string | null;
+  notes: string;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lineItems?: CommercialLineItem[];
+}
+
+export interface CommercialLineItem {
+  id: string;
+  orgId: string;
+  recordId: string;
+  sortOrder: number;
+  description: string;
+  clientDescription: string;
+  unit: string;
+  quantity: number;
+  internalRate: number;
+  clientRate: number;
+  markupPct: number | null;
+}
+
 // Source traceability — attached to every AI-extracted finding
 export interface FindingSource {
   document: string;         // filename

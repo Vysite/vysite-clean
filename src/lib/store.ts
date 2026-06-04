@@ -118,7 +118,12 @@ export type PermissionKey =
   | 'programmes.create'
   | 'programmes.edit'
   | 'programmes.delete'
-  | 'programmes.export';
+  | 'programmes.export'
+  // Commercial Module
+  | 'modules.commercial'
+  | 'commercial.create'
+  | 'commercial.edit'
+  | 'commercial.delete';
 
 export interface DBPlatformUser {
   id: string;
@@ -162,6 +167,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.view': true, 'maintenance.create': true, 'maintenance.edit': true, 'maintenance.delete': true,
     'maintenance.assign': true, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
     'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': true, 'programmes.export': true,
+    'modules.commercial': true, 'commercial.create': true, 'commercial.edit': true, 'commercial.delete': true,
   },
   'Commercial Lead': {
     'projects.view_all': true, 'projects.view_assigned': true,
@@ -183,6 +189,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.view': true, 'maintenance.create': true, 'maintenance.edit': true, 'maintenance.delete': true,
     'maintenance.assign': true, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
     'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': true, 'programmes.export': true,
+    'modules.commercial': true, 'commercial.create': true, 'commercial.edit': true, 'commercial.delete': true,
   },
   'Project Manager': {
     'projects.view_assigned': true, 'projects.edit': true,
@@ -247,6 +254,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.view': false, 'maintenance.create': false, 'maintenance.edit': false, 'maintenance.delete': false,
     'maintenance.assign': false, 'maintenance.export': false, 'maintenance.comment': false, 'maintenance.upload': false, 'maintenance.complete': false,
     'programmes.view': false, 'programmes.create': false, 'programmes.edit': false, 'programmes.delete': false, 'programmes.export': false,
+    'modules.commercial': true, 'commercial.create': true, 'commercial.edit': true, 'commercial.delete': false,
   },
   Client: {
     // Least privileged role — project overview only, no operational submodules.
@@ -296,6 +304,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.view': true, 'maintenance.create': true, 'maintenance.edit': true, 'maintenance.delete': false,
     'maintenance.assign': true, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
     'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
+    'modules.commercial': true, 'commercial.create': true, 'commercial.edit': true, 'commercial.delete': false,
   },
   User: {
     'projects.view_assigned': true,
@@ -350,6 +359,7 @@ export function resolvePermissions(user: DBPlatformUser): Record<PermissionKey, 
     'maintenance.view','maintenance.create','maintenance.edit','maintenance.delete',
     'maintenance.assign','maintenance.export','maintenance.comment','maintenance.upload','maintenance.complete',
     'programmes.view','programmes.create','programmes.edit','programmes.delete','programmes.export',
+    'modules.commercial','commercial.create','commercial.edit','commercial.delete',
   ];
   for (const key of allKeys) {
     all[key] = key in overrides ? (overrides[key] ?? false) : (defaults[key] ?? false);
