@@ -565,7 +565,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
       completedBy: form.completedBy,
       description: form.description,
       comments: form.comments,
-      status: status as ExtendedFormStatus,
+      status: (type === 'Early Warning Notice' ? form.status : status) as ExtendedFormStatus,
       submittedDate: status === 'Submitted' || status === 'Issued' ? new Date().toISOString().split('T')[0] : undefined,
       notes: form.notes,
     };
