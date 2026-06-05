@@ -644,13 +644,24 @@ function ReviewDetailPanel({
 
       {/* Error banner */}
       {error && (
-        <div className="flex items-start gap-2.5 bg-red-900/20 border border-red-800/50 rounded-xl p-3.5">
-          <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />
+        <div className={`flex items-start gap-2.5 rounded-xl p-3.5 ${
+          error.code === 'provider_overloaded'
+            ? 'bg-sky-900/20 border border-sky-800/50'
+            : 'bg-red-900/20 border border-red-800/50'
+        }`}>
+          <AlertTriangle size={14} className={`shrink-0 mt-0.5 ${error.code === 'provider_overloaded' ? 'text-sky-400' : 'text-red-400'}`} />
           <div className="flex-1">
-            <p className="text-xs font-bold text-red-300 mb-0.5">Review failed</p>
-            <p className="text-xs text-red-300/80 leading-relaxed">{error.message}</p>
+            <p className={`text-xs font-bold mb-0.5 ${error.code === 'provider_overloaded' ? 'text-sky-300' : 'text-red-300'}`}>
+              {error.code === 'provider_overloaded' ? 'AI Service Temporarily Overloaded' : 'Review failed'}
+            </p>
+            <p className={`text-xs leading-relaxed ${error.code === 'provider_overloaded' ? 'text-sky-300/80' : 'text-red-300/80'}`}>
+              {error.message}
+            </p>
             {error.code === 'auth_error' && (
               <p className="text-xs text-red-400/70 mt-1">Check that ANTHROPIC_API_KEY is configured in Supabase project secrets.</p>
+            )}
+            {error.code === 'provider_overloaded' && (
+              <p className="text-[10px] text-sky-500/70 mt-1">No AI allowance has been consumed. Your document is still ready to review.</p>
             )}
           </div>
         </div>

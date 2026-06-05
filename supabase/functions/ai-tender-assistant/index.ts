@@ -873,6 +873,22 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const isOverloaded =
+      errStatus === 529 ||
+      lower.includes("overloaded_error") ||
+      lower.includes("overloaded");
+
+    if (isOverloaded) {
+      console.warn(`[ai-tender-assistant] Provider overloaded HTTP=${errStatus ?? "unknown"}`);
+      return new Response(
+        JSON.stringify({
+          error: "The AI service is temporarily overloaded. Your document is still here — please try again in a few minutes.",
+          errorCode: "PROVIDER_OVERLOADED",
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const isCredit =
       lower.includes("credit balance") ||
       lower.includes("insufficient_quota") ||

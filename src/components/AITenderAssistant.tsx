@@ -145,7 +145,7 @@ function SaveBar({ label, onSave, disabled }: { label: string; onSave: () => voi
   );
 }
 
-type ErrorVariant = 'auth' | 'credit' | 'zero_results' | 'generic';
+type ErrorVariant = 'auth' | 'credit' | 'overloaded' | 'zero_results' | 'generic';
 
 function ErrorBanner({ message, variant, onDismiss }: { message: string; variant: ErrorVariant; onDismiss: () => void }) {
   const [copied, setCopied] = useState(false);
@@ -168,6 +168,28 @@ function ErrorBanner({ message, variant, onDismiss }: { message: string; variant
       {copied ? 'Copied' : 'Copy error details'}
     </button>
   );
+
+  if (variant === 'overloaded') {
+    return (
+      <div className="bg-sky-900/20 border border-sky-700/50 rounded-xl p-4">
+        <div className="flex items-start gap-2">
+          <AlertTriangle size={15} className="text-sky-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-sky-300">AI Service Temporarily Overloaded</p>
+            <p className="text-xs text-sky-200/80 leading-relaxed mt-1">
+              The Anthropic API is under high load and could not process the request. Your document is still uploaded — please wait a few minutes and try again.
+            </p>
+            <p className="text-[10px] text-sky-500/70 mt-1">
+              This is a temporary provider issue. No AI allowance has been consumed.
+            </p>
+          </div>
+          <button onClick={onDismiss} className="p-1 rounded text-sky-700 hover:text-sky-400 hover:bg-sky-900/40 transition-colors shrink-0" title="Dismiss">
+            <X size={13} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (variant === 'auth') {
     return (
@@ -1107,6 +1129,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     const variant: ErrorVariant =
       code === 'INVALID_API_KEY'     ? 'auth'         :
       code === 'INSUFFICIENT_CREDIT' ? 'credit'        :
+      code === 'PROVIDER_OVERLOADED' ? 'overloaded'    :
       code === 'ZERO_RESULTS'        ? 'zero_results'  :
                                        'generic';
     console.error('[AITenderAssistant] Error:', err);
@@ -1397,12 +1420,13 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     } catch (err) {
       const code = (err as Error & { errorCode?: string }).errorCode;
       const isFatal = code === 'INSUFFICIENT_CREDIT' || code === 'INVALID_API_KEY';
+      const shouldRethrow = isFatal || code === 'PROVIDER_OVERLOADED';
       const msg = err instanceof Error ? err.message : 'Failed';
       console.error(`[AITenderAssistant] chunk ${i + 1}/${chunks.length} failed:`, msg);
       setChunkStatuses(prev => prev.map((s, j) =>
         j === i ? { ...s, status: 'error', error: msg, canRetry: !isFatal } : s
       ));
-      if (isFatal) throw err;
+      if (shouldRethrow) throw err;
     }
   }
 

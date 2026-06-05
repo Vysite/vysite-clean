@@ -548,9 +548,21 @@ Deno.serve(async (req: Request) => {
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    const isAuthError = msg.includes("401") || msg.toLowerCase().includes("authentication");
-    const isCreditError = msg.includes("529") || msg.toLowerCase().includes("credit") || msg.toLowerCase().includes("overloaded");
-    const code = isAuthError ? "auth_error" : isCreditError ? "credit_error" : "generic_error";
+    const errStatus = (err as { status?: number })?.status;
+    const lower = msg.toLowerCase();
+    const isAuthError = errStatus === 401 || lower.includes("invalid x-api-key") || lower.includes("authentication");
+    const isOverloaded = errStatus === 529 || lower.includes("overloaded_error") || lower.includes("overloaded");
+    const isCreditError = !isOverloaded && (errStatus === 402 || lower.includes("credit balance") || lower.includes("insufficient funds") || lower.includes("billing") || lower.includes("payment") || lower.includes("quota exceeded"));
+    const code = isAuthError ? "auth_error" : isOverloaded ? "provider_overloaded" : isCreditError ? "credit_error" : "generic_error";
+
+    if (isOverloaded) {
+      console.warn(`[contract-review] Provider overloaded HTTP=${errStatus ?? "unknown"}`);
+      return new Response(
+        JSON.stringify({ error: "The AI service is temporarily overloaded. Your document is still here — please try again in a few minutes.", code }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     console.error(`[contract-review] Unhandled error (${code}):`, msg);
     return new Response(
       JSON.stringify({ error: msg, code }),
