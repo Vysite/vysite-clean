@@ -841,18 +841,33 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
-  function makeEntries(items: string[], category: string): TenderScopeEntry[] {
+  function makeEntries(items: AIReviewListItem[], category: string): TenderScopeEntry[] {
     const now = new Date().toISOString();
     const user = currentUser?.name ?? 'Team Member';
     const avatar = currentUser?.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() ?? 'TM';
-    return items.map((text, i) => ({
-      id: `se-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-      category,
-      user,
-      avatar,
-      datetime: now,
-      text,
-    }));
+    const notIdentified = (v?: string) => !v || v === 'Not identified';
+    return items.map((item, i) => {
+      const text = typeof item === 'string' ? item : item.text;
+      const src  = typeof item === 'object' && item !== null ? item.source : undefined;
+      const sectionClause = src
+        ? [
+            notIdentified(src.section) ? '' : src.section,
+            notIdentified(src.clause)  ? '' : src.clause,
+          ].filter(Boolean).join(' §') || undefined
+        : undefined;
+      return {
+        id: `se-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+        category,
+        user,
+        avatar,
+        datetime: now,
+        text,
+        importSource: 'AI Review',
+        sourceDocument: notIdentified(src?.document)  ? undefined : src!.document,
+        pageReference:  notIdentified(src?.pageRange) ? undefined : src!.pageRange,
+        sectionClause,
+      };
+    });
   }
 
   // Build a TenderRFI from an RFIResult — pure, no side effects
@@ -860,6 +875,14 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     const notesParts: string[] = [];
     if (r.responseRequired?.trim()) notesParts.push(`Response Required: ${r.responseRequired.trim()}`);
     if (r.impact?.trim()) notesParts.push(`Impact / Urgency: ${r.impact.trim()}`);
+    const src = r.source;
+    const notIdentified = (v?: string) => !v || v === 'Not identified';
+    const sectionClause = src
+      ? [
+          notIdentified(src.section) ? '' : src.section,
+          notIdentified(src.clause)  ? '' : src.clause,
+        ].filter(Boolean).join(' §') || undefined
+      : undefined;
     return {
       id: `rfi-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       ref: `RFI-${String(refIndex).padStart(3, '0')}`,
@@ -869,6 +892,10 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
       status: 'Draft' as RFIStatus,
       notes: notesParts.join('\n\n'),
       comments: [],
+      importSource: 'AI Review',
+      sourceDocument: notIdentified(src?.document)  ? undefined : src!.document,
+      pageReference:  notIdentified(src?.pageRange) ? undefined : src!.pageRange,
+      sectionClause,
     };
   }
 
@@ -943,16 +970,21 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     });
   }
 
-  function handleReviewSaveList(indices: number[], texts: string[], category: string) {
+  function handleReviewSaveList(indices: number[], _texts: string[], category: string) {
     if (!review || indices.length === 0) return;
     const field: keyof StoredAIReview =
       category === 'Assumptions' ? 'savedAssumptionIndices' :
       category === 'Exclusions'  ? 'savedExclusionIndices'  :
                                    'savedScopeNoteIndices';
     const catKey = category === 'Scope Note' ? 'Scope Note' : category;
-    // texts already extracted as plain strings by ListOutput
+    // Look up the full list items (with source) rather than the stripped text strings
+    const catBase: AIReviewListItem[] =
+      category === 'Assumptions' ? (review.editedAssumptions ?? [...review.assumptions]) :
+      category === 'Exclusions'  ? (review.editedExclusions  ?? [...review.exclusions])  :
+                                   (review.editedScopeNotes  ?? [...review.scopeNotes]);
+    const fullItems: AIReviewListItem[] = indices.map(i => catBase[i] ?? _texts[indices.indexOf(i)]);
     commitReviewSave({
-      scopeEntries: makeEntries(texts, catKey),
+      scopeEntries: makeEntries(fullItems, catKey),
       updatedReview: {
         ...review,
         [field]: [...new Set([...(review[field] as number[]), ...indices])],

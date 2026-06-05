@@ -401,21 +401,23 @@ Extract every commercially relevant item. Do not skip, omit, or summarise — in
 Respond with ONLY this JSON structure — no markdown, no commentary, nothing outside the JSON:
 {
   "rfis": [
-    {"subject": "concise subject", "query": "clear query", "responseRequired": "what is needed", "impact": "commercial impact"}
+    {"subject": "concise subject", "query": "clear query", "responseRequired": "what is needed", "impact": "commercial impact", "source": {"document": "document filename or title", "pageRange": "page number or range e.g. 12 or 8-15", "section": "section heading or name", "clause": "clause reference e.g. 3.2.1"}}
   ],
   "assumptions": [
-    "Assumed ..."
+    {"text": "Assumed ...", "source": {"document": "document filename or title", "pageRange": "page number or range", "section": "section heading", "clause": "clause reference"}}
   ],
   "exclusions": [
-    "Exclusion text"
+    {"text": "Exclusion text", "source": {"document": "document filename or title", "pageRange": "page number or range", "section": "section heading", "clause": "clause reference"}}
   ],
   "scopeNotes": [
-    "Key commercial information or technical requirement"
+    {"text": "Key commercial information or technical requirement", "source": {"document": "document filename or title", "pageRange": "page number or range", "section": "section heading", "clause": "clause reference"}}
   ],
   "risks": [
-    {"risk": "description", "severity": "High", "suggestedAction": "RFI", "actionNote": "action"}
+    {"risk": "description", "severity": "High", "suggestedAction": "RFI", "actionNote": "action", "source": {"document": "document filename or title", "pageRange": "page number or range", "section": "section heading", "clause": "clause reference"}}
   ]
 }
+
+For each "source": use the document filename/title if known; the page number or range where the finding appears; the section heading from the document; and the clause/sub-clause number. Use "Not identified" for any source field you cannot determine from the document.
 
 RFIs: missing/unclear/conflicting information — design responsibility, missing specs, ambiguous scope, commissioning requirements, interface responsibilities, testing obligations, approval requirements.
 Assumptions: start with "Assumed" or "It is assumed that" — based on what the document states, implies, or omits.
@@ -450,12 +452,13 @@ Rules: remove only exact duplicates; merge near-identical RFIs keeping the most 
 
 Respond with ONLY this JSON — no markdown, no commentary:
 {
-  "rfis": [{"subject":"...","query":"...","responseRequired":"...","impact":"..."}],
-  "assumptions": ["..."],
-  "exclusions": ["..."],
-  "scopeNotes": ["..."],
-  "risks": [{"risk":"...","severity":"High|Medium|Low","suggestedAction":"...","actionNote":"..."}]
-}`;
+  "rfis": [{"subject":"...","query":"...","responseRequired":"...","impact":"...","source":{"document":"...","pageRange":"...","section":"...","clause":"..."}}],
+  "assumptions": [{"text":"...","source":{"document":"...","pageRange":"...","section":"...","clause":"..."}}],
+  "exclusions": [{"text":"...","source":{"document":"...","pageRange":"...","section":"...","clause":"..."}}],
+  "scopeNotes": [{"text":"...","source":{"document":"...","pageRange":"...","section":"...","clause":"..."}}],
+  "risks": [{"risk":"...","severity":"High|Medium|Low","suggestedAction":"...","actionNote":"...","source":{"document":"...","pageRange":"...","section":"...","clause":"..."}}]
+}
+Preserve source traceability fields from the input — carry them through to the output unchanged.`;
     }
 
     case "reconcile-findings": {
