@@ -1234,6 +1234,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
 
   async function processChunk(file: File, chunk: PdfChunk, chunkIndex: number, chunkTotal: number, pageCount: number): Promise<{ result: DocumentReviewResult; findings: number }> {
     const base64 = await readBlobAsBase64(chunk.blob);
+    console.log(`[AITenderAssistant] processChunk: submitting chunk ${chunkIndex + 1}/${chunkTotal} pages ${chunk.startPage}–${chunk.endPage} (base64 size: ${Math.round(base64.length / 1024)}KB)`);
     const res = await fetch(`${supabaseUrl}/functions/v1/ai-tender-assistant`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
@@ -1252,7 +1253,9 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
         ...(authUser?.id ? { userId: authUser.id } : {}),
       }),
     });
+    console.log(`[AITenderAssistant] processChunk: response status=${res.status} ok=${res.ok}`);
     const data = await res.json();
+    console.log(`[AITenderAssistant] processChunk: response keys=${Object.keys(data).join(',')} warning=${data.warning ?? 'none'}`);
     if (!res.ok && !data.result) throwFromResponse(data, 'AI request failed');
     const result = data.result as DocumentReviewResult;
     const findings: number = data.findings?.total ?? (
@@ -1264,7 +1267,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
       `rfis:${result.rfis?.length ?? 0} assumptions:${result.assumptions?.length ?? 0} ` +
       `exclusions:${result.exclusions?.length ?? 0} scopeNotes:${result.scopeNotes?.length ?? 0} ` +
       `risks:${result.risks?.length ?? 0} total:${findings}`,
-      'assumption[0] type:', result.assumptions?.[0] !== undefined ? typeof result.assumptions[0] : 'none'
+      '| assumption[0]:', result.assumptions?.[0] !== undefined ? JSON.stringify(result.assumptions[0]).slice(0, 120) : 'none'
     );
     return { result, findings };
   }
@@ -1366,6 +1369,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     const totalFindings = (mergedResult.rfis.length) + (mergedResult.assumptions.length) +
       (mergedResult.exclusions.length) + (mergedResult.scopeNotes.length) + (mergedResult.risks.length);
 
+    console.log(`[AITenderAssistant] processChunkedPdf: persisting review — totalFindings=${totalFindings} processingState=${updatedReview.processingState}`);
     setCurrentStep(allDone
       ? `Complete — all ${chunks.length} sections reviewed. ${totalFindings} findings total.`
       : `Section ${nextChunkIndex + 1} of ${chunks.length} complete. ${chunkFindings} findings added.`
