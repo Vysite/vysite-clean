@@ -47,7 +47,7 @@ export default function StartTrial() {
       );
       const json = await res.json();
       if (!res.ok) {
-        setError(json.error ?? 'Something went wrong. Please try again or contact hello@vysite.com.');
+        setError(json.error ?? json.message ?? 'Something went wrong. Please try again or contact hello@vysite.com.');
       } else {
         setSuccess(true);
       }
