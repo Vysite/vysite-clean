@@ -1301,7 +1301,9 @@ export interface OrgSettings {
   logo_data_url?: string;
 }
 
-export function renderFormPDF(form: ExtendedSiteForm, orgSettings?: OrgSettings | null): void {
+export { CSS as FORM_PDF_CSS };
+
+export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | null): string {
   const f = form as unknown as Record<string, unknown>;
   const formTitle = safeStr(f.title) || '(Untitled)';
   const orgName = orgSettings?.company_name || 'VYSITE';
@@ -1327,7 +1329,6 @@ export function renderFormPDF(form: ExtendedSiteForm, orgSettings?: OrgSettings 
     return map[form.type] ?? form.type;
   })();
 
-  // ── Document header ──
   const logoHtml = orgLogo
     ? `<img class="doc-logo-img" src="${orgLogo}" alt="${esc(orgName)}" />`
     : `<div class="doc-logo-text">${esc(orgName)}</div>`;
@@ -1353,7 +1354,6 @@ export function renderFormPDF(form: ExtendedSiteForm, orgSettings?: OrgSettings 
       ${esc(typeLabel)}${projectName ? ' &nbsp;&middot;&nbsp; ' + esc(projectName) : ''}${safeStr(f.date) ? ' &nbsp;&middot;&nbsp; ' + fmtDate(safeStr(f.date)) : ''}${safeStr(f.completedBy) ? ' &nbsp;&middot;&nbsp; ' + esc(safeStr(f.completedBy)) : ''}${statusStr ? statusBadge(statusStr) : ''}
     </div>`;
 
-  // ── Meta block ──
   const metaItems: [string, string][] = [
     ['Form Type', typeLabel],
     ['Project', projectName],
@@ -1370,7 +1370,6 @@ export function renderFormPDF(form: ExtendedSiteForm, orgSettings?: OrgSettings 
       </div>
     </div>`;
 
-  // ── Type-specific body ──
   let formBody = '';
   switch (form.type) {
     case 'Pressure Test':                  formBody = buildPressureTestBody(f); break;
@@ -1397,13 +1396,11 @@ export function renderFormPDF(form: ExtendedSiteForm, orgSettings?: OrgSettings 
     default:                               formBody = buildGenericBody(f); break;
   }
 
-  // ── Evidence / attachments ──
   const attachments = f.attachments;
   const evidenceSection = attachments && Array.isArray(attachments) && attachments.length
     ? sectionHtml('Evidence & Attachments', evidenceHtml(attachments))
     : '';
 
-  // ── Legal footer (universal — renders on every form) ──
   const docRef = safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.id) || `VY-${Date.now()}`;
   const legalFooter = reportFooter({
     formType: form.type,
@@ -1414,8 +1411,22 @@ export function renderFormPDF(form: ExtendedSiteForm, orgSettings?: OrgSettings 
     projectName,
   });
 
-  const fullBody = `<div class="page">${header}${metaBlock}${formBody}${evidenceSection}${legalFooter}</div>`;
+  return `<div class="page">${header}${metaBlock}${formBody}${evidenceSection}${legalFooter}</div>`;
+}
 
+export function renderFormPDF(form: ExtendedSiteForm, orgSettings?: OrgSettings | null): void {
+  const f = form as unknown as Record<string, unknown>;
+  const orgName = orgSettings?.company_name || 'VYSITE';
+  const typeLabel = (() => {
+    const map: Record<string, string> = {
+      'Daily Site Report': 'Daily Site Report', 'QA Inspection': 'QA Inspection',
+      'RFI': 'Request for Information', 'Pressure Test': 'Pressure Test Record',
+      'Risk Assessment': 'Risk Assessment / RAMS', 'Accident / Incident Report': 'Accident & Incident Report',
+    };
+    return map[form.type] ?? form.type;
+  })();
+  const formTitle = safeStr(f.title) || '(Untitled)';
+  const fullBody = buildFormPageHTML(form, orgSettings);
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -1428,7 +1439,6 @@ ${fullBody}
 <script>window.onload = function() { window.print(); };<\/script>
 </body>
 </html>`;
-
   openPrintTab(html);
 }
 

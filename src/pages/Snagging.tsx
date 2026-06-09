@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Plus, X, MessageSquare, Search, CheckCircle, AlertTriangle, Clock, AlertCircle, FileText, Printer, Trash2, Eye, Download, File, Image, Paperclip, CreditCard as Edit2, TrendingUp, ClipboardList, Camera } from 'lucide-react';
-import { openPrintTab, buildPrintDocument } from '../lib/printTab';
+import { openPrintTab } from '../lib/printTab';
+import { buildSnaggingReportPageHTML, SNAGGING_PDF_CSS } from '../forms/SnaggingPDF';
+import type { SnagItemForPDF, AttachmentForPDF } from '../forms/SnaggingPDF';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
 import type { DBAttachment, DBSnaggingReport } from '../lib/store';
 import type { Snag, SnagPriority, SnagStatus } from '../data/types';
@@ -1054,46 +1056,36 @@ export default function Snagging({ pendingOpen, onPendingOpenConsumed, pendingFi
   const handleExportPDF = () => {
     const selectedReports = reports.filter(r => selectedIds.has(r.id));
     if (selectedReports.length === 0) return;
-    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const rows = selectedReports.map(r => {
-      const rSnags = allSnags.filter(s => s.reportId === r.id);
-      const openCount   = rSnags.filter(s => s.status === 'Open').length;
-      const closedCount = rSnags.filter(s => s.status === 'Closed').length;
-      const statusColor = r.status === 'Closed' ? '#059669' : r.status === 'Approved' ? '#0d9488' : r.status === 'Submitted' ? '#2563eb' : '#64748b';
-      return `<tr>
-        <td style="font-weight:600">${r.title}</td>
-        <td>${r.project_name}</td>
-        <td><span style="color:${statusColor};font-weight:700">${r.status}</span></td>
-        <td>${r.inspector ?? ''}</td>
-        <td>${r.inspection_date ? new Date(r.inspection_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : ''}</td>
-        <td style="text-align:center;font-weight:700">${rSnags.length}</td>
-        <td style="text-align:center;color:#dc2626;font-weight:700">${openCount}</td>
-        <td style="text-align:center;color:#059669;font-weight:700">${closedCount}</td>
-      </tr>`;
+    const orgSettings = { company_name: store.settings?.company_name ?? '', logo_data_url: store.settings?.logo_data_url ?? '' };
+    const pages = selectedReports.map((report, i) => {
+      const rSnags = (store.snags as ExtendedSnag[])
+        .filter(s => s.reportId === report.id)
+        .sort((a, b) => (a.snagNumber ?? '').localeCompare(b.snagNumber ?? ''));
+      const snagItems: SnagItemForPDF[] = rSnags.map(s => {
+        const atts = store.attachments.filter(a => a.linked_type === 'snag' && a.linked_id === s.id);
+        const photos: AttachmentForPDF[] = atts
+          .filter(a => a.type.startsWith('image/') && a.category !== 'Closure Photo')
+          .map(a => ({ id: a.id, name: a.name, type: a.type, data_url: a.data_url, category: a.category }));
+        const closurePhotos: AttachmentForPDF[] = atts
+          .filter(a => a.category === 'Closure Photo')
+          .map(a => ({ id: a.id, name: a.name, type: a.type, data_url: a.data_url, category: a.category }));
+        return {
+          id: s.id, snagNumber: s.snagNumber, title: s.title, location: s.location,
+          trade: s.trade, priority: s.priority, status: s.status, description: s.description,
+          rectification: s.rectification, responsibleParty: s.responsibleParty,
+          assignedTo: s.assignedTo, raisedBy: s.raisedBy, raisedDate: s.raisedDate,
+          targetCompletionDate: s.targetCompletionDate ?? s.dueDate, dueDate: s.dueDate,
+          comments: s.comments, closedBy: s.closedBy, closedDate: s.closedDate,
+          closureComments: s.closureComments, photos, closurePhotos,
+        };
+      });
+      const pageHtml = buildSnaggingReportPageHTML(report, snagItems, orgSettings);
+      return i < selectedReports.length - 1
+        ? `<div style="page-break-after:always;break-after:page;">${pageHtml}</div>`
+        : pageHtml;
     }).join('');
-    const styles = `
-      .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #f97316;padding-bottom:14px;margin-bottom:22px}
-      .logo{font-size:22px;font-weight:900;color:#f97316;letter-spacing:2px}
-      .dateline{font-size:11px;color:#666;margin-top:3px}
-      table{width:100%;border-collapse:collapse;font-size:11px}
-      th{background:#f1f5f9;color:#334155;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0}
-      td{padding:8px 10px;color:#1e293b;border-bottom:1px solid #f1f5f9;vertical-align:top}
-      tr:nth-child(even) td{background:#f8fafc}
-    `;
-    const body = `
-      <div class="header">
-        <div>
-          <div class="logo">VYSITE</div>
-          <div class="dateline">Snagging Reports · Generated ${today} · ${selectedReports.length} report${selectedReports.length !== 1 ? 's' : ''}</div>
-        </div>
-      </div>
-      <table>
-        <thead><tr><th>Report Title</th><th>Project</th><th>Status</th><th>Inspector</th><th>Inspection Date</th><th style="text-align:center">Total</th><th style="text-align:center">Open</th><th style="text-align:center">Closed</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div style="margin-top:32px;border-top:1px solid #e2e8f0;padding-top:10px;font-size:10px;color:#94a3b8;text-align:center">Generated by VYSITE · ${today}</div>
-    `;
-    openPrintTab(buildPrintDocument('Snagging Reports — VYSITE', styles, body));
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Snagging Reports — VYSITE</title><style>${SNAGGING_PDF_CSS}</style></head><body>${pages}<script>window.onload=function(){window.print();};<\/script></body></html>`;
+    openPrintTab(html);
   };
 
   const handleSaveReport = async (data: ReportFormData) => {
@@ -1228,24 +1220,21 @@ export default function Snagging({ pendingOpen, onPendingOpenConsumed, pendingFi
               const hasOverdue  = reportSnags.some(s => s.status !== 'Closed' && s.dueDate && new Date(s.dueDate) < new Date());
               const isSelected  = selectedIds.has(report.id);
               return (
-                <div key={report.id} className="flex items-start gap-3">
-                  {selectMode && (
-                    <div className="pt-4 pl-1 shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleId(report.id)}
-                        className="w-4 h-4 rounded accent-[#f97316] cursor-pointer"
-                      />
-                    </div>
-                  )}
-                  <div
-                    onClick={() => selectMode ? toggleId(report.id) : setViewingReport(report)}
-                    className={`flex-1 bg-[#1a2236] border rounded-xl p-4 transition-all cursor-pointer group ${
-                      isSelected
-                        ? 'border-[#f97316] bg-[#f97316]/5'
-                        : 'border-[#1e2d4a] hover:border-slate-500/60 hover:bg-[#1e2840]'
-                    }`}>
+                <div key={report.id}
+                  onClick={() => selectMode ? toggleId(report.id) : setViewingReport(report)}
+                  className={`bg-[#1a2236] border rounded-xl p-4 transition-all cursor-pointer group ${
+                    isSelected
+                      ? 'border-orange-500/60'
+                      : 'border-[#1e2d4a] hover:border-slate-500/60 hover:bg-[#1e2840]'
+                  }`}>
+                  <div className="flex items-start gap-3">
+                    {selectMode && (
+                      <div className="shrink-0 mt-0.5 pt-0.5" onClick={e => { e.stopPropagation(); toggleId(report.id); }}>
+                        <input type="checkbox" checked={isSelected} onChange={() => toggleId(report.id)}
+                          className="w-4 h-4 rounded border-slate-600 bg-[#0d1628] accent-orange-500 cursor-pointer" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -1288,6 +1277,7 @@ export default function Snagging({ pendingOpen, onPendingOpenConsumed, pendingFi
                       </span>
                     )}
                   </div>
+                    </div>
                   </div>
                 </div>
               );

@@ -346,17 +346,18 @@ function legalFooter(docRef: string, today: string, orgName: string, projectName
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function renderSnaggingReportPDF(
+export { CSS as SNAGGING_PDF_CSS };
+
+export function buildSnaggingReportPageHTML(
   report: DBSnaggingReport,
   snags: SnagItemForPDF[],
   orgSettings?: OrgSettings | null,
-): void {
+): string {
   const orgName  = orgSettings?.company_name || 'VYSITE';
   const orgLogo  = orgSettings?.logo_data_url;
   const today    = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   const docRef   = `SNR-${report.id.toUpperCase()}`;
 
-  // ── KPI counts ──
   const total    = snags.length;
   const open     = snags.filter(s => s.status === 'Open').length;
   const inProg   = snags.filter(s => s.status === 'In Progress').length;
@@ -365,7 +366,6 @@ export function renderSnaggingReportPDF(
   const overdue  = snags.filter(s => s.status !== 'Closed' && s.dueDate && new Date(s.dueDate) < now).length;
   const pct      = report.overall_completion_pct ?? (total > 0 ? Math.round((closed / total) * 100) : 0);
 
-  // ── Header ──
   const logoHtml = orgLogo
     ? `<img class="doc-logo-img" src="${orgLogo}" alt="${esc(orgName)}" />`
     : `<div class="doc-logo-text">${esc(orgName)}</div>`;
@@ -382,7 +382,6 @@ export function renderSnaggingReportPDF(
       </div>
     </div>`;
 
-  // ── KPI bar ──
   const kpiBar = `
     <div class="kpi-bar">
       <div class="kpi-cell"><div class="kpi-value">${total}</div><div class="kpi-label">Total Snags</div></div>
@@ -392,14 +391,12 @@ export function renderSnaggingReportPDF(
       <div class="kpi-cell"><div class="kpi-value kpi-overdue">${overdue}</div><div class="kpi-label">Overdue</div></div>
     </div>`;
 
-  // ── Progress bar ──
   const progressBar = `
     <div class="progress-wrap">
       <div class="progress-label"><span>Overall Completion</span><span>${pct}%</span></div>
       <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
     </div>`;
 
-  // ── Report meta block ──
   const metaItems: [string, string][] = [
     ['Project',          safe(report.project_name)],
     ['Area / Block',     safe(report.area_block)],
@@ -422,7 +419,6 @@ export function renderSnaggingReportPDF(
       </div>
     </div>`;
 
-  // ── Notes ──
   const notesHtml = report.notes
     ? `<div class="text-field" style="margin-bottom:18px">
         <div class="text-field-label">Report Notes</div>
@@ -430,13 +426,11 @@ export function renderSnaggingReportPDF(
        </div>`
     : '';
 
-  // ── Snag items ──
   const snagItemsHtml = snags.length
     ? `<div class="section-heading">Snag Items (${snags.length})</div>
        ${snags.map((s, i) => snagCard(s, i)).join('')}`
     : `<div style="text-align:center;padding:32px;color:#94a3b8;font-size:12px;">No snag items in this report.</div>`;
 
-  // ── Report summary table ──
   const summaryTable = snags.length
     ? `<div class="section-heading">Snag Summary</div>
        <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:20px">
@@ -471,7 +465,7 @@ export function renderSnaggingReportPDF(
        </table>`
     : '';
 
-  const fullBody = `<div class="page">
+  return `<div class="page">
     ${header}
     ${kpiBar}
     ${progressBar}
@@ -481,6 +475,15 @@ export function renderSnaggingReportPDF(
     ${snagItemsHtml}
     ${legalFooter(docRef, today, orgName, safe(report.project_name))}
   </div>`;
+}
+
+export function renderSnaggingReportPDF(
+  report: DBSnaggingReport,
+  snags: SnagItemForPDF[],
+  orgSettings?: OrgSettings | null,
+): void {
+  const orgName  = orgSettings?.company_name || 'VYSITE';
+  const fullBody = buildSnaggingReportPageHTML(report, snags, orgSettings);
 
   const html = `<!DOCTYPE html>
 <html>
