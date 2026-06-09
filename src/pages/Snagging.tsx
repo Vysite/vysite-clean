@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Plus, X, MessageSquare, Search, CheckCircle, AlertTriangle, Clock, AlertCircle, FileText, Printer, Trash2, Eye, Download, File, Image, Paperclip, CreditCard as Edit2, TrendingUp, ClipboardList, Camera } from 'lucide-react';
 import { openPrintTab } from '../lib/printTab';
-import { buildSnaggingReportPageHTML, SNAGGING_PDF_CSS } from '../forms/SnaggingPDF';
+import { buildSnaggingReportPageHTML, SNAGGING_PDF_CSS, renderSnaggingReportPDF } from '../forms/SnaggingPDF';
 import type { SnagItemForPDF, AttachmentForPDF } from '../forms/SnaggingPDF';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
 import type { DBAttachment, DBSnaggingReport } from '../lib/store';
@@ -10,8 +10,6 @@ import type { UploadedFile } from '../components/FileUpload';
 import FileUploadComponent from '../components/FileUpload';
 import MentionTextarea, { renderWithMentions } from '../components/MentionTextarea';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import { renderSnaggingReportPDF } from '../forms/SnaggingPDF';
-import type { SnagItemForPDF, AttachmentForPDF } from '../forms/SnaggingPDF';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
