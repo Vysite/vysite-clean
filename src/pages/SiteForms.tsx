@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react';
 import {
   FileText, Search, Calendar, Wrench, Zap, PoundSterling, CheckSquare,
   HardHat, Users, CreditCard as Edit2, Trash2, ChevronDown, X,
-  Plus, Clock, CheckCircle, AlertCircle, TrendingUp,
+  Plus, Clock, CheckCircle, AlertCircle, TrendingUp, Download,
 } from 'lucide-react';
+import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
 import type { DBSiteForm } from '../lib/store';
@@ -135,9 +136,11 @@ function CategoryDrawer({ cat, onSelect, canCreate }: CategoryDrawerProps) {
 export default function SiteForms(_props: SiteFormsProps = {}) {
   const store    = useAppStore();
   const perms    = usePermissions();
+  const isAdmin  = store.currentUser?.role === 'Admin';
   const canCreate = perms['site_forms.create'];
   const canEdit   = perms['site_forms.edit'];
   const canDelete = perms['site_forms.delete'];
+  const canExport = canEdit || isAdmin;
 
   const [openCategory, setOpenCategory]           = useState<string | null>(null);
   const [search, setSearch]                       = useState('');
@@ -151,6 +154,8 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const [builderType, setBuilderType]             = useState<ExtendedFormType>('QA Inspection');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingId, setDeletingId]               = useState<string | null>(null);
+  const [selectMode, setSelectMode]               = useState(false);
+  const [selectedIds, setSelectedIds]             = useState<Set<string>>(new Set());
 
   const forms = (store.siteForms ?? []) as unknown as ExtendedSiteForm[];
 
@@ -255,6 +260,60 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     setShowBuilder(true);
   };
 
+  const toggleSelectMode = () => { setSelectMode(p => !p); setSelectedIds(new Set()); };
+  const toggleId = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectAll = () => setSelectedIds(new Set(filtered.map(f => f.id)));
+  const clearSelection = () => setSelectedIds(new Set());
+  const selectedForms = forms.filter(f => selectedIds.has(f.id));
+
+  const handleExportPDF = () => {
+    if (selectedForms.length === 0) return;
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const rows = selectedForms.map(f => {
+      const te = TYPE_MAP[f.type] ?? { label: f.type };
+      const statusColor =
+        f.status === 'Action Required' ? '#dc2626' :
+        f.status === 'Approved'        ? '#059669' :
+        f.status === 'Submitted'       ? '#2563eb' :
+        f.status === 'Issued'          ? '#0ea5e9' :
+        f.status === 'Draft'           ? '#d97706' : '#64748b';
+      const descRaw = String(f.description ?? f.ramsScopeOfWorks ?? '');
+      const desc = descRaw.length > 80 ? descRaw.slice(0, 80) + '…' : descRaw;
+      return `<tr>
+        <td><span style="font-size:9px;font-weight:700;background:#f1f5f9;padding:1px 6px;border-radius:9999px;white-space:nowrap">${te.label}</span></td>
+        <td style="font-weight:600">${f.title || te.label}</td>
+        <td>${f.projectName ?? ''}</td>
+        <td>${f.date ? new Date(f.date as string).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : ''}</td>
+        <td>${f.completedBy ?? ''}</td>
+        <td style="color:${statusColor};font-weight:700">${f.status ?? ''}</td>
+        <td style="color:#64748b">${desc}</td>
+      </tr>`;
+    }).join('');
+    const styles = `
+      .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #f97316;padding-bottom:14px;margin-bottom:22px}
+      .logo{font-size:22px;font-weight:900;color:#f97316;letter-spacing:2px}
+      .dateline{font-size:11px;color:#666;margin-top:3px}
+      table{width:100%;border-collapse:collapse;font-size:11px}
+      th{background:#f1f5f9;color:#334155;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0}
+      td{padding:8px 10px;color:#1e293b;border-bottom:1px solid #f1f5f9;vertical-align:top}
+      tr:nth-child(even) td{background:#f8fafc}
+    `;
+    const body = `
+      <div class="header">
+        <div>
+          <div class="logo">VYSITE</div>
+          <div class="dateline">Site Forms Report · Generated ${today} · ${selectedForms.length} form${selectedForms.length !== 1 ? 's' : ''}</div>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Type</th><th>Title</th><th>Project</th><th>Date</th><th>Completed By</th><th>Status</th><th>Description</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="margin-top:32px;border-top:1px solid #e2e8f0;padding-top:10px;font-size:10px;color:#94a3b8;text-align:center">Generated by VYSITE · ${today}</div>
+    `;
+    openPrintTab(buildPrintDocument('Site Forms Report — VYSITE', styles, body));
+  };
+
   return (
     <div className="p-4 lg:p-6 space-y-5">
 
@@ -264,6 +323,16 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
           <h1 className="text-xl font-bold text-white">Site Forms</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage, create and export site documentation</p>
         </div>
+        {canExport && forms.length > 0 && (
+          <button
+            onClick={toggleSelectMode}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors border shrink-0 ${
+              selectMode ? 'bg-[#f97316] text-white border-[#f97316]' : 'border-[#1e2d4a] text-slate-400 hover:bg-[#1e2d4a] hover:text-slate-200'
+            }`}
+          >
+            {selectMode ? 'Done' : 'Select'}
+          </button>
+        )}
       </div>
 
       {/* ── Stats bar ── */}
@@ -387,6 +456,16 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
+          {selectedIds.size > 0 && (
+            <div className="w-full flex flex-wrap items-center gap-3 mb-1 bg-[#1a2236] border border-[#1e2d4a] rounded-xl px-4 py-3">
+              <span className="text-sm font-semibold text-white">{selectedIds.size} selected</span>
+              <button onClick={handleExportPDF} className="flex items-center gap-2 px-4 py-2 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">
+                <Download size={14} />Export to PDF
+              </button>
+              <button onClick={selectAll} className="px-3 py-2 border border-[#1e2d4a] rounded-lg text-xs font-semibold text-slate-400 hover:bg-[#1e2d4a] hover:text-slate-200 transition-colors">Select All</button>
+              <button onClick={clearSelection} className="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2 transition-colors ml-auto">Clear selection</button>
+            </div>
+          )}
           <div className="relative flex-1 min-w-44">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
             <input
@@ -463,10 +542,20 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
               return (
                 <div
                   key={f.id}
-                  onClick={() => setViewingForm(f)}
-                  className={`bg-[#1a2236] border ${f.status === 'Action Required' ? 'border-red-900/40' : 'border-[#1e2d4a]'} border-l-[3px] ${te.border} rounded-xl px-4 py-3.5 hover:border-slate-500/50 hover:bg-[#1e2840] transition-all duration-100 group cursor-pointer`}
+                  onClick={() => selectMode ? toggleId(f.id) : setViewingForm(f)}
+                  className={`bg-[#1a2236] border ${
+                    selectMode && selectedIds.has(f.id) ? 'border-orange-500/60' :
+                    f.status === 'Action Required' ? 'border-red-900/40' : 'border-[#1e2d4a]'
+                  } border-l-[3px] ${te.border} rounded-xl px-4 py-3.5 hover:border-slate-500/50 hover:bg-[#1e2840] transition-all duration-100 group cursor-pointer`}
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    {selectMode && (
+                      <div className="shrink-0 mt-0.5 pt-0.5" onClick={e => { e.stopPropagation(); toggleId(f.id); }}>
+                        <input type="checkbox" checked={selectedIds.has(f.id)} onChange={() => toggleId(f.id)}
+                          className="w-4 h-4 rounded border-slate-600 bg-[#0d1628] accent-orange-500 cursor-pointer" />
+                      </div>
+                    )}
+                    <div className="flex items-start justify-between gap-4 flex-1 min-w-0">
                     {/* Left: main content */}
                     <div className="flex-1 min-w-0">
                       {/* Row 1: type badge + status badge */}
@@ -505,6 +594,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
                       {canEdit   && <button onClick={e => { e.stopPropagation(); openEdit(f); }} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-[#0d1628] transition-colors"><Edit2 size={13} /></button>}
                       {canDelete && <button onClick={e => { e.stopPropagation(); handleDelete(f.id); }} className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"><Trash2 size={13} /></button>}
                     </div>
+                  </div>
                   </div>
                 </div>
               );
