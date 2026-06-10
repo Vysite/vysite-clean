@@ -246,7 +246,7 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
 
           {/* ── Commercial Notices ── */}
           {isCommercial && <>
-            <Field2Col items={[['Notice Ref', s('noticeRef')], ['Variation Ref', s('variationRef')], ['Variation Status', s('variationStatus')], ['Area / Location', s('areaLocation')], ['Instruction Source', s('instructionSource')]]} />
+            <Field2Col items={[['Notice Ref', s('noticeRef')], ['Variation Ref', s('variationRef')], ['Variation Status', s('variationStatus')], ['Area / Location', s('areaLocation')], ['Instruction Source', s('instructionSource')], ['Raised By', s('raisedBy')]]} />
             <ViewField label="Cause" value={s('cause')} />
             <ViewField label="Impact" value={s('impact')} />
             <ViewField label="Programme Impact" value={s('programmeImpact')} />
@@ -257,8 +257,9 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
 
           {/* ── Site Instruction ── */}
           {isSI && <>
-            <ViewField label="Details" value={s('description')} />
-            <ViewField label="Notes" value={s('notes')} />
+            <Field2Col items={[['Issued By', s('raisedBy')], ['Issued To', s('instructionSource')]]} />
+            <ViewField label="Instruction" value={s('description')} />
+            {s('notes') && <ViewField label="Notes" value={s('notes')} />}
           </>}
 
           {/* ── Pressure Test ── */}

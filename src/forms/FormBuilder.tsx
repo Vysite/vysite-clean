@@ -43,7 +43,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     completedBy: sv('completedBy'),
     description: sv('description'),
     comments:    sv('comments'),
-    status:      sv('status', 'Draft'),
+    status:      sv('status', ['Early Warning Notice', 'Site Instruction'].includes(type) ? 'Open' : 'Draft'),
     rfiRef:      sv('rfiRef', nextRfiRef()),
     subject:     sv('subject'),
     question:    sv('question'),
@@ -565,7 +565,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
       completedBy: form.completedBy,
       description: form.description,
       comments: form.comments,
-      status: (type === 'Early Warning Notice' ? form.status : status) as ExtendedFormStatus,
+      status: (['Early Warning Notice', 'Site Instruction'].includes(type) ? form.status : status) as ExtendedFormStatus,
       submittedDate: status === 'Submitted' || status === 'Issued' ? new Date().toISOString().split('T')[0] : undefined,
       notes: form.notes,
     };
@@ -615,6 +615,18 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
         costImpact: form.costImpact,
         programmeImpact: form.programmeImpact,
         variationStatus: form.variationStatus,
+      });
+    }
+    if (type === 'Early Warning Notice') {
+      Object.assign(base, {
+        impact: form.impact,
+        raisedBy: form.raisedBy,
+      });
+    }
+    if (type === 'Site Instruction') {
+      Object.assign(base, {
+        raisedBy: form.raisedBy,
+        instructionSource: form.instructionSource,
       });
     }
     if (type === 'Technical Query') {

@@ -1262,6 +1262,7 @@ function buildCommercialBody(f: Record<string, unknown>): string {
       ['Area / Location', safeStr(f.areaLocation)],
       ['Instruction Source', safeStr(f.instructionSource)],
       ['Variation Status', safeStr(f.variationStatus)],
+      ['Raised By / Issued By', safeStr(f.raisedBy)],
     ]))}
     ${section('Description', safeStr(f.description))}
     ${section('Cause', safeStr(f.cause))}
