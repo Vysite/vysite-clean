@@ -502,6 +502,11 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
                 f.status === 'Submitted'         ? 'text-blue-400 bg-blue-900/20' :
                 f.status === 'Issued'            ? 'text-sky-400 bg-sky-900/20' :
                 f.status === 'Draft'             ? 'text-amber-400 bg-amber-900/20' :
+                f.status === 'Open'              ? 'text-yellow-400 bg-yellow-900/20' :
+                f.status === 'Acknowledged'      ? 'text-cyan-400 bg-cyan-900/20' :
+                f.status === 'Actioned'          ? 'text-violet-400 bg-violet-900/20' :
+                f.status === 'Resolved'          ? 'text-emerald-400 bg-emerald-900/20' :
+                f.status === 'Closed'            ? 'text-slate-400 bg-slate-700/30' :
                 'text-slate-400 bg-slate-700/30';
               const catId  = typeToCatId[f.type];
               const catDef = FORM_CATEGORIES.find(c => c.id === catId);

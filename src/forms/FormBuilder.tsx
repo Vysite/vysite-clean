@@ -43,7 +43,12 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     completedBy: sv('completedBy'),
     description: sv('description'),
     comments:    sv('comments'),
-    status:      sv('status', ['Early Warning Notice', 'Site Instruction'].includes(type) ? 'Open' : 'Draft'),
+    status:      (() => {
+      const raw = sv('status', ['Early Warning Notice', 'Site Instruction'].includes(type) ? 'Open' : 'Draft');
+      // 'Draft' is not a valid status for EWN/SI — normalize to 'Open'
+      if (['Early Warning Notice', 'Site Instruction'].includes(type) && raw === 'Draft') return 'Open';
+      return raw;
+    })(),
     rfiRef:      sv('rfiRef', nextRfiRef()),
     subject:     sv('subject'),
     question:    sv('question'),

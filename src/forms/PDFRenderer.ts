@@ -48,11 +48,16 @@ const CSS = `
   .doc-subtitle-bar { font-size: 11px; color: #64748b; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
   /* Status badge */
   .status-badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 2px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; margin-left: 6px; vertical-align: middle; }
-  .status-submitted { background: #dbeafe; color: #1d4ed8; }
-  .status-approved  { background: #d1fae5; color: #065f46; }
-  .status-draft     { background: #f1f5f9; color: #475569; }
-  .status-issued    { background: #e0f2fe; color: #0369a1; }
-  .status-other     { background: #f1f5f9; color: #475569; }
+  .status-submitted    { background: #dbeafe; color: #1d4ed8; }
+  .status-approved     { background: #d1fae5; color: #065f46; }
+  .status-draft        { background: #f1f5f9; color: #475569; }
+  .status-issued       { background: #e0f2fe; color: #0369a1; }
+  .status-open         { background: #fef9c3; color: #854d0e; }
+  .status-acknowledged { background: #cffafe; color: #0e7490; }
+  .status-actioned     { background: #ede9fe; color: #5b21b6; }
+  .status-resolved     { background: #d1fae5; color: #065f46; }
+  .status-closed       { background: #f1f5f9; color: #475569; }
+  .status-other        { background: #f1f5f9; color: #475569; }
   /* Meta block */
   .meta-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; }
   .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 20px; }
@@ -182,10 +187,15 @@ function riskBadge(score: number): string {
 
 function statusBadge(status: string): string {
   const lower = status.toLowerCase();
-  const cls = lower === 'submitted' ? 'status-submitted'
-    : lower === 'approved' ? 'status-approved'
-    : lower === 'draft' ? 'status-draft'
-    : lower === 'issued' ? 'status-issued'
+  const cls = lower === 'submitted'    ? 'status-submitted'
+    : lower === 'approved'             ? 'status-approved'
+    : lower === 'draft'                ? 'status-draft'
+    : lower === 'issued'               ? 'status-issued'
+    : lower === 'open'                 ? 'status-open'
+    : lower === 'acknowledged'         ? 'status-acknowledged'
+    : lower === 'actioned'             ? 'status-actioned'
+    : lower === 'resolved'             ? 'status-resolved'
+    : lower === 'closed'               ? 'status-closed'
     : 'status-other';
   return `<span class="status-badge ${cls}">${esc(status)}</span>`;
 }
