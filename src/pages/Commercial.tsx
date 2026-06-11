@@ -1783,6 +1783,7 @@ export default function Commercial() {
           : proj.progress;
         const remaining    = completedNum != null ? contractNum - completedNum : null;
         const variationsNum = bannerVariationsEdit.trim() !== '' ? parseFloat(bannerVariationsEdit) : (proj.variationsValue ?? null);
+        const contractInclVariations = contractNum + (variationsNum ?? 0);
         const fmtVal = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
         const contractDirty   = bannerContractEdit   !== '' && parseFloat(bannerContractEdit)   !== (proj.value ? parseRawValue(proj.value) : 0);
         const completedDirty  = bannerCompletedEdit  !== '' && parseFloat(bannerCompletedEdit)  !== (proj.committed ?? NaN);
@@ -1917,18 +1918,22 @@ export default function Commercial() {
               </div>
             )}
             {!canEdit && contractNum > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-2">
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Contract Value</p>
                   <p className="text-sm font-bold text-white">{contractNum > 0 ? fmtVal(contractNum) : '—'}</p>
                 </div>
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Completed Value</p>
-                  <p className="text-sm font-bold text-slate-300">{completedNum != null ? fmtVal(completedNum) : '—'}</p>
-                </div>
-                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Variations Value</p>
                   <p className="text-sm font-bold text-amber-300">{variationsNum != null ? fmtVal(variationsNum) : '—'}</p>
+                </div>
+                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] border-l-2 border-l-orange-500/50 px-3 py-2">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Contract incl. Variations</p>
+                  <p className="text-sm font-bold text-orange-300">{contractNum > 0 || variationsNum != null ? fmtVal(contractInclVariations) : '—'}</p>
+                </div>
+                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Completed Value</p>
+                  <p className="text-sm font-bold text-slate-300">{completedNum != null ? fmtVal(completedNum) : '—'}</p>
                 </div>
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Progress</p>
@@ -1987,6 +1992,7 @@ export default function Commercial() {
             onAdd={store.addKeyDate}
             onUpdate={store.updateKeyDate}
             onRemove={store.removeKeyDate}
+            collapsible
           />
         </div>
       )}

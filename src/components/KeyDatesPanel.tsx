@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Calendar, Printer, Pencil, Trash2, X } from 'lucide-react';
+import { Plus, Calendar, Printer, Pencil, Trash2, X, ChevronDown, ChevronUp } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import type { Project } from '../data/types';
 import type { DBKeyDate } from '../lib/store';
@@ -11,6 +11,7 @@ export interface KeyDatesPanelProps {
   onAdd: (d: DBKeyDate) => Promise<void>;
   onUpdate: (d: DBKeyDate) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  collapsible?: boolean;
 }
 
 function keyDateStatusCls(d: DBKeyDate): string {
@@ -101,11 +102,12 @@ function exportKeyDatesPDF(project: Project, keyDates: DBKeyDate[]) {
 
 type KDForm = { title: string; date: string; description: string; comments: string; status: string };
 
-export default function KeyDatesPanel({ project, keyDates, currentUserName, onAdd, onUpdate, onRemove }: KeyDatesPanelProps) {
+export default function KeyDatesPanel({ project, keyDates, currentUserName, onAdd, onUpdate, onRemove, collapsible = false }: KeyDatesPanelProps) {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<DBKeyDate | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DBKeyDate | null>(null);
   const [form, setForm] = useState<KDForm>({ title: '', date: '', description: '', comments: '', status: 'Open' });
+  const [expanded, setExpanded] = useState(false);
 
   function openCreate() {
     setForm({ title: '', date: '', description: '', comments: '', status: 'Open' });
@@ -143,6 +145,130 @@ export default function KeyDatesPanel({ project, keyDates, currentUserName, onAd
     return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
 
+  // For collapsible mode: find next upcoming open date
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const nextOpen = sorted.find(d => d.status === 'Open' && d.date && new Date(d.date) >= today)
+    ?? sorted.find(d => d.status === 'Open')
+    ?? null;
+
+  if (collapsible && !expanded) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-[#1a2236] rounded-xl border-l-4 border-l-[#f97316] border border-[#1e2d4a]">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <Calendar size={15} className="text-[#f97316] shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-0.5">Key Dates</p>
+                {nextOpen ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-slate-200 truncate">{nextOpen.title}</p>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${keyDateStatusCls(nextOpen)}`}>{keyDateLabel(nextOpen)}</span>
+                    {nextOpen.date && <span className="text-[10px] text-slate-500 shrink-0">{daysRemaining(nextOpen.date)}</span>}
+                    {nextOpen.date && (
+                      <span className="text-xs text-orange-400 font-medium shrink-0">
+                        {new Date(nextOpen.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">{keyDates.length === 0 ? 'No key dates added' : 'All dates closed'}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-3">
+              <span className="text-xs text-slate-500">{keyDates.length} date{keyDates.length !== 1 ? 's' : ''}</span>
+              <button
+                onClick={() => setExpanded(true)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-[#0d1628] border border-[#1e2d4a] text-slate-300 hover:text-[#f97316] hover:border-[#f97316] rounded-lg text-xs font-semibold transition-colors"
+              >
+                View All <ChevronDown size={12} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {showModal && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl w-full max-w-md shadow-2xl">
+              <div className="flex items-center justify-between p-4 border-b border-[#1e2d4a]">
+                <h3 className="text-sm font-bold text-white">{editing ? 'Edit Key Date' : 'Add Key Date'}</h3>
+                <button onClick={() => setShowModal(false)} className="text-slate-500 hover:text-slate-300"><X size={16} /></button>
+              </div>
+              <div className="p-4 space-y-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Title <span className="text-red-400">*</span></label>
+                  <input
+                    className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f97316]"
+                    value={form.title}
+                    onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder="e.g. Practical Completion"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Date</label>
+                  <input
+                    type="date"
+                    className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f97316]"
+                    value={form.date}
+                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Description</label>
+                  <textarea
+                    rows={2}
+                    className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f97316] resize-none"
+                    value={form.description}
+                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Brief description..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Comments</label>
+                  <textarea
+                    rows={2}
+                    className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f97316] resize-none"
+                    value={form.comments}
+                    onChange={e => setForm(f => ({ ...f, comments: e.target.value }))}
+                    placeholder="Any additional comments..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Status</label>
+                  <select
+                    className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f97316]"
+                    value={form.status}
+                    onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                  >
+                    <option>Open</option>
+                    <option>Closed</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 p-4 border-t border-[#1e2d4a]">
+                <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">Cancel</button>
+                <button
+                  onClick={handleSave}
+                  disabled={!form.title.trim()}
+                  className="px-4 py-2 bg-[#f97316] hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors"
+                >{editing ? 'Save Changes' : 'Add Key Date'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {deleteTarget && (
+          <ConfirmDeleteModal
+            title="Delete Key Date"
+            message={`Delete "${deleteTarget.title}"? This cannot be undone.`}
+            onConfirm={() => { onRemove(deleteTarget.id); setDeleteTarget(null); }}
+            onCancel={() => setDeleteTarget(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a]">
@@ -165,6 +291,14 @@ export default function KeyDatesPanel({ project, keyDates, currentUserName, onAd
             >
               <Plus size={13} />Add Key Date
             </button>
+            {collapsible && (
+              <button
+                onClick={() => setExpanded(false)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-[#0d1628] border border-[#1e2d4a] text-slate-300 hover:text-[#f97316] hover:border-[#f97316] rounded-lg text-xs font-semibold transition-colors"
+              >
+                Collapse <ChevronUp size={12} />
+              </button>
+            )}
           </div>
         </div>
 
