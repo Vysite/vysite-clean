@@ -2162,10 +2162,6 @@ export default function Projects({ onNavigate, pendingProjectId, onPendingProjec
   const activeCount = visibleProjects.filter(p => p.status === 'Active').length;
   const onHoldCount = visibleProjects.filter(p => p.status === 'On Hold').length;
   const completedCount = visibleProjects.filter(p => p.status === 'Completed').length;
-  const totalValue = visibleProjects.reduce((sum, p) => {
-    const raw = typeof p.value === 'string' ? parseFloat((p.value as string).replace(/[£,\s]/g, '')) : (p.value as number ?? 0);
-    return sum + (isNaN(raw) ? 0 : raw);
-  }, 0);
   const openActions = visibleProjects.reduce((sum, p) => sum + (p.openActions ?? 0), 0);
   const openSnags = visibleProjects.reduce((sum, p) => sum + (p.openSnags ?? 0), 0);
 
@@ -2184,7 +2180,7 @@ export default function Projects({ onNavigate, pendingProjectId, onPendingProjec
       </div>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         {[
           { label: 'Total Projects',    value: totalProjects,    color: 'text-white' },
           { label: 'Active',            value: activeCount,      color: 'text-emerald-400' },
@@ -2192,9 +2188,6 @@ export default function Projects({ onNavigate, pendingProjectId, onPendingProjec
           { label: 'Completed',         value: completedCount,   color: 'text-slate-400' },
           { label: 'Open Actions',      value: openActions,      color: 'text-blue-400' },
           { label: 'Open Snags',        value: openSnags,        color: 'text-red-400' },
-          { label: 'Total Value',
-            value: totalValue > 0 ? '£' + totalValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '—',
-            color: 'text-[#f97316]' },
         ].map(kpi => (
           <div key={kpi.label} className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl px-4 py-3 text-center">
             <div className={`text-xl font-bold ${kpi.color} leading-none`}>{kpi.value}</div>

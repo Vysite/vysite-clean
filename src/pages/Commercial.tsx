@@ -13,7 +13,7 @@ import KeyDatesPanel from '../components/KeyDatesPanel';
 import FileUploadComponent from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
 import type { CommercialRecord, CommercialLineItem, CommercialRecordType, CommercialRecordStatus } from '../data/types';
-import type { DBAttachment } from '../lib/store';
+import type { DBAttachment, DBKeyDate } from '../lib/store';
 import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -1554,12 +1554,14 @@ export default function Commercial() {
     contractNum: number,
     completedNum: number | null,
     remaining: number | null,
+    variationsNum: number | null,
   ): string {
     const fv = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
     const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
     const barPct = Math.min(100, progress);
     const statusBadge = proj.status === 'Active' ? 'badge-green' : proj.status === 'Completed' ? 'badge-blue' : proj.status === 'On Hold' ? 'badge-amber' : 'badge-slate';
     const remainCls = remaining == null ? '' : remaining < 0 ? 'kpi-red' : remaining < contractNum * 0.1 ? 'kpi-amber' : 'kpi-green';
+    const contractInclVar = contractNum + (variationsNum ?? 0);
     return `
       <div class="meta-block">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;">
@@ -1582,19 +1584,22 @@ export default function Commercial() {
           <div class="progress-label"><span>Overall Progress</span><span>${barPct}%</span></div>
           <div class="progress-track"><div class="progress-fill" style="width:${barPct}%;"></div></div>
         </div>
-        ${contractNum > 0 && completedNum != null && remaining != null ? `
-        <div class="kpi-bar kpi-bar-4" style="margin-top:12px;">
-          <div class="kpi-cell"><div class="kpi-value">${fv(contractNum)}</div><div class="kpi-label">Contract Value</div></div>
-          <div class="kpi-cell"><div class="kpi-value">${fv(completedNum)}</div><div class="kpi-label">Completed Value</div></div>
+        <div class="kpi-bar" style="grid-template-columns:repeat(6,1fr);margin-top:12px;">
+          <div class="kpi-cell"><div class="kpi-value">${contractNum > 0 ? fv(contractNum) : '—'}</div><div class="kpi-label">Contract Value</div></div>
+          <div class="kpi-cell"><div class="kpi-value kpi-amber">${variationsNum != null ? fv(variationsNum) : '—'}</div><div class="kpi-label">Variations Value</div></div>
+          <div class="kpi-cell"><div class="kpi-value kpi-orange">${contractNum > 0 || variationsNum != null ? fv(contractInclVar) : '—'}</div><div class="kpi-label">Contract incl. Variations</div></div>
+          <div class="kpi-cell"><div class="kpi-value">${completedNum != null ? fv(completedNum) : '—'}</div><div class="kpi-label">Completed Value</div></div>
           <div class="kpi-cell"><div class="kpi-value kpi-orange">${barPct}%</div><div class="kpi-label">Progress</div></div>
-          <div class="kpi-cell"><div class="kpi-value ${remainCls}">${fv(remaining)}</div><div class="kpi-label">Remaining</div></div>
-        </div>` : ''}
+          <div class="kpi-cell"><div class="kpi-value ${remainCls}">${remaining != null ? fv(remaining) : '—'}</div><div class="kpi-label">Remaining</div></div>
+        </div>
       </div>`;
   }
 
   function exportRegisterSummary(
     proj: { name: string; status: string; client: string; location: string; projectManager: string; startDate: string; completionDate: string },
     progress: number, contractNum: number, completedNum: number | null, remaining: number | null,
+    variationsNum: number | null,
+    keyDates: DBKeyDate[],
     recordList: CommercialRecord[],
   ) {
     const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB') : '—';
@@ -1602,9 +1607,27 @@ export default function Commercial() {
     const openR  = recordList.filter(r => !['complete','rejected'].includes(r.status)).length;
     const agreeR = recordList.filter(r => ['agreed','added_to_valuation','paid','complete'].includes(r.status)).length;
     const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
 
     const statusBadgeCls = (s: string) => ['agreed','added_to_valuation','paid','complete'].includes(s) ? 'badge-green' : s === 'submitted' || s === 'under_review' ? 'badge-blue' : s === 'rejected' ? 'badge-red' : 'badge-amber';
     const typeBadgeCls = (t: string) => t === 'variation' ? 'badge-orange' : t === 'delay_notice' ? 'badge-amber' : t === 'compensation_event' ? 'badge-blue' : 'badge-slate';
+    const kdLabel = (d: DBKeyDate) => {
+      if (d.status === 'Closed') return 'Closed';
+      if (d.date && new Date(d.date) < todayMidnight) return 'Overdue';
+      return 'Open';
+    };
+    const kdBadge = (d: DBKeyDate) => {
+      if (d.status === 'Closed') return 'badge-green';
+      if (d.date && new Date(d.date) < todayMidnight) return 'badge-red';
+      return 'badge-amber';
+    };
+    const kdDaysRemaining = (d: DBKeyDate) => {
+      if (d.status === 'Closed' || !d.date) return '—';
+      const diff = Math.round((new Date(d.date).getTime() - todayMidnight.getTime()) / 86400000);
+      if (diff === 0) return 'Today';
+      if (diff < 0) return `${Math.abs(diff)}d overdue`;
+      return `${diff}d remaining`;
+    };
 
     const rows = recordList.map(r => `
       <tr>
@@ -1615,6 +1638,20 @@ export default function Commercial() {
         <td>${r.client || '—'}</td>
         <td><span class="badge ${statusBadgeCls(r.status)}">${statusInfo(r.status).label}</span></td>
         <td>${fmtDate(r.dateRaised)}</td>
+      </tr>`).join('');
+
+    const sortedKd = [...keyDates].sort((a, b) => {
+      if (!a.date) return 1; if (!b.date) return -1;
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+    const kdRows = sortedKd.map(d => `
+      <tr>
+        <td>${fmtDate(d.date)}</td>
+        <td style="font-weight:600;">${d.title}</td>
+        <td><span class="badge ${kdBadge(d)}">${kdLabel(d)}</span></td>
+        <td>${kdDaysRemaining(d)}</td>
+        <td style="color:#64748b;">${d.description || '—'}</td>
+        <td style="color:#64748b;font-style:italic;">${d.comments || '—'}</td>
       </tr>`).join('');
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Register — ${proj.name}</title>
@@ -1631,7 +1668,7 @@ export default function Commercial() {
           <div class="doc-dateline">Exported ${todayStr}</div>
         </div>
       </div>
-      ${buildProjectMetaHTML(proj, progress, contractNum, completedNum, remaining)}
+      ${buildProjectMetaHTML(proj, progress, contractNum, completedNum, remaining, variationsNum)}
       <div class="kpi-bar kpi-bar-3">
         <div class="kpi-cell"><div class="kpi-value">${totalR}</div><div class="kpi-label">Total Records</div></div>
         <div class="kpi-cell"><div class="kpi-value kpi-amber">${openR}</div><div class="kpi-label">Open / Active</div></div>
@@ -1642,6 +1679,12 @@ export default function Commercial() {
         <thead><tr><th>Type</th><th>Reference</th><th>Title</th><th>Project</th><th>Client</th><th>Status</th><th>Date Raised</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      ${keyDates.length > 0 ? `
+      <div class="section-heading" style="margin-top:24px;">Key Dates (${keyDates.length})</div>
+      <table class="data-table">
+        <thead><tr><th style="width:90px;">Date</th><th>Title</th><th style="width:80px;">Status</th><th style="width:100px;">Days Remaining</th><th>Description</th><th>Notes</th></tr></thead>
+        <tbody>${kdRows}</tbody>
+      </table>` : ''}
       <div class="legal-footer">
         <div class="legal-footer-header">
           <div class="legal-footer-title">Commercial Document — Confidential</div>
@@ -1659,12 +1702,33 @@ export default function Commercial() {
   function exportFullTickets(
     proj: { name: string; status: string; client: string; location: string; projectManager: string; startDate: string; completionDate: string },
     progress: number, contractNum: number, completedNum: number | null, remaining: number | null,
+    variationsNum: number | null,
+    keyDates: DBKeyDate[],
     recordList: CommercialRecord[],
   ) {
     const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }) : '—';
+    const fmtDateShort = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB') : '—';
     const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
     const statusBadgeCls = (s: string) => ['agreed','added_to_valuation','paid','complete'].includes(s) ? 'badge-green' : s === 'submitted' || s === 'under_review' ? 'badge-blue' : s === 'rejected' ? 'badge-red' : 'badge-amber';
     const typeBadgeCls = (t: string) => t === 'variation' ? 'badge-orange' : t === 'delay_notice' ? 'badge-amber' : t === 'compensation_event' ? 'badge-blue' : 'badge-slate';
+    const kdLabel = (d: DBKeyDate) => {
+      if (d.status === 'Closed') return 'Closed';
+      if (d.date && new Date(d.date) < todayMidnight) return 'Overdue';
+      return 'Open';
+    };
+    const kdBadge = (d: DBKeyDate) => {
+      if (d.status === 'Closed') return 'badge-green';
+      if (d.date && new Date(d.date) < todayMidnight) return 'badge-red';
+      return 'badge-amber';
+    };
+    const kdDaysRemaining = (d: DBKeyDate) => {
+      if (d.status === 'Closed' || !d.date) return '—';
+      const diff = Math.round((new Date(d.date).getTime() - todayMidnight.getTime()) / 86400000);
+      if (diff === 0) return 'Today';
+      if (diff < 0) return `${Math.abs(diff)}d overdue`;
+      return `${diff}d remaining`;
+    };
 
     const tickets = recordList.map((r, idx) => {
       const totals = r.lineItems && r.lineItems.length > 0 ? recordTotals(r.lineItems) : null;
@@ -1711,6 +1775,29 @@ export default function Commercial() {
         </div>`;
     }).join('');
 
+    const sortedKd = [...keyDates].sort((a, b) => {
+      if (!a.date) return 1; if (!b.date) return -1;
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+    const kdSection = keyDates.length > 0 ? `
+      <div style="page-break-before:always;height:1px;"></div>
+      <div class="section-heading" style="margin-top:24px;">Key Dates (${keyDates.length})</div>
+      <table class="data-table">
+        <thead><tr><th style="width:90px;">Date</th><th>Title</th><th style="width:80px;">Status</th><th style="width:100px;">Days Remaining</th><th>Description</th><th>Notes</th><th style="width:90px;">Created By</th><th style="width:90px;">Created</th></tr></thead>
+        <tbody>${sortedKd.map(d => `
+          <tr>
+            <td>${fmtDateShort(d.date)}</td>
+            <td style="font-weight:600;">${d.title}</td>
+            <td><span class="badge ${kdBadge(d)}">${kdLabel(d)}</span></td>
+            <td>${kdDaysRemaining(d)}</td>
+            <td style="color:#64748b;">${d.description || '—'}</td>
+            <td style="color:#64748b;font-style:italic;">${d.comments || '—'}</td>
+            <td>${d.created_by}</td>
+            <td>${fmtDateShort(d.created_date)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : '';
+
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Full Export — ${proj.name}</title>
     <style>${PDF_CSS}</style>
     <script>window.onload=function(){window.print();}<\/script>
@@ -1725,9 +1812,10 @@ export default function Commercial() {
           <div class="doc-dateline">${recordList.length} record${recordList.length !== 1 ? 's' : ''} · ${todayStr}</div>
         </div>
       </div>
-      ${buildProjectMetaHTML(proj, progress, contractNum, completedNum, remaining)}
+      ${buildProjectMetaHTML(proj, progress, contractNum, completedNum, remaining, variationsNum)}
       <div class="section-heading">Tickets (${recordList.length})</div>
       ${tickets}
+      ${kdSection}
       <div class="legal-footer">
         <div class="legal-footer-header">
           <div class="legal-footer-title">Commercial Document — Confidential</div>
@@ -1748,6 +1836,10 @@ export default function Commercial() {
   const totalRecords     = records.length;
   const openRecords      = records.filter(r => !['complete', 'rejected'].includes(r.status)).length;
   const agreedRecords    = records.filter(r => r.status === 'agreed' || r.status === 'added_to_valuation' || r.status === 'paid' || r.status === 'complete').length;
+  const totalContractValue = store.projects.reduce((sum, p) => {
+    const raw = typeof p.value === 'string' ? parseFloat((p.value as string).replace(/[£,\s]/g, '')) : (p.value as number ?? 0);
+    return sum + (isNaN(raw) ? 0 : raw);
+  }, 0);
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
@@ -1763,14 +1855,24 @@ export default function Commercial() {
             <p className="text-xs text-slate-500">Variations, Delay Notices &amp; Compensation Events</p>
           </div>
         </div>
-        {canCreate && (
-          <button
-            onClick={openNew}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#f97316] hover:bg-orange-400 text-white text-sm font-semibold transition-colors shadow-lg shadow-orange-900/30"
-          >
-            <Plus size={16} /> New Record
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {totalContractValue > 0 && (
+            <div className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl px-4 py-2 text-right">
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider leading-none mb-0.5">Total Contract Value</p>
+              <p className="text-base font-bold text-[#f97316] leading-none">
+                {'£' + totalContractValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </p>
+            </div>
+          )}
+          {canCreate && (
+            <button
+              onClick={openNew}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#f97316] hover:bg-orange-400 text-white text-sm font-semibold transition-colors shadow-lg shadow-orange-900/30"
+            >
+              <Plus size={16} /> New Record
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Project summary banner */}
@@ -1967,13 +2069,13 @@ export default function Commercial() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => exportRegisterSummary(proj, progress, contractNum, completedNum, remaining, filteredRecords)}
+                  onClick={() => exportRegisterSummary(proj, progress, contractNum, completedNum, remaining, variationsNum, store.keyDates.filter(d => d.project_id === effectiveBannerProjectId), filteredRecords)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0d1628] hover:bg-[#1a2236] border border-[#1e2d4a] text-slate-300 hover:text-white text-xs font-semibold rounded-lg transition-colors"
                 >
                   <FileText size={12} />Register Summary
                 </button>
                 <button
-                  onClick={() => exportFullTickets(proj, progress, contractNum, completedNum, remaining, selectedIds.size > 0 ? filteredRecords.filter(r => selectedIds.has(r.id)) : filteredRecords)}
+                  onClick={() => exportFullTickets(proj, progress, contractNum, completedNum, remaining, variationsNum, store.keyDates.filter(d => d.project_id === effectiveBannerProjectId), selectedIds.size > 0 ? filteredRecords.filter(r => selectedIds.has(r.id)) : filteredRecords)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0d1628] hover:bg-[#1a2236] border border-[#1e2d4a] text-slate-300 hover:text-white text-xs font-semibold rounded-lg transition-colors"
                 >
                   <Printer size={12} />{selectedIds.size > 0 ? `Full Export (${selectedIds.size})` : 'Full Export (All)'}
