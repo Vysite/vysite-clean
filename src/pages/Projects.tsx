@@ -1298,7 +1298,6 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
   const canDelete = perms['projects.delete'] || isAdmin;
   const canUploadDocs = perms['docs.upload'];
   const canDeleteDocs = perms['docs.delete'] || isAdmin;
-  const canEditFinanceProgress = perms['commercial.edit_project_finance_progress'] || isAdmin;
 
   // Tab visibility driven by module permissions
   const hiddenTabs = new Set<DetailTab>();
@@ -1316,7 +1315,13 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
 
   // If the current tab becomes hidden (e.g. after a permission change), fall back to overview
   const safeActiveTab: DetailTab = hiddenTabs.has(activeTab) ? 'overview' : activeTab;
-  const [localProgress, setLocalProgress] = useState(project.progress);
+
+  // Progress is driven by commercial values — committed / contract value
+  const contractNum  = project.value    ? parseFloat(project.value.replace(/[£,\s]/g, ''))    : 0;
+  const committedNum = project.committed != null ? project.committed : null;
+  const localProgress = contractNum > 0
+    ? Math.min(100, Math.round(((committedNum ?? 0) / contractNum) * 100))
+    : project.progress;
   const [showAddDocument, setShowAddDocument] = useState(false);
   const [viewingDoc, setViewingDoc] = useState<DBProjectDocument | null>(null);
 
@@ -1391,11 +1396,6 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
 
     return items.sort((a, b) => (b.ts > a.ts ? 1 : b.ts < a.ts ? -1 : 0));
   }, [projectActions, projectSnags, projectForms, projectTC, projectDocs]);
-
-  function handleSaveProgress() {
-    if (!canEditFinanceProgress) return;
-    store.updateProject({ ...project, progress: localProgress });
-  }
 
   function handlePrint() {
     const completionDate = project.completionDate
@@ -1593,27 +1593,16 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
             <span className="font-medium text-slate-400">Overall Progress</span>
             <span className="font-bold text-[#f97316] text-base">{localProgress}%</span>
           </div>
-          {canEditFinanceProgress ? (
-            <>
-              <input
-                type="range" min={0} max={100} value={localProgress}
-                onChange={e => setLocalProgress(Number(e.target.value))}
-                className="w-full cursor-pointer h-2" style={{ accentColor: '#f97316' }}
-              />
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-xs text-slate-500">Drag to update completion percentage</span>
-                {localProgress !== project.progress && (
-                  <button onClick={handleSaveProgress} className="text-xs font-semibold text-[#f97316] hover:text-orange-400 transition-colors">Save →</button>
-                )}
-              </div>
-            </>
+          <div className="w-full bg-[#0d1628] rounded-full h-2.5">
+            <div
+              className="h-2.5 rounded-full bg-[#f97316] transition-all"
+              style={{ width: `${localProgress}%` }}
+            />
+          </div>
+          {contractNum > 0 ? (
+            <p className="text-xs text-slate-600 mt-1.5">Calculated from commercial values — update in the Commercial module.</p>
           ) : (
-            <div className="w-full bg-[#0d1628] rounded-full h-2.5">
-              <div
-                className="h-2.5 rounded-full bg-[#f97316] transition-all"
-                style={{ width: `${project.progress}%` }}
-              />
-            </div>
+            <p className="text-xs text-slate-600 mt-1.5">Set Contract &amp; Completed values in the Commercial module to drive progress.</p>
           )}
         </div>
       </div>
