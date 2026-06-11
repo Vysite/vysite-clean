@@ -101,8 +101,8 @@ export default function Sidebar({
           <img
             src="/VYSITE_Logo_Long.png"
             alt="VYSITE"
-            className="w-full object-contain"
-            style={{ maxHeight: '64px', mixBlendMode: 'lighten' }}
+            className="w-full h-full object-contain"
+            style={{ mixBlendMode: 'lighten' }}
           />
         )}
       </div>
