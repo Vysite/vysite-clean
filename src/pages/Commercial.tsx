@@ -13,7 +13,6 @@ import FileUploadComponent from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
 import type { CommercialRecord, CommercialLineItem, CommercialRecordType, CommercialRecordStatus } from '../data/types';
 import type { DBAttachment } from '../lib/store';
-import { openPrintTab } from '../lib/printTab';
 
 import CommercialOverview from './commercial/CommercialOverview';
 import CommercialRegister from './commercial/CommercialRegister';
@@ -22,6 +21,7 @@ import CommercialApplications from './commercial/CommercialApplications';
 import CommercialTimeline from './commercial/CommercialTimeline';
 import type { CommercialTab } from './commercial/types';
 import { RECORD_TYPES, STATUSES, typeInfo, statusInfo, parseRawValue, fmtCurrency as fmtC } from './commercial/types';
+import { exportFullCommercialReport } from './commercial/CommercialPDF';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -905,7 +905,7 @@ export default function Commercial() {
             <p className="text-[11px] text-slate-500">Contract Management &amp; Commercial Control</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {totalContractValue > 0 && (
             <div className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl px-4 py-2 text-right">
               <p className="text-[10px] text-slate-500 uppercase tracking-wider leading-none mb-0.5">Total Portfolio Value</p>
@@ -913,6 +913,57 @@ export default function Commercial() {
                 {'£' + totalContractValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
+          )}
+          {bannerProject && (
+            <button
+              onClick={() => {
+                const contractNum = bannerProject.value ? parseRawValue(bannerProject.value) : 0;
+                const variationExposure = vaHasItems ? vaMetrics.exposure : (bannerProject.variationsValue ?? 0);
+                const agreedVariations = vaHasItems ? vaMetrics.agreed : 0;
+                const forecastContractSum = contractNum + variationExposure;
+                const adjustedContractSum = contractNum + agreedVariations;
+                const completedNum = bannerProject.committed ?? null;
+                const projectApps = (store.commercialApplications ?? []).filter(a => a.project_id === bannerProject.id);
+                const buildEventsForPDF = () => {
+                  const evts: {id:string;sortDate:string;displayDate:string;kind:string;source:string;reference:string;title:string;statusLabel?:string;value?:number;isPositive?:boolean;createdBy?:string|null}[] = [];
+                  const safeDate = (d?: string|null) => { if (!d) return ''; try { return new Date(d).toISOString().slice(0,10); } catch { return ''; } };
+                  const fmtEvtDate = (d?: string|null) => { if (!d) return '—'; try { return new Date(d).toLocaleDateString('en-GB'); } catch { return '—'; } };
+                  for (const item of projectVAItems) {
+                    const rd = safeDate(item.date_raised || item.created_at);
+                    if (rd) evts.push({ id:`va-r-${item.id}`, sortDate:rd, displayDate:fmtEvtDate(item.date_raised||item.created_at), kind:'va-raised', source:'Variation Account', reference:item.reference, title:item.title, statusLabel:item.status, value:item.value, isPositive:item.is_positive, createdBy:item.created_by });
+                    if (item.date_agreed && (item.status==='agreed'||item.status==='paid')) { const ad = safeDate(item.date_agreed); if (ad) evts.push({ id:`va-a-${item.id}`, sortDate:ad, displayDate:fmtEvtDate(item.date_agreed), kind:'va-agreed', source:'Variation Account', reference:item.reference, title:item.title, statusLabel:item.status, value:item.value, isPositive:item.is_positive, createdBy:item.created_by }); }
+                  }
+                  for (const r of records.filter(r => r.projectId === bannerProject.id)) {
+                    const cd = safeDate(r.createdAt); if (cd) evts.push({ id:`cr-a-${r.id}`, sortDate:cd, displayDate:fmtEvtDate(r.createdAt), kind:'cr-added', source:'Commercial Register', reference:r.reference, title:r.title, statusLabel:r.status, createdBy:r.createdBy });
+                    if (r.dateSubmitted && r.status!=='draft') { const sd=safeDate(r.dateSubmitted); if (sd) evts.push({ id:`cr-s-${r.id}`, sortDate:sd, displayDate:fmtEvtDate(r.dateSubmitted), kind:'cr-submitted', source:'Commercial Register', reference:r.reference, title:r.title, statusLabel:r.status, createdBy:r.createdBy }); }
+                    if (r.dateAgreed && ['agreed','added_to_valuation','paid','complete'].includes(r.status)) { const ad=safeDate(r.dateAgreed); if (ad) evts.push({ id:`cr-ag-${r.id}`, sortDate:ad, displayDate:fmtEvtDate(r.dateAgreed), kind:'cr-agreed', source:'Commercial Register', reference:r.reference, title:r.title, statusLabel:r.status, createdBy:r.createdBy }); }
+                  }
+                  return evts.sort((a,b) => b.sortDate.localeCompare(a.sortDate));
+                };
+                exportFullCommercialReport({
+                  project: bannerProject,
+                  keyDates: projectKeyDates,
+                  records: records.filter(r => r.projectId === bannerProject.id),
+                  vaItems: projectVAItems,
+                  apps: projectApps,
+                  events: buildEventsForPDF(),
+                  contractNum,
+                  completedNum,
+                  variationExposure,
+                  agreedVariations,
+                  forecastContractSum,
+                  adjustedContractSum,
+                  vaExposure: vaMetrics.exposure,
+                  vaAgreed: vaMetrics.agreed,
+                  currentUserName: store.currentUser?.name ?? '',
+                });
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-slate-600 transition-colors"
+              title="Export Full Commercial Report PDF"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Full Report
+            </button>
           )}
           {canCreate && activeTab !== 'overview' && (
             <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f97316] hover:bg-orange-400 text-white text-sm font-semibold transition-colors shadow-lg shadow-orange-900/30">
@@ -990,6 +1041,7 @@ export default function Commercial() {
           canCreate={canCreate}
           canEdit={canEdit}
           canDelete={canDelete}
+          currentUserName={store.currentUser?.name ?? ''}
           onProjectChange={(id) => setBannerProjectId(id)}
         />
       )}
@@ -1005,6 +1057,7 @@ export default function Commercial() {
             canEdit={canEdit}
             canDelete={canDelete}
             forecastContractSum={forecastContractSum}
+            currentUserName={store.currentUser?.name ?? ''}
             onProjectChange={(id) => setBannerProjectId(id)}
           />
         );
@@ -1014,6 +1067,7 @@ export default function Commercial() {
           project={bannerProject}
           records={records}
           variationItems={projectVAItems}
+          currentUserName={store.currentUser?.name ?? ''}
         />
       )}
 

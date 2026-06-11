@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
-import { Clock, GitBranch, FileText, TrendingUp } from 'lucide-react';
+import { Clock, GitBranch, FileText, TrendingUp, Printer } from 'lucide-react';
 import type { CommercialRecord } from '../../data/types';
 import type { DBVariationAccountItem } from '../../lib/store';
 import type { Project } from './types';
 import { fmtCurrency, fmtDate, typeInfo, statusInfo } from './types';
+import { exportTimelinePDF } from './CommercialPDF';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -228,12 +229,14 @@ interface CommercialTimelineProps {
   project: Project | null;
   records: CommercialRecord[];
   variationItems: DBVariationAccountItem[];
+  currentUserName?: string;
 }
 
 export default function CommercialTimeline({
   project,
   records,
   variationItems,
+  currentUserName,
 }: CommercialTimelineProps) {
   const events = useMemo(() => {
     if (!project) return [];
@@ -264,6 +267,13 @@ export default function CommercialTimeline({
             {events.length} event{events.length !== 1 ? 's' : ''}
           </span>
         )}
+        <button
+          onClick={() => exportTimelinePDF({ project, events, currentUserName: currentUserName || '' })}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-slate-600 rounded-lg transition-colors"
+          title="Export Timeline PDF"
+        >
+          <Printer size={13} /> Export PDF
+        </button>
       </div>
 
       {/* Legend */}

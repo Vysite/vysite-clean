@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { Plus, X, Save, Trash2, ChevronRight, AlertCircle } from 'lucide-react';
+import { Plus, X, Save, Trash2, ChevronRight, AlertCircle, Printer } from 'lucide-react';
 import type { Project } from './types';
 import { fmtCurrency, fmtDate, parseRawValue } from './types';
 import type { DBCommercialApplication } from '../../lib/store';
 import { useAppStore } from '../../lib/StoreContext';
+import { exportApplicationsPDF } from './CommercialPDF';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -349,6 +350,7 @@ interface CommercialApplicationsProps {
   canEdit: boolean;
   canDelete: boolean;
   forecastContractSum: number;
+  currentUserName?: string;
   onProjectChange: (id: string) => void;
 }
 
@@ -359,6 +361,7 @@ export default function CommercialApplications({
   canEdit,
   canDelete,
   forecastContractSum,
+  currentUserName,
 }: CommercialApplicationsProps) {
   const store = useAppStore();
 
@@ -417,12 +420,21 @@ export default function CommercialApplications({
           <h3 className="text-sm font-semibold text-white">Applications</h3>
           <p className="text-[11px] text-slate-500 mt-0.5">Valuation applications — {project.name}</p>
         </div>
-        {canCreate && (
-          <button onClick={openNew}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#f97316] hover:bg-orange-400 text-white text-xs font-semibold transition-colors shadow-lg shadow-orange-900/30">
-            <Plus size={13} /> New Application
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportApplicationsPDF({ project, apps: items, forecastContractSum, currentUserName: currentUserName || '' })}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-slate-600 transition-colors"
+            title="Export Applications PDF"
+          >
+            <Printer size={13} /> Export PDF
           </button>
-        )}
+          {canCreate && (
+            <button onClick={openNew}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#f97316] hover:bg-orange-400 text-white text-xs font-semibold transition-colors shadow-lg shadow-orange-900/30">
+              <Plus size={13} /> New Application
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Summary strip */}

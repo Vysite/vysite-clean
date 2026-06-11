@@ -8,7 +8,7 @@ import KeyDatesPanel from '../../components/KeyDatesPanel';
 import { fmtCurrency, parseRawValue, typeInfo, statusInfo } from './types';
 import type { CommercialRecord, Project } from './types';
 import type { DBKeyDate } from '../../lib/store';
-import { openPrintTab } from '../../lib/printTab';
+import { exportPositionStatementPDF } from './CommercialPDF';
 
 interface CommercialOverviewProps {
   project: Project | null;
@@ -70,57 +70,6 @@ function activityIcon(label: string) {
   if (label.includes('Submitted')) return <ChevronRight size={12} className="text-sky-400 shrink-0 mt-0.5" />;
   if (label.includes('Raised')) return <Clock size={12} className="text-amber-400 shrink-0 mt-0.5" />;
   return <AlertCircle size={12} className="text-slate-400 shrink-0 mt-0.5" />;
-}
-
-// ─── PDF export CSS shared block ─────────────────────────────────────────────
-
-const PDF_CSS = `
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #1e293b; background: white; font-size: 11px; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .page { max-width: 880px; margin: 0 auto; padding: 36px 40px; }
-  .doc-header { display: flex; align-items: flex-end; justify-content: space-between; padding-bottom: 12px; border-bottom: 3px solid #f97316; margin-bottom: 22px; }
-  .doc-logo-text { font-size: 22px; font-weight: 900; color: #f97316; letter-spacing: 0.05em; line-height: 1; }
-  .doc-tagline { font-size: 9px; color: #94a3b8; margin-top: 3px; letter-spacing: 0.04em; }
-  .doc-header-right { text-align: right; }
-  .doc-title { font-size: 17px; font-weight: 900; color: #0f172a; line-height: 1.2; margin-bottom: 3px; }
-  .doc-dateline { font-size: 10px; color: #64748b; }
-  .report-meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
-  .report-meta-label { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; padding: 7px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
-  .report-meta-value { font-size: 10.5px; font-weight: 600; color: #0f172a; padding: 7px 14px; background: white; border-bottom: 1px solid #e2e8f0; }
-  .statement-block { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
-  .statement-header { background: #fff7ed; padding: 8px 16px; border-bottom: 1px solid #fed7aa; }
-  .statement-header-title { font-size: 8px; font-weight: 800; color: #c2410c; text-transform: uppercase; letter-spacing: 0.1em; }
-  .statement-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 16px; border-bottom: 1px solid #f1f5f9; }
-  .statement-row:last-child { border-bottom: none; }
-  .statement-label { font-size: 9.5px; color: #475569; }
-  .statement-sub { font-size: 8px; color: #94a3b8; margin-top: 1px; }
-  .statement-value { font-size: 11px; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; text-align: right; }
-  .statement-divider { border-top: 1.5px solid #e2e8f0; margin: 2px 0; }
-  .statement-total .statement-label { font-size: 10px; font-weight: 700; color: #0f172a; }
-  .statement-total .statement-value { font-size: 12px; color: #f97316; }
-  .statement-accent .statement-value { color: #f97316; }
-  .section-heading { font-size: 8.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 6px; border-bottom: 1.5px solid #e2e8f0; margin-bottom: 12px; margin-top: 24px; }
-  .data-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-  .data-table th { padding: 8px 10px; text-align: left; font-size: 8.5px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; background: #f1f5f9; border-bottom: 2px solid #e2e8f0; }
-  .data-table td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: top; }
-  .data-table tr:nth-child(even) td { background: #f8fafc; }
-  .badge { display: inline-block; font-size: 8.5px; font-weight: 700; padding: 2px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
-  .badge-orange { background: #fff7ed; color: #c2410c; } .badge-green { background: #d1fae5; color: #065f46; }
-  .badge-amber { background: #fef3c7; color: #92400e; } .badge-blue { background: #dbeafe; color: #1d4ed8; }
-  .badge-slate { background: #f1f5f9; color: #475569; } .badge-red { background: #fee2e2; color: #991b1b; }
-  .doc-footer { margin-top: 36px; padding-top: 10px; border-top: 2px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
-  .doc-footer-left { font-size: 8px; color: #94a3b8; }
-  .doc-footer-right { font-size: 8px; color: #94a3b8; text-align: right; }
-  @media print { .page { padding: 20px 24px; } }
-`;
-
-function escHtml(v: unknown): string {
-  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function fmtD(d: string | null | undefined): string {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-GB');
 }
 
 // ─── Overview component ───────────────────────────────────────────────────────
@@ -196,93 +145,15 @@ export default function CommercialOverview({
   const projectKeyDates = keyDates.filter(d => d.project_id === project.id);
 
   function exportPositionStatement() {
-    const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
-
-    const fv = (n: number) => '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    const kdRows = [...projectKeyDates]
-      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
-      .map(d => {
-        const isOverdue = d.status === 'Open' && d.date && new Date(d.date) < todayMidnight;
-        const label = d.status === 'Closed' ? 'Closed' : isOverdue ? 'Overdue' : 'Open';
-        const badgeCls = d.status === 'Closed' ? 'badge-green' : isOverdue ? 'badge-red' : 'badge-amber';
-        const diff = d.date && d.status === 'Open' ? Math.round((new Date(d.date).getTime() - todayMidnight.getTime()) / 86400000) : null;
-        const dr = diff === null ? '—' : diff === 0 ? 'Today' : diff < 0 ? `${Math.abs(diff)}d overdue` : `${diff}d remaining`;
-        return `<tr><td>${fmtD(d.date)}</td><td style="font-weight:600;">${escHtml(d.title)}</td><td><span class="badge ${badgeCls}">${label}</span></td><td>${dr}</td></tr>`;
-      }).join('');
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Position Statement — ${escHtml(project.name)}</title>
-    <style>${PDF_CSS}</style>
-    <script>window.onload=function(){window.print();}<\/script>
-    </head><body><div class="page">
-      <div class="doc-header">
-        <div><div class="doc-logo-text">VYSITE</div><div class="doc-tagline">Construction Operating System</div></div>
-        <div class="doc-header-right">
-          <div class="doc-title">Commercial Position Statement</div>
-          <div class="doc-dateline">${escHtml(project.name)}${project.client ? ' &mdash; ' + escHtml(project.client) : ''}</div>
-        </div>
-      </div>
-      <div class="report-meta">
-        <div class="report-meta-label">Report Type</div><div class="report-meta-value">Commercial Position Statement</div>
-        <div class="report-meta-label">Project</div><div class="report-meta-value">${escHtml(project.name)}</div>
-        ${project.client ? `<div class="report-meta-label">Client</div><div class="report-meta-value">${escHtml(project.client)}</div>` : ''}
-        <div class="report-meta-label">Project Manager</div><div class="report-meta-value">${escHtml(project.projectManager || '—')}</div>
-        <div class="report-meta-label">Generated Date</div><div class="report-meta-value">${todayStr}</div>
-        <div class="report-meta-label">Generated By</div><div class="report-meta-value">${escHtml(currentUserName || '—')}</div>
-      </div>
-
-      <div class="statement-block">
-        <div class="statement-header"><div class="statement-header-title">Commercial Position</div></div>
-        <div class="statement-row">
-          <div class="statement-label">Original Contract Sum</div>
-          <div class="statement-value">${contractNum > 0 ? fv(contractNum) : '—'}</div>
-        </div>
-        ${variationExposure !== 0 ? `
-        <div class="statement-row statement-accent">
-          <div class="statement-label">Outstanding Variation Exposure<div class="statement-sub">Submitted + Under Review variations</div></div>
-          <div class="statement-value">+${fv(variationExposure)}</div>
-        </div>` : ''}
-        <div class="statement-divider"></div>
-        <div class="statement-row statement-total">
-          <div class="statement-label">Forecast Contract Sum</div>
-          <div class="statement-value">${contractNum > 0 ? fv(forecastContractSum) : '—'}</div>
-        </div>
-        ${agreedVariations !== 0 ? `
-        <div class="statement-row">
-          <div class="statement-label">Agreed Variations</div>
-          <div class="statement-value">+${fv(agreedVariations)}</div>
-        </div>` : ''}
-        <div class="statement-divider"></div>
-        <div class="statement-row statement-total">
-          <div class="statement-label">Adjusted Contract Sum</div>
-          <div class="statement-value">${contractNum > 0 ? fv(adjustedContractSum) : '—'}</div>
-        </div>
-        ${completedNum != null ? `
-        <div class="statement-row">
-          <div class="statement-label">Completed Value</div>
-          <div class="statement-value">${fv(completedNum)}</div>
-        </div>` : ''}
-        ${remainingValue != null ? `
-        <div class="statement-row">
-          <div class="statement-label">Remaining Value</div>
-          <div class="statement-value">${fv(remainingValue)}</div>
-        </div>` : ''}
-      </div>
-
-      ${projectKeyDates.length > 0 ? `
-      <div class="section-heading">Key Dates (${projectKeyDates.length})</div>
-      <table class="data-table">
-        <thead><tr><th style="width:90px">Date</th><th>Title</th><th style="width:80px">Status</th><th style="width:110px">Days Remaining</th></tr></thead>
-        <tbody>${kdRows || '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:12px">No key dates recorded</td></tr>'}</tbody>
-      </table>` : ''}
-
-      <div class="doc-footer">
-        <div class="doc-footer-left">VYSITE &bull; Construction Operating System &bull; Commercial Document &mdash; Confidential</div>
-        <div class="doc-footer-right">Generated by ${escHtml(currentUserName || 'VYSITE')} &bull; ${todayStr} &bull; &copy; VYSITE. All rights reserved.</div>
-      </div>
-    </div></body></html>`;
-    openPrintTab(html);
+    exportPositionStatementPDF({
+      project,
+      keyDates: projectKeyDates,
+      contractNum,
+      completedNum,
+      variationExposure,
+      agreedVariations,
+      currentUserName: currentUserName || '',
+    });
   }
 
   return (

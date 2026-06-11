@@ -7,7 +7,7 @@ import { RECORD_TYPES, STATUSES, typeInfo, statusInfo } from './types';
 import type { CommercialRecord, CommercialRecordType, CommercialRecordStatus } from './types';
 import type { DBKeyDate } from '../../lib/store';
 import type { Project } from '../../data/types';
-import { openPrintTab } from '../../lib/printTab';
+import { exportRegisterPDF } from './CommercialPDF';
 
 interface CommercialRegisterProps {
   records: CommercialRecord[];
@@ -25,15 +25,6 @@ interface CommercialRegisterProps {
 
 function fmtCurrency(n: number): string {
   return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function escHtml(v: unknown): string {
-  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function fmtD(d: string | null | undefined): string {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-GB');
 }
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -64,34 +55,6 @@ function StatusBadge({ status }: { status: CommercialRecordStatus }) {
     </span>
   );
 }
-
-const PDF_CSS = `
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #1e293b; background: white; font-size: 11px; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .page { max-width: 880px; margin: 0 auto; padding: 36px 40px; }
-  .doc-header { display: flex; align-items: flex-end; justify-content: space-between; padding-bottom: 12px; border-bottom: 3px solid #f97316; margin-bottom: 22px; }
-  .doc-logo-text { font-size: 22px; font-weight: 900; color: #f97316; letter-spacing: 0.05em; line-height: 1; }
-  .doc-tagline { font-size: 9px; color: #94a3b8; margin-top: 3px; letter-spacing: 0.04em; }
-  .doc-header-right { text-align: right; }
-  .doc-title { font-size: 17px; font-weight: 900; color: #0f172a; line-height: 1.2; margin-bottom: 3px; }
-  .doc-dateline { font-size: 10px; color: #64748b; }
-  .report-meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
-  .report-meta-label { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; padding: 7px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
-  .report-meta-value { font-size: 10.5px; font-weight: 600; color: #0f172a; padding: 7px 14px; background: white; border-bottom: 1px solid #e2e8f0; }
-  .section-heading { font-size: 8.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 6px; border-bottom: 1.5px solid #e2e8f0; margin-bottom: 12px; margin-top: 24px; }
-  .data-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-  .data-table th { padding: 8px 10px; text-align: left; font-size: 8.5px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; background: #f1f5f9; border-bottom: 2px solid #e2e8f0; }
-  .data-table td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: top; }
-  .data-table tr:nth-child(even) td { background: #f8fafc; }
-  .badge { display: inline-block; font-size: 8.5px; font-weight: 700; padding: 2px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
-  .badge-orange { background: #fff7ed; color: #c2410c; } .badge-green { background: #d1fae5; color: #065f46; }
-  .badge-amber { background: #fef3c7; color: #92400e; } .badge-blue { background: #dbeafe; color: #1d4ed8; }
-  .badge-slate { background: #f1f5f9; color: #475569; } .badge-red { background: #fee2e2; color: #991b1b; }
-  .doc-footer { margin-top: 36px; padding-top: 10px; border-top: 2px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
-  .doc-footer-left { font-size: 8px; color: #94a3b8; }
-  .doc-footer-right { font-size: 8px; color: #94a3b8; text-align: right; }
-  @media print { .page { padding: 20px 24px; } }
-`;
 
 export default function CommercialRegister({
   records, loading, projects, canCreate, currentProject,
@@ -136,53 +99,8 @@ export default function CommercialRegister({
     else setSelectedIds(new Set(filteredRecords.map(r => r.id)));
   }
 
-  function exportRegisterPDF(list: CommercialRecord[]) {
-    const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const projName = currentProject?.name ?? 'All Projects';
-    const projClient = currentProject?.client ?? '';
-    const statusBadgeCls = (s: string) => ['agreed','added_to_valuation','paid','complete'].includes(s) ? 'badge-green' : s === 'submitted' || s === 'awaiting_agreement' ? 'badge-blue' : s === 'rejected' ? 'badge-red' : 'badge-amber';
-    const typeBadgeCls  = (t: string) => t === 'variation' ? 'badge-orange' : t === 'delay_notice' ? 'badge-amber' : t === 'compensation_event' ? 'badge-blue' : 'badge-slate';
-
-    const rows = list.map(r => `
-      <tr>
-        <td><span class="badge ${typeBadgeCls(r.recordType)}">${escHtml(typeInfo(r.recordType).label)}</span></td>
-        <td style="font-family:monospace;font-size:9.5px;font-weight:700;color:#f97316;">${escHtml(r.reference || '—')}</td>
-        <td style="font-weight:600;">${escHtml(r.title || 'Untitled')}</td>
-        <td>${escHtml(r.projectName || '—')}</td>
-        <td>${escHtml(r.client || '—')}</td>
-        <td><span class="badge ${statusBadgeCls(r.status)}">${escHtml(statusInfo(r.status).label)}</span></td>
-        <td>${fmtD(r.dateRaised)}</td>
-      </tr>`).join('');
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Register — ${escHtml(projName)}</title>
-    <style>${PDF_CSS}</style>
-    <script>window.onload=function(){window.print();}<\/script>
-    </head><body><div class="page">
-      <div class="doc-header">
-        <div><div class="doc-logo-text">VYSITE</div><div class="doc-tagline">Construction Operating System</div></div>
-        <div class="doc-header-right">
-          <div class="doc-title">Commercial Register</div>
-          <div class="doc-dateline">${escHtml(projName)}${projClient ? ' &mdash; ' + escHtml(projClient) : ''}</div>
-        </div>
-      </div>
-      <div class="report-meta">
-        <div class="report-meta-label">Report Type</div><div class="report-meta-value">Commercial Register</div>
-        <div class="report-meta-label">Project</div><div class="report-meta-value">${escHtml(projName)}</div>
-        <div class="report-meta-label">Records</div><div class="report-meta-value">${list.length} record${list.length !== 1 ? 's' : ''}</div>
-        <div class="report-meta-label">Generated Date</div><div class="report-meta-value">${todayStr}</div>
-        <div class="report-meta-label">Generated By</div><div class="report-meta-value">${escHtml(currentUserName || '—')}</div>
-      </div>
-      <div class="section-heading">Commercial Records (${list.length})</div>
-      <table class="data-table">
-        <thead><tr><th>Type</th><th>Reference</th><th>Title</th><th>Project</th><th>Client</th><th>Status</th><th>Date Raised</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">No records</td></tr>'}</tbody>
-      </table>
-      <div class="doc-footer">
-        <div class="doc-footer-left">VYSITE &bull; Construction Operating System &bull; Commercial Document &mdash; Confidential</div>
-        <div class="doc-footer-right">Generated by ${escHtml(currentUserName || 'VYSITE')} &bull; ${todayStr} &bull; &copy; VYSITE. All rights reserved.</div>
-      </div>
-    </div></body></html>`;
-    openPrintTab(html);
+  function handleExportPDF(list: CommercialRecord[]) {
+    exportRegisterPDF({ project: currentProject, records: list, currentUserName: currentUserName || '' });
   }
 
   const inputCls = 'bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-[#f97316] focus:border-[#f97316] transition-colors';
@@ -232,8 +150,7 @@ export default function CommercialRegister({
 
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => exportRegisterPDF(exportList)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-[#f97316] rounded-lg transition-colors"
+            onClick={() => handleExportPDF(exportList)}            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-[#f97316] rounded-lg transition-colors"
           >
             <FileText size={12} />Export PDF
           </button>
@@ -360,8 +277,7 @@ export default function CommercialRegister({
           </p>
           {selectedIds.size > 0 && (
             <button
-              onClick={() => exportRegisterPDF(exportList)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#f97316] border border-[#f97316]/30 hover:bg-[#f97316]/10 rounded-lg transition-colors"
+              onClick={() => handleExportPDF(exportList)}              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#f97316] border border-[#f97316]/30 hover:bg-[#f97316]/10 rounded-lg transition-colors"
             >
               <Printer size={12} /> Export Selected ({selectedIds.size})
             </button>

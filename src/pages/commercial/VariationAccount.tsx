@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import {
   Plus, X, Save, Trash2,
   Paperclip, Eye, Download, FileText, AlertCircle,
-  TrendingUp, TrendingDown, Info,
+  TrendingUp, TrendingDown, Info, Printer,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAppStore } from '../../lib/StoreContext';
@@ -10,7 +10,8 @@ import FileUploadComponent from '../../components/FileUpload';
 import type { UploadedFile } from '../../components/FileUpload';
 import type { DBVariationAccountItem, DBAttachment } from '../../lib/store';
 import type { Project } from '../../data/types';
-import { fmtCurrency, fmtDate } from './types';
+import { fmtCurrency, fmtDate, parseRawValue } from './types';
+import { exportVariationAccountPDF } from './CommercialPDF';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -564,11 +565,12 @@ interface VariationAccountProps {
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  currentUserName?: string;
   onProjectChange: (id: string) => void;
 }
 
 export default function VariationAccount({
-  project, projects, orgId, canCreate, canEdit, canDelete, onProjectChange,
+  project, projects, orgId, canCreate, canEdit, canDelete, currentUserName, onProjectChange,
 }: VariationAccountProps) {
   const store = useAppStore();
 
@@ -660,6 +662,25 @@ export default function VariationAccount({
               title="How are these calculated?"
             >
               <Info size={14} />
+            </button>
+            <button
+              onClick={() => {
+                if (!project) return;
+                const contractNum = project.value ? parseRawValue(project.value) : 0;
+                exportVariationAccountPDF({
+                  project,
+                  items,
+                  forecastContractSum: contractNum + metrics.exposure,
+                  adjustedContractSum: contractNum + metrics.agreed,
+                  vaExposure: metrics.exposure,
+                  vaAgreed: metrics.agreed,
+                  currentUserName: currentUserName || '',
+                });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-slate-600 rounded-lg transition-colors"
+              title="Export Variation Account PDF"
+            >
+              <Printer size={13} /> Export PDF
             </button>
             {canCreate && (
               <button
