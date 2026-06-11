@@ -380,6 +380,7 @@ export default function CommercialApplications({
   const certifiedToDate  = items.reduce((s, a) => s + a.certified_value, 0);
   const paidToDate       = items.reduce((s, a) => s + a.paid_value, 0);
   const totalRetention   = items.reduce((s, a) => s + a.retention, 0);
+  const certificationShortfall = appliedToDate - certifiedToDate;
   const outstanding      = certifiedToDate - paidToDate;
   const remainingContract = forecastContractSum > 0 ? forecastContractSum - appliedToDate : null;
 
@@ -425,13 +426,15 @@ export default function CommercialApplications({
       </div>
 
       {/* Summary strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-        <MetricCard label="Applied To Date"    value={fmtCurrency(appliedToDate)} />
-        <MetricCard label="Certified To Date"  value={fmtCurrency(certifiedToDate)} />
-        <MetricCard label="Paid To Date"       value={fmtCurrency(paidToDate)} />
-        <MetricCard label="Outstanding"        value={fmtCurrency(outstanding)}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 mb-6">
+        <MetricCard label="Applied To Date"         value={fmtCurrency(appliedToDate)} />
+        <MetricCard label="Certified To Date"       value={fmtCurrency(certifiedToDate)} />
+        <MetricCard label="Certification Shortfall" value={fmtCurrency(certificationShortfall)}
+          sub={certificationShortfall > 0 ? 'Applied – Certified' : undefined} />
+        <MetricCard label="Paid To Date"            value={fmtCurrency(paidToDate)} />
+        <MetricCard label="Outstanding"             value={fmtCurrency(outstanding)}
           sub={outstanding > 0 ? 'Certified – Paid' : undefined} />
-        <MetricCard label="Retention"          value={fmtCurrency(totalRetention)} />
+        <MetricCard label="Retention"               value={fmtCurrency(totalRetention)} />
         <MetricCard label="Remaining Contract"
           value={remainingContract != null ? fmtCurrency(remainingContract) : '—'}
           sub={remainingContract != null ? 'Forecast – Applied' : 'No contract value'} />
@@ -514,3 +517,6 @@ export default function CommercialApplications({
     </div>
   );
 }
+
+
+export default CommercialApplications
