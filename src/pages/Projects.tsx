@@ -1695,15 +1695,25 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
             const nextDate = upcomingDates[0] ?? null;
             const hasOverdue = overdueDates.length > 0;
 
+            function daysRemainingColor(days: number): string {
+              if (days < 0)  return 'text-red-400';
+              if (days < 7)  return 'text-orange-400';
+              if (days <= 14) return 'text-amber-400';
+              return 'text-emerald-400';
+            }
+
             return (
-              <div className={`rounded-xl border ${hasOverdue ? 'border-red-900/60 bg-red-950/20' : 'border-[#f97316]/40 bg-[#1a2236]'}`}>
-                <div className="flex items-center justify-between p-4 border-b border-inherit">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${hasOverdue ? 'bg-red-900/60' : 'bg-[#f97316]/20'}`}>
-                      <Calendar size={15} className={hasOverdue ? 'text-red-400' : 'text-[#f97316]'} />
+              <div
+                className={`rounded-xl border cursor-pointer transition-colors ${hasOverdue ? 'border-red-900/60 bg-red-950/20 hover:border-red-800/80' : 'border-[#f97316]/40 bg-[#1a2236] hover:border-[#f97316]/70'}`}
+                onClick={() => setActiveTab('dates')}
+              >
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-inherit">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${hasOverdue ? 'bg-red-900/60' : 'bg-[#f97316]/20'}`}>
+                      <Calendar size={17} className={hasOverdue ? 'text-red-400' : 'text-[#f97316]'} />
                     </div>
                     <div>
-                      <span className="text-sm font-bold text-white">Key Dates</span>
+                      <span className="text-base font-bold text-white tracking-tight">Key Dates</span>
                       {projectKeyDates.length > 0 && (
                         <span className="text-xs text-slate-500 ml-2">{projectKeyDates.length} total · {openDates.length} open</span>
                       )}
@@ -1715,7 +1725,7 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
                     )}
                   </div>
                   <button
-                    onClick={() => setActiveTab('dates')}
+                    onClick={e => { e.stopPropagation(); setActiveTab('dates'); }}
                     className="text-xs font-semibold text-[#f97316] hover:text-orange-400 transition-colors flex items-center gap-1"
                   >
                     View All Key Dates <ChevronRight size={12} />
@@ -1723,47 +1733,48 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
                 </div>
 
                 {projectKeyDates.length === 0 ? (
-                  <div className="flex items-center justify-between px-5 py-4">
+                  <div className="flex items-center justify-between px-5 py-5">
                     <p className="text-sm text-slate-500">No key dates added for this project</p>
                     <button
-                      onClick={() => setActiveTab('dates')}
+                      onClick={e => { e.stopPropagation(); setActiveTab('dates'); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f97316] hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition-colors"
                     >
                       <Plus size={12} />Add Key Date
                     </button>
                   </div>
-                ) : nextDate ? (
-                  <div className="px-5 py-4 flex flex-wrap items-center gap-6">
-                    <div>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Next Upcoming</p>
-                      <p className="text-base font-bold text-white">{nextDate.title}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Date</p>
-                      <p className="text-sm font-semibold text-[#f97316]">
-                        {new Date(nextDate.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Days Remaining</p>
-                      <p className="text-sm font-semibold text-slate-300">
-                        {Math.round((new Date(nextDate.date).getTime() - todayKD.getTime()) / 86400000) === 0
-                          ? 'Today'
-                          : `${Math.round((new Date(nextDate.date).getTime() - todayKD.getTime()) / 86400000)} days`}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Status</p>
-                      <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-orange-900/60 text-orange-400">Open</span>
-                    </div>
-                    {upcomingDates.length > 1 && (
-                      <div className="ml-auto">
-                        <p className="text-[11px] text-slate-500">+{upcomingDates.length - 1} more upcoming</p>
+                ) : nextDate ? (() => {
+                  const daysLeft = Math.round((new Date(nextDate.date).getTime() - todayKD.getTime()) / 86400000);
+                  const daysLabel = daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1 day' : `${daysLeft} days`;
+                  const daysColor = daysRemainingColor(daysLeft);
+                  return (
+                    <div className="px-5 py-5 flex flex-wrap items-center gap-8">
+                      <div>
+                        <p className="text-[10px] font-semibold text-[#f97316] uppercase tracking-widest mb-1">Next Key Date</p>
+                        <p className="text-base font-bold text-white leading-tight">{nextDate.title}</p>
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="px-5 py-4 flex flex-wrap items-center gap-4">
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Date</p>
+                        <p className="text-sm font-semibold text-[#f97316]">
+                          {new Date(nextDate.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Days Remaining</p>
+                        <p className={`text-sm font-bold ${daysColor}`}>{daysLabel}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Status</p>
+                        <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-orange-900/60 text-orange-400">Open</span>
+                      </div>
+                      {upcomingDates.length > 1 && (
+                        <div className="ml-auto">
+                          <p className="text-[11px] text-slate-500">+{upcomingDates.length - 1} more upcoming</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })() : (
+                  <div className="px-5 py-5 flex flex-wrap items-center gap-4">
                     {hasOverdue && (
                       <p className="text-sm text-red-400 font-medium">
                         {overdueDates.length} open date{overdueDates.length !== 1 ? 's' : ''} past due — check Key Dates tab
