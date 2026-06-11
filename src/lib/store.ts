@@ -944,6 +944,26 @@ export interface DBVariationAccountItem {
   updated_at?: string;
 }
 
+export interface DBCommercialApplication {
+  id: string;
+  org_id?: string;
+  project_id: string;
+  app_number: number;
+  period: string;
+  app_date: string | null;
+  payment_due: string | null;
+  payment_recd: string | null;
+  applied_value: number;
+  certified_value: number;
+  paid_value: number;
+  retention: number;
+  status: string;
+  notes: string;
+  created_by: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface DBCommercialRecord {
   id: string;
   org_id?: string;
@@ -1065,6 +1085,12 @@ export interface AppStore {
   addVariationAccountItem: (v: DBVariationAccountItem) => Promise<void>;
   updateVariationAccountItem: (v: DBVariationAccountItem) => Promise<void>;
   removeVariationAccountItem: (id: string) => Promise<void>;
+
+  // Commercial Applications
+  commercialApplications: DBCommercialApplication[];
+  addCommercialApplication: (a: DBCommercialApplication) => Promise<void>;
+  updateCommercialApplication: (a: DBCommercialApplication) => Promise<void>;
+  removeCommercialApplication: (id: string) => Promise<void>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1117,6 +1143,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [platformUsers, setPlatformUsers] = useState<DBPlatformUser[]>([]);
   const [notifications, setNotifications] = useState<DBNotification[]>([]);
   const [variationAccountItems, setVariationAccountItems] = useState<DBVariationAccountItem[]>([]);
+  const [commercialApplications, setCommercialApplications] = useState<DBCommercialApplication[]>([]);
   const [settings, setSettings] = useState<DBSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
@@ -1144,6 +1171,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setKeyDates([]);
       setNotifications([]);
       setVariationAccountItems([]);
+      setCommercialApplications([]);
       // Keep platformUsers/settings as-is — they load below with org filter
       setLoading(false);
       return;
@@ -1160,7 +1188,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       const ATT_COLS = 'id,linked_type,linked_id,project_id,project_name,name,type,size,category,uploaded_by,created_at';
 
       // All queries are explicitly scoped to the resolved org — no global reads.
-      const [projRes, docRes, attRes, actRes, snaRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, kdRes, puRes, notifRes, settingsRes, vaRes] = await Promise.all([
+      const [projRes, docRes, attRes, actRes, snaRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, kdRes, puRes, notifRes, settingsRes, vaRes, appRes] = await Promise.all([
         supabase.from('vy_projects').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
         supabase.from('vy_project_documents').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
@@ -1178,6 +1206,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
         supabase.from('vy_notifications').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_settings').select('*').eq('org_id', orgId).maybeSingle(),
         supabase.from('vy_variation_account').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_commercial_applications').select('*').eq('org_id', orgId).order('app_number', { ascending: true }),
       ]);
 
       if (cancelled) return;
@@ -1219,6 +1248,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setNotifications((notifRes.data ?? []) as DBNotification[]);
       if (settingsRes.data) setSettings({ ...DEFAULT_SETTINGS, ...(settingsRes.data as DBSettings) });
       setVariationAccountItems((vaRes.data ?? []) as DBVariationAccountItem[]);
+      setCommercialApplications((appRes.data ?? []) as DBCommercialApplication[]);
       setLoading(false);
     }
 
@@ -1640,6 +1670,30 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('removeVariationAccountItem', 'vy_variation_account', error);
   }, []);
 
+  // ── Commercial Applications ────────────────────────────────────────────────
+
+  const addCommercialApplication = useCallback(async (a: DBCommercialApplication) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setCommercialApplications(prev => [...prev, a].sort((x, y) => x.app_number - y.app_number));
+    const { error } = await supabase.from('vy_commercial_applications').upsert({ ...a, org_id: oid }, { onConflict: 'id' });
+    logWrite('addCommercialApplication', 'vy_commercial_applications', error);
+  }, []);
+
+  const updateCommercialApplication = useCallback(async (a: DBCommercialApplication) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setCommercialApplications(prev => prev.map(x => x.id === a.id ? a : x));
+    const { error } = await supabase.from('vy_commercial_applications').upsert({ ...a, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateCommercialApplication', 'vy_commercial_applications', error);
+  }, []);
+
+  const removeCommercialApplication = useCallback(async (id: string) => {
+    setCommercialApplications(prev => prev.filter(a => a.id !== id));
+    const { error } = await supabase.from('vy_commercial_applications').delete().eq('id', id);
+    logWrite('removeCommercialApplication', 'vy_commercial_applications', error);
+  }, []);
+
   // ── Settings ──────────────────────────────────────────────────────────────────
 
   const updateSettings = useCallback(async (s: DBSettings) => {
@@ -1695,5 +1749,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addNotification, markNotificationRead, markAllNotificationsRead,
     variationAccountItems,
     addVariationAccountItem, updateVariationAccountItem, removeVariationAccountItem,
+    commercialApplications,
+    addCommercialApplication, updateCommercialApplication, removeCommercialApplication,
   };
 }

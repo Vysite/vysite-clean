@@ -18,7 +18,7 @@ import { openPrintTab } from '../lib/printTab';
 import CommercialOverview from './commercial/CommercialOverview';
 import CommercialRegister from './commercial/CommercialRegister';
 import VariationAccount, { calcVAMetrics } from './commercial/VariationAccount';
-import { ApplicationsPlaceholder } from './commercial/CommercialPlaceholders';
+import CommercialApplications from './commercial/CommercialApplications';
 import CommercialTimeline from './commercial/CommercialTimeline';
 import type { CommercialTab } from './commercial/types';
 import { RECORD_TYPES, STATUSES, typeInfo, statusInfo, parseRawValue, fmtCurrency as fmtC } from './commercial/types';
@@ -993,7 +993,22 @@ export default function Commercial() {
           onProjectChange={(id) => setBannerProjectId(id)}
         />
       )}
-      {activeTab === 'applications'      && <ApplicationsPlaceholder />}
+      {activeTab === 'applications' && (() => {
+        const contractNum = bannerProject?.value ? parseRawValue(bannerProject.value) : 0;
+        const variationExposure = vaHasItems ? vaMetrics.exposure : (bannerProject?.variationsValue ?? 0);
+        const forecastContractSum = contractNum + variationExposure;
+        return (
+          <CommercialApplications
+            project={bannerProject}
+            orgId={orgId}
+            canCreate={canCreate}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            forecastContractSum={forecastContractSum}
+            onProjectChange={(id) => setBannerProjectId(id)}
+          />
+        );
+      })()}
       {activeTab === 'timeline'          && (
         <CommercialTimeline
           project={bannerProject}
