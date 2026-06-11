@@ -558,9 +558,378 @@ interface ApplicationsData {
   currentUserName: string;
 }
 
+// Dedicated CSS for the Applications PDF — injected into its own page shell
+const APPLICATIONS_PDF_CSS = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  @page {
+    margin: 18mm 14mm 16mm 14mm;
+    size: A4;
+  }
+  @page :first {
+    margin-top: 0;
+  }
+
+  html, body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 9pt;
+    color: #0f172a;
+    background: #ffffff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── Suppress browser chrome ─────────────────────────────────────────────── */
+  @media print {
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+
+  /* ── Cover ───────────────────────────────────────────────────────────────── */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 0 52px 64px;
+    background: #ffffff;
+  }
+  .cover-wordmark {
+    font-size: 11pt;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    color: #ea6c00;
+    text-transform: uppercase;
+    margin-bottom: 80px;
+    padding-top: 52px;
+  }
+  .cover-doc-type {
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 16px;
+  }
+  .cover-title {
+    font-size: 36pt;
+    font-weight: 300;
+    color: #0f172a;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  .cover-title strong {
+    font-weight: 800;
+  }
+  .cover-project-name {
+    font-size: 14pt;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 4px;
+    margin-top: 36px;
+  }
+  .cover-client {
+    font-size: 10pt;
+    font-weight: 400;
+    color: #64748b;
+    margin-bottom: 40px;
+  }
+  .cover-figures {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid #0f172a;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 20px 0 18px;
+    margin-bottom: 36px;
+    gap: 0;
+  }
+  .cover-fig {
+    padding-right: 24px;
+  }
+  .cover-fig + .cover-fig {
+    border-left: 1px solid #e2e8f0;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  .cover-fig-label {
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 8px;
+  }
+  .cover-fig-value {
+    font-size: 20pt;
+    font-weight: 700;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .cover-fig-value.highlight {
+    color: #ea6c00;
+  }
+  .cover-fig-sub {
+    font-size: 7.5pt;
+    color: #94a3b8;
+    margin-top: 4px;
+  }
+  .cover-meta {
+    font-size: 8pt;
+    color: #94a3b8;
+  }
+
+  /* ── Body page ───────────────────────────────────────────────────────────── */
+  .body-page {
+    padding: 48px 52px 0;
+  }
+
+  /* ── Page header (running head on body pages) ────────────────────────────── */
+  .page-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #0f172a;
+    margin-bottom: 40px;
+  }
+  .page-head-left {}
+  .page-head-wordmark {
+    font-size: 9pt;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    color: #ea6c00;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .page-head-doc {
+    font-size: 8pt;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .page-head-right {
+    text-align: right;
+  }
+  .page-head-project {
+    font-size: 9pt;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .page-head-client {
+    font-size: 8pt;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  /* ── Section ─────────────────────────────────────────────────────────────── */
+  .section {
+    margin-bottom: 44px;
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .section-number {
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    flex-shrink: 0;
+  }
+  .section-title {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+  }
+
+  /* ── Summary position (two-column financial layout) ─────────────────────── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+  .summary-col {
+    padding-right: 40px;
+  }
+  .summary-col + .summary-col {
+    padding-left: 40px;
+    padding-right: 0;
+    border-left: 1px solid #e2e8f0;
+  }
+  .summary-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #f8fafc;
+  }
+  .summary-row.total-row {
+    border-bottom: none;
+    padding-top: 12px;
+    margin-top: 4px;
+    border-top: 1px solid #0f172a;
+  }
+  .summary-label {
+    font-size: 9pt;
+    color: #334155;
+    padding-right: 16px;
+  }
+  .summary-value {
+    font-size: 9.5pt;
+    font-weight: 600;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .summary-value.warn {
+    color: #b45309;
+  }
+  .summary-value.danger {
+    color: #991b1b;
+  }
+  .summary-label.total-label {
+    font-size: 9.5pt;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .summary-value.total-value {
+    font-size: 14pt;
+    font-weight: 700;
+    color: #ea6c00;
+  }
+
+  /* ── Full-width total band ───────────────────────────────────────────────── */
+  .total-band {
+    grid-column: 1 / -1;
+    margin-top: 24px;
+    padding: 16px 0 14px;
+    border-top: 1px solid #0f172a;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .total-band-label {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .total-band-value {
+    font-size: 18pt;
+    font-weight: 700;
+    color: #ea6c00;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  /* ── Application schedule table ─────────────────────────────────────────── */
+  .sched-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .sched-table thead tr {
+    border-bottom: 1px solid #0f172a;
+  }
+  .sched-table th {
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    padding: 0 8px 10px 0;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .sched-table th.r { text-align: right; padding-right: 0; padding-left: 8px; }
+  .sched-table td {
+    font-size: 8.5pt;
+    color: #1e293b;
+    padding: 9px 8px 9px 0;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: baseline;
+  }
+  .sched-table td.r {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    padding-right: 0;
+    padding-left: 8px;
+  }
+  .sched-table tbody tr:last-child td { border-bottom: none; }
+  .sched-table .app-num {
+    font-weight: 700;
+    color: #ea6c00;
+    font-size: 8pt;
+  }
+  .sched-table .app-period { font-weight: 600; color: #0f172a; }
+  .sched-table .app-date { color: #94a3b8; font-size: 8pt; display: block; margin-top: 1px; }
+  .sched-table .outstanding { color: #b45309; font-weight: 700; }
+
+  /* Totals footer row */
+  .sched-table tfoot tr td {
+    border-top: 1px solid #0f172a;
+    border-bottom: none;
+    padding-top: 10px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .sched-table tfoot .total-val { font-size: 10pt; color: #ea6c00; }
+
+  /* ── Status pill ─────────────────────────────────────────────────────────── */
+  .pill {
+    display: inline-block;
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .pill-green  { background: #f0fdf4; color: #166534; }
+  .pill-blue   { background: #eff6ff; color: #1e40af; }
+  .pill-amber  { background: #fffbeb; color: #92400e; }
+  .pill-orange { background: #fff7ed; color: #c2410c; }
+  .pill-red    { background: #fef2f2; color: #991b1b; }
+  .pill-slate  { background: #f8fafc; color: #475569; }
+
+  /* ── Footer ──────────────────────────────────────────────────────────────── */
+  .doc-footer {
+    margin-top: 56px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .doc-footer-l { font-size: 7.5pt; color: #94a3b8; }
+  .doc-footer-r { font-size: 7.5pt; color: #94a3b8; text-align: right; }
+
+  .empty-state {
+    padding: 28px 0;
+    color: #94a3b8;
+    font-size: 9pt;
+    text-align: center;
+  }
+`;
+
+function applicationsPillCls(status: string): string {
+  if (['paid'].includes(status))                              return 'pill-green';
+  if (status === 'certified')                                 return 'pill-amber';
+  if (status === 'submitted')                                 return 'pill-blue';
+  if (status === 'part_paid')                                 return 'pill-orange';
+  if (['overdue','disputed'].includes(status))                return 'pill-red';
+  return 'pill-slate';
+}
+
 function applicationsBody(d: ApplicationsData): string {
   const today = todayStr();
   const projName = d.project?.name ?? '—';
+  const client = d.project?.client ?? '';
 
   const appliedToDate    = d.apps.reduce((s, a) => s + a.applied_value, 0);
   const certifiedToDate  = d.apps.reduce((s, a) => s + a.certified_value, 0);
@@ -570,93 +939,155 @@ function applicationsBody(d: ApplicationsData): string {
   const outstanding      = certifiedToDate - paidToDate;
   const remaining        = d.forecastContractSum > 0 ? d.forecastContractSum - appliedToDate : null;
 
-  const summaryRows = [
-    { label: 'Applied To Date',         value: fv(appliedToDate),   warn: false },
-    { label: 'Certified To Date',        value: fv(certifiedToDate), warn: false },
-    { label: 'Certification Shortfall',  value: fv(certShortfall),   warn: certShortfall > 0 },
-    { label: 'Paid To Date',             value: fv(paidToDate),      warn: false },
-    { label: 'Outstanding',              value: fv(outstanding),     warn: outstanding > 0 },
-    { label: 'Retention',                value: fv(totalRetention),  warn: false },
+  // ── Cover page ──
+  const cover = `<div class="cover">
+  <div class="cover-wordmark">VYSITE</div>
+  <div class="cover-doc-type">Valuation &amp; Payment</div>
+  <div class="cover-title"><strong>Valuation</strong><br>Applications</div>
+  <div class="cover-project-name">${esc(projName)}</div>
+  ${client ? `<div class="cover-client">${esc(client)}</div>` : '<div style="margin-bottom:40px;"></div>'}
+  <div class="cover-figures">
+    <div class="cover-fig">
+      <div class="cover-fig-label">Applied To Date</div>
+      <div class="cover-fig-value highlight">${fv(appliedToDate)}</div>
+      <div class="cover-fig-sub">${d.apps.length} application${d.apps.length !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="cover-fig">
+      <div class="cover-fig-label">Certified To Date</div>
+      <div class="cover-fig-value">${fv(certifiedToDate)}</div>
+      ${certShortfall > 0 ? `<div class="cover-fig-sub" style="color:#b45309;">Shortfall ${fv(certShortfall)}</div>` : '<div class="cover-fig-sub">&nbsp;</div>'}
+    </div>
+    <div class="cover-fig">
+      <div class="cover-fig-label">Paid To Date</div>
+      <div class="cover-fig-value">${fv(paidToDate)}</div>
+      ${outstanding > 0 ? `<div class="cover-fig-sub" style="color:#b45309;">Outstanding ${fv(outstanding)}</div>` : '<div class="cover-fig-sub">&nbsp;</div>'}
+    </div>
+  </div>
+  <div class="cover-meta">Prepared by ${esc(d.currentUserName || 'VYSITE')} &bull; ${today}</div>
+</div>`;
+
+  // ── Body: page head ──
+  const pageHead = `<div class="page-head">
+  <div class="page-head-left">
+    <div class="page-head-wordmark">VYSITE</div>
+    <div class="page-head-doc">Valuation Applications</div>
+  </div>
+  <div class="page-head-right">
+    <div class="page-head-project">${esc(projName)}</div>
+    ${client ? `<div class="page-head-client">${esc(client)}</div>` : ''}
+  </div>
+</div>`;
+
+  // ── Section 1: Summary position ──
+  const leftRows = [
+    { label: 'Applied To Date',        value: fv(appliedToDate),   cls: '' },
+    { label: 'Certified To Date',      value: fv(certifiedToDate), cls: '' },
+    { label: 'Certification Shortfall',value: fv(certShortfall),   cls: certShortfall > 0 ? ' warn' : '' },
+  ];
+  const rightRows = [
+    { label: 'Paid To Date',  value: fv(paidToDate),      cls: '' },
+    { label: 'Outstanding',   value: fv(outstanding),     cls: outstanding > 0 ? ' warn' : '' },
+    { label: 'Retention',     value: fv(totalRetention),  cls: '' },
   ];
 
-  const summaryHtml = `
-  <div class="val-summary">
-    <div class="val-col">
-      ${summaryRows.slice(0, 3).map(r => `
-      <div class="val-row">
-        <div class="val-label">${esc(r.label)}</div>
-        <div class="val-value${r.warn ? ' warn' : ''}">${r.value}</div>
+  const summarySection = `<div class="section">
+  <div class="section-head">
+    <span class="section-number">01</span>
+    <span class="section-title">Summary Position</span>
+  </div>
+  <div class="summary-grid">
+    <div class="summary-col">
+      ${leftRows.map(r => `<div class="summary-row">
+        <span class="summary-label">${esc(r.label)}</span>
+        <span class="summary-value${r.cls}">${r.value}</span>
       </div>`).join('')}
     </div>
-    <div class="val-col">
-      ${summaryRows.slice(3).map(r => `
-      <div class="val-row">
-        <div class="val-label">${esc(r.label)}</div>
-        <div class="val-value${r.warn ? ' warn' : ''}">${r.value}</div>
+    <div class="summary-col">
+      ${rightRows.map(r => `<div class="summary-row">
+        <span class="summary-label">${esc(r.label)}</span>
+        <span class="summary-value${r.cls}">${r.value}</span>
       </div>`).join('')}
     </div>
     ${remaining != null ? `
-    <div class="val-total-block">
-      <div class="val-total-label">Remaining Contract Value</div>
-      <div class="val-total-value">${fv(remaining)}</div>
+    <div class="total-band">
+      <span class="total-band-label">Remaining Contract Value</span>
+      <span class="total-band-value">${fv(remaining)}</span>
     </div>` : ''}
-  </div>`;
+  </div>
+</div>`;
 
-  const rows = d.apps.map(a => {
-    const outstandingA = a.certified_value - a.paid_value;
+  // ── Section 2: Application schedule ──
+  const schedRows = d.apps.map(a => {
+    const outs = a.certified_value - a.paid_value;
+    const pillCls = applicationsPillCls(a.status);
+    const label   = APP_STATUS_LABELS[a.status] || a.status;
     return `<tr>
-      <td class="ref">${String(a.app_number).padStart(2, '0')}</td>
-      <td class="strong">${esc(a.period || '—')}</td>
-      <td style="color:#64748b;font-size:9px;">${fmtD(a.app_date)}</td>
-      <td class="num">${fv(a.applied_value)}</td>
-      <td class="num">${fv(a.certified_value)}</td>
-      <td class="num">${fv(a.paid_value)}</td>
-      <td class="num">${fv(a.retention)}</td>
-      <td class="num${outstandingA > 0 ? '" style="color:#92400e;font-weight:700;' : ''}">${fv(outstandingA)}</td>
-      <td style="color:#64748b;font-size:9px;">${fmtD(a.payment_due)}</td>
-      <td style="color:#64748b;font-size:9px;">${fmtD(a.payment_recd)}</td>
-      <td>${statusTag(a.status, APP_STATUS_LABELS[a.status] || a.status)}</td>
+      <td><span class="app-num">${String(a.app_number).padStart(2, '0')}</span></td>
+      <td>
+        <span class="app-period">${esc(a.period || '—')}</span>
+        ${a.app_date ? `<span class="app-date">${fmtD(a.app_date)}</span>` : ''}
+      </td>
+      <td class="r">${fv(a.applied_value)}</td>
+      <td class="r">${fv(a.certified_value)}</td>
+      <td class="r">${fv(a.paid_value)}</td>
+      <td class="r">${fv(a.retention)}</td>
+      <td class="r${outs > 0 ? ' outstanding' : ''}">${fv(outs)}</td>
+      <td style="color:#94a3b8;font-size:8pt;">${fmtD(a.payment_due)}</td>
+      <td style="color:#94a3b8;font-size:8pt;">${fmtD(a.payment_recd)}</td>
+      <td><span class="pill ${pillCls}">${esc(label)}</span></td>
     </tr>`;
   }).join('');
 
-  return `
-  ${docHeader('Commercial Document', 'Valuation Applications', projName, d.project?.client, today)}
+  const totalOut = certifiedToDate - paidToDate;
+  const schedFooter = d.apps.length > 1 ? `<tfoot><tr>
+    <td colspan="2" style="font-size:8pt;color:#64748b;">Totals (${d.apps.length} applications)</td>
+    <td class="r total-val">${fv(appliedToDate)}</td>
+    <td class="r total-val">${fv(certifiedToDate)}</td>
+    <td class="r total-val">${fv(paidToDate)}</td>
+    <td class="r total-val">${fv(totalRetention)}</td>
+    <td class="r total-val${totalOut > 0 ? '" style="color:#b45309;' : ''}">${fv(totalOut)}</td>
+    <td colspan="3"></td>
+  </tr></tfoot>` : '';
 
-  <div class="project-strip">
-    <div>
-      <div class="project-strip-name">${esc(projName)}</div>
-      ${d.project?.client ? `<div class="project-strip-client">${esc(d.project.client)}</div>` : ''}
-    </div>
-    <div class="project-strip-meta">
-      <div style="font-size:18px;font-weight:700;color:#1a1a2e;font-variant-numeric:tabular-nums;">${fv(appliedToDate)}</div>
-      <div style="font-size:7.5px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">Applied To Date</div>
-    </div>
+  const schedSection = `<div class="section">
+  <div class="section-head">
+    <span class="section-number">02</span>
+    <span class="section-title">Application Schedule</span>
   </div>
+  ${d.apps.length === 0
+    ? '<div class="empty-state">No valuation applications recorded for this project.</div>'
+    : `<table class="sched-table">
+        <thead><tr>
+          <th style="width:28px">No.</th>
+          <th>Period</th>
+          <th class="r">Applied</th>
+          <th class="r">Certified</th>
+          <th class="r">Paid</th>
+          <th class="r">Retention</th>
+          <th class="r">Outstanding</th>
+          <th style="width:66px;text-align:right;padding-right:0;padding-left:8px;">Due</th>
+          <th style="width:66px;text-align:right;padding-right:0;padding-left:8px;">Recd</th>
+          <th style="width:62px;">Status</th>
+        </tr></thead>
+        <tbody>${schedRows}</tbody>
+        ${schedFooter}
+      </table>`}
+</div>`;
 
-  <div class="section-label">Summary Position</div>
-  ${summaryHtml}
+  // ── Footer ──
+  const footer = `<div class="doc-footer">
+  <div class="doc-footer-l">Confidential &mdash; VYSITE Commercial Document</div>
+  <div class="doc-footer-r">${esc(d.currentUserName || 'VYSITE')} &bull; ${today}</div>
+</div>`;
 
-  ${d.apps.length > 0 ? `
-  <hr class="section-rule">
-  <div class="section-label">Application Schedule &mdash; ${d.apps.length} application${d.apps.length !== 1 ? 's' : ''}</div>
-  <table class="data-table" style="font-size:9px;">
-    <thead><tr>
-      <th style="width:28px">No.</th>
-      <th>Period</th>
-      <th style="width:68px;color:#94a3b8;">Date</th>
-      <th class="num">Applied</th>
-      <th class="num">Certified</th>
-      <th class="num">Paid</th>
-      <th class="num">Retention</th>
-      <th class="num">Outstanding</th>
-      <th style="width:60px;color:#94a3b8;">Due</th>
-      <th style="width:60px;color:#94a3b8;">Recd</th>
-      <th>Status</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>` : '<div class="empty-notice">No valuation applications recorded for this project.</div>'}
-
-  ${docFooter(d.currentUserName, today)}`;
+  return `${cover}
+<div style="page-break-before:always;"></div>
+<div class="body-page">
+  ${pageHead}
+  ${summarySection}
+  ${schedSection}
+  ${footer}
+</div>`;
 }
 
 // ─── Timeline body ────────────────────────────────────────────────────────────
@@ -939,7 +1370,19 @@ export function exportVariationAccountPDF(data: VAData): void {
 
 export function exportApplicationsPDF(data: ApplicationsData): void {
   const name = data.project?.name ?? '—';
-  openPrintTab(pageShell(`Valuation Applications — ${name}`, applicationsBody(data)));
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${esc(`Valuation Applications — ${name}`)}</title>
+<style>${APPLICATIONS_PDF_CSS}</style>
+<script>window.onload=function(){window.print();};<\/script>
+</head>
+<body>
+${applicationsBody(data)}
+</body>
+</html>`;
+  openPrintTab(html);
 }
 
 export function exportTimelinePDF(data: TimelineData): void {
