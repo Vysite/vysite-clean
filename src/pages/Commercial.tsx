@@ -4,7 +4,7 @@ import {
   Paperclip, Trash2, Eye, Download, FileText,
   Banknote,
   ChevronRight, AlertCircle, CheckCircle2, Clock, CircleDot,
-  Printer,
+  Printer, MapPin, User, Calendar,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
@@ -44,6 +44,11 @@ function fmt(n: number): string {
 
 function fmtCurrency(n: number): string {
   return `£${fmt(n)}`;
+}
+
+function parseRawValue(raw: string): number {
+  const n = parseFloat(raw.replace(/[£,\s]/g, ''));
+  return isNaN(n) ? 0 : n;
 }
 
 function typeInfo(t: CommercialRecordType) {
@@ -1441,6 +1446,91 @@ export default function Commercial() {
           </button>
         )}
       </div>
+
+      {/* Project summary banner */}
+      {filterProject && (() => {
+        const proj = store.projects.find(p => p.id === filterProject);
+        if (!proj) return null;
+        const contractNum = proj.value ? parseRawValue(proj.value) : 0;
+        const hasActual = proj.committed != null;
+        const committed = contractNum > 0
+          ? (hasActual ? proj.committed! : contractNum * proj.progress / 100)
+          : null;
+        const remaining = committed != null ? contractNum - committed : null;
+        const fmtVal = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
+        return (
+          <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5 mb-6">
+            <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-0.5">
+                  <h2 className="text-lg font-bold text-white leading-tight">{proj.name}</h2>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    proj.status === 'Active' ? 'bg-emerald-900/60 text-emerald-400'
+                    : proj.status === 'Completed' ? 'bg-blue-900/60 text-blue-400'
+                    : proj.status === 'On Hold' ? 'bg-amber-900/60 text-amber-400'
+                    : 'bg-slate-700/60 text-slate-400'
+                  }`}>{proj.status}</span>
+                </div>
+                <p className="text-sm text-slate-500">{proj.client}</p>
+              </div>
+              {proj.value && (
+                <div className="text-right shrink-0">
+                  <p className="text-2xl font-bold text-white">{proj.value}</p>
+                  <p className="text-xs text-slate-500">Contract Value</p>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              {[
+                { icon: MapPin, label: 'Location', value: proj.location ? proj.location.split(',').slice(-2).join(',').trim() : '—' },
+                { icon: User,     label: 'Project Manager', value: proj.projectManager || '—' },
+                { icon: Calendar, label: 'Start Date',  value: proj.startDate ? new Date(proj.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—' },
+                { icon: Calendar, label: 'Completion',  value: proj.completionDate ? new Date(proj.completionDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—' },
+              ].map(item => (
+                <div key={item.label} className="flex items-start gap-2">
+                  <item.icon size={14} className="text-slate-600 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">{item.label}</p>
+                    <p className="text-sm text-slate-300 font-medium">{item.value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <div className="flex justify-between text-sm mb-1.5">
+                <span className="text-slate-400 font-medium">Overall Progress</span>
+                <span className="font-bold text-[#f97316]">{proj.progress}%</span>
+              </div>
+              <div className="w-full bg-[#0d1628] rounded-full h-2 mb-3">
+                <div className="h-2 rounded-full bg-[#f97316] transition-all" style={{ width: `${proj.progress}%` }} />
+              </div>
+              {contractNum > 0 && committed != null && remaining != null && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Contract Value</p>
+                    <p className="text-sm font-bold text-white">{fmtVal(contractNum)}</p>
+                  </div>
+                  <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Progress</p>
+                    <p className="text-sm font-bold text-[#f97316]">{proj.progress}%</p>
+                  </div>
+                  <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">{hasActual ? 'Committed / Spent' : 'Approx. Completed'}</p>
+                    <p className="text-sm font-bold text-slate-300">{fmtVal(committed)}</p>
+                  </div>
+                  <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">{hasActual ? 'Remaining Budget' : 'Approx. Remaining'}</p>
+                    <p className={`text-sm font-bold ${remaining < 0 ? 'text-red-400' : remaining < contractNum * 0.1 ? 'text-amber-400' : 'text-emerald-400'}`}>{fmtVal(remaining)}</p>
+                  </div>
+                  {!hasActual && <p className="col-span-2 md:col-span-4 text-[10px] text-slate-600 mt-0.5">Progress-based estimate — add Committed spend in Edit Project for actual figures.</p>}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">

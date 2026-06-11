@@ -1299,7 +1299,6 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
   const canUploadDocs = perms['docs.upload'];
   const canDeleteDocs = perms['docs.delete'] || isAdmin;
   const canEditFinanceProgress = perms['commercial.edit_project_finance_progress'] || isAdmin;
-  const canViewFinanceValues = perms['commercial.view_values'] || perms['commercial.view_pricing'] || canEditFinanceProgress;
 
   // Tab visibility driven by module permissions
   const hiddenTabs = new Set<DetailTab>();
@@ -1549,7 +1548,6 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
             <p className="text-sm text-slate-500">{project.client}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {/* Action buttons — match Tender & Estimating button style */}
             <button
               onClick={handlePrint}
               className="flex items-center gap-2 px-4 py-2 bg-[#1a2236] border border-[#1e2d4a] text-slate-300 rounded-lg text-sm font-semibold hover:border-[#f97316] hover:text-[#f97316] transition-colors"
@@ -1572,11 +1570,6 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
                 <Trash2 size={14} />Delete
               </button>
             )}
-            {/* Contract value */}
-            <div className="text-right ml-2 pl-3 border-l border-[#1e2d4a]">
-              <p className="text-2xl font-bold text-white">{project.value || '—'}</p>
-              <p className="text-xs text-slate-500">Contract Value</p>
-            </div>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
@@ -1615,42 +1608,13 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
               </div>
             </>
           ) : (
-            <div className="w-full bg-[#0d1628] rounded-full h-2">
+            <div className="w-full bg-[#0d1628] rounded-full h-2.5">
               <div
-                className="h-2 rounded-full bg-[#f97316] transition-all"
+                className="h-2.5 rounded-full bg-[#f97316] transition-all"
                 style={{ width: `${project.progress}%` }}
               />
             </div>
           )}
-          {canViewFinanceValues && project.value && (() => {
-            const contractNum = parseValue(project.value);
-            if (contractNum === 0) return null;
-            const hasActual = project.committed != null;
-            const committed = hasActual ? project.committed! : contractNum * project.progress / 100;
-            const remaining = contractNum - committed;
-            const fmt = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
-            return (
-              <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
-                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Contract Value</p>
-                  <p className="text-sm font-bold text-white">{fmt(contractNum)}</p>
-                </div>
-                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Progress</p>
-                  <p className="text-sm font-bold text-[#f97316]">{project.progress}%</p>
-                </div>
-                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">{hasActual ? 'Committed / Spent' : 'Approx. Completed'}</p>
-                  <p className="text-sm font-bold text-slate-300">{fmt(committed)}</p>
-                </div>
-                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">{hasActual ? 'Remaining Budget' : 'Approx. Remaining'}</p>
-                  <p className={`text-sm font-bold ${remaining < 0 ? 'text-red-400' : remaining < contractNum * 0.1 ? 'text-amber-400' : 'text-emerald-400'}`}>{fmt(remaining)}</p>
-                </div>
-                {!hasActual && <p className="col-span-2 md:col-span-4 text-[10px] text-slate-600 mt-0.5">Progress-based estimate — add Committed spend in Edit Project for actual figures.</p>}
-              </div>
-            );
-          })()}
         </div>
       </div>
 
