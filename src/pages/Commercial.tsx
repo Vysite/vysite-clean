@@ -1357,6 +1357,7 @@ export default function Commercial() {
   // Editable banner commercial values
   const [bannerContractEdit, setBannerContractEdit] = useState('');
   const [bannerCompletedEdit, setBannerCompletedEdit] = useState('');
+  const [bannerVariationsEdit, setBannerVariationsEdit] = useState('');
   const [bannerSaving, setBannerSaving] = useState(false);
 
   // When banner project changes, reset edit fields to stored values
@@ -1365,12 +1366,14 @@ export default function Commercial() {
     const raw = bannerProject.value ? parseRawValue(bannerProject.value) : 0;
     setBannerContractEdit(raw > 0 ? String(raw) : '');
     setBannerCompletedEdit(bannerProject.committed != null ? String(bannerProject.committed) : '');
+    setBannerVariationsEdit(bannerProject.variationsValue != null ? String(bannerProject.variationsValue) : '');
   }, [effectiveBannerProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function saveBannerValues() {
     if (!bannerProject) return;
     const contractNum = parseFloat(bannerContractEdit) || 0;
     const completedNum = bannerCompletedEdit.trim() !== '' ? parseFloat(bannerCompletedEdit) : null;
+    const variationsNum = bannerVariationsEdit.trim() !== '' ? parseFloat(bannerVariationsEdit) : null;
     const newProgress = contractNum > 0 && completedNum != null
       ? Math.min(100, Math.round((completedNum / contractNum) * 100))
       : bannerProject.progress;
@@ -1378,6 +1381,7 @@ export default function Commercial() {
       ...bannerProject,
       value: contractNum > 0 ? `£${Math.round(contractNum).toLocaleString('en-GB')}` : bannerProject.value,
       committed: completedNum,
+      variationsValue: variationsNum,
       progress: newProgress,
     };
     setBannerSaving(true);
@@ -1669,10 +1673,27 @@ export default function Commercial() {
           ? Math.min(100, Math.round((completedNum / contractNum) * 100))
           : proj.progress;
         const remaining    = completedNum != null ? contractNum - completedNum : null;
+        const variationsNum = bannerVariationsEdit.trim() !== '' ? parseFloat(bannerVariationsEdit) : (proj.variationsValue ?? null);
         const fmtVal = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
-        const contractDirty  = bannerContractEdit  !== '' && parseFloat(bannerContractEdit)  !== (proj.value ? parseRawValue(proj.value) : 0);
-        const completedDirty = bannerCompletedEdit !== '' && parseFloat(bannerCompletedEdit) !== (proj.committed ?? NaN);
-        const isDirty = contractDirty || completedDirty;
+        const contractDirty   = bannerContractEdit   !== '' && parseFloat(bannerContractEdit)   !== (proj.value ? parseRawValue(proj.value) : 0);
+        const completedDirty  = bannerCompletedEdit  !== '' && parseFloat(bannerCompletedEdit)  !== (proj.committed ?? NaN);
+        const variationsDirty = bannerVariationsEdit !== '' && parseFloat(bannerVariationsEdit) !== (proj.variationsValue ?? NaN);
+        const isDirty = contractDirty || completedDirty || variationsDirty;
+
+        // Key dates for the banner project
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const projKeyDates = store.keyDates.filter(d => d.project_id === effectiveBannerProjectId);
+        const openKeyDates = projKeyDates.filter(d => d.status === 'Open');
+        const overdueKeyDates = openKeyDates.filter(d => d.date && new Date(d.date) < today);
+        const upcomingKeyDates = openKeyDates
+          .filter(d => d.date && new Date(d.date) >= today)
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          .slice(0, 4);
+        const fmtKdDate = (s: string) => new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        const kdDaysRemaining = (s: string) => {
+          const diff = Math.round((new Date(s).getTime() - today.getTime()) / 86400000);
+          return diff === 0 ? 'Today' : diff === 1 ? '1 day' : `${diff} days`;
+        };
 
         return (
           <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-6 mb-6">
@@ -1736,7 +1757,7 @@ export default function Commercial() {
 
             {/* Editable financial cards */}
             {canEdit && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
                 {/* Contract Value — editable */}
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Contract Value</p>
@@ -1769,6 +1790,22 @@ export default function Commercial() {
                     />
                   </div>
                 </div>
+                {/* Variations Value — editable */}
+                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Variations Value</p>
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-500 text-sm">£</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={bannerVariationsEdit}
+                      onChange={e => setBannerVariationsEdit(e.target.value)}
+                      placeholder="0"
+                      className="bg-transparent text-sm font-bold text-amber-300 w-full focus:outline-none placeholder-slate-600"
+                    />
+                  </div>
+                </div>
                 {/* Progress % — auto-calculated */}
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Progress</p>
@@ -1785,15 +1822,19 @@ export default function Commercial() {
                 </div>
               </div>
             )}
-            {!canEdit && contractNum > 0 && completedNum != null && remaining != null && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+            {!canEdit && contractNum > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Contract Value</p>
-                  <p className="text-sm font-bold text-white">{fmtVal(contractNum)}</p>
+                  <p className="text-sm font-bold text-white">{contractNum > 0 ? fmtVal(contractNum) : '—'}</p>
                 </div>
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Completed Value</p>
-                  <p className="text-sm font-bold text-slate-300">{fmtVal(completedNum)}</p>
+                  <p className="text-sm font-bold text-slate-300">{completedNum != null ? fmtVal(completedNum) : '—'}</p>
+                </div>
+                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Variations Value</p>
+                  <p className="text-sm font-bold text-amber-300">{variationsNum != null ? fmtVal(variationsNum) : '—'}</p>
                 </div>
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Progress</p>
@@ -1801,8 +1842,63 @@ export default function Commercial() {
                 </div>
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Remaining</p>
-                  <p className={`text-sm font-bold ${remaining < 0 ? 'text-red-400' : remaining < contractNum * 0.1 ? 'text-amber-400' : 'text-emerald-400'}`}>{fmtVal(remaining)}</p>
+                  <p className={`text-sm font-bold ${remaining == null ? 'text-slate-500' : remaining < 0 ? 'text-red-400' : remaining < contractNum * 0.1 ? 'text-amber-400' : 'text-emerald-400'}`}>{remaining != null ? fmtVal(remaining) : '—'}</p>
                 </div>
+              </div>
+            )}
+
+            {/* Key Dates summary */}
+            {projKeyDates.length > 0 && (
+              <div className="mt-3 bg-[#0d1628] rounded-xl border border-[#1e2d4a] overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1e2d4a]">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={13} className={overdueKeyDates.length > 0 ? 'text-red-400' : 'text-[#f97316]'} />
+                    <span className="text-xs font-semibold text-white">Key Dates</span>
+                    <span className="text-[10px] text-slate-500">{projKeyDates.length} total · {openKeyDates.length} open</span>
+                  </div>
+                  {overdueKeyDates.length > 0 && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-900/60 text-red-400">
+                      {overdueKeyDates.length} overdue
+                    </span>
+                  )}
+                </div>
+                {overdueKeyDates.length > 0 && (
+                  <div className="divide-y divide-[#1e2d4a]">
+                    {overdueKeyDates.slice(0, 2).map(d => (
+                      <div key={d.id} className="flex items-center justify-between px-4 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-900/60 text-red-400 shrink-0">Overdue</span>
+                          <span className="text-xs text-slate-300 truncate">{d.title}</span>
+                        </div>
+                        <div className="text-right shrink-0 ml-3">
+                          <p className="text-xs text-red-400 font-medium">{d.date ? fmtKdDate(d.date) : '—'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {upcomingKeyDates.length > 0 ? (
+                  <div className="divide-y divide-[#1e2d4a]">
+                    {upcomingKeyDates.map(d => {
+                      const daysLeft = d.date ? Math.round((new Date(d.date).getTime() - today.getTime()) / 86400000) : null;
+                      const isUrgent = daysLeft != null && daysLeft <= 7;
+                      return (
+                        <div key={d.id} className="flex items-center justify-between px-4 py-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isUrgent ? 'bg-amber-900/60 text-amber-400' : 'bg-orange-900/40 text-orange-400'}`}>Open</span>
+                            <span className="text-xs text-slate-300 truncate">{d.title}</span>
+                          </div>
+                          <div className="text-right shrink-0 ml-3">
+                            <p className="text-xs text-slate-400">{d.date ? fmtKdDate(d.date) : '—'}</p>
+                            <p className={`text-[10px] font-semibold ${isUrgent ? 'text-amber-400' : 'text-slate-500'}`}>{d.date ? kdDaysRemaining(d.date) : ''}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : overdueKeyDates.length === 0 && (
+                  <div className="px-4 py-3 text-xs text-slate-500">All key dates closed or no upcoming dates.</div>
+                )}
               </div>
             )}
 

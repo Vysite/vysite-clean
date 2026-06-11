@@ -1,0 +1,1 @@
+ALTER TABLE vy_projects ADD COLUMN IF NOT EXISTS variations_value NUMERIC NULL;

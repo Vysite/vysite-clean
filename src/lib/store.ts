@@ -395,6 +395,7 @@ export interface DBProject {
   open_actions: number;
   open_snags: number;
   committed?: number | null;
+  variations_value?: number | null;
 }
 
 export interface DBProjectDocument {
@@ -574,6 +575,7 @@ function dbToProject(r: DBProject): Project {
     openActions: r.open_actions,
     openSnags: r.open_snags,
     committed: r.committed ?? null,
+    variationsValue: r.variations_value ?? null,
   };
 }
 
@@ -592,6 +594,7 @@ function projectToDB(p: Project): DBProject {
     open_actions: p.openActions,
     open_snags: p.openSnags,
     committed: p.committed ?? null,
+    variations_value: p.variationsValue ?? null,
   };
 }
 

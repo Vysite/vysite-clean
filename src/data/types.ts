@@ -19,6 +19,7 @@ export interface Project {
   progress: number;
   value: string;
   committed?: number | null;
+  variationsValue?: number | null;
 }
 
 export type SnagPriority = 'Critical' | 'High' | 'Medium' | 'Low';
