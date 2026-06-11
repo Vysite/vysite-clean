@@ -44,7 +44,6 @@ function fmt(n: number): string {
 }
 
 function fmtCurrency(n: number): string {
-  if (Number.isInteger(n)) return '£' + n.toLocaleString('en-GB');
   return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -1365,11 +1364,11 @@ export default function Commercial() {
   const [completedFocused, setCompletedFocused] = useState(false);
   const [variationsFocused, setVariationsFocused] = useState(false);
 
-  // Format a raw numeric string as £ with commas for display
+  // Format a raw numeric string as £X,XXX,XXX.00 for display
   const fmtEditDisplay = (raw: string) => {
     const n = parseFloat(raw);
     if (!raw || isNaN(n)) return raw;
-    return '£' + Math.round(n).toLocaleString('en-GB');
+    return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
   // Strip £ and commas so stored value stays parseable
   const normaliseInput = (v: string) => v.replace(/[£,\s]/g, '');
@@ -1393,7 +1392,7 @@ export default function Commercial() {
       : bannerProject.progress;
     const updated = {
       ...bannerProject,
-      value: contractNum > 0 ? `£${Math.round(contractNum).toLocaleString('en-GB')}` : bannerProject.value,
+      value: contractNum > 0 ? '£' + contractNum.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : bannerProject.value,
       committed: completedNum,
       variationsValue: variationsNum,
       progress: newProgress,
@@ -1569,7 +1568,7 @@ export default function Commercial() {
     remaining: number | null,
     variationsNum: number | null,
   ): string {
-    const fv = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
+    const fv = (n: number) => '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
     const barPct = Math.min(100, progress);
     const statusBadge = proj.status === 'Active' ? 'badge-green' : proj.status === 'Completed' ? 'badge-blue' : proj.status === 'On Hold' ? 'badge-amber' : 'badge-slate';
@@ -1873,7 +1872,7 @@ export default function Commercial() {
             <div className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl px-4 py-2 text-right">
               <p className="text-[10px] text-slate-500 uppercase tracking-wider leading-none mb-0.5">Total Contract Value</p>
               <p className="text-base font-bold text-[#f97316] leading-none">
-                {'£' + totalContractValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                {'£' + totalContractValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
           )}
@@ -1899,7 +1898,7 @@ export default function Commercial() {
         const remaining    = completedNum != null ? contractNum - completedNum : null;
         const variationsNum = bannerVariationsEdit.trim() !== '' ? parseFloat(bannerVariationsEdit) : (proj.variationsValue ?? null);
         const contractInclVariations = contractNum + (variationsNum ?? 0);
-        const fmtVal = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
+        const fmtVal = (n: number) => '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const contractDirty   = bannerContractEdit   !== '' && parseFloat(bannerContractEdit)   !== (proj.value ? parseRawValue(proj.value) : 0);
         const completedDirty  = bannerCompletedEdit  !== '' && parseFloat(bannerCompletedEdit)  !== (proj.committed ?? NaN);
         const variationsDirty = bannerVariationsEdit !== '' && parseFloat(bannerVariationsEdit) !== (proj.variationsValue ?? NaN);
