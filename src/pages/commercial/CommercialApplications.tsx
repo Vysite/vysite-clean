@@ -517,6 +517,3 @@ export default function CommercialApplications({
     </div>
   );
 }
-
-
-export default CommercialApplications
