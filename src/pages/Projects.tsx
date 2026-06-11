@@ -1131,6 +1131,16 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
         <td>${f.date ? fmtDate(f.date) : '—'}</td>
       </tr>`).join('');
 
+    const tcRows = projectTC.map(r => `
+      <tr>
+        <td style="font-weight:600;">${esc(r.title || '—')}</td>
+        <td>${esc(r.category || '—')}</td>
+        <td>${esc(r.area || '—')}</td>
+        <td><span class="badge ${r.status === 'Complete' ? 'badge-green' : r.status === 'In Progress' ? 'badge-blue' : r.status === 'Failed' ? 'badge-red' : r.status === 'On Hold' ? 'badge-amber' : 'badge-slate'}">${esc(r.status || '—')}</span></td>
+        <td>${esc(r.engineer || '—')}</td>
+        <td>${r.date ? fmtDate(r.date) : '—'}</td>
+      </tr>`).join('');
+
     const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
     const sortedKd = [...projectKeyDates].sort((a, b) => {
       if (!a.date) return 1; if (!b.date) return -1;
@@ -1220,9 +1230,9 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
     <div class="meta-block">
       <div class="meta-grid">
         <div><div class="meta-label">Status</div><div class="meta-value">${esc(project.status)}</div></div>
-        <div><div class="meta-label">Contract Value</div><div class="meta-value">${esc(project.value || '—')}</div></div>
         <div><div class="meta-label">Project Manager</div><div class="meta-value">${esc(project.projectManager || '—')}</div></div>
         <div><div class="meta-label">Location</div><div class="meta-value">${esc(project.location || '—')}</div></div>
+        <div><div class="meta-label">Open Key Dates</div><div class="meta-value">${projectKeyDates.filter(d => d.status === 'Open').length}</div></div>
         <div><div class="meta-label">Start Date</div><div class="meta-value">${fmtDate(project.startDate)}</div></div>
         <div><div class="meta-label">Completion Date</div><div class="meta-value">${fmtDate(project.completionDate)}</div></div>
         <div><div class="meta-label">Open Snags</div><div class="meta-value">${openSnags}</div></div>
@@ -1267,6 +1277,13 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
     <table>
       <thead><tr><th>Type</th><th style="width:130px;">Completed By</th><th style="width:80px;">Status</th><th style="width:90px;">Date</th></tr></thead>
       <tbody>${formRows}</tbody>
+    </table>` : ''}
+
+    ${projectTC.length > 0 ? `
+    <div class="section-heading">Testing &amp; Commissioning (${projectTC.length})</div>
+    <table>
+      <thead><tr><th>Title</th><th style="width:100px;">Category</th><th style="width:100px;">Area</th><th style="width:90px;">Status</th><th style="width:110px;">Engineer</th><th style="width:90px;">Date</th></tr></thead>
+      <tbody>${tcRows}</tbody>
     </table>` : ''}
 
     <div class="footer">
