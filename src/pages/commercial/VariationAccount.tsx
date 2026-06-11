@@ -818,8 +818,3 @@ export default function VariationAccount({
     </div>
   );
 }
-
-
-export default VariationAccount
-
-export { calcVAMetrics }
