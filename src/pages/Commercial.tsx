@@ -1497,37 +1497,55 @@ export default function Commercial() {
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #1e293b; background: white; font-size: 11px; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page { max-width: 880px; margin: 0 auto; padding: 36px 40px; }
-    .doc-header { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 14px; border-bottom: 3px solid #f97316; margin-bottom: 20px; }
-    .doc-logo-text { font-size: 22px; font-weight: 900; color: #f97316; letter-spacing: 0.05em; }
-    .doc-type-label { font-size: 10px; color: #64748b; margin-top: 4px; }
+
+    /* Document header */
+    .doc-header { display: flex; align-items: flex-end; justify-content: space-between; padding-bottom: 12px; border-bottom: 3px solid #f97316; margin-bottom: 22px; }
+    .doc-logo-text { font-size: 22px; font-weight: 900; color: #f97316; letter-spacing: 0.05em; line-height: 1; }
+    .doc-tagline { font-size: 9px; color: #94a3b8; margin-top: 3px; letter-spacing: 0.04em; }
     .doc-header-right { text-align: right; }
-    .doc-title { font-size: 18px; font-weight: 900; color: #111; margin-bottom: 4px; line-height: 1.25; max-width: 420px; }
-    .doc-dateline { font-size: 11px; color: #64748b; }
-    .kpi-bar { display: grid; gap: 10px; margin: 16px 0; }
-    .kpi-bar-3 { grid-template-columns: repeat(3, 1fr); }
-    .kpi-bar-4 { grid-template-columns: repeat(4, 1fr); }
-    .kpi-cell { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; text-align: center; }
-    .kpi-value { font-size: 20px; font-weight: 900; color: #0f172a; line-height: 1; }
-    .kpi-label { font-size: 8.5px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-top: 4px; }
-    .kpi-orange { color: #f97316; } .kpi-amber { color: #d97706; } .kpi-green { color: #059669; } .kpi-red { color: #dc2626; }
-    .meta-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 18px; }
-    .meta-grid { display: grid; gap: 10px 20px; }
-    .meta-grid-4 { grid-template-columns: repeat(4, 1fr); }
-    .meta-label { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
-    .meta-value { font-size: 11px; font-weight: 600; color: #0f172a; }
-    .progress-wrap { margin: 12px 0 4px; }
-    .progress-label { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 5px; display: flex; justify-content: space-between; }
-    .progress-track { height: 8px; background: #e2e8f0; border-radius: 20px; overflow: hidden; }
+    .doc-title { font-size: 17px; font-weight: 900; color: #0f172a; line-height: 1.2; margin-bottom: 3px; }
+    .doc-dateline { font-size: 10px; color: #64748b; }
+
+    /* Report metadata panel */
+    .report-meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+    .report-meta-row { display: contents; }
+    .report-meta-label { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; padding: 7px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; white-space: nowrap; }
+    .report-meta-value { font-size: 10.5px; font-weight: 600; color: #0f172a; padding: 7px 14px; background: white; border-bottom: 1px solid #e2e8f0; }
+    .report-meta-label:last-of-type, .report-meta-value:last-of-type { border-bottom: none; }
+
+    /* Project summary table */
+    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .summary-table td { padding: 6px 12px; border-bottom: 1px solid #f1f5f9; font-size: 10.5px; vertical-align: middle; }
+    .summary-table td:first-child { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; width: 180px; background: #f8fafc; border-right: 1px solid #e2e8f0; }
+    .summary-table td:last-child { font-weight: 600; color: #0f172a; }
+    .summary-table td.money { font-size: 11.5px; font-weight: 700; color: #0f172a; }
+    .summary-table td.money-accent { font-size: 11.5px; font-weight: 700; color: #f97316; }
+    .summary-table td.money-positive { font-size: 11.5px; font-weight: 700; color: #059669; }
+    .summary-table td.money-warn { font-size: 11.5px; font-weight: 700; color: #d97706; }
+    .summary-table td.money-negative { font-size: 11.5px; font-weight: 700; color: #dc2626; }
+    .summary-section-title { font-size: 7.5px; font-weight: 800; color: #f97316; text-transform: uppercase; letter-spacing: 0.1em; background: #fff7ed; padding: 5px 12px; border-bottom: 1px solid #fed7aa; }
+
+    /* Progress bar */
+    .progress-row td { padding: 8px 12px !important; }
+    .progress-track { height: 6px; background: #e2e8f0; border-radius: 20px; overflow: hidden; margin-top: 5px; }
     .progress-fill { height: 100%; background: #f97316; border-radius: 20px; }
+
+    /* Badges */
     .badge { display: inline-block; font-size: 8.5px; font-weight: 700; padding: 2px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
     .badge-orange { background: #fff7ed; color: #c2410c; } .badge-green { background: #d1fae5; color: #065f46; }
     .badge-amber { background: #fef3c7; color: #92400e; } .badge-blue { background: #dbeafe; color: #1d4ed8; }
     .badge-slate { background: #f1f5f9; color: #475569; } .badge-red { background: #fee2e2; color: #991b1b; }
-    .section-heading { font-size: 8.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 6px; border-bottom: 1.5px solid #e2e8f0; margin-bottom: 12px; margin-top: 20px; }
+
+    /* Section headings */
+    .section-heading { font-size: 8.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 6px; border-bottom: 1.5px solid #e2e8f0; margin-bottom: 12px; margin-top: 24px; }
+
+    /* Register table */
     .data-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-    .data-table th { padding: 8px 10px; text-align: left; font-size: 9px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; background: #f1f5f9; border-bottom: 2px solid #e2e8f0; }
-    .data-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: top; }
+    .data-table th { padding: 8px 10px; text-align: left; font-size: 8.5px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; background: #f1f5f9; border-bottom: 2px solid #e2e8f0; }
+    .data-table td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: top; }
     .data-table tr:nth-child(even) td { background: #f8fafc; }
+
+    /* Ticket cards */
     .ticket-card { border: 1.5px solid #e2e8f0; border-radius: 10px; margin-bottom: 24px; overflow: hidden; page-break-inside: avoid; }
     .ticket-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; gap: 12px; }
     .ticket-ref { font-family: monospace; font-size: 9.5px; font-weight: 700; color: #f97316; background: #fff7ed; padding: 2px 8px; border-radius: 5px; display: inline-block; margin-bottom: 4px; }
@@ -1550,13 +1568,12 @@ export default function Commercial() {
     .li-total { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 9px 10px; border-top: 1.5px solid #e2e8f0; background: #f8fafc; }
     .li-total-label { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; }
     .li-total-value { font-size: 13px; font-weight: 900; color: #f97316; }
-    .legal-footer { margin-top: 32px; border-top: 2px solid #e2e8f0; }
-    .legal-footer-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 0 8px; }
-    .legal-footer-title { font-size: 8px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; }
-    .legal-footer-ref { font-size: 8px; color: #94a3b8; }
-    .legal-branding { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0; }
-    .legal-branding-left { font-size: 8px; color: #94a3b8; }
-    .legal-branding-right { font-size: 8px; color: #94a3b8; }
+
+    /* Footer */
+    .doc-footer { margin-top: 36px; padding-top: 10px; border-top: 2px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
+    .doc-footer-left { font-size: 8px; color: #94a3b8; }
+    .doc-footer-right { font-size: 8px; color: #94a3b8; text-align: right; }
+
     @media print { .page { padding: 20px 24px; } .ticket-card { page-break-inside: avoid; } }
   `;
 
@@ -1571,40 +1588,36 @@ export default function Commercial() {
     const fv = (n: number) => '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
     const barPct = Math.min(100, progress);
-    const statusBadge = proj.status === 'Active' ? 'badge-green' : proj.status === 'Completed' ? 'badge-blue' : proj.status === 'On Hold' ? 'badge-amber' : 'badge-slate';
-    const remainCls = remaining == null ? '' : remaining < 0 ? 'kpi-red' : remaining < contractNum * 0.1 ? 'kpi-amber' : 'kpi-green';
     const contractInclVar = contractNum + (variationsNum ?? 0);
+    const remainCls = remaining == null ? '' : remaining < 0 ? 'money-negative' : remaining < contractNum * 0.1 ? 'money-warn' : 'money-positive';
+    const statusBadge = proj.status === 'Active' ? 'badge-green' : proj.status === 'Completed' ? 'badge-blue' : proj.status === 'On Hold' ? 'badge-amber' : 'badge-slate';
     return `
-      <div class="meta-block">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;">
-          <div>
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
-              <span style="font-size:15px;font-weight:800;color:#0f172a;">${proj.name}</span>
-              <span class="badge ${statusBadge}">${proj.status}</span>
-            </div>
-            ${proj.client ? `<p style="font-size:10.5px;color:#64748b;margin:0;">${proj.client}</p>` : ''}
-          </div>
-          ${contractNum > 0 ? `<div style="text-align:right;"><p style="font-size:18px;font-weight:900;color:#0f172a;margin:0;">${fv(contractNum)}</p><p style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin:2px 0 0;">Contract Value</p></div>` : ''}
-        </div>
-        <div class="meta-grid meta-grid-4" style="margin-bottom:12px;">
-          <div><div class="meta-label">Location</div><div class="meta-value">${proj.location || '—'}</div></div>
-          <div><div class="meta-label">Project Manager</div><div class="meta-value">${proj.projectManager || '—'}</div></div>
-          <div><div class="meta-label">Start Date</div><div class="meta-value">${fmtDate(proj.startDate)}</div></div>
-          <div><div class="meta-label">Completion</div><div class="meta-value">${fmtDate(proj.completionDate)}</div></div>
-        </div>
-        <div class="progress-wrap">
-          <div class="progress-label"><span>Overall Progress</span><span>${barPct}%</span></div>
-          <div class="progress-track"><div class="progress-fill" style="width:${barPct}%;"></div></div>
-        </div>
-        <div class="kpi-bar" style="grid-template-columns:repeat(6,1fr);margin-top:12px;">
-          <div class="kpi-cell"><div class="kpi-value">${contractNum > 0 ? fv(contractNum) : '—'}</div><div class="kpi-label">Contract Value</div></div>
-          <div class="kpi-cell"><div class="kpi-value kpi-amber">${variationsNum != null ? fv(variationsNum) : '—'}</div><div class="kpi-label">Variations Value</div></div>
-          <div class="kpi-cell"><div class="kpi-value kpi-orange">${contractNum > 0 || variationsNum != null ? fv(contractInclVar) : '—'}</div><div class="kpi-label">Contract incl. Variations</div></div>
-          <div class="kpi-cell"><div class="kpi-value">${completedNum != null ? fv(completedNum) : '—'}</div><div class="kpi-label">Completed Value</div></div>
-          <div class="kpi-cell"><div class="kpi-value kpi-orange">${barPct}%</div><div class="kpi-label">Progress</div></div>
-          <div class="kpi-cell"><div class="kpi-value ${remainCls}">${remaining != null ? fv(remaining) : '—'}</div><div class="kpi-label">Remaining</div></div>
-        </div>
-      </div>`;
+      <table class="summary-table" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+        <tbody>
+          <tr><td colspan="2" class="summary-section-title">Project Details</td></tr>
+          <tr><td>Project</td><td>${proj.name} <span class="badge ${statusBadge}" style="margin-left:6px;">${proj.status}</span></td></tr>
+          ${proj.client ? `<tr><td>Client</td><td>${proj.client}</td></tr>` : ''}
+          ${proj.location ? `<tr><td>Location</td><td>${proj.location}</td></tr>` : ''}
+          <tr><td>Project Manager</td><td>${proj.projectManager || '—'}</td></tr>
+          <tr><td>Start Date</td><td>${fmtDate(proj.startDate)}</td></tr>
+          <tr><td>Completion Date</td><td>${fmtDate(proj.completionDate)}</td></tr>
+          <tr class="progress-row">
+            <td>Overall Progress</td>
+            <td>
+              <span style="font-size:11px;font-weight:700;color:#f97316;">${barPct}%</span>
+              <div class="progress-track"><div class="progress-fill" style="width:${barPct}%;"></div></div>
+            </td>
+          </tr>
+          ${contractNum > 0 ? `
+          <tr><td colspan="2" class="summary-section-title" style="margin-top:0;">Commercial Summary</td></tr>
+          <tr><td>Contract Value</td><td class="money">${fv(contractNum)}</td></tr>
+          ${variationsNum != null ? `<tr><td>Variation Value</td><td class="money-accent">${fv(variationsNum)}</td></tr>` : ''}
+          ${variationsNum != null ? `<tr><td>Contract incl. Variations</td><td class="money-accent">${fv(contractInclVar)}</td></tr>` : ''}
+          ${completedNum != null ? `<tr><td>Completed Value</td><td class="money">${fv(completedNum)}</td></tr>` : ''}
+          ${remaining != null ? `<tr><td>Remaining Value</td><td class="${remainCls}">${fv(remaining)}</td></tr>` : ''}
+          ` : ''}
+        </tbody>
+      </table>`;
   }
 
   function exportRegisterSummary(
@@ -1613,6 +1626,7 @@ export default function Commercial() {
     variationsNum: number | null,
     keyDates: DBKeyDate[],
     recordList: CommercialRecord[],
+    generatedBy: string,
   ) {
     const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB') : '—';
     const totalR = recordList.length;
@@ -1646,8 +1660,7 @@ export default function Commercial() {
         <td><span class="badge ${typeBadgeCls(r.recordType)}">${typeInfo(r.recordType).label}</span></td>
         <td style="font-family:monospace;font-size:9.5px;font-weight:700;color:#f97316;">${r.reference || '—'}</td>
         <td style="font-weight:600;">${r.title || 'Untitled'}</td>
-        <td>${r.projectName || '—'}</td>
-        <td>${r.client || '—'}</td>
+        <td>${r.client || proj.client || '—'}</td>
         <td><span class="badge ${statusBadgeCls(r.status)}">${statusInfo(r.status).label}</span></td>
         <td>${fmtDate(r.dateRaised)}</td>
       </tr>`).join('');
@@ -1666,46 +1679,48 @@ export default function Commercial() {
         <td style="color:#64748b;font-style:italic;">${d.comments || '—'}</td>
       </tr>`).join('');
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Register — ${proj.name}</title>
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Project Summary — ${proj.name}</title>
     <style>${PDF_CSS}</style>
     <script>window.onload=function(){window.print();}<\/script>
     </head><body><div class="page">
       <div class="doc-header">
         <div>
           <div class="doc-logo-text">VYSITE</div>
-          <div class="doc-type-label">Commercial Register — ${proj.name}</div>
+          <div class="doc-tagline">Construction Operating System</div>
         </div>
         <div class="doc-header-right">
-          <div class="doc-title">Commercial Register Summary</div>
-          <div class="doc-dateline">Exported ${todayStr}</div>
+          <div class="doc-title">Commercial Project Summary</div>
+          <div class="doc-dateline">${proj.name}${proj.client ? ' &mdash; ' + proj.client : ''}</div>
         </div>
       </div>
-      ${buildProjectMetaHTML(proj, progress, contractNum, completedNum, remaining, variationsNum)}
-      <div class="kpi-bar kpi-bar-3">
-        <div class="kpi-cell"><div class="kpi-value">${totalR}</div><div class="kpi-label">Total Records</div></div>
-        <div class="kpi-cell"><div class="kpi-value kpi-amber">${openR}</div><div class="kpi-label">Open / Active</div></div>
-        <div class="kpi-cell"><div class="kpi-value kpi-green">${agreeR}</div><div class="kpi-label">Agreed / Paid</div></div>
+
+      <div class="report-meta">
+        <div class="report-meta-label">Report Type</div><div class="report-meta-value">Commercial Project Summary</div>
+        <div class="report-meta-label">Project</div><div class="report-meta-value">${proj.name}</div>
+        ${proj.client ? `<div class="report-meta-label">Client</div><div class="report-meta-value">${proj.client}</div>` : ''}
+        <div class="report-meta-label">Generated Date</div><div class="report-meta-value">${todayStr}</div>
+        <div class="report-meta-label">Generated By</div><div class="report-meta-value">${generatedBy || '—'}</div>
       </div>
-      <div class="section-heading">Commercial Register (${totalR} record${totalR !== 1 ? 's' : ''})</div>
+
+      ${buildProjectMetaHTML(proj, progress, contractNum, completedNum, remaining, variationsNum)}
+
+      ${totalR > 0 ? `
+      <div class="section-heading">Commercial Register &mdash; ${totalR} Record${totalR !== 1 ? 's' : ''} &nbsp;|&nbsp; ${openR} Open &nbsp;|&nbsp; ${agreeR} Agreed / Paid</div>
       <table class="data-table">
-        <thead><tr><th>Type</th><th>Reference</th><th>Title</th><th>Project</th><th>Client</th><th>Status</th><th>Date Raised</th></tr></thead>
+        <thead><tr><th>Type</th><th>Reference</th><th>Title</th><th>Client</th><th>Status</th><th>Date Raised</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>
+      </table>` : ''}
+
       ${keyDates.length > 0 ? `
       <div class="section-heading" style="margin-top:24px;">Key Dates (${keyDates.length})</div>
       <table class="data-table">
         <thead><tr><th style="width:90px;">Date</th><th>Title</th><th style="width:80px;">Status</th><th style="width:100px;">Days Remaining</th><th>Description</th><th>Notes</th></tr></thead>
         <tbody>${kdRows}</tbody>
       </table>` : ''}
-      <div class="legal-footer">
-        <div class="legal-footer-header">
-          <div class="legal-footer-title">Commercial Document — Confidential</div>
-          <div class="legal-footer-ref">Exported ${todayStr}</div>
-        </div>
-        <div class="legal-branding">
-          <div class="legal-branding-left">Generated by VYSITE — powered by <strong>VYSITE</strong> | Construction Operating System</div>
-          <div class="legal-branding-right">&copy; VYSITE. All rights reserved.</div>
-        </div>
+
+      <div class="doc-footer">
+        <div class="doc-footer-left">VYSITE &bull; Construction Operating System &bull; Commercial Document &mdash; Confidential</div>
+        <div class="doc-footer-right">Generated by ${generatedBy || 'VYSITE'} &bull; ${todayStr} &bull; &copy; VYSITE. All rights reserved.</div>
       </div>
     </div></body></html>`;
     openPrintTab(html);
@@ -1717,6 +1732,7 @@ export default function Commercial() {
     variationsNum: number | null,
     keyDates: DBKeyDate[],
     recordList: CommercialRecord[],
+    generatedBy: string,
   ) {
     const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }) : '—';
     const fmtDateShort = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB') : '—';
@@ -1742,6 +1758,9 @@ export default function Commercial() {
       return `${diff}d remaining`;
     };
 
+    const hasTickets = recordList.length > 0;
+    const reportTitle = hasTickets ? 'Commercial Full Ticket Export' : 'Commercial Project Summary';
+
     const tickets = recordList.map((r, idx) => {
       const totals = r.lineItems && r.lineItems.length > 0 ? recordTotals(r.lineItems) : null;
       const lineRows = r.lineItems && r.lineItems.length > 0
@@ -1760,7 +1779,7 @@ export default function Commercial() {
             <div>
               ${r.reference ? `<span class="ticket-ref">${r.reference}</span>` : ''}
               <div class="ticket-title">${r.title || 'Untitled'}</div>
-              <div class="ticket-sub">${r.projectName || proj.name}${(r.client || proj.client) ? ' · ' + (r.client || proj.client) : ''}</div>
+              <div class="ticket-sub">${r.projectName || proj.name}${(r.client || proj.client) ? ' &middot; ' + (r.client || proj.client) : ''}</div>
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:2px;">
               <span class="badge ${typeBadgeCls(r.recordType)}">${typeInfo(r.recordType).label}</span>
@@ -1792,7 +1811,7 @@ export default function Commercial() {
       return new Date(a.date).getTime() - new Date(b.date).getTime();
     });
     const kdSection = keyDates.length > 0 ? `
-      <div style="page-break-before:always;height:1px;"></div>
+      ${hasTickets ? '<div style="page-break-before:always;height:1px;"></div>' : ''}
       <div class="section-heading" style="margin-top:24px;">Key Dates (${keyDates.length})</div>
       <table class="data-table">
         <thead><tr><th style="width:90px;">Date</th><th>Title</th><th style="width:80px;">Status</th><th style="width:100px;">Days Remaining</th><th>Description</th><th>Notes</th><th style="width:90px;">Created By</th><th style="width:90px;">Created</th></tr></thead>
@@ -1810,33 +1829,38 @@ export default function Commercial() {
         </tbody>
       </table>` : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Full Export — ${proj.name}</title>
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${reportTitle} — ${proj.name}</title>
     <style>${PDF_CSS}</style>
     <script>window.onload=function(){window.print();}<\/script>
     </head><body><div class="page">
       <div class="doc-header">
         <div>
           <div class="doc-logo-text">VYSITE</div>
-          <div class="doc-type-label">Commercial Full Ticket Export — ${proj.name}</div>
+          <div class="doc-tagline">Construction Operating System</div>
         </div>
         <div class="doc-header-right">
-          <div class="doc-title">Commercial Full Ticket Export</div>
-          <div class="doc-dateline">${recordList.length} record${recordList.length !== 1 ? 's' : ''} · ${todayStr}</div>
+          <div class="doc-title">${reportTitle}</div>
+          <div class="doc-dateline">${proj.name}${proj.client ? ' &mdash; ' + proj.client : ''}</div>
         </div>
       </div>
+
+      <div class="report-meta">
+        <div class="report-meta-label">Report Type</div><div class="report-meta-value">${reportTitle}</div>
+        <div class="report-meta-label">Project</div><div class="report-meta-value">${proj.name}</div>
+        ${proj.client ? `<div class="report-meta-label">Client</div><div class="report-meta-value">${proj.client}</div>` : ''}
+        ${hasTickets ? `<div class="report-meta-label">Records Included</div><div class="report-meta-value">${recordList.length} record${recordList.length !== 1 ? 's' : ''}</div>` : ''}
+        <div class="report-meta-label">Generated Date</div><div class="report-meta-value">${todayStr}</div>
+        <div class="report-meta-label">Generated By</div><div class="report-meta-value">${generatedBy || '—'}</div>
+      </div>
+
       ${buildProjectMetaHTML(proj, progress, contractNum, completedNum, remaining, variationsNum)}
-      <div class="section-heading">Tickets (${recordList.length})</div>
-      ${tickets}
+
+      ${hasTickets ? `<div class="section-heading">Commercial Records (${recordList.length})</div>${tickets}` : ''}
       ${kdSection}
-      <div class="legal-footer">
-        <div class="legal-footer-header">
-          <div class="legal-footer-title">Commercial Document — Confidential</div>
-          <div class="legal-footer-ref">Exported ${todayStr}</div>
-        </div>
-        <div class="legal-branding">
-          <div class="legal-branding-left">Generated by VYSITE — powered by <strong>VYSITE</strong> | Construction Operating System</div>
-          <div class="legal-branding-right">&copy; VYSITE. All rights reserved.</div>
-        </div>
+
+      <div class="doc-footer">
+        <div class="doc-footer-left">VYSITE &bull; Construction Operating System &bull; Commercial Document &mdash; Confidential</div>
+        <div class="doc-footer-right">Generated by ${generatedBy || 'VYSITE'} &bull; ${todayStr} &bull; &copy; VYSITE. All rights reserved.</div>
       </div>
     </div></body></html>`;
     openPrintTab(html);
@@ -2075,13 +2099,13 @@ export default function Commercial() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => exportRegisterSummary(proj, progress, contractNum, completedNum, remaining, variationsNum, store.keyDates.filter(d => d.project_id === effectiveBannerProjectId), filteredRecords)}
+                  onClick={() => exportRegisterSummary(proj, progress, contractNum, completedNum, remaining, variationsNum, store.keyDates.filter(d => d.project_id === effectiveBannerProjectId), filteredRecords, store.currentUser?.name ?? '')}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0d1628] hover:bg-[#1a2236] border border-[#1e2d4a] text-slate-300 hover:text-white text-xs font-semibold rounded-lg transition-colors"
                 >
                   <FileText size={12} />Register Summary
                 </button>
                 <button
-                  onClick={() => exportFullTickets(proj, progress, contractNum, completedNum, remaining, variationsNum, store.keyDates.filter(d => d.project_id === effectiveBannerProjectId), selectedIds.size > 0 ? filteredRecords.filter(r => selectedIds.has(r.id)) : filteredRecords)}
+                  onClick={() => exportFullTickets(proj, progress, contractNum, completedNum, remaining, variationsNum, store.keyDates.filter(d => d.project_id === effectiveBannerProjectId), selectedIds.size > 0 ? filteredRecords.filter(r => selectedIds.has(r.id)) : filteredRecords, store.currentUser?.name ?? '')}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0d1628] hover:bg-[#1a2236] border border-[#1e2d4a] text-slate-300 hover:text-white text-xs font-semibold rounded-lg transition-colors"
                 >
                   <Printer size={12} />{selectedIds.size > 0 ? `Full Export (${selectedIds.size})` : 'Full Export (All)'}
