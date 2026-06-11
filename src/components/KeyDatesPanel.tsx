@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Calendar, Printer, Pencil, Trash2, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Calendar, Pencil, Trash2, X, ChevronDown, ChevronUp, FileText, Layers } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import type { Project } from '../data/types';
 import type { DBKeyDate } from '../lib/store';
@@ -40,64 +40,187 @@ function daysRemaining(dateStr: string): string {
   return `${diff}d remaining`;
 }
 
-function exportKeyDatesPDF(project: Project, keyDates: DBKeyDate[]) {
-  const today = new Date();
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const fmtDate = (s: string) => s ? new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+// ─── VYSITE PDF helpers ────────────────────────────────────────────────────────
 
-  const rows = keyDates.map(d => {
-    const isOverdue = d.status === 'Open' && d.date && new Date(d.date) < today;
-    const cls = d.status === 'Closed' ? 'closed' : isOverdue ? 'overdue' : 'open';
-    const label = d.status === 'Closed' ? 'Closed' : isOverdue ? 'Overdue' : 'Open';
-    return `<tr>
-      <td>${esc(d.title)}</td>
-      <td>${fmtDate(d.date)}</td>
-      <td>${esc(d.description || '—')}</td>
-      <td>${esc(d.comments || '—')}</td>
-      <td><span class="badge ${cls}">${esc(label)}</span></td>
-      <td>${esc(d.created_by)}</td>
-      <td>${fmtDate(d.created_date)}</td>
-    </tr>`;
-  }).join('');
+const PDF_CSS = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    color: #1e293b; background: white; font-size: 11px; line-height: 1.5;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .page { max-width: 880px; margin: 0 auto; padding: 36px 40px; }
+  .doc-header { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 14px; border-bottom: 3px solid #f97316; margin-bottom: 20px; }
+  .doc-logo { font-size: 22px; font-weight: 900; color: #f97316; letter-spacing: 0.05em; }
+  .doc-type-label { font-size: 10px; color: #64748b; margin-top: 4px; }
+  .doc-header-right { text-align: right; }
+  .doc-title { font-size: 18px; font-weight: 900; color: #111; margin-bottom: 4px; line-height: 1.25; }
+  .doc-dateline { font-size: 11px; color: #64748b; }
+  .meta-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; }
+  .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 20px; }
+  .meta-label { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+  .meta-value { font-size: 11px; font-weight: 600; color: #0f172a; }
+  .section-heading { font-size: 8.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 6px; border-bottom: 1.5px solid #e2e8f0; margin-bottom: 12px; margin-top: 24px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f97316; color: #fff; font-weight: 700; padding: 8px 10px; text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; font-size: 10px; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 9999px; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .badge-open    { background: #fff3e0; color: #c2410c; }
+  .badge-closed  { background: #dcfce7; color: #15803d; }
+  .badge-overdue { background: #fee2e2; color: #b91c1c; }
+  .kd-card { border: 1.5px solid #e2e8f0; border-radius: 10px; margin-bottom: 18px; overflow: hidden; page-break-inside: avoid; }
+  .kd-card-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+  .kd-card-title { font-size: 13px; font-weight: 800; color: #0f172a; }
+  .kd-card-body { padding: 12px 14px; }
+  .data-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: #e2e8f0; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; margin-bottom: 10px; }
+  .data-cell { background: white; padding: 8px 10px; }
+  .data-label { font-size: 7.5px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 2px; }
+  .data-value { font-size: 10.5px; font-weight: 600; color: #0f172a; }
+  .text-field { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 9px 12px; margin-bottom: 8px; }
+  .text-label { font-size: 7.5px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 3px; }
+  .text-value { font-size: 10.5px; color: #334155; line-height: 1.6; }
+  .footer { margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 10px; display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; }
+  @media print { body { padding: 0; } .page { padding: 20px 24px; } }
+`;
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-  <title>Key Dates — ${esc(project.name)}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 24px; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #f97316; padding-bottom: 12px; margin-bottom: 20px; }
-    .header h1 { font-size: 18px; font-weight: 700; color: #f97316; }
-    .header p { font-size: 11px; color: #555; margin-top: 2px; }
-    .meta { font-size: 10px; color: #555; text-align: right; }
-    h2 { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
-    table { width: 100%; border-collapse: collapse; }
-    th { background: #f97316; color: #fff; font-weight: 600; padding: 7px 8px; text-align: left; font-size: 10px; }
-    td { padding: 7px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; font-size: 10px; }
-    tr:nth-child(even) td { background: #fafafa; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 9px; font-weight: 700; }
-    .open { background: #fff3e0; color: #e65100; }
-    .closed { background: #e8f5e9; color: #1b5e20; }
-    .overdue { background: #ffebee; color: #b71c1c; }
-    .footer { margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 8px; display: flex; justify-content: space-between; font-size: 9px; color: #999; }
-  </style></head><body>
-  <div class="header">
-    <div><h1>Key Dates</h1><p>${esc(project.name)}${project.client ? ' — ' + esc(project.client) : ''}</p></div>
-    <div class="meta">Exported ${today.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}<br/>${keyDates.length} date${keyDates.length !== 1 ? 's' : ''}</div>
-  </div>
-  <h2>Key Dates Register</h2>
-  <table>
-    <thead><tr><th>Title</th><th>Date</th><th>Description</th><th>Comments</th><th>Status</th><th>Created By</th><th>Created Date</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px">No key dates recorded</td></tr>'}</tbody>
-  </table>
-  <div class="footer"><span>VYSITE | Construction Operating System</span><span>© VYSITE. All rights reserved.</span></div>
-  </body></html>`;
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
+function fmtDate(s: string): string {
+  return s ? new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+}
+
+function openPDF(html: string) {
   const win = window.open('', '_blank');
   if (!win) return;
   win.document.write(html);
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 400);
+}
+
+function docHeader(project: Project, subtitle: string, exportedDate: string, count: number): string {
+  return `
+  <div class="doc-header">
+    <div>
+      <div class="doc-logo">VYSITE</div>
+      <div class="doc-type-label">Construction Operating System</div>
+    </div>
+    <div class="doc-header-right">
+      <div class="doc-title">${esc(subtitle)}</div>
+      <div class="doc-dateline">${esc(project.name)}${project.client ? ' &mdash; ' + esc(project.client) : ''}</div>
+      <div class="doc-dateline" style="margin-top:2px">Exported ${exportedDate} &bull; ${count} date${count !== 1 ? 's' : ''}</div>
+    </div>
+  </div>`;
+}
+
+function projectMetaBlock(project: Project): string {
+  const fmt = (s?: string | null) => s ? new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  return `
+  <div class="meta-block">
+    <div class="meta-grid">
+      <div><div class="meta-label">Project</div><div class="meta-value">${esc(project.name)}</div></div>
+      <div><div class="meta-label">Client</div><div class="meta-value">${esc(project.client || '—')}</div></div>
+      <div><div class="meta-label">Location</div><div class="meta-value">${esc(project.location || '—')}</div></div>
+      <div><div class="meta-label">Project Manager</div><div class="meta-value">${esc(project.projectManager || '—')}</div></div>
+      <div><div class="meta-label">Start Date</div><div class="meta-value">${fmt(project.startDate)}</div></div>
+      <div><div class="meta-label">Completion Date</div><div class="meta-value">${fmt(project.completionDate)}</div></div>
+    </div>
+  </div>`;
+}
+
+function exportKeyDatesListPDF(project: Project, keyDates: DBKeyDate[]) {
+  const today = new Date();
+  const exportedDate = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+
+  const rows = keyDates.map(d => {
+    const isOverdue = d.status === 'Open' && d.date && new Date(d.date) < todayMidnight;
+    const label = d.status === 'Closed' ? 'Closed' : isOverdue ? 'Overdue' : 'Open';
+    const badgeCls = d.status === 'Closed' ? 'badge-closed' : isOverdue ? 'badge-overdue' : 'badge-open';
+    const dr = d.status === 'Open' && d.date ? (() => {
+      const diff = Math.round((new Date(d.date).getTime() - todayMidnight.getTime()) / 86400000);
+      if (diff === 0) return 'Today';
+      if (diff < 0) return `${Math.abs(diff)}d overdue`;
+      return `${diff}d remaining`;
+    })() : '—';
+    return `<tr>
+      <td>${fmtDate(d.date)}</td>
+      <td><strong>${esc(d.title)}</strong>${d.description ? '<br/><span style="color:#64748b;font-size:9.5px">' + esc(d.description) + '</span>' : ''}</td>
+      <td><span class="badge ${badgeCls}">${esc(label)}</span></td>
+      <td>${esc(dr)}</td>
+      <td>${esc(d.created_by)}</td>
+      <td>${fmtDate(d.created_date)}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+  <title>Key Dates List — ${esc(project.name)}</title>
+  <style>${PDF_CSS}</style></head>
+  <body><div class="page">
+    ${docHeader(project, 'Key Dates List', exportedDate, keyDates.length)}
+    ${projectMetaBlock(project)}
+    <div class="section-heading">Key Dates Register</div>
+    <table>
+      <thead><tr><th style="width:110px">Date</th><th>Title / Description</th><th style="width:80px">Status</th><th style="width:100px">Days Remaining</th><th style="width:110px">Created By</th><th style="width:110px">Created Date</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px">No key dates recorded</td></tr>'}</tbody>
+    </table>
+    <div class="footer"><span>VYSITE &bull; Construction Operating System</span><span>&copy; VYSITE. All rights reserved. Confidential.</span></div>
+  </div></body></html>`;
+
+  openPDF(html);
+}
+
+function exportKeyDatesFullPDF(project: Project, keyDates: DBKeyDate[]) {
+  const today = new Date();
+  const exportedDate = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+
+  const cards = keyDates.map(d => {
+    const isOverdue = d.status === 'Open' && d.date && new Date(d.date) < todayMidnight;
+    const label = d.status === 'Closed' ? 'Closed' : isOverdue ? 'Overdue' : 'Open';
+    const badgeCls = d.status === 'Closed' ? 'badge-closed' : isOverdue ? 'badge-overdue' : 'badge-open';
+    const dr = d.status === 'Open' && d.date ? (() => {
+      const diff = Math.round((new Date(d.date).getTime() - todayMidnight.getTime()) / 86400000);
+      if (diff === 0) return 'Today';
+      if (diff < 0) return `${Math.abs(diff)}d overdue`;
+      return `${diff}d remaining`;
+    })() : '—';
+    return `
+    <div class="kd-card">
+      <div class="kd-card-header">
+        <span class="kd-card-title">${esc(d.title)}</span>
+        <span class="badge ${badgeCls}">${esc(label)}</span>
+      </div>
+      <div class="kd-card-body">
+        <div class="data-grid">
+          <div class="data-cell"><div class="data-label">Due Date</div><div class="data-value">${fmtDate(d.date)}</div></div>
+          <div class="data-cell"><div class="data-label">Days Remaining</div><div class="data-value">${esc(dr)}</div></div>
+          <div class="data-cell"><div class="data-label">Status</div><div class="data-value">${esc(label)}</div></div>
+          <div class="data-cell"><div class="data-label">Created By</div><div class="data-value">${esc(d.created_by)}</div></div>
+          <div class="data-cell"><div class="data-label">Created Date</div><div class="data-value">${fmtDate(d.created_date)}</div></div>
+          <div class="data-cell"><div class="data-label">Project</div><div class="data-value">${esc(d.project_name || project.name)}</div></div>
+        </div>
+        ${d.description ? `<div class="text-field"><div class="text-label">Description</div><div class="text-value">${esc(d.description)}</div></div>` : ''}
+        ${d.comments ? `<div class="text-field"><div class="text-label">Notes</div><div class="text-value">${esc(d.comments)}</div></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+  <title>Key Dates Full Export — ${esc(project.name)}</title>
+  <style>${PDF_CSS}</style></head>
+  <body><div class="page">
+    ${docHeader(project, 'Key Dates Full Export', exportedDate, keyDates.length)}
+    ${projectMetaBlock(project)}
+    <div class="section-heading">Key Dates Detail</div>
+    ${cards || '<p style="text-align:center;color:#94a3b8;padding:24px">No key dates recorded</p>'}
+    <div class="footer"><span>VYSITE &bull; Construction Operating System</span><span>&copy; VYSITE. All rights reserved. Confidential.</span></div>
+  </div></body></html>`;
+
+  openPDF(html);
 }
 
 type KDForm = { title: string; date: string; description: string; comments: string; status: string };
@@ -154,7 +277,7 @@ export default function KeyDatesPanel({ project, keyDates, currentUserName, onAd
   if (collapsible && !expanded) {
     return (
       <div className="space-y-4">
-        <div className="bg-[#1a2236] rounded-xl border-l-4 border-l-[#f97316] border border-[#1e2d4a]">
+        <div className="bg-[#1a2236] rounded-xl border-2 border-[#f97316]">
           <div className="flex items-center justify-between p-4">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <Calendar size={15} className="text-[#f97316] shrink-0" />
@@ -271,19 +394,27 @@ export default function KeyDatesPanel({ project, keyDates, currentUserName, onAd
 
   return (
     <div className="space-y-4">
-      <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a]">
+      <div className={`bg-[#1a2236] rounded-xl ${collapsible ? 'border-2 border-[#f97316]' : 'border border-[#1e2d4a]'}`}>
         <div className="flex items-center justify-between p-4 border-b border-[#1e2d4a]">
           <h3 className="text-sm font-semibold text-white">
             Key Dates <span className="text-slate-600 font-normal ml-1">({keyDates.length})</span>
           </h3>
           <div className="flex items-center gap-2">
             {keyDates.length > 0 && (
-              <button
-                onClick={() => exportKeyDatesPDF(project, sorted)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1a2236] border border-[#1e2d4a] text-slate-300 rounded-lg text-xs font-semibold hover:border-[#f97316] hover:text-[#f97316] transition-colors"
-              >
-                <Printer size={12} />Export PDF
-              </button>
+              <>
+                <button
+                  onClick={() => exportKeyDatesListPDF(project, sorted)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1a2236] border border-[#1e2d4a] text-slate-300 rounded-lg text-xs font-semibold hover:border-[#f97316] hover:text-[#f97316] transition-colors"
+                >
+                  <FileText size={12} />Export List
+                </button>
+                <button
+                  onClick={() => exportKeyDatesFullPDF(project, sorted)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1a2236] border border-[#1e2d4a] text-slate-300 rounded-lg text-xs font-semibold hover:border-[#f97316] hover:text-[#f97316] transition-colors"
+                >
+                  <Layers size={12} />Export Full
+                </button>
+              </>
             )}
             <button
               onClick={openCreate}

@@ -1852,7 +1852,7 @@ export default function Commercial() {
 
             {/* Editable financial cards */}
             {canEdit && (
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-2">
                 {/* Contract Value — editable */}
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Contract Value</p>
@@ -1869,22 +1869,6 @@ export default function Commercial() {
                     />
                   </div>
                 </div>
-                {/* Completed Value — editable */}
-                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Completed Value</p>
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-500 text-sm">£</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1000}
-                      value={bannerCompletedEdit}
-                      onChange={e => setBannerCompletedEdit(e.target.value)}
-                      placeholder="0"
-                      className="bg-transparent text-sm font-bold text-slate-300 w-full focus:outline-none placeholder-slate-600"
-                    />
-                  </div>
-                </div>
                 {/* Variations Value — editable */}
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Variations Value</p>
@@ -1898,6 +1882,28 @@ export default function Commercial() {
                       onChange={e => setBannerVariationsEdit(e.target.value)}
                       placeholder="0"
                       className="bg-transparent text-sm font-bold text-amber-300 w-full focus:outline-none placeholder-slate-600"
+                    />
+                  </div>
+                </div>
+                {/* Contract incl. Variations — read-only derived */}
+                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] border-l-2 border-l-orange-500/50 px-3 py-2">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Contract incl. Variations</p>
+                  <p className="text-sm font-bold text-orange-300">{contractNum > 0 || variationsNum != null ? fmtVal(contractInclVariations) : '—'}</p>
+                  <p className="text-[9px] text-slate-600 mt-0.5">Auto-calculated</p>
+                </div>
+                {/* Completed Value — editable */}
+                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Completed Value</p>
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-500 text-sm">£</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={bannerCompletedEdit}
+                      onChange={e => setBannerCompletedEdit(e.target.value)}
+                      placeholder="0"
+                      className="bg-transparent text-sm font-bold text-slate-300 w-full focus:outline-none placeholder-slate-600"
                     />
                   </div>
                 </div>
