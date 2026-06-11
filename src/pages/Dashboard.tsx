@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { AlertTriangle, CheckSquare, FolderOpen, Clock, FileText, ArrowRight, Activity, Wrench, ClipboardList, FileSpreadsheet } from 'lucide-react';
+import { AlertTriangle, CheckSquare, FolderOpen, Clock, FileText, ArrowRight, Activity, Wrench, ClipboardList, FileSpreadsheet, Calendar } from 'lucide-react';
 import { useAppStore } from '../lib/StoreContext';
 import type { PendingFilter, PendingOpen } from '../App';
 import type { LucideIcon } from '../data/types';
@@ -146,6 +146,16 @@ export default function Dashboard({ onNavigate, onNavigateProject }: DashboardPr
   const overdueActions = actionList.filter(a => a.overdue && a.status !== 'Complete').length;
   const formsCount = siteForms.length;
 
+  const today = new Date(); today.setHours(0,0,0,0);
+  const allKeyDates = visibleProjectIds
+    ? store.keyDates.filter(d => visibleProjectIds.includes(d.project_id))
+    : store.keyDates;
+  const openKeyDates = allKeyDates.filter(d => d.status === 'Open');
+  const nextKeyDate = openKeyDates
+    .filter(d => d.date && new Date(d.date) >= today)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
+  const overdueKeyDates = openKeyDates.filter(d => d.date && new Date(d.date) < today).length;
+
   const closeAction = (id: string) => {
     const action = actionList.find(a => a.id === id);
     if (action) store.updateAction({ ...action, status: 'Complete', overdue: false });
@@ -249,7 +259,7 @@ export default function Dashboard({ onNavigate, onNavigateProject }: DashboardPr
   return (
     <div className="p-4 lg:p-6 space-y-6">
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard
           title="Active Projects"
           value={activeProjects}
@@ -282,6 +292,19 @@ export default function Dashboard({ onNavigate, onNavigateProject }: DashboardPr
           icon={FileText}
           color="bg-emerald-600"
           onClick={() => onNavigate('site-forms')}
+        />
+        <StatCard
+          title="Key Dates"
+          value={openKeyDates.length}
+          subtitle={
+            nextKeyDate
+              ? `Next: ${nextKeyDate.title} — ${new Date(nextKeyDate.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+              : overdueKeyDates > 0 ? `${overdueKeyDates} overdue` : 'No upcoming dates'
+          }
+          icon={Calendar}
+          color={overdueKeyDates > 0 ? 'bg-red-700' : 'bg-orange-600'}
+          alert={overdueKeyDates > 0}
+          onClick={() => onNavigate('projects')}
         />
       </div>
 

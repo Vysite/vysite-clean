@@ -907,6 +907,21 @@ export interface DBProgramme {
   updated_at?: string;
 }
 
+export interface DBKeyDate {
+  id: string;
+  org_id?: string;
+  project_id: string;
+  project_name: string;
+  title: string;
+  date: string;
+  description: string;
+  comments: string;
+  status: string;
+  created_by: string;
+  created_date: string;
+  updated_at?: string;
+}
+
 // ─── Main store hook ──────────────────────────────────────────────────────────
 
 export interface AppStore {
@@ -922,6 +937,7 @@ export interface AppStore {
   maintenanceJobs: DBMaintenanceJob[];
   programmes: DBProgramme[];
   programmeTasks: DBProgrammeTask[];
+  keyDates: DBKeyDate[];
   platformUsers: DBPlatformUser[];
   notifications: DBNotification[];
   loading: boolean;
@@ -989,6 +1005,11 @@ export interface AppStore {
   updateProgrammeTask: (t: DBProgrammeTask) => Promise<void>;
   removeProgrammeTask: (id: string) => Promise<void>;
 
+  // Key Dates
+  addKeyDate: (d: DBKeyDate) => Promise<void>;
+  updateKeyDate: (d: DBKeyDate) => Promise<void>;
+  removeKeyDate: (id: string) => Promise<void>;
+
   // Platform Users
   addPlatformUser: (u: DBPlatformUser) => Promise<void>;
   updatePlatformUser: (u: DBPlatformUser) => Promise<void>;
@@ -1046,6 +1067,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [maintenanceJobs, setMaintenanceJobs] = useState<DBMaintenanceJob[]>([]);
   const [programmes, setProgrammes] = useState<DBProgramme[]>([]);
   const [programmeTasks, setProgrammeTasks] = useState<DBProgrammeTask[]>([]);
+  const [keyDates, setKeyDates] = useState<DBKeyDate[]>([]);
   const [platformUsers, setPlatformUsers] = useState<DBPlatformUser[]>([]);
   const [notifications, setNotifications] = useState<DBNotification[]>([]);
   const [settings, setSettings] = useState<DBSettings>(DEFAULT_SETTINGS);
@@ -1072,6 +1094,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setMaintenanceJobs([]);
       setProgrammes([]);
       setProgrammeTasks([]);
+      setKeyDates([]);
       setNotifications([]);
       // Keep platformUsers/settings as-is — they load below with org filter
       setLoading(false);
@@ -1089,7 +1112,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       const ATT_COLS = 'id,linked_type,linked_id,project_id,project_name,name,type,size,category,uploaded_by,created_at';
 
       // All queries are explicitly scoped to the resolved org — no global reads.
-      const [projRes, docRes, attRes, actRes, snaRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, puRes, notifRes, settingsRes] = await Promise.all([
+      const [projRes, docRes, attRes, actRes, snaRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, kdRes, puRes, notifRes, settingsRes] = await Promise.all([
         supabase.from('vy_projects').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
         supabase.from('vy_project_documents').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
@@ -1102,6 +1125,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
         supabase.from('vy_maintenance_jobs').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_programmes').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
         supabase.from('vy_programme_tasks').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
+        supabase.from('vy_key_dates').select('*').eq('org_id', orgId).order('date', { ascending: true }),
         supabase.from('vy_platform_users').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
         supabase.from('vy_notifications').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_settings').select('*').eq('org_id', orgId).maybeSingle(),
@@ -1141,6 +1165,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setMaintenanceJobs((mjRes.data ?? []) as DBMaintenanceJob[]);
       setProgrammes((progRes.data ?? []) as DBProgramme[]);
       setProgrammeTasks((ptaskRes.data ?? []) as DBProgrammeTask[]);
+      setKeyDates((kdRes.data ?? []) as DBKeyDate[]);
       setPlatformUsers((puRes.data ?? []) as DBPlatformUser[]);
       setNotifications((notifRes.data ?? []) as DBNotification[]);
       if (settingsRes.data) setSettings({ ...DEFAULT_SETTINGS, ...(settingsRes.data as DBSettings) });
@@ -1442,6 +1467,30 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('removeProgrammeTask', 'vy_programme_tasks', error);
   }, []);
 
+  // ── Key Dates ─────────────────────────────────────────────────────────────────
+
+  const addKeyDate = useCallback(async (d: DBKeyDate) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setKeyDates(prev => [...prev, d]);
+    const { error } = await supabase.from('vy_key_dates').upsert({ ...d, org_id: oid }, { onConflict: 'id' });
+    logWrite('addKeyDate', 'vy_key_dates', error);
+  }, []);
+
+  const updateKeyDate = useCallback(async (d: DBKeyDate) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setKeyDates(prev => prev.map(x => x.id === d.id ? d : x));
+    const { error } = await supabase.from('vy_key_dates').upsert({ ...d, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateKeyDate', 'vy_key_dates', error);
+  }, []);
+
+  const removeKeyDate = useCallback(async (id: string) => {
+    setKeyDates(prev => prev.filter(d => d.id !== id));
+    const { error } = await supabase.from('vy_key_dates').delete().eq('id', id);
+    logWrite('removeKeyDate', 'vy_key_dates', error);
+  }, []);
+
   // ── Attachments ───────────────────────────────────────────────────────────────
 
   const addAttachment = useCallback(async (a: DBAttachment) => {
@@ -1546,7 +1595,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
 
   return {
     projects, projectDocuments, attachments,
-    actions, snags, snaggingReports, siteForms, tenders, tcRecords, maintenanceJobs, programmes, programmeTasks,
+    actions, snags, snaggingReports, siteForms, tenders, tcRecords, maintenanceJobs, programmes, programmeTasks, keyDates,
     platformUsers, notifications,
     loading,
     currentUser,
@@ -1567,6 +1616,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addMaintenanceJob, updateMaintenanceJob, removeMaintenanceJob,
     addProgramme, updateProgramme, removeProgramme,
     addProgrammeTask, updateProgrammeTask, removeProgrammeTask,
+    addKeyDate, updateKeyDate, removeKeyDate,
     addPlatformUser, updatePlatformUser, removePlatformUser,
     addNotification, markNotificationRead, markAllNotificationsRead,
   };
