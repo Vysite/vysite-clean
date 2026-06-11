@@ -1480,7 +1480,74 @@ export default function Commercial() {
 
   // ── PDF export helpers ────────────────────────────────────────────────────
 
-  function buildCommercialBannerHTML(
+  const PDF_CSS = `
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #1e293b; background: white; font-size: 11px; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { max-width: 880px; margin: 0 auto; padding: 36px 40px; }
+    .doc-header { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 14px; border-bottom: 3px solid #f97316; margin-bottom: 20px; }
+    .doc-logo-text { font-size: 22px; font-weight: 900; color: #f97316; letter-spacing: 0.05em; }
+    .doc-type-label { font-size: 10px; color: #64748b; margin-top: 4px; }
+    .doc-header-right { text-align: right; }
+    .doc-title { font-size: 18px; font-weight: 900; color: #111; margin-bottom: 4px; line-height: 1.25; max-width: 420px; }
+    .doc-dateline { font-size: 11px; color: #64748b; }
+    .kpi-bar { display: grid; gap: 10px; margin: 16px 0; }
+    .kpi-bar-3 { grid-template-columns: repeat(3, 1fr); }
+    .kpi-bar-4 { grid-template-columns: repeat(4, 1fr); }
+    .kpi-cell { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; text-align: center; }
+    .kpi-value { font-size: 20px; font-weight: 900; color: #0f172a; line-height: 1; }
+    .kpi-label { font-size: 8.5px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-top: 4px; }
+    .kpi-orange { color: #f97316; } .kpi-amber { color: #d97706; } .kpi-green { color: #059669; } .kpi-red { color: #dc2626; }
+    .meta-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 18px; }
+    .meta-grid { display: grid; gap: 10px 20px; }
+    .meta-grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .meta-label { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+    .meta-value { font-size: 11px; font-weight: 600; color: #0f172a; }
+    .progress-wrap { margin: 12px 0 4px; }
+    .progress-label { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 5px; display: flex; justify-content: space-between; }
+    .progress-track { height: 8px; background: #e2e8f0; border-radius: 20px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #f97316; border-radius: 20px; }
+    .badge { display: inline-block; font-size: 8.5px; font-weight: 700; padding: 2px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge-orange { background: #fff7ed; color: #c2410c; } .badge-green { background: #d1fae5; color: #065f46; }
+    .badge-amber { background: #fef3c7; color: #92400e; } .badge-blue { background: #dbeafe; color: #1d4ed8; }
+    .badge-slate { background: #f1f5f9; color: #475569; } .badge-red { background: #fee2e2; color: #991b1b; }
+    .section-heading { font-size: 8.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 6px; border-bottom: 1.5px solid #e2e8f0; margin-bottom: 12px; margin-top: 20px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .data-table th { padding: 8px 10px; text-align: left; font-size: 9px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; background: #f1f5f9; border-bottom: 2px solid #e2e8f0; }
+    .data-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: top; }
+    .data-table tr:nth-child(even) td { background: #f8fafc; }
+    .ticket-card { border: 1.5px solid #e2e8f0; border-radius: 10px; margin-bottom: 24px; overflow: hidden; page-break-inside: avoid; }
+    .ticket-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; gap: 12px; }
+    .ticket-ref { font-family: monospace; font-size: 9.5px; font-weight: 700; color: #f97316; background: #fff7ed; padding: 2px 8px; border-radius: 5px; display: inline-block; margin-bottom: 4px; }
+    .ticket-title { font-size: 13px; font-weight: 800; color: #0f172a; }
+    .ticket-sub { font-size: 10px; color: #64748b; margin-top: 2px; }
+    .ticket-body { padding: 14px 16px; }
+    .data-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #e2e8f0; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; margin-bottom: 12px; }
+    .data-cell { background: white; padding: 8px 10px; }
+    .data-cell-label { font-size: 7.5px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 2px; }
+    .data-cell-value { font-size: 10.5px; font-weight: 600; color: #0f172a; }
+    .text-field { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 9px 12px; margin-bottom: 10px; }
+    .text-field-label { font-size: 7.5px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 3px; }
+    .text-field-value { font-size: 10.5px; color: #334155; line-height: 1.6; white-space: pre-wrap; }
+    .li-table { width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
+    .li-table th { padding: 7px 10px; text-align: left; font-size: 8.5px; font-weight: 700; color: #64748b; text-transform: uppercase; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; }
+    .li-table th.r { text-align: right; }
+    .li-table td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
+    .li-table td.r { text-align: right; }
+    .li-table tr:nth-child(even) td { background: #f8fafc; }
+    .li-total { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 9px 10px; border-top: 1.5px solid #e2e8f0; background: #f8fafc; }
+    .li-total-label { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+    .li-total-value { font-size: 13px; font-weight: 900; color: #f97316; }
+    .legal-footer { margin-top: 32px; border-top: 2px solid #e2e8f0; }
+    .legal-footer-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 0 8px; }
+    .legal-footer-title { font-size: 8px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; }
+    .legal-footer-ref { font-size: 8px; color: #94a3b8; }
+    .legal-branding { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0; }
+    .legal-branding-left { font-size: 8px; color: #94a3b8; }
+    .legal-branding-right { font-size: 8px; color: #94a3b8; }
+    @media print { .page { padding: 20px 24px; } .ticket-card { page-break-inside: avoid; } }
+  `;
+
+  function buildProjectMetaHTML(
     proj: { name: string; status: string; client: string; location: string; projectManager: string; startDate: string; completionDate: string },
     progress: number,
     contractNum: number,
@@ -1489,36 +1556,37 @@ export default function Commercial() {
   ): string {
     const fv = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
     const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-    const statusColor = proj.status === 'Active' ? '#10b981' : proj.status === 'Completed' ? '#3b82f6' : proj.status === 'On Hold' ? '#f59e0b' : '#94a3b8';
     const barPct = Math.min(100, progress);
+    const statusBadge = proj.status === 'Active' ? 'badge-green' : proj.status === 'Completed' ? 'badge-blue' : proj.status === 'On Hold' ? 'badge-amber' : 'badge-slate';
+    const remainCls = remaining == null ? '' : remaining < 0 ? 'kpi-red' : remaining < contractNum * 0.1 ? 'kpi-amber' : 'kpi-green';
     return `
-      <div style="background:#1a2236;border:1px solid #1e2d4a;border-radius:12px;padding:24px;margin-bottom:24px;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+      <div class="meta-block">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;">
           <div>
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-              <h2 style="color:#fff;font-size:18px;font-weight:700;margin:0;">${proj.name}</h2>
-              <span style="background:${statusColor}22;color:${statusColor};font-size:11px;font-weight:600;padding:2px 10px;border-radius:20px;">${proj.status}</span>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+              <span style="font-size:15px;font-weight:800;color:#0f172a;">${proj.name}</span>
+              <span class="badge ${statusBadge}">${proj.status}</span>
             </div>
-            <p style="color:#64748b;font-size:13px;margin:0;">${proj.client}</p>
+            ${proj.client ? `<p style="font-size:10.5px;color:#64748b;margin:0;">${proj.client}</p>` : ''}
           </div>
-          ${contractNum > 0 ? `<div style="text-align:right;"><p style="color:#fff;font-size:22px;font-weight:700;margin:0;">${fv(contractNum)}</p><p style="color:#64748b;font-size:11px;margin:0;">Contract Value</p></div>` : ''}
+          ${contractNum > 0 ? `<div style="text-align:right;"><p style="font-size:18px;font-weight:900;color:#0f172a;margin:0;">${fv(contractNum)}</p><p style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin:2px 0 0;">Contract Value</p></div>` : ''}
         </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
-          <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 2px;">Location</p><p style="color:#cbd5e1;font-size:13px;font-weight:500;margin:0;">${proj.location || '—'}</p></div>
-          <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 2px;">Project Manager</p><p style="color:#cbd5e1;font-size:13px;font-weight:500;margin:0;">${proj.projectManager || '—'}</p></div>
-          <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 2px;">Start Date</p><p style="color:#cbd5e1;font-size:13px;font-weight:500;margin:0;">${fmtDate(proj.startDate)}</p></div>
-          <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 2px;">Completion</p><p style="color:#cbd5e1;font-size:13px;font-weight:500;margin:0;">${fmtDate(proj.completionDate)}</p></div>
+        <div class="meta-grid meta-grid-4" style="margin-bottom:12px;">
+          <div><div class="meta-label">Location</div><div class="meta-value">${proj.location || '—'}</div></div>
+          <div><div class="meta-label">Project Manager</div><div class="meta-value">${proj.projectManager || '—'}</div></div>
+          <div><div class="meta-label">Start Date</div><div class="meta-value">${fmtDate(proj.startDate)}</div></div>
+          <div><div class="meta-label">Completion</div><div class="meta-value">${fmtDate(proj.completionDate)}</div></div>
         </div>
-        <div style="margin-bottom:12px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:#94a3b8;font-size:13px;">Overall Progress</span><span style="color:#f97316;font-size:13px;font-weight:700;">${barPct}%</span></div>
-          <div style="background:#0d1628;border-radius:4px;height:8px;"><div style="background:#f97316;border-radius:4px;height:8px;width:${barPct}%;"></div></div>
+        <div class="progress-wrap">
+          <div class="progress-label"><span>Overall Progress</span><span>${barPct}%</span></div>
+          <div class="progress-track"><div class="progress-fill" style="width:${barPct}%;"></div></div>
         </div>
         ${contractNum > 0 && completedNum != null && remaining != null ? `
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
-          <div style="background:#0d1628;border:1px solid #1e2d4a;border-radius:8px;padding:8px 12px;"><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Contract Value</p><p style="color:#fff;font-size:13px;font-weight:700;margin:0;">${fv(contractNum)}</p></div>
-          <div style="background:#0d1628;border:1px solid #1e2d4a;border-radius:8px;padding:8px 12px;"><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Completed Value</p><p style="color:#cbd5e1;font-size:13px;font-weight:700;margin:0;">${fv(completedNum)}</p></div>
-          <div style="background:#0d1628;border:1px solid #1e2d4a;border-radius:8px;padding:8px 12px;"><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Progress</p><p style="color:#f97316;font-size:13px;font-weight:700;margin:0;">${barPct}%</p></div>
-          <div style="background:#0d1628;border:1px solid #1e2d4a;border-radius:8px;padding:8px 12px;"><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Remaining</p><p style="color:${remaining < 0 ? '#f87171' : remaining < contractNum * 0.1 ? '#fbbf24' : '#34d399'};font-size:13px;font-weight:700;margin:0;">${fv(remaining)}</p></div>
+        <div class="kpi-bar kpi-bar-4" style="margin-top:12px;">
+          <div class="kpi-cell"><div class="kpi-value">${fv(contractNum)}</div><div class="kpi-label">Contract Value</div></div>
+          <div class="kpi-cell"><div class="kpi-value">${fv(completedNum)}</div><div class="kpi-label">Completed Value</div></div>
+          <div class="kpi-cell"><div class="kpi-value kpi-orange">${barPct}%</div><div class="kpi-label">Progress</div></div>
+          <div class="kpi-cell"><div class="kpi-value ${remainCls}">${fv(remaining)}</div><div class="kpi-label">Remaining</div></div>
         </div>` : ''}
       </div>`;
   }
@@ -1532,34 +1600,58 @@ export default function Commercial() {
     const totalR = recordList.length;
     const openR  = recordList.filter(r => !['complete','rejected'].includes(r.status)).length;
     const agreeR = recordList.filter(r => ['agreed','added_to_valuation','paid','complete'].includes(r.status)).length;
+    const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    const statusBadgeCls = (s: string) => ['agreed','added_to_valuation','paid','complete'].includes(s) ? 'badge-green' : s === 'submitted' || s === 'under_review' ? 'badge-blue' : s === 'rejected' ? 'badge-red' : 'badge-amber';
+    const typeBadgeCls = (t: string) => t === 'variation' ? 'badge-orange' : t === 'delay_notice' ? 'badge-amber' : t === 'compensation_event' ? 'badge-blue' : 'badge-slate';
 
     const rows = recordList.map(r => `
-      <tr style="border-bottom:1px solid #1e2d4a;">
-        <td style="padding:8px 12px;font-size:12px;color:#94a3b8;">${typeInfo(r.recordType).label}</td>
-        <td style="padding:8px 12px;font-size:12px;color:#f97316;font-family:monospace;">${r.reference || '—'}</td>
-        <td style="padding:8px 12px;font-size:12px;color:#fff;font-weight:500;">${r.title || 'Untitled'}</td>
-        <td style="padding:8px 12px;font-size:12px;color:#94a3b8;">${r.projectName || '—'}</td>
-        <td style="padding:8px 12px;font-size:12px;color:#94a3b8;">${r.client || '—'}</td>
-        <td style="padding:8px 12px;font-size:12px;color:#94a3b8;">${statusInfo(r.status).label}</td>
-        <td style="padding:8px 12px;font-size:12px;color:#94a3b8;">${fmtDate(r.dateRaised)}</td>
+      <tr>
+        <td><span class="badge ${typeBadgeCls(r.recordType)}">${typeInfo(r.recordType).label}</span></td>
+        <td style="font-family:monospace;font-size:9.5px;font-weight:700;color:#f97316;">${r.reference || '—'}</td>
+        <td style="font-weight:600;">${r.title || 'Untitled'}</td>
+        <td>${r.projectName || '—'}</td>
+        <td>${r.client || '—'}</td>
+        <td><span class="badge ${statusBadgeCls(r.status)}">${statusInfo(r.status).label}</span></td>
+        <td>${fmtDate(r.dateRaised)}</td>
       </tr>`).join('');
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Register — ${proj.name}</title>
-    <style>body{background:#0d1628;color:#e2e8f0;font-family:system-ui,sans-serif;padding:24px;}table{width:100%;border-collapse:collapse;}th{background:#1a2236;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:10px 12px;text-align:left;}td{vertical-align:middle;}</style>
-    </head><body>
-    <p style="color:#f97316;font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Commercial Register</p>
-    <p style="color:#64748b;font-size:11px;margin-bottom:20px;">Exported ${new Date().toLocaleDateString('en-GB', { day:'numeric',month:'long',year:'numeric' })}</p>
-    ${buildCommercialBannerHTML(proj, progress, contractNum, completedNum, remaining)}
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;">
-      <div style="background:#1a2236;border:1px solid #1e2d4a;border-radius:8px;padding:16px;"><p style="color:#64748b;font-size:11px;margin:0 0 4px;">Total Records</p><p style="color:#fff;font-size:24px;font-weight:700;margin:0;">${totalR}</p></div>
-      <div style="background:#1a2236;border:1px solid #1e2d4a;border-radius:8px;padding:16px;"><p style="color:#64748b;font-size:11px;margin:0 0 4px;">Open / Active</p><p style="color:#fbbf24;font-size:24px;font-weight:700;margin:0;">${openR}</p></div>
-      <div style="background:#1a2236;border:1px solid #1e2d4a;border-radius:8px;padding:16px;"><p style="color:#64748b;font-size:11px;margin:0 0 4px;">Agreed / Paid</p><p style="color:#34d399;font-size:24px;font-weight:700;margin:0;">${agreeR}</p></div>
-    </div>
-    <div style="background:#111827;border:1px solid #1e2d4a;border-radius:8px;overflow:hidden;">
-      <table><thead><tr><th>Type</th><th>Reference</th><th>Title</th><th>Project</th><th>Client</th><th>Status</th><th>Date Raised</th></tr></thead>
-      <tbody>${rows}</tbody></table>
-    </div>
-    </body></html>`;
+    <style>${PDF_CSS}</style>
+    <script>window.onload=function(){window.print();}<\/script>
+    </head><body><div class="page">
+      <div class="doc-header">
+        <div>
+          <div class="doc-logo-text">VYSITE</div>
+          <div class="doc-type-label">Commercial Register — ${proj.name}</div>
+        </div>
+        <div class="doc-header-right">
+          <div class="doc-title">Commercial Register Summary</div>
+          <div class="doc-dateline">Exported ${todayStr}</div>
+        </div>
+      </div>
+      ${buildProjectMetaHTML(proj, progress, contractNum, completedNum, remaining)}
+      <div class="kpi-bar kpi-bar-3">
+        <div class="kpi-cell"><div class="kpi-value">${totalR}</div><div class="kpi-label">Total Records</div></div>
+        <div class="kpi-cell"><div class="kpi-value kpi-amber">${openR}</div><div class="kpi-label">Open / Active</div></div>
+        <div class="kpi-cell"><div class="kpi-value kpi-green">${agreeR}</div><div class="kpi-label">Agreed / Paid</div></div>
+      </div>
+      <div class="section-heading">Commercial Register (${totalR} record${totalR !== 1 ? 's' : ''})</div>
+      <table class="data-table">
+        <thead><tr><th>Type</th><th>Reference</th><th>Title</th><th>Project</th><th>Client</th><th>Status</th><th>Date Raised</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="legal-footer">
+        <div class="legal-footer-header">
+          <div class="legal-footer-title">Commercial Document — Confidential</div>
+          <div class="legal-footer-ref">Exported ${todayStr}</div>
+        </div>
+        <div class="legal-branding">
+          <div class="legal-branding-left">Generated by VYSITE — powered by <strong>VYSITE</strong> | Construction Operating System</div>
+          <div class="legal-branding-right">&copy; VYSITE. All rights reserved.</div>
+        </div>
+      </div>
+    </div></body></html>`;
     openPrintTab(html);
   }
 
@@ -1569,67 +1661,83 @@ export default function Commercial() {
     recordList: CommercialRecord[],
   ) {
     const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }) : '—';
+    const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const statusBadgeCls = (s: string) => ['agreed','added_to_valuation','paid','complete'].includes(s) ? 'badge-green' : s === 'submitted' || s === 'under_review' ? 'badge-blue' : s === 'rejected' ? 'badge-red' : 'badge-amber';
+    const typeBadgeCls = (t: string) => t === 'variation' ? 'badge-orange' : t === 'delay_notice' ? 'badge-amber' : t === 'compensation_event' ? 'badge-blue' : 'badge-slate';
+
     const tickets = recordList.map((r, idx) => {
       const totals = r.lineItems && r.lineItems.length > 0 ? recordTotals(r.lineItems) : null;
       const lineRows = r.lineItems && r.lineItems.length > 0
-        ? r.lineItems.map(l => `<tr style="border-bottom:1px solid #1e2d4a;">
-            <td style="padding:6px 8px;font-size:12px;color:#e2e8f0;">${l.description || '—'}</td>
-            <td style="padding:6px 8px;font-size:12px;color:#94a3b8;">${l.unit}</td>
-            <td style="padding:6px 8px;font-size:12px;color:#94a3b8;text-align:right;">${l.quantity}</td>
-            <td style="padding:6px 8px;font-size:12px;color:#f97316;text-align:right;">${fmtCurrency(l.clientRate)}</td>
-            <td style="padding:6px 8px;font-size:12px;color:#f97316;text-align:right;font-weight:600;">${fmtCurrency(l.quantity * l.clientRate)}</td>
+        ? r.lineItems.map(l => `<tr>
+            <td>${l.description || '—'}</td>
+            <td>${l.unit}</td>
+            <td class="r">${l.quantity}</td>
+            <td class="r">${fmtCurrency(l.clientRate)}</td>
+            <td class="r" style="font-weight:700;color:#f97316;">${fmtCurrency(l.quantity * l.clientRate)}</td>
           </tr>`).join('')
-        : `<tr><td colspan="5" style="padding:12px 8px;color:#64748b;font-size:12px;text-align:center;">No line items</td></tr>`;
-      const field = (label: string, val: string) => val ? `<div style="margin-bottom:12px;"><p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 3px;">${label}</p><p style="color:#e2e8f0;font-size:13px;margin:0;white-space:pre-wrap;">${val}</p></div>` : '';
+        : `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:10px;">No line items</td></tr>`;
       return `
-        ${idx > 0 ? '<div style="page-break-before:always;"></div>' : ''}
-        <div style="background:#111827;border:1px solid #1e2d4a;border-radius:12px;padding:24px;margin-bottom:24px;">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #1e2d4a;">
+        ${idx > 0 ? '<div style="page-break-before:always;height:1px;"></div>' : ''}
+        <div class="ticket-card">
+          <div class="ticket-header">
             <div>
-              ${r.reference ? `<p style="color:#f97316;font-family:monospace;font-size:13px;font-weight:700;margin:0 0 4px;">${r.reference}</p>` : ''}
-              <h3 style="color:#fff;font-size:16px;font-weight:700;margin:0 0 4px;">${r.title || 'Untitled'}</h3>
-              <p style="color:#64748b;font-size:12px;margin:0;">${r.projectName || proj.name} · ${r.client || proj.client}</p>
+              ${r.reference ? `<span class="ticket-ref">${r.reference}</span>` : ''}
+              <div class="ticket-title">${r.title || 'Untitled'}</div>
+              <div class="ticket-sub">${r.projectName || proj.name}${(r.client || proj.client) ? ' · ' + (r.client || proj.client) : ''}</div>
             </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <span style="background:#1a2236;border:1px solid #1e2d4a;color:#94a3b8;font-size:11px;padding:3px 8px;border-radius:6px;">${typeInfo(r.recordType).label}</span>
-              <span style="background:#1a2236;border:1px solid #1e2d4a;color:#94a3b8;font-size:11px;padding:3px 8px;border-radius:6px;">${statusInfo(r.status).label}</span>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:2px;">
+              <span class="badge ${typeBadgeCls(r.recordType)}">${typeInfo(r.recordType).label}</span>
+              <span class="badge ${statusBadgeCls(r.status)}">${statusInfo(r.status).label}</span>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
-            <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Date Raised</p><p style="color:#cbd5e1;font-size:13px;margin:0;">${fmtDate(r.dateRaised)}</p></div>
-            <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Date Submitted</p><p style="color:#cbd5e1;font-size:13px;margin:0;">${fmtDate(r.dateSubmitted)}</p></div>
-            <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Date Agreed</p><p style="color:#cbd5e1;font-size:13px;margin:0;">${fmtDate(r.dateAgreed)}</p></div>
-            <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Created By</p><p style="color:#cbd5e1;font-size:13px;margin:0;">${r.createdBy || '—'}</p></div>
-          </div>
-          ${field('Notes / Description', r.notes)}
-          ${r.lineItems && r.lineItems.length > 0 ? `
-          <div style="margin-top:16px;">
-            <p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 8px;">Cost Breakdown</p>
-            <div style="background:#0d1628;border:1px solid #1e2d4a;border-radius:8px;overflow:hidden;">
-              <table style="width:100%;border-collapse:collapse;">
-                <thead><tr style="border-bottom:1px solid #1e2d4a;">
-                  <th style="padding:8px;font-size:11px;color:#64748b;text-align:left;font-weight:500;">Description</th>
-                  <th style="padding:8px;font-size:11px;color:#64748b;text-align:left;font-weight:500;">Unit</th>
-                  <th style="padding:8px;font-size:11px;color:#64748b;text-align:right;font-weight:500;">Qty</th>
-                  <th style="padding:8px;font-size:11px;color:#64748b;text-align:right;font-weight:500;">Rate</th>
-                  <th style="padding:8px;font-size:11px;color:#64748b;text-align:right;font-weight:500;">Total</th>
-                </tr></thead>
-                <tbody>${lineRows}</tbody>
-              </table>
-              ${totals ? `<div style="border-top:1px solid #1e2d4a;padding:10px 8px;text-align:right;"><span style="color:#64748b;font-size:12px;margin-right:16px;">Total Client Value:</span><span style="color:#f97316;font-size:14px;font-weight:700;">${fmtCurrency(totals.totalClient)}</span></div>` : ''}
+          <div class="ticket-body">
+            <div class="data-grid">
+              <div class="data-cell"><div class="data-cell-label">Date Raised</div><div class="data-cell-value">${fmtDate(r.dateRaised)}</div></div>
+              <div class="data-cell"><div class="data-cell-label">Date Submitted</div><div class="data-cell-value">${fmtDate(r.dateSubmitted)}</div></div>
+              <div class="data-cell"><div class="data-cell-label">Date Agreed</div><div class="data-cell-value">${fmtDate(r.dateAgreed)}</div></div>
+              <div class="data-cell"><div class="data-cell-label">Created By</div><div class="data-cell-value">${r.createdBy || '—'}</div></div>
             </div>
-          </div>` : ''}
+            ${r.notes ? `<div class="text-field"><div class="text-field-label">Notes / Description</div><div class="text-field-value">${r.notes}</div></div>` : ''}
+            ${r.lineItems && r.lineItems.length > 0 ? `
+            <div class="section-heading" style="margin-top:12px;">Cost Breakdown</div>
+            <table class="li-table">
+              <thead><tr><th>Description</th><th>Unit</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Total</th></tr></thead>
+              <tbody>${lineRows}</tbody>
+            </table>
+            ${totals ? `<div class="li-total"><span class="li-total-label">Total Client Value</span><span class="li-total-value">${fmtCurrency(totals.totalClient)}</span></div>` : ''}
+            ` : ''}
+          </div>
         </div>`;
     }).join('');
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Full Export — ${proj.name}</title>
-    <style>body{background:#0d1628;color:#e2e8f0;font-family:system-ui,sans-serif;padding:24px;}@media print{body{padding:0;}}</style>
-    </head><body>
-    <p style="color:#f97316;font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Commercial Full Ticket Export</p>
-    <p style="color:#64748b;font-size:11px;margin-bottom:20px;">${recordList.length} record${recordList.length !== 1 ? 's' : ''} · Exported ${new Date().toLocaleDateString('en-GB', { day:'numeric',month:'long',year:'numeric' })}</p>
-    ${buildCommercialBannerHTML(proj, progress, contractNum, completedNum, remaining)}
-    ${tickets}
-    </body></html>`;
+    <style>${PDF_CSS}</style>
+    <script>window.onload=function(){window.print();}<\/script>
+    </head><body><div class="page">
+      <div class="doc-header">
+        <div>
+          <div class="doc-logo-text">VYSITE</div>
+          <div class="doc-type-label">Commercial Full Ticket Export — ${proj.name}</div>
+        </div>
+        <div class="doc-header-right">
+          <div class="doc-title">Commercial Full Ticket Export</div>
+          <div class="doc-dateline">${recordList.length} record${recordList.length !== 1 ? 's' : ''} · ${todayStr}</div>
+        </div>
+      </div>
+      ${buildProjectMetaHTML(proj, progress, contractNum, completedNum, remaining)}
+      <div class="section-heading">Tickets (${recordList.length})</div>
+      ${tickets}
+      <div class="legal-footer">
+        <div class="legal-footer-header">
+          <div class="legal-footer-title">Commercial Document — Confidential</div>
+          <div class="legal-footer-ref">Exported ${todayStr}</div>
+        </div>
+        <div class="legal-branding">
+          <div class="legal-branding-left">Generated by VYSITE — powered by <strong>VYSITE</strong> | Construction Operating System</div>
+          <div class="legal-branding-right">&copy; VYSITE. All rights reserved.</div>
+        </div>
+      </div>
+    </div></body></html>`;
     openPrintTab(html);
   }
 
