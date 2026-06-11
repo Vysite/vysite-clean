@@ -1682,7 +1682,104 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
 
       {/* ── Overview tab ─────────────────────────────────────────────────────── */}
       {safeActiveTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="space-y-4">
+
+          {/* Key Dates — full-width banner */}
+          {(() => {
+            const todayKD = new Date(); todayKD.setHours(0,0,0,0);
+            const openDates = projectKeyDates.filter(d => d.status === 'Open');
+            const upcomingDates = openDates
+              .filter(d => d.date && new Date(d.date) >= todayKD)
+              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            const overdueDates = openDates.filter(d => d.date && new Date(d.date) < todayKD);
+            const nextDate = upcomingDates[0] ?? null;
+            const hasOverdue = overdueDates.length > 0;
+
+            return (
+              <div className={`rounded-xl border ${hasOverdue ? 'border-red-900/60 bg-red-950/20' : 'border-[#f97316]/40 bg-[#1a2236]'}`}>
+                <div className="flex items-center justify-between p-4 border-b border-inherit">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${hasOverdue ? 'bg-red-900/60' : 'bg-[#f97316]/20'}`}>
+                      <Calendar size={15} className={hasOverdue ? 'text-red-400' : 'text-[#f97316]'} />
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold text-white">Key Dates</span>
+                      {projectKeyDates.length > 0 && (
+                        <span className="text-xs text-slate-500 ml-2">{projectKeyDates.length} total · {openDates.length} open</span>
+                      )}
+                    </div>
+                    {hasOverdue && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-900/60 text-red-400">
+                        {overdueDates.length} overdue
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('dates')}
+                    className="text-xs font-semibold text-[#f97316] hover:text-orange-400 transition-colors flex items-center gap-1"
+                  >
+                    View All Key Dates <ChevronRight size={12} />
+                  </button>
+                </div>
+
+                {projectKeyDates.length === 0 ? (
+                  <div className="flex items-center justify-between px-5 py-4">
+                    <p className="text-sm text-slate-500">No key dates added for this project</p>
+                    <button
+                      onClick={() => setActiveTab('dates')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f97316] hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition-colors"
+                    >
+                      <Plus size={12} />Add Key Date
+                    </button>
+                  </div>
+                ) : nextDate ? (
+                  <div className="px-5 py-4 flex flex-wrap items-center gap-6">
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Next Upcoming</p>
+                      <p className="text-base font-bold text-white">{nextDate.title}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Date</p>
+                      <p className="text-sm font-semibold text-[#f97316]">
+                        {new Date(nextDate.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Days Remaining</p>
+                      <p className="text-sm font-semibold text-slate-300">
+                        {Math.round((new Date(nextDate.date).getTime() - todayKD.getTime()) / 86400000) === 0
+                          ? 'Today'
+                          : `${Math.round((new Date(nextDate.date).getTime() - todayKD.getTime()) / 86400000)} days`}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Status</p>
+                      <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-orange-900/60 text-orange-400">Open</span>
+                    </div>
+                    {upcomingDates.length > 1 && (
+                      <div className="ml-auto">
+                        <p className="text-[11px] text-slate-500">+{upcomingDates.length - 1} more upcoming</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="px-5 py-4 flex flex-wrap items-center gap-4">
+                    {hasOverdue && (
+                      <p className="text-sm text-red-400 font-medium">
+                        {overdueDates.length} open date{overdueDates.length !== 1 ? 's' : ''} past due — check Key Dates tab
+                      </p>
+                    )}
+                    {!hasOverdue && (
+                      <p className="text-sm text-slate-500">All open key dates are in the past or project has no upcoming dates</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* 2-col grid: Snags / Actions / Forms / T&C */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Snags summary */}
           <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a]">
             <div
@@ -1838,42 +1935,6 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
               })}
             </div>
           </div>
-
-          {/* Key Dates summary */}
-          <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a]">
-            <div
-              className="flex items-center justify-between p-4 border-b border-[#1e2d4a] rounded-t-xl cursor-pointer hover:bg-[#0d1628]/40 transition-colors"
-              onClick={() => setActiveTab('dates')}
-            >
-              <div className="flex items-center gap-2">
-                <Calendar size={15} className="text-orange-400" />
-                <span className="text-sm font-semibold text-white">Key Dates</span>
-              </div>
-              {projectKeyDates.length > 0 && <span className="text-[10px] text-[#f97316] font-semibold">View {projectKeyDates.length} →</span>}
-            </div>
-            <div className="divide-y divide-[#1e2d4a] max-h-44 overflow-y-auto">
-              {projectKeyDates.length === 0 ? (
-                <p className="text-sm text-slate-500 text-center py-6">No key dates added</p>
-              ) : (() => {
-                const today = new Date(); today.setHours(0,0,0,0);
-                return projectKeyDates.slice(0, 4).map(d => {
-                  const dt = d.date ? new Date(d.date) : null;
-                  const isOverdue = dt && d.status === 'Open' && dt < today;
-                  const badgeCls = d.status === 'Closed' ? 'bg-emerald-900/60 text-emerald-400'
-                    : isOverdue ? 'bg-red-900/60 text-red-400'
-                    : 'bg-orange-900/60 text-orange-400';
-                  return (
-                    <div key={d.id} className="p-3 flex items-center justify-between">
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-slate-300 line-clamp-1">{d.title}</p>
-                        <p className="text-[11px] text-slate-500">{dt ? dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}</p>
-                      </div>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ml-2 ${badgeCls}`}>{isOverdue ? 'Overdue' : d.status}</span>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
           </div>
         </div>
       )}
