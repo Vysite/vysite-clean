@@ -562,12 +562,10 @@ interface ApplicationsData {
 const APPLICATIONS_PDF_CSS = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
-  @page {
-    margin: 18mm 14mm 16mm 14mm;
-    size: A4;
-  }
-  @page :first {
-    margin-top: 0;
+  /* Zero margins eliminate all browser print chrome (URL, date, page number) */
+  @page { margin: 0; size: A4; }
+  @media print {
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 
   html, body {
@@ -680,7 +678,7 @@ const APPLICATIONS_PDF_CSS = `
 
   /* ── Body page ───────────────────────────────────────────────────────────── */
   .body-page {
-    padding: 48px 52px 0;
+    padding: 40px 52px 36px;
   }
 
   /* ── Page header (running head on body pages) ────────────────────────────── */
@@ -830,52 +828,72 @@ const APPLICATIONS_PDF_CSS = `
     width: 100%;
     border-collapse: collapse;
   }
-  .sched-table thead tr {
-    border-bottom: 1px solid #0f172a;
-  }
-  .sched-table th {
-    font-size: 7pt;
-    font-weight: 700;
-    letter-spacing: 0.12em;
+  .sched-table thead th {
+    font-size: 6.5pt;
+    font-weight: 800;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: #94a3b8;
-    padding: 0 8px 10px 0;
+    color: #64748b;
+    padding: 0 12px 12px 0;
     text-align: left;
+    border-bottom: 1.5px solid #0f172a;
     white-space: nowrap;
+    vertical-align: bottom;
   }
-  .sched-table th.r { text-align: right; padding-right: 0; padding-left: 8px; }
-  .sched-table td {
+  .sched-table thead th.r { text-align: right; padding-right: 0; padding-left: 12px; }
+  .sched-table thead th.secondary { color: #94a3b8; }
+  .sched-table tbody td {
     font-size: 8.5pt;
     color: #1e293b;
-    padding: 9px 8px 9px 0;
-    border-bottom: 1px solid #f1f5f9;
-    vertical-align: baseline;
+    padding: 13px 12px 12px 0;
+    border-bottom: 0.5px solid #f1f5f9;
+    vertical-align: top;
   }
-  .sched-table td.r {
+  .sched-table tbody td.r {
     text-align: right;
     font-variant-numeric: tabular-nums;
+    font-weight: 600;
     padding-right: 0;
-    padding-left: 8px;
+    padding-left: 12px;
+    vertical-align: top;
   }
   .sched-table tbody tr:last-child td { border-bottom: none; }
-  .sched-table .app-num {
-    font-weight: 700;
+  /* App number cell */
+  .sched-app-num {
+    font-size: 9.5pt;
+    font-weight: 800;
     color: #ea6c00;
-    font-size: 8pt;
+    letter-spacing: -0.01em;
+    line-height: 1.4;
   }
-  .sched-table .app-period { font-weight: 600; color: #0f172a; }
-  .sched-table .app-date { color: #94a3b8; font-size: 8pt; display: block; margin-top: 1px; }
-  .sched-table .outstanding { color: #b45309; font-weight: 700; }
+  /* Period cell */
+  .sched-period { font-size: 9pt; font-weight: 700; color: #0f172a; line-height: 1.3; }
+  .sched-date { font-size: 7.5pt; color: #94a3b8; margin-top: 2px; }
+  /* Value cells — primary (applied/certified) vs secondary (paid/retention) */
+  .val-primary { color: #0f172a; font-size: 8.5pt; }
+  .val-secondary { color: #64748b; font-size: 8.5pt; font-weight: 400; }
+  .val-outstanding { color: #b45309; font-weight: 700; font-size: 8.5pt; }
+  /* Date cells */
+  .sched-date-cell { font-size: 7.5pt; color: #94a3b8; padding-left: 12px; }
 
-  /* Totals footer row */
-  .sched-table tfoot tr td {
-    border-top: 1px solid #0f172a;
+  /* Totals footer */
+  .sched-table tfoot td {
+    border-top: 1.5px solid #0f172a;
     border-bottom: none;
-    padding-top: 10px;
+    padding: 12px 12px 10px 0;
+    font-size: 8.5pt;
     font-weight: 700;
     color: #0f172a;
+    vertical-align: baseline;
   }
-  .sched-table tfoot .total-val { font-size: 10pt; color: #ea6c00; }
+  .sched-table tfoot td.r {
+    text-align: right;
+    padding-right: 0;
+    padding-left: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .tfoot-total { font-size: 10pt; font-weight: 700; color: #ea6c00; }
+  .tfoot-label { font-size: 7.5pt; color: #64748b; font-weight: 400; margin-top: 2px; }
 
   /* ── Status pill ─────────────────────────────────────────────────────────── */
   .pill {
@@ -1085,30 +1103,33 @@ function applicationsBody(d: ApplicationsData): string {
     const pillCls = applicationsPillCls(a.status);
     const label   = APP_STATUS_LABELS[a.status] || a.status;
     return `<tr>
-      <td><span class="app-num">${String(a.app_number).padStart(2, '0')}</span></td>
+      <td><span class="sched-app-num">${String(a.app_number).padStart(2, '0')}</span></td>
       <td>
-        <span class="app-period">${esc(a.period || '—')}</span>
-        ${a.app_date ? `<span class="app-date">${fmtD(a.app_date)}</span>` : ''}
+        <div class="sched-period">${esc(a.period || '—')}</div>
+        ${a.app_date ? `<div class="sched-date">${fmtD(a.app_date)}</div>` : ''}
       </td>
-      <td class="r">${fv(a.applied_value)}</td>
-      <td class="r">${fv(a.certified_value)}</td>
-      <td class="r">${fv(a.paid_value)}</td>
-      <td class="r">${fv(a.retention)}</td>
-      <td class="r${outs > 0 ? ' outstanding' : ''}">${fv(outs)}</td>
-      <td style="color:#94a3b8;font-size:8pt;">${fmtD(a.payment_due)}</td>
-      <td style="color:#94a3b8;font-size:8pt;">${fmtD(a.payment_recd)}</td>
-      <td><span class="pill ${pillCls}">${esc(label)}</span></td>
+      <td class="r"><span class="val-primary">${fv(a.applied_value)}</span></td>
+      <td class="r"><span class="val-primary">${fv(a.certified_value)}</span></td>
+      <td class="r"><span class="val-secondary">${fv(a.paid_value)}</span></td>
+      <td class="r"><span class="val-secondary">${fv(a.retention)}</span></td>
+      <td class="r"><span class="${outs > 0 ? 'val-outstanding' : 'val-secondary'}">${fv(outs)}</span></td>
+      <td class="sched-date-cell">${fmtD(a.payment_due)}</td>
+      <td class="sched-date-cell">${fmtD(a.payment_recd)}</td>
+      <td style="padding-left:12px;vertical-align:top;"><span class="pill ${pillCls}">${esc(label)}</span></td>
     </tr>`;
   }).join('');
 
   const totalOut = certifiedToDate - paidToDate;
   const schedFooter = d.apps.length > 1 ? `<tfoot><tr>
-    <td colspan="2" style="font-size:8pt;color:#64748b;">Totals (${d.apps.length} applications)</td>
-    <td class="r total-val">${fv(appliedToDate)}</td>
-    <td class="r total-val">${fv(certifiedToDate)}</td>
-    <td class="r total-val">${fv(paidToDate)}</td>
-    <td class="r total-val">${fv(totalRetention)}</td>
-    <td class="r total-val${totalOut > 0 ? '" style="color:#b45309;' : ''}">${fv(totalOut)}</td>
+    <td colspan="2">
+      <div style="font-size:8.5pt;font-weight:700;color:#0f172a;">Totals</div>
+      <div class="tfoot-label">${d.apps.length} applications</div>
+    </td>
+    <td class="r"><span class="tfoot-total">${fv(appliedToDate)}</span></td>
+    <td class="r"><span class="tfoot-total">${fv(certifiedToDate)}</span></td>
+    <td class="r"><span style="font-size:8.5pt;color:#64748b;">${fv(paidToDate)}</span></td>
+    <td class="r"><span style="font-size:8.5pt;color:#64748b;">${fv(totalRetention)}</span></td>
+    <td class="r"><span class="${totalOut > 0 ? 'tfoot-total" style="color:#b45309;' : 'tfoot-total'}">${fv(totalOut)}</span></td>
     <td colspan="3"></td>
   </tr></tfoot>` : '';
 
@@ -1121,16 +1142,16 @@ function applicationsBody(d: ApplicationsData): string {
     ? '<div class="empty-state">No valuation applications recorded for this project.</div>'
     : `<table class="sched-table">
         <thead><tr>
-          <th style="width:28px">No.</th>
+          <th style="width:32px">No.</th>
           <th>Period</th>
           <th class="r">Applied</th>
           <th class="r">Certified</th>
-          <th class="r">Paid</th>
-          <th class="r">Retention</th>
+          <th class="r secondary">Paid</th>
+          <th class="r secondary">Retention</th>
           <th class="r">Outstanding</th>
-          <th style="width:66px;text-align:right;padding-right:0;padding-left:8px;">Due</th>
-          <th style="width:66px;text-align:right;padding-right:0;padding-left:8px;">Recd</th>
-          <th style="width:62px;">Status</th>
+          <th class="secondary" style="width:72px;padding-left:12px;">Due</th>
+          <th class="secondary" style="width:72px;">Received</th>
+          <th style="width:68px;padding-left:12px;">Status</th>
         </tr></thead>
         <tbody>${schedRows}</tbody>
         ${schedFooter}
