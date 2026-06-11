@@ -1089,96 +1089,190 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
   }, [projectActions, projectSnags, projectForms, projectTC, projectDocs]);
 
   function handlePrint() {
-    const completionDate = project.completionDate
-      ? new Date(project.completionDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-      : '—';
-    const startDate = project.startDate
-      ? new Date(project.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-      : '—';
+    const today = new Date();
+    const exportedDate = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const fmtDate = (s?: string | null) => s ? new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+    const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
     const openSnags = projectSnags.filter(s => s.status !== 'Closed').length;
     const openActions = projectActions.filter(a => a.status !== 'Complete').length;
+    const progress = localProgress;
 
-    const snagRows = projectSnags.map(s =>
-      `<tr><td>${s.title}</td><td>${s.priority}</td><td>${s.status}</td><td>${s.location}</td><td>${s.assignedTo}</td></tr>`
-    ).join('');
-    const actionRows = projectActions.map(a =>
-      `<tr><td>${a.title}</td><td>${a.priority}</td><td>${a.status}</td><td>${a.owner}</td><td>${a.dueDate ? new Date(a.dueDate).toLocaleDateString('en-GB') : '—'}</td></tr>`
-    ).join('');
-    const formRows = projectForms.map(f =>
-      `<tr><td>${f.type}</td><td>${f.completed_by}</td><td>${f.status}</td><td>${f.date ? new Date(f.date).toLocaleDateString('en-GB') : '—'}</td></tr>`
-    ).join('');
+    // KPI counts
+    const snagOpen = projectSnags.filter(s => s.status === 'Open').length;
+    const snagInProg = projectSnags.filter(s => s.status === 'In Progress').length;
+    const snagClosed = projectSnags.filter(s => s.status === 'Closed').length;
+    const actOpen = projectActions.filter(a => a.status !== 'Complete').length;
+    const actComplete = projectActions.filter(a => a.status === 'Complete').length;
+
+    const snagRows = projectSnags.map(s => `
+      <tr>
+        <td style="font-weight:600;">${esc(s.title)}</td>
+        <td>${esc(s.priority)}</td>
+        <td><span class="badge ${s.status === 'Closed' ? 'badge-green' : s.status === 'In Progress' ? 'badge-blue' : 'badge-red'}">${esc(s.status)}</span></td>
+        <td>${esc(s.location || '—')}</td>
+        <td>${esc(s.assignedTo || '—')}</td>
+      </tr>`).join('');
+
+    const actionRows = projectActions.map(a => `
+      <tr>
+        <td style="font-weight:600;">${esc(a.title)}</td>
+        <td><span class="badge ${a.priority === 'High' ? 'badge-red' : a.priority === 'Medium' ? 'badge-amber' : 'badge-slate'}">${esc(a.priority)}</span></td>
+        <td><span class="badge ${a.status === 'Complete' ? 'badge-green' : a.status === 'In Progress' ? 'badge-blue' : 'badge-amber'}">${esc(a.status)}</span></td>
+        <td>${esc(a.owner || '—')}</td>
+        <td>${a.dueDate ? fmtDate(a.dueDate) : '—'}</td>
+      </tr>`).join('');
+
+    const formRows = projectForms.map(f => `
+      <tr>
+        <td style="font-weight:600;">${esc(f.type)}</td>
+        <td>${esc(f.completed_by || '—')}</td>
+        <td><span class="badge ${f.status === 'Complete' ? 'badge-green' : 'badge-amber'}">${esc(f.status)}</span></td>
+        <td>${f.date ? fmtDate(f.date) : '—'}</td>
+      </tr>`).join('');
+
+    const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+    const sortedKd = [...projectKeyDates].sort((a, b) => {
+      if (!a.date) return 1; if (!b.date) return -1;
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+    const kdRows = sortedKd.map(d => {
+      const isOverdue = d.status === 'Open' && d.date && new Date(d.date) < todayMidnight;
+      const label = d.status === 'Closed' ? 'Closed' : isOverdue ? 'Overdue' : 'Open';
+      const badgeCls = d.status === 'Closed' ? 'badge-green' : isOverdue ? 'badge-red' : 'badge-amber';
+      const dr = d.status === 'Open' && d.date ? (() => {
+        const diff = Math.round((new Date(d.date).getTime() - todayMidnight.getTime()) / 86400000);
+        if (diff === 0) return 'Today';
+        if (diff < 0) return `${Math.abs(diff)}d overdue`;
+        return `${diff}d remaining`;
+      })() : '—';
+      return `<tr>
+        <td>${fmtDate(d.date)}</td>
+        <td style="font-weight:600;">${esc(d.title)}</td>
+        <td><span class="badge ${badgeCls}">${esc(label)}</span></td>
+        <td>${esc(dr)}</td>
+        <td style="color:#64748b;">${esc(d.description || '—')}</td>
+        <td style="color:#64748b;font-style:italic;">${esc(d.comments || '—')}</td>
+      </tr>`;
+    }).join('');
 
     const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>${project.name} — Project Report</title>
+  <title>${esc(project.name)} — Project Report</title>
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111;background:white;padding:40px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #f97316;padding-bottom:16px;margin-bottom:24px}
-    .logo{font-size:22px;font-weight:900;letter-spacing:-0.5px;color:#f97316}
-    .dateline{color:#888;font-size:11px;margin-top:3px}
-    .proj-name{font-size:20px;font-weight:700;text-align:right}
-    .proj-client{color:#666;font-size:12px;text-align:right;margin-top:3px}
-    .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;background:#f8f8f8;border-radius:8px;padding:16px;margin-bottom:22px}
-    .meta-label{font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:#888;display:block;margin-bottom:2px}
-    .meta-val{font-weight:700;font-size:12px;color:#111}
-    .section{margin-bottom:22px}
-    .section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#f97316;border-bottom:1px solid #e5e7eb;padding-bottom:5px;margin-bottom:10px}
-    .progress-bar{height:10px;background:#e5e7eb;border-radius:5px;overflow:hidden;margin:6px 0}
-    .progress-fill{height:100%;background:#f97316;border-radius:5px}
-    table{width:100%;border-collapse:collapse}
-    th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:#666;border-bottom:2px solid #e5e7eb;padding:6px 8px;font-weight:700}
-    td{padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:11px;color:#1e293b}
-    tr:nth-child(even) td{background:#f9fafb}
-    .footer{margin-top:32px;border-top:1px solid #e5e7eb;padding-top:10px;font-size:10px;color:#999;display:flex;justify-content:space-between}
-    @media print{body{padding:24px}}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      color: #1e293b; background: white; font-size: 11px; line-height: 1.5;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .page { max-width: 880px; margin: 0 auto; padding: 36px 40px; }
+    .doc-header { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 14px; border-bottom: 3px solid #f97316; margin-bottom: 20px; }
+    .doc-logo { font-size: 22px; font-weight: 900; color: #f97316; letter-spacing: 0.05em; }
+    .doc-type-label { font-size: 10px; color: #64748b; margin-top: 4px; }
+    .doc-header-right { text-align: right; }
+    .doc-title { font-size: 18px; font-weight: 900; color: #111; margin-bottom: 4px; line-height: 1.25; }
+    .doc-dateline { font-size: 11px; color: #64748b; }
+    .meta-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 20px; }
+    .meta-label { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+    .meta-value { font-size: 11px; font-weight: 600; color: #0f172a; }
+    .progress-wrap { margin: 14px 0 4px; }
+    .progress-label { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 5px; display: flex; justify-content: space-between; }
+    .progress-track { height: 8px; background: #e2e8f0; border-radius: 20px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #f97316; border-radius: 20px; }
+    .kpi-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 14px 0; }
+    .kpi-cell { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; text-align: center; }
+    .kpi-value { font-size: 20px; font-weight: 900; color: #0f172a; line-height: 1; }
+    .kpi-label { font-size: 8.5px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-top: 4px; }
+    .kpi-orange { color: #f97316; } .kpi-red { color: #dc2626; } .kpi-green { color: #059669; } .kpi-blue { color: #2563eb; } .kpi-amber { color: #d97706; }
+    .section-heading { font-size: 8.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 6px; border-bottom: 1.5px solid #e2e8f0; margin-bottom: 12px; margin-top: 24px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f97316; color: #fff; font-weight: 700; padding: 8px 10px; text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; font-size: 10px; }
+    tr:nth-child(even) td { background: #fafafa; }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 9999px; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge-green  { background: #d1fae5; color: #065f46; }
+    .badge-red    { background: #fee2e2; color: #991b1b; }
+    .badge-amber  { background: #fef3c7; color: #92400e; }
+    .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+    .badge-slate  { background: #f1f5f9; color: #475569; }
+    .badge-orange { background: #fff7ed; color: #c2410c; }
+    .footer { margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 10px; display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; }
+    @media print { body { padding: 0; } .page { padding: 20px 24px; } }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div>
-      <div class="logo">VYSITE</div>
-      <div class="dateline">Project Report — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+  <div class="page">
+    <div class="doc-header">
+      <div>
+        <div class="doc-logo">VYSITE</div>
+        <div class="doc-type-label">Project Report</div>
+      </div>
+      <div class="doc-header-right">
+        <div class="doc-title">${esc(project.name)}</div>
+        <div class="doc-dateline">${esc(project.client || '')}${project.client ? ' &mdash; ' : ''}Exported ${exportedDate}</div>
+      </div>
     </div>
-    <div>
-      <div class="proj-name">${project.name}</div>
-      <div class="proj-client">${project.client}</div>
+
+    <div class="meta-block">
+      <div class="meta-grid">
+        <div><div class="meta-label">Status</div><div class="meta-value">${esc(project.status)}</div></div>
+        <div><div class="meta-label">Contract Value</div><div class="meta-value">${esc(project.value || '—')}</div></div>
+        <div><div class="meta-label">Project Manager</div><div class="meta-value">${esc(project.projectManager || '—')}</div></div>
+        <div><div class="meta-label">Location</div><div class="meta-value">${esc(project.location || '—')}</div></div>
+        <div><div class="meta-label">Start Date</div><div class="meta-value">${fmtDate(project.startDate)}</div></div>
+        <div><div class="meta-label">Completion Date</div><div class="meta-value">${fmtDate(project.completionDate)}</div></div>
+        <div><div class="meta-label">Open Snags</div><div class="meta-value">${openSnags}</div></div>
+        <div><div class="meta-label">Open Actions</div><div class="meta-value">${openActions}</div></div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-label"><span>Overall Progress</span><span>${progress}%</span></div>
+        <div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>
+      </div>
+      <div class="kpi-bar">
+        <div class="kpi-cell"><div class="kpi-value kpi-red">${snagOpen}</div><div class="kpi-label">Snags Open</div></div>
+        <div class="kpi-cell"><div class="kpi-value kpi-blue">${snagInProg}</div><div class="kpi-label">In Progress</div></div>
+        <div class="kpi-cell"><div class="kpi-value kpi-green">${snagClosed}</div><div class="kpi-label">Snags Closed</div></div>
+        <div class="kpi-cell"><div class="kpi-value kpi-amber">${actOpen}</div><div class="kpi-label">Actions Open</div></div>
+        <div class="kpi-cell"><div class="kpi-value kpi-green">${actComplete}</div><div class="kpi-label">Actions Done</div></div>
+      </div>
     </div>
-  </div>
-  <div class="meta">
-    <div><span class="meta-label">Status</span><span class="meta-val">${project.status}</span></div>
-    <div><span class="meta-label">Contract Value</span><span class="meta-val">${project.value || '—'}</span></div>
-    <div><span class="meta-label">Project Manager</span><span class="meta-val">${project.projectManager || '—'}</span></div>
-    <div><span class="meta-label">Location</span><span class="meta-val">${project.location || '—'}</span></div>
-    <div><span class="meta-label">Start Date</span><span class="meta-val">${startDate}</span></div>
-    <div><span class="meta-label">Completion Date</span><span class="meta-val">${completionDate}</span></div>
-    <div><span class="meta-label">Open Snags</span><span class="meta-val">${openSnags}</span></div>
-    <div><span class="meta-label">Open Actions</span><span class="meta-val">${openActions}</span></div>
-  </div>
-  <div class="section">
-    <div class="section-title">Overall Progress — ${localProgress}%</div>
-    <div class="progress-bar"><div class="progress-fill" style="width:${localProgress}%"></div></div>
-  </div>
-  ${snagRows ? `<div class="section">
-    <div class="section-title">Snags (${projectSnags.length})</div>
-    <table><thead><tr><th>Title</th><th>Priority</th><th>Status</th><th>Location</th><th>Assigned To</th></tr></thead>
-    <tbody>${snagRows}</tbody></table>
-  </div>` : ''}
-  ${actionRows ? `<div class="section">
-    <div class="section-title">Actions (${projectActions.length})</div>
-    <table><thead><tr><th>Title</th><th>Priority</th><th>Status</th><th>Owner</th><th>Due Date</th></tr></thead>
-    <tbody>${actionRows}</tbody></table>
-  </div>` : ''}
-  ${formRows ? `<div class="section">
-    <div class="section-title">Site Forms (${projectForms.length})</div>
-    <table><thead><tr><th>Type</th><th>Completed By</th><th>Status</th><th>Date</th></tr></thead>
-    <tbody>${formRows}</tbody></table>
-  </div>` : ''}
-  <div class="footer">
-    <span>Generated by VYSITE — ${project.name}</span>
-    <span>Printed ${new Date().toLocaleDateString('en-GB')}</span>
+
+    ${projectKeyDates.length > 0 ? `
+    <div class="section-heading">Key Dates (${projectKeyDates.length})</div>
+    <table>
+      <thead><tr><th style="width:90px;">Date</th><th>Title</th><th style="width:80px;">Status</th><th style="width:100px;">Days Remaining</th><th>Description</th><th>Notes</th></tr></thead>
+      <tbody>${kdRows}</tbody>
+    </table>` : ''}
+
+    ${projectSnags.length > 0 ? `
+    <div class="section-heading">Snags (${projectSnags.length})</div>
+    <table>
+      <thead><tr><th>Title</th><th style="width:70px;">Priority</th><th style="width:80px;">Status</th><th style="width:120px;">Location</th><th style="width:120px;">Assigned To</th></tr></thead>
+      <tbody>${snagRows}</tbody>
+    </table>` : ''}
+
+    ${projectActions.length > 0 ? `
+    <div class="section-heading">Actions (${projectActions.length})</div>
+    <table>
+      <thead><tr><th>Title</th><th style="width:70px;">Priority</th><th style="width:90px;">Status</th><th style="width:110px;">Owner</th><th style="width:90px;">Due Date</th></tr></thead>
+      <tbody>${actionRows}</tbody>
+    </table>` : ''}
+
+    ${projectForms.length > 0 ? `
+    <div class="section-heading">Site Forms (${projectForms.length})</div>
+    <table>
+      <thead><tr><th>Type</th><th style="width:130px;">Completed By</th><th style="width:80px;">Status</th><th style="width:90px;">Date</th></tr></thead>
+      <tbody>${formRows}</tbody>
+    </table>` : ''}
+
+    <div class="footer">
+      <span>VYSITE &bull; Construction Operating System &bull; ${esc(project.name)}</span>
+      <span>&copy; VYSITE. All rights reserved. Confidential.</span>
+    </div>
   </div>
   <script>window.onload=function(){window.print();};<\/script>
 </body>
