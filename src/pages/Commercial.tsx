@@ -9,6 +9,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
+import KeyDatesPanel from '../components/KeyDatesPanel';
 import FileUploadComponent from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
 import type { CommercialRecord, CommercialLineItem, CommercialRecordType, CommercialRecordStatus } from '../data/types';
@@ -1788,21 +1789,6 @@ export default function Commercial() {
         const variationsDirty = bannerVariationsEdit !== '' && parseFloat(bannerVariationsEdit) !== (proj.variationsValue ?? NaN);
         const isDirty = contractDirty || completedDirty || variationsDirty;
 
-        // Key dates for the banner project
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const projKeyDates = store.keyDates.filter(d => d.project_id === effectiveBannerProjectId);
-        const openKeyDates = projKeyDates.filter(d => d.status === 'Open');
-        const overdueKeyDates = openKeyDates.filter(d => d.date && new Date(d.date) < today);
-        const upcomingKeyDates = openKeyDates
-          .filter(d => d.date && new Date(d.date) >= today)
-          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-          .slice(0, 4);
-        const fmtKdDate = (s: string) => new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-        const kdDaysRemaining = (s: string) => {
-          const diff = Math.round((new Date(s).getTime() - today.getTime()) / 86400000);
-          return diff === 0 ? 'Today' : diff === 1 ? '1 day' : `${diff} days`;
-        };
-
         return (
           <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-6 mb-6">
             {/* Project name / status / project selector / contract value */}
@@ -1955,61 +1941,6 @@ export default function Commercial() {
               </div>
             )}
 
-            {/* Key Dates summary */}
-            {projKeyDates.length > 0 && (
-              <div className="mt-3 bg-[#0d1628] rounded-xl border border-[#1e2d4a] overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1e2d4a]">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={13} className={overdueKeyDates.length > 0 ? 'text-red-400' : 'text-[#f97316]'} />
-                    <span className="text-xs font-semibold text-white">Key Dates</span>
-                    <span className="text-[10px] text-slate-500">{projKeyDates.length} total · {openKeyDates.length} open</span>
-                  </div>
-                  {overdueKeyDates.length > 0 && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-900/60 text-red-400">
-                      {overdueKeyDates.length} overdue
-                    </span>
-                  )}
-                </div>
-                {overdueKeyDates.length > 0 && (
-                  <div className="divide-y divide-[#1e2d4a]">
-                    {overdueKeyDates.slice(0, 2).map(d => (
-                      <div key={d.id} className="flex items-center justify-between px-4 py-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-900/60 text-red-400 shrink-0">Overdue</span>
-                          <span className="text-xs text-slate-300 truncate">{d.title}</span>
-                        </div>
-                        <div className="text-right shrink-0 ml-3">
-                          <p className="text-xs text-red-400 font-medium">{d.date ? fmtKdDate(d.date) : '—'}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {upcomingKeyDates.length > 0 ? (
-                  <div className="divide-y divide-[#1e2d4a]">
-                    {upcomingKeyDates.map(d => {
-                      const daysLeft = d.date ? Math.round((new Date(d.date).getTime() - today.getTime()) / 86400000) : null;
-                      const isUrgent = daysLeft != null && daysLeft <= 7;
-                      return (
-                        <div key={d.id} className="flex items-center justify-between px-4 py-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isUrgent ? 'bg-amber-900/60 text-amber-400' : 'bg-orange-900/40 text-orange-400'}`}>Open</span>
-                            <span className="text-xs text-slate-300 truncate">{d.title}</span>
-                          </div>
-                          <div className="text-right shrink-0 ml-3">
-                            <p className="text-xs text-slate-400">{d.date ? fmtKdDate(d.date) : '—'}</p>
-                            <p className={`text-[10px] font-semibold ${isUrgent ? 'text-amber-400' : 'text-slate-500'}`}>{d.date ? kdDaysRemaining(d.date) : ''}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : overdueKeyDates.length === 0 && (
-                  <div className="px-4 py-3 text-xs text-slate-500">All key dates closed or no upcoming dates.</div>
-                )}
-              </div>
-            )}
-
             {/* Save / export actions */}
             <div className="flex items-center justify-between mt-1">
               <div className="flex items-center gap-2">
@@ -2045,6 +1976,20 @@ export default function Commercial() {
           <p className="text-sm text-slate-500">No projects found — create a project first to see its commercial summary here.</p>
         </div>
       ) : null}
+
+      {/* Key Dates Panel — full component, same as Projects */}
+      {bannerProject && (
+        <div className="mb-6">
+          <KeyDatesPanel
+            project={bannerProject}
+            keyDates={store.keyDates.filter(d => d.project_id === effectiveBannerProjectId)}
+            currentUserName={store.currentUser?.name ?? ''}
+            onAdd={store.addKeyDate}
+            onUpdate={store.updateKeyDate}
+            onRemove={store.removeKeyDate}
+          />
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
