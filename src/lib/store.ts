@@ -925,6 +925,43 @@ export interface DBKeyDate {
   updated_at?: string;
 }
 
+export interface DBVariationAccountItem {
+  id: string;
+  org_id?: string;
+  project_id: string;
+  reference: string;
+  title: string;
+  description: string;
+  reason: string;
+  value: number;
+  is_positive: boolean;
+  status: string;
+  date_raised: string | null;
+  date_agreed: string | null;
+  notes: string;
+  created_by: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DBCommercialRecord {
+  id: string;
+  org_id?: string;
+  project_id: string | null;
+  record_type: string;
+  reference: string;
+  title: string;
+  client: string;
+  status: string;
+  date_raised: string | null;
+  date_submitted: string | null;
+  date_agreed: string | null;
+  notes: string;
+  created_by: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // ─── Main store hook ──────────────────────────────────────────────────────────
 
 export interface AppStore {
@@ -1022,6 +1059,12 @@ export interface AppStore {
   addNotification: (n: DBNotification) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
+
+  // Variation Account
+  variationAccountItems: DBVariationAccountItem[];
+  addVariationAccountItem: (v: DBVariationAccountItem) => Promise<void>;
+  updateVariationAccountItem: (v: DBVariationAccountItem) => Promise<void>;
+  removeVariationAccountItem: (id: string) => Promise<void>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1073,6 +1116,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [keyDates, setKeyDates] = useState<DBKeyDate[]>([]);
   const [platformUsers, setPlatformUsers] = useState<DBPlatformUser[]>([]);
   const [notifications, setNotifications] = useState<DBNotification[]>([]);
+  const [variationAccountItems, setVariationAccountItems] = useState<DBVariationAccountItem[]>([]);
   const [settings, setSettings] = useState<DBSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
@@ -1099,6 +1143,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setProgrammeTasks([]);
       setKeyDates([]);
       setNotifications([]);
+      setVariationAccountItems([]);
       // Keep platformUsers/settings as-is — they load below with org filter
       setLoading(false);
       return;
@@ -1115,7 +1160,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       const ATT_COLS = 'id,linked_type,linked_id,project_id,project_name,name,type,size,category,uploaded_by,created_at';
 
       // All queries are explicitly scoped to the resolved org — no global reads.
-      const [projRes, docRes, attRes, actRes, snaRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, kdRes, puRes, notifRes, settingsRes] = await Promise.all([
+      const [projRes, docRes, attRes, actRes, snaRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, kdRes, puRes, notifRes, settingsRes, vaRes] = await Promise.all([
         supabase.from('vy_projects').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
         supabase.from('vy_project_documents').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
@@ -1132,6 +1177,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
         supabase.from('vy_platform_users').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
         supabase.from('vy_notifications').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_settings').select('*').eq('org_id', orgId).maybeSingle(),
+        supabase.from('vy_variation_account').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
       ]);
 
       if (cancelled) return;
@@ -1172,6 +1218,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setPlatformUsers((puRes.data ?? []) as DBPlatformUser[]);
       setNotifications((notifRes.data ?? []) as DBNotification[]);
       if (settingsRes.data) setSettings({ ...DEFAULT_SETTINGS, ...(settingsRes.data as DBSettings) });
+      setVariationAccountItems((vaRes.data ?? []) as DBVariationAccountItem[]);
       setLoading(false);
     }
 
@@ -1569,6 +1616,30 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('markAllNotificationsRead', 'vy_notifications', error);
   }, []);
 
+  // ── Variation Account ─────────────────────────────────────────────────────────
+
+  const addVariationAccountItem = useCallback(async (v: DBVariationAccountItem) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setVariationAccountItems(prev => [v, ...prev]);
+    const { error } = await supabase.from('vy_variation_account').upsert({ ...v, org_id: oid }, { onConflict: 'id' });
+    logWrite('addVariationAccountItem', 'vy_variation_account', error);
+  }, []);
+
+  const updateVariationAccountItem = useCallback(async (v: DBVariationAccountItem) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setVariationAccountItems(prev => prev.map(x => x.id === v.id ? v : x));
+    const { error } = await supabase.from('vy_variation_account').upsert({ ...v, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateVariationAccountItem', 'vy_variation_account', error);
+  }, []);
+
+  const removeVariationAccountItem = useCallback(async (id: string) => {
+    setVariationAccountItems(prev => prev.filter(v => v.id !== id));
+    const { error } = await supabase.from('vy_variation_account').delete().eq('id', id);
+    logWrite('removeVariationAccountItem', 'vy_variation_account', error);
+  }, []);
+
   // ── Settings ──────────────────────────────────────────────────────────────────
 
   const updateSettings = useCallback(async (s: DBSettings) => {
@@ -1622,5 +1693,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addKeyDate, updateKeyDate, removeKeyDate,
     addPlatformUser, updatePlatformUser, removePlatformUser,
     addNotification, markNotificationRead, markAllNotificationsRead,
+    variationAccountItems,
+    addVariationAccountItem, updateVariationAccountItem, removeVariationAccountItem,
   };
 }
