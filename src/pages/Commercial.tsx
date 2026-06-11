@@ -44,7 +44,8 @@ function fmt(n: number): string {
 }
 
 function fmtCurrency(n: number): string {
-  return `£${fmt(n)}`;
+  if (Number.isInteger(n)) return '£' + n.toLocaleString('en-GB');
+  return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function parseRawValue(raw: string): number {
@@ -1360,6 +1361,18 @@ export default function Commercial() {
   const [bannerCompletedEdit, setBannerCompletedEdit] = useState('');
   const [bannerVariationsEdit, setBannerVariationsEdit] = useState('');
   const [bannerSaving, setBannerSaving] = useState(false);
+  const [contractFocused, setContractFocused] = useState(false);
+  const [completedFocused, setCompletedFocused] = useState(false);
+  const [variationsFocused, setVariationsFocused] = useState(false);
+
+  // Format a raw numeric string as £ with commas for display
+  const fmtEditDisplay = (raw: string) => {
+    const n = parseFloat(raw);
+    if (!raw || isNaN(n)) return raw;
+    return '£' + Math.round(n).toLocaleString('en-GB');
+  };
+  // Strip £ and commas so stored value stays parseable
+  const normaliseInput = (v: string) => v.replace(/[£,\s]/g, '');
 
   // When banner project changes, reset edit fields to stored values
   useEffect(() => {
@@ -1958,34 +1971,30 @@ export default function Commercial() {
                 {/* Contract Value — editable */}
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Contract Value</p>
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-500 text-sm">£</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1000}
-                      value={bannerContractEdit}
-                      onChange={e => setBannerContractEdit(e.target.value)}
-                      placeholder={proj.value ? String(parseRawValue(proj.value)) : '0'}
-                      className="bg-transparent text-sm font-bold text-white w-full focus:outline-none placeholder-slate-600"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={contractFocused ? bannerContractEdit : fmtEditDisplay(bannerContractEdit)}
+                    onFocus={() => setContractFocused(true)}
+                    onBlur={() => { setContractFocused(false); setBannerContractEdit(normaliseInput(bannerContractEdit)); }}
+                    onChange={e => setBannerContractEdit(normaliseInput(e.target.value))}
+                    placeholder={proj.value ? fmtEditDisplay(String(parseRawValue(proj.value))) : '£0'}
+                    className="bg-transparent text-sm font-bold text-white w-full focus:outline-none placeholder-slate-600"
+                  />
                 </div>
                 {/* Variations Value — editable */}
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Variations Value</p>
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-500 text-sm">£</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1000}
-                      value={bannerVariationsEdit}
-                      onChange={e => setBannerVariationsEdit(e.target.value)}
-                      placeholder="0"
-                      className="bg-transparent text-sm font-bold text-amber-300 w-full focus:outline-none placeholder-slate-600"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={variationsFocused ? bannerVariationsEdit : fmtEditDisplay(bannerVariationsEdit)}
+                    onFocus={() => setVariationsFocused(true)}
+                    onBlur={() => { setVariationsFocused(false); setBannerVariationsEdit(normaliseInput(bannerVariationsEdit)); }}
+                    onChange={e => setBannerVariationsEdit(normaliseInput(e.target.value))}
+                    placeholder="£0"
+                    className="bg-transparent text-sm font-bold text-amber-300 w-full focus:outline-none placeholder-slate-600"
+                  />
                 </div>
                 {/* Contract incl. Variations — read-only derived */}
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] border-l-2 border-l-orange-500/50 px-3 py-2">
@@ -1996,18 +2005,16 @@ export default function Commercial() {
                 {/* Completed Value — editable */}
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Completed Value</p>
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-500 text-sm">£</span>
-                    <input
-                      type="number"
-                      min={0}
-                      step={1000}
-                      value={bannerCompletedEdit}
-                      onChange={e => setBannerCompletedEdit(e.target.value)}
-                      placeholder="0"
-                      className="bg-transparent text-sm font-bold text-slate-300 w-full focus:outline-none placeholder-slate-600"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={completedFocused ? bannerCompletedEdit : fmtEditDisplay(bannerCompletedEdit)}
+                    onFocus={() => setCompletedFocused(true)}
+                    onBlur={() => { setCompletedFocused(false); setBannerCompletedEdit(normaliseInput(bannerCompletedEdit)); }}
+                    onChange={e => setBannerCompletedEdit(normaliseInput(e.target.value))}
+                    placeholder="£0"
+                    className="bg-transparent text-sm font-bold text-slate-300 w-full focus:outline-none placeholder-slate-600"
+                  />
                 </div>
                 {/* Progress % — auto-calculated */}
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
