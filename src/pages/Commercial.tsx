@@ -18,7 +18,8 @@ import { openPrintTab } from '../lib/printTab';
 import CommercialOverview from './commercial/CommercialOverview';
 import CommercialRegister from './commercial/CommercialRegister';
 import VariationAccount, { calcVAMetrics } from './commercial/VariationAccount';
-import { ApplicationsPlaceholder, CommercialTimelinePlaceholder } from './commercial/CommercialPlaceholders';
+import { ApplicationsPlaceholder } from './commercial/CommercialPlaceholders';
+import CommercialTimeline from './commercial/CommercialTimeline';
 import type { CommercialTab } from './commercial/types';
 import { RECORD_TYPES, STATUSES, typeInfo, statusInfo, parseRawValue, fmtCurrency as fmtC } from './commercial/types';
 
@@ -993,7 +994,13 @@ export default function Commercial() {
         />
       )}
       {activeTab === 'applications'      && <ApplicationsPlaceholder />}
-      {activeTab === 'timeline'          && <CommercialTimelinePlaceholder />}
+      {activeTab === 'timeline'          && (
+        <CommercialTimeline
+          project={bannerProject}
+          records={records}
+          variationItems={projectVAItems}
+        />
+      )}
 
       {/* Record detail modal */}
       {modalOpen && (
