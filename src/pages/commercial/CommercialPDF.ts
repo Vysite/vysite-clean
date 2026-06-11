@@ -584,101 +584,99 @@ const APPLICATIONS_PDF_CSS = `
     html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 
-  /* ── Cover ───────────────────────────────────────────────────────────────── */
-  .cover {
-    min-height: 100vh;
+  /* ── Page 1: Executive Commercial Summary ───────────────────────────────── */
+  .exec-page {
+    padding: 40px 52px 36px;
+  }
+  .exec-head {
     display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    padding: 0 52px 64px;
-    background: #ffffff;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding-bottom: 14px;
+    border-bottom: 1.5px solid #0f172a;
+    margin-bottom: 28px;
   }
-  .cover-wordmark {
-    font-size: 11pt;
-    font-weight: 900;
-    letter-spacing: 0.18em;
-    color: #ea6c00;
-    text-transform: uppercase;
-    margin-bottom: 80px;
-    padding-top: 52px;
+  .exec-brand { font-size: 10pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; line-height: 1; }
+  .exec-brand-sub { font-size: 6.5pt; color: #94a3b8; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
+  .exec-head-right { text-align: right; }
+  .exec-doc-type { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8; margin-bottom: 3px; }
+  .exec-doc-title { font-size: 11pt; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
+  .exec-project-band {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding-bottom: 20px;
+    border-bottom: 0.5px solid #e2e8f0;
+    margin-bottom: 28px;
   }
-  .cover-doc-type {
-    font-size: 7.5pt;
-    font-weight: 700;
+  .exec-project-name { font-size: 17pt; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; line-height: 1.1; }
+  .exec-client { font-size: 9.5pt; color: #64748b; margin-top: 4px; }
+  .exec-report-date { font-size: 7.5pt; color: #94a3b8; text-align: right; line-height: 1.6; }
+  .exec-section-label {
+    font-size: 6.5pt;
+    font-weight: 800;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: #94a3b8;
     margin-bottom: 16px;
   }
-  .cover-title {
-    font-size: 36pt;
-    font-weight: 300;
-    color: #0f172a;
-    line-height: 1.05;
-    letter-spacing: -0.02em;
-    margin-bottom: 8px;
+  /* Applied + Certified: primary 2-col figures */
+  .primary-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-bottom: 0; }
+  .primary-fig { padding: 0 36px 20px 0; }
+  .primary-fig + .primary-fig { border-left: 0.5px solid #e2e8f0; padding-left: 36px; padding-right: 0; }
+  .fig-label { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #64748b; margin-bottom: 7px; }
+  .fig-value { font-size: 26pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; line-height: 1; }
+  .fig-value.accent { color: #ea6c00; }
+  /* Certification Shortfall: hero highlighted band */
+  .shortfall-band {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 20px;
+    border-left: 3px solid #ea6c00;
+    background: #fff7ed;
+    margin: 16px 0 20px;
   }
-  .cover-title strong {
-    font-weight: 800;
-  }
-  .cover-project-name {
-    font-size: 14pt;
-    font-weight: 700;
-    color: #0f172a;
-    margin-bottom: 4px;
-    margin-top: 36px;
-  }
-  .cover-client {
-    font-size: 10pt;
-    font-weight: 400;
-    color: #64748b;
-    margin-bottom: 40px;
-  }
-  .cover-figures {
+  .shortfall-band.zero { border-left-color: #16a34a; background: #f0fdf4; }
+  .shortfall-band-left {}
+  .shortfall-label { font-size: 7pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #92400e; }
+  .shortfall-band.zero .shortfall-label { color: #166534; }
+  .shortfall-sub { font-size: 7pt; color: #a16207; margin-top: 2px; }
+  .shortfall-band.zero .shortfall-sub { color: #166534; }
+  .shortfall-value { font-size: 22pt; font-weight: 700; color: #ea6c00; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .shortfall-band.zero .shortfall-value { color: #16a34a; }
+  /* Paid, Outstanding, Retention: secondary 3-col */
+  .secondary-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    border-top: 1px solid #0f172a;
-    border-bottom: 1px solid #e2e8f0;
-    padding: 20px 0 18px;
-    margin-bottom: 36px;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 0;
+    padding: 16px 0;
+    border-top: 0.5px solid #e2e8f0;
+    border-bottom: 0.5px solid #e2e8f0;
+    margin-bottom: 16px;
   }
-  .cover-fig {
-    padding-right: 24px;
+  .sec-fig { padding-right: 24px; }
+  .sec-fig + .sec-fig { border-left: 0.5px solid #e2e8f0; padding-left: 24px; }
+  .sec-fig:last-child { padding-right: 0; }
+  .sec-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; }
+  .sec-value { font-size: 15pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .sec-value.warn { color: #b45309; }
+  /* Remaining Contract Value: strong bottom total */
+  .remaining-band {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 14px 0 13px;
+    border-bottom: 1.5px solid #0f172a;
+    margin-bottom: 24px;
   }
-  .cover-fig + .cover-fig {
-    border-left: 1px solid #e2e8f0;
-    padding-left: 24px;
-    padding-right: 24px;
-  }
-  .cover-fig-label {
-    font-size: 7pt;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #94a3b8;
-    margin-bottom: 8px;
-  }
-  .cover-fig-value {
-    font-size: 20pt;
-    font-weight: 700;
-    color: #0f172a;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
-    line-height: 1;
-  }
-  .cover-fig-value.highlight {
-    color: #ea6c00;
-  }
-  .cover-fig-sub {
-    font-size: 7.5pt;
-    color: #94a3b8;
-    margin-top: 4px;
-  }
-  .cover-meta {
-    font-size: 8pt;
-    color: #94a3b8;
-  }
+  .remaining-label { font-size: 9.5pt; font-weight: 700; color: #0f172a; }
+  .remaining-value { font-size: 22pt; font-weight: 700; color: #ea6c00; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  /* Application metadata strip */
+  .app-meta-strip { display: flex; gap: 32px; padding: 10px 0 0; }
+  .app-meta-item {}
+  .app-meta-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 2px; }
+  .app-meta-value { font-size: 8.5pt; font-weight: 600; color: #334155; }
 
   /* ── Body page ───────────────────────────────────────────────────────────── */
   .body-page {
@@ -939,31 +937,96 @@ function applicationsBody(d: ApplicationsData): string {
   const outstanding      = certifiedToDate - paidToDate;
   const remaining        = d.forecastContractSum > 0 ? d.forecastContractSum - appliedToDate : null;
 
-  // ── Cover page ──
-  const cover = `<div class="cover">
-  <div class="cover-wordmark">VYSITE</div>
-  <div class="cover-doc-type">Valuation &amp; Payment</div>
-  <div class="cover-title"><strong>Valuation</strong><br>Applications</div>
-  <div class="cover-project-name">${esc(projName)}</div>
-  ${client ? `<div class="cover-client">${esc(client)}</div>` : '<div style="margin-bottom:40px;"></div>'}
-  <div class="cover-figures">
-    <div class="cover-fig">
-      <div class="cover-fig-label">Applied To Date</div>
-      <div class="cover-fig-value highlight">${fv(appliedToDate)}</div>
-      <div class="cover-fig-sub">${d.apps.length} application${d.apps.length !== 1 ? 's' : ''}</div>
+  // ── Page 1: Executive Commercial Summary ──
+  const isZeroShortfall = certShortfall <= 0;
+  const sortedApps = [...d.apps].sort((a, b) => (a.app_date ?? '').localeCompare(b.app_date ?? ''));
+  const firstPeriod = sortedApps.length > 0 ? (sortedApps[0].period || fmtD(sortedApps[0].app_date)) : '—';
+  const lastPeriod  = sortedApps.length > 1 ? (sortedApps[sortedApps.length - 1].period || fmtD(sortedApps[sortedApps.length - 1].app_date)) : firstPeriod;
+
+  const cover = `<div class="exec-page">
+  <div class="exec-head">
+    <div>
+      <div class="exec-brand">VYSITE</div>
+      <div class="exec-brand-sub">Construction Operating System</div>
     </div>
-    <div class="cover-fig">
-      <div class="cover-fig-label">Certified To Date</div>
-      <div class="cover-fig-value">${fv(certifiedToDate)}</div>
-      ${certShortfall > 0 ? `<div class="cover-fig-sub" style="color:#b45309;">Shortfall ${fv(certShortfall)}</div>` : '<div class="cover-fig-sub">&nbsp;</div>'}
-    </div>
-    <div class="cover-fig">
-      <div class="cover-fig-label">Paid To Date</div>
-      <div class="cover-fig-value">${fv(paidToDate)}</div>
-      ${outstanding > 0 ? `<div class="cover-fig-sub" style="color:#b45309;">Outstanding ${fv(outstanding)}</div>` : '<div class="cover-fig-sub">&nbsp;</div>'}
+    <div class="exec-head-right">
+      <div class="exec-doc-type">Valuation &amp; Payment</div>
+      <div class="exec-doc-title">Valuation Applications</div>
     </div>
   </div>
-  <div class="cover-meta">Prepared by ${esc(d.currentUserName || 'VYSITE')} &bull; ${today}</div>
+
+  <div class="exec-project-band">
+    <div>
+      <div class="exec-project-name">${esc(projName)}</div>
+      ${client ? `<div class="exec-client">${esc(client)}</div>` : ''}
+    </div>
+    <div class="exec-report-date">
+      <div>${today}</div>
+      <div>Prepared by ${esc(d.currentUserName || 'VYSITE')}</div>
+    </div>
+  </div>
+
+  <div class="exec-section-label">Commercial Position</div>
+
+  <div class="primary-row">
+    <div class="primary-fig">
+      <div class="fig-label">Applied To Date</div>
+      <div class="fig-value accent">${fv(appliedToDate)}</div>
+    </div>
+    <div class="primary-fig">
+      <div class="fig-label">Certified To Date</div>
+      <div class="fig-value">${fv(certifiedToDate)}</div>
+    </div>
+  </div>
+
+  <div class="shortfall-band${isZeroShortfall ? ' zero' : ''}">
+    <div class="shortfall-band-left">
+      <div class="shortfall-label">Certification Shortfall</div>
+      <div class="shortfall-sub">Applied to Date minus Certified to Date</div>
+    </div>
+    <div class="shortfall-value">${fv(Math.abs(certShortfall))}</div>
+  </div>
+
+  <div class="secondary-row">
+    <div class="sec-fig">
+      <div class="sec-label">Paid To Date</div>
+      <div class="sec-value">${fv(paidToDate)}</div>
+    </div>
+    <div class="sec-fig">
+      <div class="sec-label">Outstanding</div>
+      <div class="sec-value${outstanding > 0 ? ' warn' : ''}">${fv(outstanding)}</div>
+    </div>
+    <div class="sec-fig">
+      <div class="sec-label">Retention</div>
+      <div class="sec-value">${fv(totalRetention)}</div>
+    </div>
+  </div>
+
+  ${remaining != null ? `
+  <div class="remaining-band">
+    <span class="remaining-label">Remaining Contract Value</span>
+    <span class="remaining-value">${fv(remaining)}</span>
+  </div>` : '<div style="margin-bottom:24px;border-bottom:1.5px solid #0f172a;"></div>'}
+
+  <div class="app-meta-strip">
+    <div class="app-meta-item">
+      <div class="app-meta-label">Applications</div>
+      <div class="app-meta-value">${d.apps.length} submitted</div>
+    </div>
+    ${d.apps.length > 0 ? `<div class="app-meta-item">
+      <div class="app-meta-label">Period</div>
+      <div class="app-meta-value">${esc(firstPeriod)}${d.apps.length > 1 ? ' &ndash; ' + esc(lastPeriod) : ''}</div>
+    </div>` : ''}
+    ${d.forecastContractSum > 0 ? `<div class="app-meta-item">
+      <div class="app-meta-label">Forecast Contract Sum</div>
+      <div class="app-meta-value">${fv(d.forecastContractSum)}</div>
+    </div>` : ''}
+  </div>
+
+  <div class="doc-footer">
+    <div class="doc-footer-l">Confidential &mdash; VYSITE Commercial Document</div>
+    <div class="doc-footer-r">${esc(d.currentUserName || 'VYSITE')} &bull; ${today}</div>
+  </div>
 </div>`;
 
   // ── Body: page head ──
