@@ -240,7 +240,7 @@ export default function CommercialOverview({
         </div>
         ${variationExposure !== 0 ? `
         <div class="statement-row statement-accent">
-          <div class="statement-label">Variation Exposure<div class="statement-sub">All submitted / under review variations</div></div>
+          <div class="statement-label">Outstanding Variation Exposure<div class="statement-sub">Submitted + Under Review variations</div></div>
           <div class="statement-value">+${fv(variationExposure)}</div>
         </div>` : ''}
         <div class="statement-divider"></div>
@@ -385,10 +385,10 @@ export default function CommercialOverview({
               )}
             </div>
 
-            {/* Row: Variation Exposure */}
+            {/* Row: Outstanding Variation Exposure */}
             <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm text-slate-300">Variation Exposure</span>
+                <span className="text-sm text-slate-300">Outstanding Variation Exposure</span>
                 {vaHasItems ? (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0d1628] border border-[#1e2d4a] text-slate-500">
                     From Variation Account

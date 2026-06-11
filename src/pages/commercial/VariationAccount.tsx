@@ -37,8 +37,8 @@ function statusInfo(s: string) {
   return VA_STATUSES.find(x => x.value === s) ?? VA_STATUSES[0];
 }
 
-// Variation Exposure: submitted + under_review + agreed
-const EXPOSURE_STATUSES: VAStatus[] = ['submitted', 'under_review', 'agreed'];
+// Outstanding Variation Exposure: submitted + under_review only (agreed is no longer an exposure)
+const EXPOSURE_STATUSES: VAStatus[] = ['submitted', 'under_review'];
 // Agreed Variations: agreed + paid (drives Adjusted Contract Sum)
 const AGREED_STATUSES: VAStatus[] = ['agreed', 'paid'];
 
@@ -674,9 +674,9 @@ export default function VariationAccount({
 
         {showMetricsInfo && (
           <div className="px-5 py-3 bg-[#0d1628] border-b border-[#1e2d4a] text-xs text-slate-500 space-y-1">
-            <p><span className="text-slate-400 font-medium">Variation Exposure</span> = all Submitted + Under Review + Agreed variations. Commercial risk position.</p>
+            <p><span className="text-slate-400 font-medium">Outstanding Variation Exposure</span> = Submitted + Under Review only. Commercial risk not yet agreed.</p>
             <p><span className="text-slate-400 font-medium">Agreed Variations</span> = Agreed + Paid only. Drives Adjusted Contract Sum.</p>
-            <p><span className="text-slate-400 font-medium">Under Review</span> = variations currently in review. Subset of Variation Exposure.</p>
+            <p><span className="text-slate-400 font-medium">Under Review</span> = variations currently in review. Subset of Outstanding Variation Exposure.</p>
             <p><span className="text-slate-400 font-medium">Rejected Variations</span> = rejected / not agreed. Excluded from all other totals.</p>
           </div>
         )}
@@ -684,8 +684,8 @@ export default function VariationAccount({
         <div className="px-5 py-3">
           <div className="space-y-0">
             <StatRow
-              label="Variation Exposure"
-              sub="Submitted + Under Review + Agreed"
+              label="Outstanding Variation Exposure"
+              sub="Submitted + Under Review"
               value={fmtSigned(metrics.exposure)}
               valueClass={metrics.exposure > 0 ? 'text-orange-300' : metrics.exposure < 0 ? 'text-red-400' : 'text-slate-500'}
               dividerAfter
@@ -818,3 +818,8 @@ export default function VariationAccount({
     </div>
   );
 }
+
+
+export default VariationAccount
+
+export { calcVAMetrics }
