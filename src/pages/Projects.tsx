@@ -1692,7 +1692,6 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
               .filter(d => d.date && new Date(d.date) >= todayKD)
               .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
             const overdueDates = openDates.filter(d => d.date && new Date(d.date) < todayKD);
-            const nextDate = upcomingDates[0] ?? null;
             const hasOverdue = overdueDates.length > 0;
 
             function daysRemainingColor(days: number): string {
@@ -1742,46 +1741,37 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
                       <Plus size={12} />Add Key Date
                     </button>
                   </div>
-                ) : nextDate ? (() => {
-                  const daysLeft = Math.round((new Date(nextDate.date).getTime() - todayKD.getTime()) / 86400000);
-                  const daysLabel = daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1 day' : `${daysLeft} days`;
-                  const daysColor = daysRemainingColor(daysLeft);
-                  return (
-                    <div className="px-5 py-5 flex flex-wrap items-center gap-8">
-                      <div>
-                        <p className="text-[10px] font-semibold text-[#f97316] uppercase tracking-widest mb-1">Next Key Date</p>
-                        <p className="text-base font-bold text-white leading-tight">{nextDate.title}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Date</p>
-                        <p className="text-sm font-semibold text-[#f97316]">
-                          {new Date(nextDate.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Days Remaining</p>
-                        <p className={`text-sm font-bold ${daysColor}`}>{daysLabel}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Status</p>
-                        <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-orange-900/60 text-orange-400">Open</span>
-                      </div>
-                      {upcomingDates.length > 1 && (
-                        <div className="ml-auto">
-                          <p className="text-[11px] text-slate-500">+{upcomingDates.length - 1} more upcoming</p>
-                        </div>
-                      )}
+                ) : upcomingDates.length > 0 ? (
+                  <div className="px-5 pt-4 pb-3">
+                    <p className="text-[10px] font-semibold text-[#f97316] uppercase tracking-widest mb-3">Next Upcoming Key Dates</p>
+                    <div className="space-y-0 divide-y divide-[#1e2d4a]">
+                      {upcomingDates.slice(0, 5).map(d => {
+                        const daysLeft = Math.round((new Date(d.date).getTime() - todayKD.getTime()) / 86400000);
+                        const daysLabel = daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1 day' : `${daysLeft} days`;
+                        const daysColor = daysRemainingColor(daysLeft);
+                        return (
+                          <div key={d.id} className="flex items-center gap-4 py-2.5">
+                            <span className="text-xs font-semibold text-[#f97316] w-28 shrink-0">
+                              {new Date(d.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
+                            <span className="text-sm text-slate-200 flex-1 min-w-0 truncate">{d.title}</span>
+                            <span className={`text-xs font-bold shrink-0 ${daysColor}`}>{daysLabel}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })() : (
+                    {upcomingDates.length > 5 && (
+                      <p className="text-[11px] text-slate-500 mt-2">+{upcomingDates.length - 5} more upcoming dates</p>
+                    )}
+                  </div>
+                ) : (
                   <div className="px-5 py-5 flex flex-wrap items-center gap-4">
-                    {hasOverdue && (
+                    {hasOverdue ? (
                       <p className="text-sm text-red-400 font-medium">
                         {overdueDates.length} open date{overdueDates.length !== 1 ? 's' : ''} past due — check Key Dates tab
                       </p>
-                    )}
-                    {!hasOverdue && (
-                      <p className="text-sm text-slate-500">All open key dates are in the past or project has no upcoming dates</p>
+                    ) : (
+                      <p className="text-sm text-slate-500">No upcoming key dates</p>
                     )}
                   </div>
                 )}
