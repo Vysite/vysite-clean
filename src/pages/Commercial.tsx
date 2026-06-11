@@ -17,7 +17,8 @@ import { openPrintTab } from '../lib/printTab';
 
 import CommercialOverview from './commercial/CommercialOverview';
 import CommercialRegister from './commercial/CommercialRegister';
-import { VariationAccountPlaceholder, ApplicationsPlaceholder, CommercialTimelinePlaceholder } from './commercial/CommercialPlaceholders';
+import VariationAccount, { calcVAMetrics } from './commercial/VariationAccount';
+import { ApplicationsPlaceholder, CommercialTimelinePlaceholder } from './commercial/CommercialPlaceholders';
 import type { CommercialTab } from './commercial/types';
 import { RECORD_TYPES, STATUSES, typeInfo, statusInfo, parseRawValue, fmtCurrency as fmtC } from './commercial/types';
 
@@ -489,11 +490,14 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
         title: form.title.trim(), client: form.client.trim(),
         status: form.status, date_raised: form.dateRaised || null,
         date_submitted: form.dateSubmitted || null, date_agreed: form.dateAgreed || null,
-        notes: form.notes.trim(), created_by: store.currentUser?.name ?? null,
+        notes: form.notes.trim(), created_by: null,
         updated_at: now,
       };
       if (isNew) {
-        const id = `cr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = Math.random() * 16 | 0;
+          return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
         const { data, error: err } = await supabase.from('vy_commercial_records').insert({ ...row, id, created_at: now }).select('*').single();
         if (err) throw err;
         const projectName = projects.find(p => p.id === form.projectId)?.name;
@@ -882,6 +886,11 @@ export default function Commercial() {
 
   const projectKeyDates = store.keyDates.filter(d => d.project_id === effectiveBannerProjectId);
 
+  // Variation Account metrics for the active project
+  const projectVAItems = store.variationAccountItems.filter(v => v.project_id === effectiveBannerProjectId);
+  const vaMetrics = calcVAMetrics(projectVAItems);
+  const vaHasItems = projectVAItems.length > 0;
+
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
       {/* Page header */}
@@ -945,6 +954,9 @@ export default function Commercial() {
           canEdit={canEdit}
           canCreate={canCreate}
           currentUserName={store.currentUser?.name ?? ''}
+          vaExposure={vaMetrics.exposure}
+          vaAgreed={vaMetrics.agreed}
+          vaHasItems={vaHasItems}
           onProjectChange={(id) => setBannerProjectId(id)}
           onAddKeyDate={store.addKeyDate}
           onUpdateKeyDate={store.updateKeyDate}
@@ -969,7 +981,17 @@ export default function Commercial() {
         />
       )}
 
-      {activeTab === 'variation-account' && <VariationAccountPlaceholder />}
+      {activeTab === 'variation-account' && (
+        <VariationAccount
+          project={bannerProject}
+          projects={projects}
+          orgId={orgId}
+          canCreate={canCreate}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          onProjectChange={(id) => setBannerProjectId(id)}
+        />
+      )}
       {activeTab === 'applications'      && <ApplicationsPlaceholder />}
       {activeTab === 'timeline'          && <CommercialTimelinePlaceholder />}
 

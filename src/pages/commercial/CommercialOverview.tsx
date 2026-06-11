@@ -19,6 +19,10 @@ interface CommercialOverviewProps {
   canCreate: boolean;
   currentUserName: string;
   orgSettings?: { company_name?: string; logo_data_url?: string } | null;
+  // VA metrics — passed from parent so Overview reflects live Variation Account data
+  vaExposure: number;
+  vaAgreed: number;
+  vaHasItems: boolean;
   onProjectChange: (id: string) => void;
   onAddKeyDate: (d: DBKeyDate) => Promise<void>;
   onUpdateKeyDate: (d: DBKeyDate) => Promise<void>;
@@ -123,7 +127,8 @@ function fmtD(d: string | null | undefined): string {
 
 export default function CommercialOverview({
   project, projects, records, keyDates, canEdit, canCreate,
-  currentUserName, onProjectChange, onAddKeyDate, onUpdateKeyDate,
+  currentUserName, vaExposure, vaAgreed, vaHasItems,
+  onProjectChange, onAddKeyDate, onUpdateKeyDate,
   onRemoveKeyDate, onUpdateProject, onNewRecord,
 }: CommercialOverviewProps) {
   const [contractEdit, setContractEdit] = useState('');
@@ -151,12 +156,11 @@ export default function CommercialOverview({
 
   const contractNum  = parseFloat(contractEdit) || (project.value ? parseRawValue(project.value) : 0);
   const completedNum = completedEdit.trim() !== '' ? parseFloat(completedEdit) : (project.committed ?? null);
-  const variationsNum = project.variationsValue ?? null;
 
-  // Commercial position calculations
-  const variationExposure   = variationsNum ?? 0;
+  // When VA items exist use live calculations; otherwise fall back to manual variationsValue
+  const variationExposure   = vaHasItems ? vaExposure : (project.variationsValue ?? 0);
+  const agreedVariations    = vaHasItems ? vaAgreed : 0;
   const forecastContractSum = contractNum + variationExposure;
-  const agreedVariations    = 0; // Phase 2b — will be derived from vy_variation_account
   const adjustedContractSum = contractNum + agreedVariations;
   const remainingValue      = completedNum != null ? adjustedContractSum - completedNum : null;
 
@@ -385,21 +389,27 @@ export default function CommercialOverview({
             <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
               <div className="flex items-center gap-1.5">
                 <span className="text-sm text-slate-300">Variation Exposure</span>
-                <button
-                  onClick={() => setShowVariationsInfo(v => !v)}
-                  className="text-slate-600 hover:text-slate-400 transition-colors"
-                  title="All submitted and under-review variations — not yet agreed"
-                >
-                  <Info size={12} />
-                </button>
+                {vaHasItems ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0d1628] border border-[#1e2d4a] text-slate-500">
+                    From Variation Account
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setShowVariationsInfo(v => !v)}
+                    className="text-slate-600 hover:text-slate-400 transition-colors"
+                    title="Manual value — add variations in the Variation Account tab to calculate automatically"
+                  >
+                    <Info size={12} />
+                  </button>
+                )}
               </div>
               <span className="text-sm font-semibold text-orange-300 tabular-nums">
                 {variationExposure !== 0 ? (variationExposure > 0 ? '+' : '') + fmtCurrency(variationExposure) : '—'}
               </span>
             </div>
-            {showVariationsInfo && (
+            {showVariationsInfo && !vaHasItems && (
               <div className="py-1.5 px-3 bg-[#0d1628] text-[10px] text-slate-500 italic border-b border-[#1e2d4a]/50 rounded">
-                Variation Exposure = all submitted and under-review variations. Not yet agreed. Add via Variation Account tab once Phase 2b is live. Manual value shown here during Phase 2a.
+                Manual value from project settings. Add variations in the Variation Account tab to calculate this automatically.
               </div>
             )}
 
@@ -413,9 +423,16 @@ export default function CommercialOverview({
 
             {/* Row: Agreed Variations */}
             <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
-              <span className="text-sm text-slate-400">Agreed Variations</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-slate-400">Agreed Variations</span>
+                {vaHasItems && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0d1628] border border-[#1e2d4a] text-slate-500">
+                    From Variation Account
+                  </span>
+                )}
+              </div>
               <span className="text-sm font-medium text-emerald-400 tabular-nums">
-                {agreedVariations !== 0 ? fmtCurrency(agreedVariations) : '—'}
+                {agreedVariations !== 0 ? (agreedVariations > 0 ? '+' : '') + fmtCurrency(agreedVariations) : '—'}
               </span>
             </div>
 
