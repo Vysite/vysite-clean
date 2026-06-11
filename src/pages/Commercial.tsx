@@ -1894,7 +1894,7 @@ export default function Commercial() {
         <div className="flex items-center gap-3">
           {totalContractValue > 0 && (
             <div className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl px-4 py-2 text-right">
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider leading-none mb-0.5">Total Contract Value</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider leading-none mb-0.5">Total Portfolio Value</p>
               <p className="text-base font-bold text-[#f97316] leading-none">
                 {'£' + totalContractValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
