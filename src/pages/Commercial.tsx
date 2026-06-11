@@ -1354,9 +1354,57 @@ export default function Commercial() {
   const effectiveBannerProjectId = bannerProjectId || store.projects[0]?.id || '';
   const bannerProject = store.projects.find(p => p.id === effectiveBannerProjectId) ?? null;
 
+  // Editable banner commercial values
+  const [bannerContractEdit, setBannerContractEdit] = useState('');
+  const [bannerCompletedEdit, setBannerCompletedEdit] = useState('');
+  const [bannerSaving, setBannerSaving] = useState(false);
+
+  // When banner project changes, reset edit fields to stored values
+  useEffect(() => {
+    if (!bannerProject) return;
+    const raw = bannerProject.value ? parseRawValue(bannerProject.value) : 0;
+    setBannerContractEdit(raw > 0 ? String(raw) : '');
+    setBannerCompletedEdit(bannerProject.committed != null ? String(bannerProject.committed) : '');
+  }, [effectiveBannerProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveBannerValues() {
+    if (!bannerProject) return;
+    const contractNum = parseFloat(bannerContractEdit) || 0;
+    const completedNum = bannerCompletedEdit.trim() !== '' ? parseFloat(bannerCompletedEdit) : null;
+    const newProgress = contractNum > 0 && completedNum != null
+      ? Math.min(100, Math.round((completedNum / contractNum) * 100))
+      : bannerProject.progress;
+    const updated = {
+      ...bannerProject,
+      value: contractNum > 0 ? `£${Math.round(contractNum).toLocaleString('en-GB')}` : bannerProject.value,
+      committed: completedNum,
+      progress: newProgress,
+    };
+    setBannerSaving(true);
+    await store.updateProject(updated);
+    setBannerSaving(false);
+  }
+
   function selectBannerProject(id: string) {
     setBannerProjectId(id);
     setFilterProject(id);
+  }
+
+  // Record selection for export
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    if (selectedIds.size === filteredRecords.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredRecords.map(r => r.id)));
+    }
   }
 
   const loadRecords = useCallback(async () => {
@@ -1426,6 +1474,161 @@ export default function Commercial() {
     setModalOpen(false);
   }
 
+  // ── PDF export helpers ────────────────────────────────────────────────────
+
+  function buildCommercialBannerHTML(
+    proj: { name: string; status: string; client: string; location: string; projectManager: string; startDate: string; completionDate: string },
+    progress: number,
+    contractNum: number,
+    completedNum: number | null,
+    remaining: number | null,
+  ): string {
+    const fv = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
+    const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+    const statusColor = proj.status === 'Active' ? '#10b981' : proj.status === 'Completed' ? '#3b82f6' : proj.status === 'On Hold' ? '#f59e0b' : '#94a3b8';
+    const barPct = Math.min(100, progress);
+    return `
+      <div style="background:#1a2236;border:1px solid #1e2d4a;border-radius:12px;padding:24px;margin-bottom:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+              <h2 style="color:#fff;font-size:18px;font-weight:700;margin:0;">${proj.name}</h2>
+              <span style="background:${statusColor}22;color:${statusColor};font-size:11px;font-weight:600;padding:2px 10px;border-radius:20px;">${proj.status}</span>
+            </div>
+            <p style="color:#64748b;font-size:13px;margin:0;">${proj.client}</p>
+          </div>
+          ${contractNum > 0 ? `<div style="text-align:right;"><p style="color:#fff;font-size:22px;font-weight:700;margin:0;">${fv(contractNum)}</p><p style="color:#64748b;font-size:11px;margin:0;">Contract Value</p></div>` : ''}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+          <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 2px;">Location</p><p style="color:#cbd5e1;font-size:13px;font-weight:500;margin:0;">${proj.location || '—'}</p></div>
+          <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 2px;">Project Manager</p><p style="color:#cbd5e1;font-size:13px;font-weight:500;margin:0;">${proj.projectManager || '—'}</p></div>
+          <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 2px;">Start Date</p><p style="color:#cbd5e1;font-size:13px;font-weight:500;margin:0;">${fmtDate(proj.startDate)}</p></div>
+          <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 2px;">Completion</p><p style="color:#cbd5e1;font-size:13px;font-weight:500;margin:0;">${fmtDate(proj.completionDate)}</p></div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:#94a3b8;font-size:13px;">Overall Progress</span><span style="color:#f97316;font-size:13px;font-weight:700;">${barPct}%</span></div>
+          <div style="background:#0d1628;border-radius:4px;height:8px;"><div style="background:#f97316;border-radius:4px;height:8px;width:${barPct}%;"></div></div>
+        </div>
+        ${contractNum > 0 && completedNum != null && remaining != null ? `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+          <div style="background:#0d1628;border:1px solid #1e2d4a;border-radius:8px;padding:8px 12px;"><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Contract Value</p><p style="color:#fff;font-size:13px;font-weight:700;margin:0;">${fv(contractNum)}</p></div>
+          <div style="background:#0d1628;border:1px solid #1e2d4a;border-radius:8px;padding:8px 12px;"><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Completed Value</p><p style="color:#cbd5e1;font-size:13px;font-weight:700;margin:0;">${fv(completedNum)}</p></div>
+          <div style="background:#0d1628;border:1px solid #1e2d4a;border-radius:8px;padding:8px 12px;"><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Progress</p><p style="color:#f97316;font-size:13px;font-weight:700;margin:0;">${barPct}%</p></div>
+          <div style="background:#0d1628;border:1px solid #1e2d4a;border-radius:8px;padding:8px 12px;"><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Remaining</p><p style="color:${remaining < 0 ? '#f87171' : remaining < contractNum * 0.1 ? '#fbbf24' : '#34d399'};font-size:13px;font-weight:700;margin:0;">${fv(remaining)}</p></div>
+        </div>` : ''}
+      </div>`;
+  }
+
+  function exportRegisterSummary(
+    proj: { name: string; status: string; client: string; location: string; projectManager: string; startDate: string; completionDate: string },
+    progress: number, contractNum: number, completedNum: number | null, remaining: number | null,
+    recordList: CommercialRecord[],
+  ) {
+    const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB') : '—';
+    const totalR = recordList.length;
+    const openR  = recordList.filter(r => !['complete','rejected'].includes(r.status)).length;
+    const agreeR = recordList.filter(r => ['agreed','added_to_valuation','paid','complete'].includes(r.status)).length;
+
+    const rows = recordList.map(r => `
+      <tr style="border-bottom:1px solid #1e2d4a;">
+        <td style="padding:8px 12px;font-size:12px;color:#94a3b8;">${typeInfo(r.recordType).label}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#f97316;font-family:monospace;">${r.reference || '—'}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#fff;font-weight:500;">${r.title || 'Untitled'}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#94a3b8;">${r.projectName || '—'}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#94a3b8;">${r.client || '—'}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#94a3b8;">${statusInfo(r.status).label}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#94a3b8;">${fmtDate(r.dateRaised)}</td>
+      </tr>`).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Register — ${proj.name}</title>
+    <style>body{background:#0d1628;color:#e2e8f0;font-family:system-ui,sans-serif;padding:24px;}table{width:100%;border-collapse:collapse;}th{background:#1a2236;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:10px 12px;text-align:left;}td{vertical-align:middle;}</style>
+    </head><body>
+    <p style="color:#f97316;font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Commercial Register</p>
+    <p style="color:#64748b;font-size:11px;margin-bottom:20px;">Exported ${new Date().toLocaleDateString('en-GB', { day:'numeric',month:'long',year:'numeric' })}</p>
+    ${buildCommercialBannerHTML(proj, progress, contractNum, completedNum, remaining)}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;">
+      <div style="background:#1a2236;border:1px solid #1e2d4a;border-radius:8px;padding:16px;"><p style="color:#64748b;font-size:11px;margin:0 0 4px;">Total Records</p><p style="color:#fff;font-size:24px;font-weight:700;margin:0;">${totalR}</p></div>
+      <div style="background:#1a2236;border:1px solid #1e2d4a;border-radius:8px;padding:16px;"><p style="color:#64748b;font-size:11px;margin:0 0 4px;">Open / Active</p><p style="color:#fbbf24;font-size:24px;font-weight:700;margin:0;">${openR}</p></div>
+      <div style="background:#1a2236;border:1px solid #1e2d4a;border-radius:8px;padding:16px;"><p style="color:#64748b;font-size:11px;margin:0 0 4px;">Agreed / Paid</p><p style="color:#34d399;font-size:24px;font-weight:700;margin:0;">${agreeR}</p></div>
+    </div>
+    <div style="background:#111827;border:1px solid #1e2d4a;border-radius:8px;overflow:hidden;">
+      <table><thead><tr><th>Type</th><th>Reference</th><th>Title</th><th>Project</th><th>Client</th><th>Status</th><th>Date Raised</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>
+    </body></html>`;
+    openPrintTab(html);
+  }
+
+  function exportFullTickets(
+    proj: { name: string; status: string; client: string; location: string; projectManager: string; startDate: string; completionDate: string },
+    progress: number, contractNum: number, completedNum: number | null, remaining: number | null,
+    recordList: CommercialRecord[],
+  ) {
+    const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }) : '—';
+    const tickets = recordList.map((r, idx) => {
+      const totals = r.lineItems && r.lineItems.length > 0 ? recordTotals(r.lineItems) : null;
+      const lineRows = r.lineItems && r.lineItems.length > 0
+        ? r.lineItems.map(l => `<tr style="border-bottom:1px solid #1e2d4a;">
+            <td style="padding:6px 8px;font-size:12px;color:#e2e8f0;">${l.description || '—'}</td>
+            <td style="padding:6px 8px;font-size:12px;color:#94a3b8;">${l.unit}</td>
+            <td style="padding:6px 8px;font-size:12px;color:#94a3b8;text-align:right;">${l.quantity}</td>
+            <td style="padding:6px 8px;font-size:12px;color:#f97316;text-align:right;">${fmtCurrency(l.clientRate)}</td>
+            <td style="padding:6px 8px;font-size:12px;color:#f97316;text-align:right;font-weight:600;">${fmtCurrency(l.quantity * l.clientRate)}</td>
+          </tr>`).join('')
+        : `<tr><td colspan="5" style="padding:12px 8px;color:#64748b;font-size:12px;text-align:center;">No line items</td></tr>`;
+      const field = (label: string, val: string) => val ? `<div style="margin-bottom:12px;"><p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 3px;">${label}</p><p style="color:#e2e8f0;font-size:13px;margin:0;white-space:pre-wrap;">${val}</p></div>` : '';
+      return `
+        ${idx > 0 ? '<div style="page-break-before:always;"></div>' : ''}
+        <div style="background:#111827;border:1px solid #1e2d4a;border-radius:12px;padding:24px;margin-bottom:24px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #1e2d4a;">
+            <div>
+              ${r.reference ? `<p style="color:#f97316;font-family:monospace;font-size:13px;font-weight:700;margin:0 0 4px;">${r.reference}</p>` : ''}
+              <h3 style="color:#fff;font-size:16px;font-weight:700;margin:0 0 4px;">${r.title || 'Untitled'}</h3>
+              <p style="color:#64748b;font-size:12px;margin:0;">${r.projectName || proj.name} · ${r.client || proj.client}</p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <span style="background:#1a2236;border:1px solid #1e2d4a;color:#94a3b8;font-size:11px;padding:3px 8px;border-radius:6px;">${typeInfo(r.recordType).label}</span>
+              <span style="background:#1a2236;border:1px solid #1e2d4a;color:#94a3b8;font-size:11px;padding:3px 8px;border-radius:6px;">${statusInfo(r.status).label}</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+            <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Date Raised</p><p style="color:#cbd5e1;font-size:13px;margin:0;">${fmtDate(r.dateRaised)}</p></div>
+            <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Date Submitted</p><p style="color:#cbd5e1;font-size:13px;margin:0;">${fmtDate(r.dateSubmitted)}</p></div>
+            <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Date Agreed</p><p style="color:#cbd5e1;font-size:13px;margin:0;">${fmtDate(r.dateAgreed)}</p></div>
+            <div><p style="color:#64748b;font-size:10px;text-transform:uppercase;margin:0 0 2px;">Created By</p><p style="color:#cbd5e1;font-size:13px;margin:0;">${r.createdBy || '—'}</p></div>
+          </div>
+          ${field('Notes / Description', r.notes)}
+          ${r.lineItems && r.lineItems.length > 0 ? `
+          <div style="margin-top:16px;">
+            <p style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 8px;">Cost Breakdown</p>
+            <div style="background:#0d1628;border:1px solid #1e2d4a;border-radius:8px;overflow:hidden;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="border-bottom:1px solid #1e2d4a;">
+                  <th style="padding:8px;font-size:11px;color:#64748b;text-align:left;font-weight:500;">Description</th>
+                  <th style="padding:8px;font-size:11px;color:#64748b;text-align:left;font-weight:500;">Unit</th>
+                  <th style="padding:8px;font-size:11px;color:#64748b;text-align:right;font-weight:500;">Qty</th>
+                  <th style="padding:8px;font-size:11px;color:#64748b;text-align:right;font-weight:500;">Rate</th>
+                  <th style="padding:8px;font-size:11px;color:#64748b;text-align:right;font-weight:500;">Total</th>
+                </tr></thead>
+                <tbody>${lineRows}</tbody>
+              </table>
+              ${totals ? `<div style="border-top:1px solid #1e2d4a;padding:10px 8px;text-align:right;"><span style="color:#64748b;font-size:12px;margin-right:16px;">Total Client Value:</span><span style="color:#f97316;font-size:14px;font-weight:700;">${fmtCurrency(totals.totalClient)}</span></div>` : ''}
+            </div>
+          </div>` : ''}
+        </div>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Commercial Full Export — ${proj.name}</title>
+    <style>body{background:#0d1628;color:#e2e8f0;font-family:system-ui,sans-serif;padding:24px;}@media print{body{padding:0;}}</style>
+    </head><body>
+    <p style="color:#f97316;font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Commercial Full Ticket Export</p>
+    <p style="color:#64748b;font-size:11px;margin-bottom:20px;">${recordList.length} record${recordList.length !== 1 ? 's' : ''} · Exported ${new Date().toLocaleDateString('en-GB', { day:'numeric',month:'long',year:'numeric' })}</p>
+    ${buildCommercialBannerHTML(proj, progress, contractNum, completedNum, remaining)}
+    ${tickets}
+    </body></html>`;
+    openPrintTab(html);
+  }
+
   const activeFilterCount = [filterType, filterStatus, filterProject].filter(Boolean).length;
 
   // ── Summary counts (for the top stat cards) ──────────────────────────────
@@ -1460,16 +1663,20 @@ export default function Commercial() {
       {/* Project summary banner */}
       {bannerProject ? (() => {
         const proj = bannerProject;
-        const contractNum = proj.value ? parseRawValue(proj.value) : 0;
-        const hasActual = proj.committed != null;
-        const committed = contractNum > 0
-          ? (hasActual ? proj.committed! : contractNum * proj.progress / 100)
-          : null;
-        const remaining = committed != null ? contractNum - committed : null;
+        const contractNum  = parseFloat(bannerContractEdit)  || (proj.value ? parseRawValue(proj.value) : 0);
+        const completedNum = bannerCompletedEdit.trim() !== '' ? parseFloat(bannerCompletedEdit) : (proj.committed ?? null);
+        const progress     = contractNum > 0 && completedNum != null
+          ? Math.min(100, Math.round((completedNum / contractNum) * 100))
+          : proj.progress;
+        const remaining    = completedNum != null ? contractNum - completedNum : null;
         const fmtVal = (n: number) => '£' + Math.round(n).toLocaleString('en-GB');
+        const contractDirty  = bannerContractEdit  !== '' && parseFloat(bannerContractEdit)  !== (proj.value ? parseRawValue(proj.value) : 0);
+        const completedDirty = bannerCompletedEdit !== '' && parseFloat(bannerCompletedEdit) !== (proj.committed ?? NaN);
+        const isDirty = contractDirty || completedDirty;
+
         return (
           <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-6 mb-6">
-            {/* Project name / status / contract value row */}
+            {/* Project name / status / project selector / contract value */}
             <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-1">
@@ -1488,18 +1695,12 @@ export default function Commercial() {
                   <select
                     value={effectiveBannerProjectId}
                     onChange={e => selectBannerProject(e.target.value)}
-                    className="bg-[#0d1628] border border-[#1e2d4a] text-slate-300 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#f97316] focus:border-[#f97316] transition-colors"
+                    className="bg-[#0d1628] border border-[#1e2d4a] text-slate-300 text-sm rounded-lg px-3 py-1.5 min-w-[220px] focus:outline-none focus:ring-1 focus:ring-[#f97316] focus:border-[#f97316] transition-colors"
                   >
                     {store.projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
-                )}
-                {proj.value && (
-                  <div className="text-right pl-3 border-l border-[#1e2d4a]">
-                    <p className="text-2xl font-bold text-white">{proj.value}</p>
-                    <p className="text-xs text-slate-500">Contract Value</p>
-                  </div>
                 )}
               </div>
             </div>
@@ -1522,39 +1723,117 @@ export default function Commercial() {
               ))}
             </div>
 
-            {/* Progress bar */}
-            <div className="mb-3">
+            {/* Progress bar — driven by values */}
+            <div className="mb-4">
               <div className="flex justify-between text-sm mb-1.5">
                 <span className="text-slate-400 font-medium">Overall Progress</span>
-                <span className="font-bold text-[#f97316]">{proj.progress}%</span>
+                <span className="font-bold text-[#f97316]">{progress}%</span>
               </div>
               <div className="w-full bg-[#0d1628] rounded-full h-2">
-                <div className="h-2 rounded-full bg-[#f97316] transition-all" style={{ width: `${proj.progress}%` }} />
+                <div className="h-2 rounded-full bg-[#f97316] transition-all" style={{ width: `${progress}%` }} />
               </div>
             </div>
 
-            {/* Financial cards */}
-            {contractNum > 0 && committed != null && remaining != null && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+            {/* Editable financial cards */}
+            {canEdit && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                {/* Contract Value — editable */}
+                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Contract Value</p>
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-500 text-sm">£</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={bannerContractEdit}
+                      onChange={e => setBannerContractEdit(e.target.value)}
+                      placeholder={proj.value ? String(parseRawValue(proj.value)) : '0'}
+                      className="bg-transparent text-sm font-bold text-white w-full focus:outline-none placeholder-slate-600"
+                    />
+                  </div>
+                </div>
+                {/* Completed Value — editable */}
+                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Completed Value</p>
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-500 text-sm">£</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={bannerCompletedEdit}
+                      onChange={e => setBannerCompletedEdit(e.target.value)}
+                      placeholder="0"
+                      className="bg-transparent text-sm font-bold text-slate-300 w-full focus:outline-none placeholder-slate-600"
+                    />
+                  </div>
+                </div>
+                {/* Progress % — auto-calculated */}
+                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Progress</p>
+                  <p className="text-sm font-bold text-[#f97316]">{progress}%</p>
+                  <p className="text-[9px] text-slate-600 mt-0.5">Auto-calculated</p>
+                </div>
+                {/* Remaining — auto-calculated */}
+                <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Remaining</p>
+                  <p className={`text-sm font-bold ${remaining == null ? 'text-slate-500' : remaining < 0 ? 'text-red-400' : remaining < contractNum * 0.1 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                    {remaining != null ? fmtVal(remaining) : '—'}
+                  </p>
+                  <p className="text-[9px] text-slate-600 mt-0.5">Auto-calculated</p>
+                </div>
+              </div>
+            )}
+            {!canEdit && contractNum > 0 && completedNum != null && remaining != null && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Contract Value</p>
                   <p className="text-sm font-bold text-white">{fmtVal(contractNum)}</p>
                 </div>
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Progress Value</p>
-                  <p className="text-sm font-bold text-[#f97316]">{proj.progress}%</p>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Completed Value</p>
+                  <p className="text-sm font-bold text-slate-300">{fmtVal(completedNum)}</p>
                 </div>
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">{hasActual ? 'Committed / Spent' : 'Approx. Completed'}</p>
-                  <p className="text-sm font-bold text-slate-300">{fmtVal(committed)}</p>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Progress</p>
+                  <p className="text-sm font-bold text-[#f97316]">{progress}%</p>
                 </div>
                 <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] px-3 py-2">
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">{hasActual ? 'Remaining Budget' : 'Approx. Remaining'}</p>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Remaining</p>
                   <p className={`text-sm font-bold ${remaining < 0 ? 'text-red-400' : remaining < contractNum * 0.1 ? 'text-amber-400' : 'text-emerald-400'}`}>{fmtVal(remaining)}</p>
                 </div>
-                {!hasActual && <p className="col-span-2 md:col-span-4 text-[10px] text-slate-600 mt-0.5">Progress-based estimate — add Committed spend in Edit Project for actual figures.</p>}
               </div>
             )}
+
+            {/* Save / export actions */}
+            <div className="flex items-center justify-between mt-1">
+              <div className="flex items-center gap-2">
+                {isDirty && canEdit && (
+                  <button
+                    onClick={saveBannerValues}
+                    disabled={bannerSaving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f97316] hover:bg-orange-400 disabled:opacity-60 text-white text-xs font-semibold rounded-lg transition-colors"
+                  >
+                    <Save size={12} />{bannerSaving ? 'Saving…' : 'Save Values'}
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => exportRegisterSummary(proj, progress, contractNum, completedNum, remaining, filteredRecords)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0d1628] hover:bg-[#1a2236] border border-[#1e2d4a] text-slate-300 hover:text-white text-xs font-semibold rounded-lg transition-colors"
+                >
+                  <FileText size={12} />Register Summary
+                </button>
+                <button
+                  onClick={() => exportFullTickets(proj, progress, contractNum, completedNum, remaining, selectedIds.size > 0 ? filteredRecords.filter(r => selectedIds.has(r.id)) : filteredRecords)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0d1628] hover:bg-[#1a2236] border border-[#1e2d4a] text-slate-300 hover:text-white text-xs font-semibold rounded-lg transition-colors"
+                >
+                  <Printer size={12} />{selectedIds.size > 0 ? `Full Export (${selectedIds.size})` : 'Full Export (All)'}
+                </button>
+              </div>
+            </div>
           </div>
         );
       })() : store.projects.length === 0 ? (
@@ -1646,7 +1925,15 @@ export default function Commercial() {
       {/* Register table */}
       <div className="bg-[#111827] border border-[#1e2d4a] rounded-xl overflow-hidden">
         {/* Table header */}
-        <div className="grid grid-cols-[120px_1fr_160px_160px_120px_100px] gap-4 px-4 py-3 border-b border-[#1e2d4a] text-xs font-medium text-slate-500 uppercase tracking-wide">
+        <div className="grid grid-cols-[32px_120px_1fr_160px_160px_120px_100px] gap-4 px-4 py-3 border-b border-[#1e2d4a] text-xs font-medium text-slate-500 uppercase tracking-wide">
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              className="w-3.5 h-3.5 rounded border-slate-600 bg-[#0d1628] accent-[#f97316] cursor-pointer"
+              checked={filteredRecords.length > 0 && selectedIds.size === filteredRecords.length}
+              onChange={toggleSelectAll}
+            />
+          </div>
           <span>Type</span>
           <span>Record</span>
           <span>Project</span>
@@ -1677,29 +1964,36 @@ export default function Commercial() {
           </div>
         ) : (
           filteredRecords.map((r, i) => (
-            <button
+            <div
               key={r.id}
-              onClick={() => openRecord(r)}
-              className={`w-full grid grid-cols-[120px_1fr_160px_160px_120px_100px] gap-4 px-4 py-3.5 text-left transition-colors hover:bg-[#1a2236] ${
+              className={`grid grid-cols-[32px_120px_1fr_160px_160px_120px_100px] gap-4 px-4 py-3.5 transition-colors hover:bg-[#1a2236] ${
                 i < filteredRecords.length - 1 ? 'border-b border-[#1e2d4a]/60' : ''
-              }`}
+              } ${selectedIds.has(r.id) ? 'bg-[#1a2236]/60' : ''}`}
             >
-              <div><TypeBadge type={r.recordType} /></div>
-              <div className="min-w-0">
+              <div className="flex items-center" onClick={e => { e.stopPropagation(); toggleSelect(r.id); }}>
+                <input
+                  type="checkbox"
+                  className="w-3.5 h-3.5 rounded border-slate-600 bg-[#0d1628] accent-[#f97316] cursor-pointer"
+                  checked={selectedIds.has(r.id)}
+                  onChange={() => toggleSelect(r.id)}
+                />
+              </div>
+              <button className="text-left" onClick={() => openRecord(r)}><TypeBadge type={r.recordType} /></button>
+              <button className="text-left min-w-0" onClick={() => openRecord(r)}>
                 <div className="flex items-center gap-2">
                   {r.reference && (
                     <span className="text-xs font-mono text-[#f97316] shrink-0">{r.reference}</span>
                   )}
                   <span className="text-sm text-white font-medium truncate">{r.title || 'Untitled'}</span>
                 </div>
-              </div>
-              <div className="text-sm text-slate-400 truncate">{r.projectName || '—'}</div>
-              <div className="text-sm text-slate-400 truncate">{r.client || '—'}</div>
-              <div><StatusBadge status={r.status} /></div>
-              <div className="text-xs text-slate-500">
+              </button>
+              <button className="text-left text-sm text-slate-400 truncate" onClick={() => openRecord(r)}>{r.projectName || '—'}</button>
+              <button className="text-left text-sm text-slate-400 truncate" onClick={() => openRecord(r)}>{r.client || '—'}</button>
+              <button className="text-left" onClick={() => openRecord(r)}><StatusBadge status={r.status} /></button>
+              <button className="text-left text-xs text-slate-500" onClick={() => openRecord(r)}>
                 {r.dateRaised ? new Date(r.dateRaised).toLocaleDateString('en-GB') : '—'}
-              </div>
-            </button>
+              </button>
+            </div>
           ))
         )}
       </div>
