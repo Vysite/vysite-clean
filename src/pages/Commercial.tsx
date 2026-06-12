@@ -22,6 +22,7 @@ import CommercialTimeline from './commercial/CommercialTimeline';
 import type { CommercialTab } from './commercial/types';
 import { RECORD_TYPES, STATUSES, typeInfo, statusInfo, parseRawValue, fmtCurrency as fmtC } from './commercial/types';
 import { exportFullCommercialReport } from './commercial/CommercialPDF';
+import { openPrintTab } from '../lib/printTab';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -238,6 +239,38 @@ function buildExportHTML(
     ? `<div class="section"><div class="section-heading">Commercial Details &amp; Notes</div><div class="section-content">${esc(record.notes)}</div></div>`
     : '';
 
+  // Extra data sections — document refs and type-specific fields
+  const ex = record.extraData ?? {};
+  const docRefField   = ex.document_ref as string | undefined;
+  const relatedRefs   = ex.related_refs as string | undefined;
+  const refRow = (docRefField || relatedRefs)
+    ? `<div class="section"><div class="section-heading">Document References</div><div class="meta-block"><div class="meta-grid">
+        ${docRefField ? `<div class="meta-item"><div class="meta-label">Document Ref</div><div class="meta-value">${esc(docRefField)}</div></div>` : ''}
+        ${relatedRefs ? `<div class="meta-item"><div class="meta-label">Related Records</div><div class="meta-value">${esc(relatedRefs)}</div></div>` : ''}
+      </div></div></div>` : '';
+
+  let typeFieldsSection = '';
+  if (record.recordType === 'delay_notice') {
+    const dnRows = [
+      ['Related EWN Reference', ex.ewn_ref as string],
+      ['Responsible Party',     ex.responsible_party as string],
+      ['Date Delay First Occurred', ex.delay_start_date ? fmtD(ex.delay_start_date as string) : undefined],
+      ['Date Notice Issued',    ex.notice_issued_date ? fmtD(ex.notice_issued_date as string) : undefined],
+      ['Potential Programme Impact', ex.programme_days ? `${ex.programme_days} days` : undefined],
+      ['Potential Cost Impact', ex.potential_cost ? `\u00a3${ex.potential_cost}` : undefined],
+    ].filter(([, v]) => v);
+    const causeField = ex.cause_of_delay as string | undefined;
+    const impactField = ex.impacted_works as string | undefined;
+    if (dnRows.length || causeField || impactField) {
+      const dnMeta = dnRows.length
+        ? `<div class="meta-block"><div class="meta-grid">${dnRows.map(([l, v]) => `<div class="meta-item"><div class="meta-label">${esc(l as string)}</div><div class="meta-value">${esc(v as string)}</div></div>`).join('')}</div></div>`
+        : '';
+      const causeSection = causeField ? `<div style="margin-top:10px"><div class="meta-label" style="margin-bottom:4px">Cause of Delay</div><div class="section-content">${esc(causeField)}</div></div>` : '';
+      const impactSection = impactField ? `<div style="margin-top:10px"><div class="meta-label" style="margin-bottom:4px">Impacted Works</div><div class="section-content">${esc(impactField)}</div></div>` : '';
+      typeFieldsSection = `<div class="section"><div class="section-heading">Delay Notice Details</div>${dnMeta}${causeSection}${impactSection}</div>`;
+    }
+  }
+
   const lineMarginPct = (l: CommercialLineItem) => {
     const ct = lineTotal(l, 'client'), it = lineTotal(l, 'internal');
     return ct > 0 ? ((ct - it) / ct * 100).toFixed(1) + '%' : '\u2014';
@@ -301,7 +334,7 @@ function buildExportHTML(
   const noticeBar = contractualNotice ? `<div class="legal-notice-bar"><div class="legal-notice-label">Contractual Notice</div><div class="legal-notice-text">${esc(contractualNotice)}</div></div>` : '';
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(record.reference || 'Record')} — ${esc(record.title || '')}</title><style>${CSS}</style></head>
-    <body><div class="page">${header}${metaBlock}${notesSection}${costSection}${evidenceSection}
+    <body><div class="page">${header}${metaBlock}${refRow}${notesSection}${typeFieldsSection}${costSection}${evidenceSection}
     <div class="legal-footer">
       <div class="legal-footer-header"><span class="legal-footer-title">Legal &amp; Contractual Information</span><span class="legal-footer-ref">Ref: ${esc(docRef)}</span></div>
       ${noticeBar}
@@ -658,23 +691,33 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
   }
 
   async function handleExport(view: 'internal' | 'client') {
+    if (!record) return;
     const attsWithData = await Promise.all(
       attachments.map(async a => a.data_url ? a : { ...a, data_url: await store.fetchAttachmentData(a.id) })
     );
+    const exportRecord: CommercialRecord = {
+      ...record,
+      recordType: form.recordType,
+      reference: form.reference,
+      title: form.title,
+      client: form.client,
+      status: form.status,
+      dateRaised: form.dateRaised || null,
+      dateSubmitted: form.dateSubmitted || null,
+      dateAgreed: form.dateAgreed || null,
+      notes: form.notes,
+      projectName: projects.find(p => p.id === form.projectId)?.name ?? record.projectName,
+      extraData: record.extraData,
+    };
     const html = buildExportHTML(
-      { ...record!, ...form, projectName: projects.find(p => p.id === form.projectId)?.name },
+      exportRecord,
       lineItems as CommercialLineItem[],
       view,
       attsWithData,
       store.settings?.logo_data_url,
       store.settings?.company_name,
     );
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 400);
+    openPrintTab(html);
   }
 
   const recordComments = store.commercialRecordComments.filter(c => c.record_id === (record?.id ?? ''));
