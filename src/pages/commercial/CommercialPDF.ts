@@ -1612,6 +1612,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 .comment-body { font-size:8.5pt; color:#334155; margin-top:3px; line-height:1.5; }
 .att-list { margin-top:10px; }
 .att-item { font-size:8pt; color:#64748b; padding:4px 0; border-bottom:0.5px solid #f8fafc; }
+.evidence-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:10px; }
+.evidence-img-card { border:0.5px solid #e2e8f0; border-radius:6px; overflow:hidden; }
+.evidence-img { width:100%; max-height:220px; object-fit:contain; background:#f8fafc; display:block; }
+.evidence-img-caption { padding:5px 8px; font-size:7.5pt; color:#64748b; background:#f8fafc; border-top:0.5px solid #e2e8f0; }
 .doc-footer { margin-top:32px; padding-top:10px; border-top:0.5px solid #e2e8f0; display:flex; justify-content:space-between; }
 .doc-footer-l { font-size:7pt; color:#94a3b8; }
 .doc-footer-r { font-size:7pt; color:#94a3b8; text-align:right; }
@@ -1703,6 +1707,43 @@ function vaDocFooter(today: string, variant: string): string {
   </div>`;
 }
 
+function vaAttachmentHtml(attachments: DBAttachment[]): string {
+  if (!attachments?.length) return '';
+  const images = attachments.filter(a => a.type?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(a.name ?? ''));
+  const docs   = attachments.filter(a => !images.includes(a));
+
+  const imagesHtml = images.length
+    ? `<div class="evidence-grid">${images.map(img =>
+        `<div class="evidence-img-card">${
+          img.data_url
+            ? `<img class="evidence-img" src="${img.data_url}" alt="${esc(img.name)}" />`
+            : `<div class="evidence-img" style="min-height:100px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:8pt;">Image unavailable</div>`
+        }<div class="evidence-img-caption">${esc(img.name)}${img.category ? ` — ${esc(img.category)}` : ''}</div></div>`
+      ).join('')}</div>` : '';
+
+  const docsHtml = docs.length
+    ? `<table style="width:100%;border-collapse:collapse;font-size:8pt;margin-top:${images.length ? '14px' : '10px'};">
+        <thead><tr>
+          <th style="text-align:left;padding:5px 8px;border-bottom:1.5px solid #0f172a;font-size:6pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">File</th>
+          <th style="text-align:left;padding:5px 8px;border-bottom:1.5px solid #0f172a;font-size:6pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">Category</th>
+          <th style="text-align:right;padding:5px 8px;border-bottom:1.5px solid #0f172a;font-size:6pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">Size</th>
+          <th style="text-align:right;padding:5px 8px;border-bottom:1.5px solid #0f172a;font-size:6pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;">Uploaded</th>
+        </tr></thead>
+        <tbody>${docs.map(d => {
+          const sz = d.size ? (d.size < 1024*1024 ? `${(d.size/1024).toFixed(0)} KB` : `${(d.size/(1024*1024)).toFixed(1)} MB`) : '—';
+          const dt = d.created_at ? new Date(d.created_at).toLocaleDateString('en-GB') : '—';
+          return `<tr>
+            <td style="padding:6px 8px;border-bottom:0.5px solid #f1f5f9;color:#0f172a;font-weight:600;">${esc(d.name)}</td>
+            <td style="padding:6px 8px;border-bottom:0.5px solid #f1f5f9;color:#64748b;">${esc(d.category || '—')}</td>
+            <td style="padding:6px 8px;border-bottom:0.5px solid #f1f5f9;color:#64748b;text-align:right;">${sz}</td>
+            <td style="padding:6px 8px;border-bottom:0.5px solid #f1f5f9;color:#64748b;text-align:right;">${dt}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>` : '';
+
+  return `<div style="margin-top:20px;"><div class="section-label">Evidence &amp; Attachments (${attachments.length})</div>${imagesHtml}${docsHtml}</div>`;
+}
+
 function vaInternalBody(d: VABuildUpData): string {
   const today = todayStr();
   const item = d.item;
@@ -1720,12 +1761,7 @@ function vaInternalBody(d: VABuildUpData): string {
       </div>`
     : '';
 
-  const attHtml = (d.attachments ?? []).length > 0
-    ? `<div class="att-list">
-        <div class="section-label">Attachments / Evidence (${d.attachments!.length})</div>
-        ${(d.attachments ?? []).map(a => `<div class="att-item">${esc(a.name)}${a.category ? ` — ${esc(a.category)}` : ''}</div>`).join('')}
-      </div>`
-    : '';
+  const attHtml = vaAttachmentHtml(d.attachments ?? []);
 
   return `<div class="page">
     ${vaDocHeader('Variation Account', 'Internal Build-Up')}
@@ -1775,6 +1811,7 @@ function vaInternalBody(d: VABuildUpData): string {
 function vaClientBody(d: VABuildUpData): string {
   const today = todayStr();
   const item = d.item;
+  const attHtml = vaAttachmentHtml(d.attachments ?? []);
 
   return `<div class="page">
     ${vaDocHeader('Variation Account', 'Client Copy')}
@@ -1801,6 +1838,7 @@ function vaClientBody(d: VABuildUpData): string {
       <div class="grand-value">${fv(d.buildUpTotal)}</div>
     </div>` : ''}
 
+    ${attHtml}
     ${vaDocFooter(today, 'Client')}
   </div>`;
 }

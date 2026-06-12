@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   Plus, X, Save, Trash2,
   Paperclip, Eye, Download, FileText, AlertCircle,
@@ -597,6 +597,17 @@ function VariationDrawer({
   const [showPdfMenu, setShowPdfMenu] = useState(false);
   const pdfMenuRef = useRef<HTMLDivElement>(null);
 
+  // Stable ID: generated once at mount for new items, taken from existing item otherwise
+  const [stableId] = useState<string>(() =>
+    mode === 'create'
+      ? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); })
+      : (item?.id ?? '')
+  );
+
+  // Local accumulation for create mode
+  const [localBuildUpLines, setLocalBuildUpLines] = useState<DBVABuildUpLine[]>([]);
+  const [localComments, setLocalComments] = useState<DBVAComment[]>([]);
+
   const [form, setForm] = useState({
     reference:   item?.reference   ?? nextRef,
     title:       item?.title       ?? '',
@@ -614,10 +625,27 @@ function VariationDrawer({
     a => a.linked_type === 'variation_account' && a.linked_id === (item?.id ?? '')
   );
 
-  const buildUpLines = (store.vaBuildUpLines ?? []).filter(l => l.va_item_id === (item?.id ?? ''));
+  // Build-up lines: local state for create mode, store for edit mode
+  const buildUpLines = mode === 'create'
+    ? localBuildUpLines
+    : (store.vaBuildUpLines ?? []).filter(l => l.va_item_id === (item?.id ?? ''));
   const buildUpTotal = buildUpLines.reduce((s, l) => s + (l.line_total ?? 0), 0);
 
-  const comments = (store.vaComments ?? []).filter(c => c.va_item_id === (item?.id ?? ''));
+  // Comments: local state for create mode, store for edit mode
+  const comments = mode === 'create'
+    ? localComments
+    : (store.vaComments ?? []).filter(c => c.va_item_id === (item?.id ?? ''));
+
+  // Handlers for local build-up lines in create mode
+  const localAddLine = useCallback((l: DBVABuildUpLine) => {
+    setLocalBuildUpLines(prev => [...prev, l].sort((a, b) => a.line_no - b.line_no));
+  }, []);
+  const localUpdateLine = useCallback((l: DBVABuildUpLine) => {
+    setLocalBuildUpLines(prev => prev.map(x => x.id === l.id ? l : x));
+  }, []);
+  const localRemoveLine = useCallback((id: string) => {
+    setLocalBuildUpLines(prev => prev.filter(l => l.id !== id));
+  }, []);
 
   // Close PDF menu on outside click
   useEffect(() => {
@@ -637,7 +665,7 @@ function VariationDrawer({
     setSaving(true); setError(null);
     const now = new Date().toISOString();
     const row: DBVariationAccountItem = {
-      id:          item?.id ?? genId(),
+      id:          stableId,
       org_id:      orgId,
       project_id:  projectId,
       reference:   form.reference.trim(),
@@ -657,6 +685,26 @@ function VariationDrawer({
     try {
       if (mode === 'create') {
         await store.addVariationAccountItem(row);
+        // Flush local build-up lines
+        for (const l of localBuildUpLines) {
+          await store.addVABuildUpLine(l);
+        }
+        // Flush local comments
+        for (const c of localComments) {
+          await store.addVAComment(c);
+        }
+        // Flush pending file attachments
+        for (const f of pendingFiles) {
+          await store.addAttachment({
+            id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            linked_type: 'variation_account', linked_id: stableId,
+            project_id: projectId, project_name: '',
+            name: f.name, type: f.type, size: f.size,
+            category: f.type.startsWith('image/') ? 'Photo' : 'Document',
+            data_url: f.dataUrl ?? '', uploaded_by: store.currentUser?.name ?? '',
+            created_at: now,
+          });
+        }
       } else {
         await store.updateVariationAccountItem(row);
       }
@@ -679,24 +727,31 @@ function VariationDrawer({
     setDeleting(false);
   }
 
-  function handleExportInternal() {
+  async function handleExportInternal() {
     if (!item) return;
     setShowPdfMenu(false);
+    const attsWithData = await Promise.all(
+      attachments.map(async a => a.data_url ? a : { ...a, data_url: await store.fetchAttachmentData(a.id) })
+    );
     exportVAInternalPDF({
       item,
       lines: buildUpLines,
       comments,
-      attachments,
+      attachments: attsWithData,
       buildUpTotal,
     });
   }
 
-  function handleExportClient() {
+  async function handleExportClient() {
     if (!item) return;
     setShowPdfMenu(false);
+    const attsWithData = await Promise.all(
+      attachments.map(async a => a.data_url ? a : { ...a, data_url: await store.fetchAttachmentData(a.id) })
+    );
     exportVAClientPDF({
       item,
       lines: buildUpLines,
+      attachments: attsWithData,
       buildUpTotal,
     });
   }
@@ -857,42 +912,38 @@ function VariationDrawer({
           {/* ── Cost Build-Up ── */}
           {tab === 'build-up' && (
             <div>
-              {mode === 'create' ? (
-                <p className="text-sm text-slate-500 text-center py-8">Save the variation first, then add cost build-up lines.</p>
-              ) : (
-                <BuildUpTable
-                  lines={buildUpLines}
-                  vaItemId={item!.id}
-                  orgId={orgId}
-                  projectId={projectId}
-                  canEdit={canEdit}
-                  onAdd={store.addVABuildUpLine}
-                  onUpdate={store.updateVABuildUpLine}
-                  onRemove={store.removeVABuildUpLine}
-                />
-              )}
+              <BuildUpTable
+                lines={buildUpLines}
+                vaItemId={stableId}
+                orgId={orgId}
+                projectId={projectId}
+                canEdit={canEdit}
+                onAdd={mode === 'create' ? localAddLine : store.addVABuildUpLine}
+                onUpdate={mode === 'create' ? localUpdateLine : store.updateVABuildUpLine}
+                onRemove={mode === 'create' ? localRemoveLine : store.removeVABuildUpLine}
+              />
             </div>
           )}
 
           {/* ── Comments ── */}
           {tab === 'comments' && (
             <div>
-              {mode === 'create' ? (
-                <p className="text-sm text-slate-500 text-center py-8">Save the variation first, then add comments.</p>
-              ) : (
-                <CommentsSection
-                  comments={comments}
-                  vaItemId={item!.id}
-                  orgId={orgId}
-                  projectId={projectId}
-                  currentUser={store.currentUser}
-                  platformUsers={store.platformUsers}
-                  canAdd={canEdit}
-                  onAdd={store.addVAComment}
-                  onRemove={store.removeVAComment}
-                  onNotify={store.addNotification}
-                />
-              )}
+              <CommentsSection
+                comments={comments}
+                vaItemId={stableId}
+                orgId={orgId}
+                projectId={projectId}
+                currentUser={store.currentUser}
+                platformUsers={store.platformUsers}
+                canAdd={canEdit}
+                onAdd={mode === 'create'
+                  ? async (c: DBVAComment) => { setLocalComments(prev => [...prev, c]); }
+                  : store.addVAComment}
+                onRemove={mode === 'create'
+                  ? async (id: string) => { setLocalComments(prev => prev.filter(c => c.id !== id)); }
+                  : store.removeVAComment}
+                onNotify={store.addNotification}
+              />
             </div>
           )}
 
@@ -900,7 +951,30 @@ function VariationDrawer({
           {tab === 'attachments' && (
             <div className="space-y-4">
               {mode === 'create' ? (
-                <p className="text-sm text-slate-500 text-center py-8">Save the variation first, then attach files.</p>
+                <>
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-sky-900/20 border border-sky-800/30 text-sky-300 text-xs">
+                    <Paperclip size={13} /><span>Files will be attached when you click Create Variation.</span>
+                  </div>
+                  <FileUploadComponent files={pendingFiles} onChange={setPendingFiles} label="Drop files, photos or documents here" maxFiles={20} />
+                  {pendingFiles.length > 0 && (
+                    <div className="space-y-1.5 mt-1">
+                      {pendingFiles.map((f, i) => (
+                        <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0d1628] border border-[#1e2d4a] text-xs text-slate-300">
+                          <FileText size={12} className="text-slate-500 shrink-0" />
+                          <span className="truncate flex-1">{f.name}</span>
+                          <span className="text-slate-600 shrink-0">{f.size ? `${(f.size / 1024).toFixed(0)} KB` : ''}</span>
+                          <button onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))} className="p-0.5 text-slate-600 hover:text-red-400 shrink-0"><Trash2 size={11} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {pendingFiles.length === 0 && (
+                    <div className="text-center py-6">
+                      <Paperclip size={22} className="text-slate-700 mx-auto mb-2" />
+                      <p className="text-sm text-slate-500">No files selected yet</p>
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
                   <FileUploadComponent files={pendingFiles} onChange={setPendingFiles} label="Drop files, photos or documents here" maxFiles={20} />
@@ -975,7 +1049,7 @@ function VariationDrawer({
             <button onClick={onClose} className="px-4 py-2 rounded-lg border border-[#1e2d4a] text-slate-400 hover:text-white text-sm transition-colors">
               {canEdit ? 'Cancel' : 'Close'}
             </button>
-            {canEdit && tab === 'details' && (
+            {canEdit && (
               <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#f97316] hover:bg-orange-400 text-white text-sm font-semibold transition-colors shadow-lg shadow-orange-900/30 disabled:opacity-60">
                 <Save size={14} />
                 {saving ? 'Saving…' : mode === 'create' ? 'Create Variation' : 'Save Changes'}

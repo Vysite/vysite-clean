@@ -273,6 +273,7 @@ export interface CommercialLineItem {
   sortOrder: number;
   description: string;
   clientDescription: string;
+  lineType: string;
   unit: string;
   quantity: number;
   internalRate: number;

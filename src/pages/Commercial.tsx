@@ -79,8 +79,9 @@ function dbToLineItem(r: Record<string, unknown>): CommercialLineItem {
     orgId:             r.org_id as string,
     recordId:          r.record_id as string,
     sortOrder:         r.sort_order as number,
-    description:       r.description as string,
-    clientDescription: r.client_description as string,
+    description:       (r.description as string) || (r.client_description as string) || '',
+    clientDescription: (r.client_description as string) || (r.description as string) || '',
+    lineType:          (r.line_type as string) || 'Labour',
     unit:              r.unit as string,
     quantity:          Number(r.quantity),
     internalRate:      Number(r.internal_rate),
@@ -277,34 +278,34 @@ function buildExportHTML(
   };
 
   const lineRowsHtml = lines.map((l, i) => {
-    const clientDesc = l.clientDescription || l.description || '\u2014';
-    const internalDesc = l.description || l.clientDescription || '\u2014';
+    const desc = l.description || l.clientDescription || '\u2014';
+    const type = l.lineType || '\u2014';
     const it = lineTotal(l, 'internal'), ct = lineTotal(l, 'client');
     if (view === 'internal') {
       return `<tr>
         <td class="num" style="color:#94a3b8;font-size:9px">${i+1}</td>
-        <td>${esc(internalDesc)}</td><td>${esc(clientDesc)}</td>
+        <td>${esc(desc)}</td><td>${esc(type)}</td>
         <td class="num">${l.quantity}</td><td>${esc(l.unit)}</td>
-        <td class="num">\u00a3${fmt(l.internalRate)}</td><td class="num">\u00a3${fmt(it)}</td>
-        <td class="num">\u00a3${fmt(l.clientRate)}</td><td class="num">\u00a3${fmt(ct)}</td>
+        <td class="num">\u00a3${fmt(l.internalRate)}</td>
         <td class="num">${l.markupPct != null ? l.markupPct.toFixed(1)+'%' : '\u2014'}</td>
+        <td class="num">\u00a3${fmt(l.clientRate)}</td><td class="num">\u00a3${fmt(ct)}</td>
         <td class="num">${lineMarginPct(l)}</td>
       </tr>`;
     }
     return `<tr>
       <td class="num" style="color:#94a3b8;font-size:9px">${i+1}</td>
-      <td>${esc(clientDesc)}</td>
+      <td>${esc(desc)}</td><td>${esc(type)}</td>
       <td class="num">${l.quantity}</td><td>${esc(l.unit)}</td>
       <td class="num">\u00a3${fmt(l.clientRate)}</td><td class="num">\u00a3${fmt(ct)}</td>
     </tr>`;
   }).join('');
 
-  const internalThead = `<tr><th class="num">#</th><th>Internal Desc.</th><th>Client Desc.</th><th class="num">Qty</th><th>Unit</th><th class="num">Int. Rate</th><th class="num">Int. Total</th><th class="num">Client Rate</th><th class="num">Client Total</th><th class="num">Markup %</th><th class="num">Margin %</th></tr>`;
-  const clientThead   = `<tr><th class="num">#</th><th>Description</th><th class="num">Qty</th><th>Unit</th><th class="num">Rate</th><th class="num">Total</th></tr>`;
-  const emptyColspan  = view === 'internal' ? 11 : 6;
+  const internalThead = `<tr><th class="num">#</th><th>Description</th><th>Type</th><th class="num">Qty</th><th>Unit</th><th class="num">Cost Price</th><th class="num">Markup %</th><th class="num">Sales Price</th><th class="num">Total</th><th class="num">Margin %</th></tr>`;
+  const clientThead   = `<tr><th class="num">#</th><th>Description</th><th>Type</th><th class="num">Qty</th><th>Unit</th><th class="num">Sales Price</th><th class="num">Total</th></tr>`;
+  const emptyColspan  = view === 'internal' ? 10 : 7;
   const totalsHtml    = view === 'internal'
-    ? `<table class="totals-block"><tr><td class="label">Total Internal Cost</td><td class="val">\u00a3${fmt(totals.totalInternal)}</td></tr><tr><td class="label">Total Client Value</td><td class="val">\u00a3${fmt(totals.totalClient)}</td></tr><tr><td class="label">Gross Margin</td><td class="val">\u00a3${fmt(totals.margin)} (${totals.marginPct.toFixed(1)}%)</td></tr></table>`
-    : `<table class="totals-block"><tr><td class="label">Total Client Value</td><td class="val">\u00a3${fmt(totals.totalClient)}</td></tr></table>`;
+    ? `<table class="totals-block"><tr><td class="label">Total Cost</td><td class="val">\u00a3${fmt(totals.totalInternal)}</td></tr><tr><td class="label">Total Sales Value</td><td class="val">\u00a3${fmt(totals.totalClient)}</td></tr><tr><td class="label">Gross Margin</td><td class="val">\u00a3${fmt(totals.margin)} (${totals.marginPct.toFixed(1)}%)</td></tr></table>`
+    : `<table class="totals-block"><tr><td class="label">Total Sales Value</td><td class="val">\u00a3${fmt(totals.totalClient)}</td></tr></table>`;
 
   const costSection = `<div class="section"><div class="section-heading">Cost Breakdown</div><table class="data-table"><thead>${view === 'internal' ? internalThead : clientThead}</thead><tbody>${lineRowsHtml || `<tr><td colspan="${emptyColspan}" style="text-align:center;color:#94a3b8;padding:16px">No line items recorded.</td></tr>`}</tbody></table>${totalsHtml}</div>`;
 
@@ -345,15 +346,18 @@ function buildExportHTML(
 
 // ─── Line Item Editor ──────────────────────────────────────────────────────────
 
+const LINE_TYPES = ['Labour', 'Material', 'Plant', 'Subcontractor', 'Prelims', 'Other'];
+
 type DraftLineItem = Omit<CommercialLineItem, 'id' | 'orgId' | 'recordId'> & { id?: string };
 
 function LineItemEditor({
   lines, onChange, canViewPricing,
 }: { lines: DraftLineItem[]; onChange: (l: DraftLineItem[]) => void; canViewPricing: boolean }) {
-  const numCls = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded px-2 py-1 text-xs text-right text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]/60 focus:border-[#f97316]/60 transition-colors';
+  const cellCls = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded px-2 py-1 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]/60 focus:border-[#f97316]/60 transition-colors';
+  const numCls  = `${cellCls} text-right`;
 
   function addLine() {
-    onChange([...lines, { sortOrder: lines.length, description: '', clientDescription: '', unit: 'item', quantity: 1, internalRate: 0, clientRate: 0, markupPct: null }]);
+    onChange([...lines, { sortOrder: lines.length, description: '', clientDescription: '', lineType: 'Labour', unit: 'item', quantity: 1, internalRate: 0, clientRate: 0, markupPct: null }]);
   }
 
   function removeLine(i: number) { onChange(lines.filter((_, idx) => idx !== i)); }
@@ -361,10 +365,10 @@ function LineItemEditor({
   function updateLine(i: number, patch: Partial<DraftLineItem>) {
     const next = [...lines];
     next[i] = { ...next[i], ...patch };
-    if (patch.internalRate !== undefined && canViewPricing) {
-      const rate = patch.internalRate as number;
+    if (patch.description !== undefined) next[i].clientDescription = patch.description;
+    if (patch.internalRate !== undefined) {
       const markup = next[i].markupPct ?? null;
-      if (markup != null) next[i].clientRate = parseFloat((rate * (1 + markup / 100)).toFixed(2));
+      if (markup != null) next[i].clientRate = parseFloat(((patch.internalRate as number) * (1 + markup / 100)).toFixed(2));
     }
     if (patch.markupPct !== undefined) {
       const markup = patch.markupPct as number | null;
@@ -381,35 +385,37 @@ function LineItemEditor({
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-[#1e2d4a] bg-[#0d1628]">
-              {canViewPricing && <th className="px-3 py-2 text-left text-slate-500 font-semibold">Internal Desc.</th>}
-              <th className="px-3 py-2 text-left text-slate-500 font-semibold">Client Desc.</th>
-              <th className="px-3 py-2 text-right text-slate-500 font-semibold w-16">Qty</th>
-              <th className="px-3 py-2 text-left text-slate-500 font-semibold w-20">Unit</th>
-              {canViewPricing && <th className="px-3 py-2 text-right text-slate-500 font-semibold w-24">Int. Rate</th>}
-              {canViewPricing && <th className="px-3 py-2 text-right text-slate-500 font-semibold w-20">Markup %</th>}
-              <th className="px-3 py-2 text-right text-slate-500 font-semibold w-24">Client Rate</th>
-              <th className="px-3 py-2 text-right text-slate-500 font-semibold w-24">Total</th>
+              <th className="px-2 py-2 text-left text-slate-500 font-semibold w-6">#</th>
+              <th className="px-2 py-2 text-left text-slate-500 font-semibold">Description</th>
+              <th className="px-2 py-2 text-left text-slate-500 font-semibold w-28">Type</th>
+              <th className="px-2 py-2 text-left text-slate-500 font-semibold w-20">Unit</th>
+              <th className="px-2 py-2 text-right text-slate-500 font-semibold w-16">Qty</th>
+              {canViewPricing && <th className="px-2 py-2 text-right text-slate-500 font-semibold w-24">Cost Price</th>}
+              {canViewPricing && <th className="px-2 py-2 text-right text-slate-500 font-semibold w-20">Markup %</th>}
+              <th className="px-2 py-2 text-right text-slate-500 font-semibold w-24">Sales Price</th>
+              <th className="px-2 py-2 text-right text-slate-500 font-semibold w-24">Total</th>
               <th className="w-8" />
             </tr>
           </thead>
           <tbody>
             {lines.map((l, i) => (
               <tr key={i} className="border-b border-[#1e2d4a]/50 group hover:bg-[#0d1628]/40 transition-colors">
-                {canViewPricing && (
-                  <td className="py-1.5 pl-3 pr-2">
-                    <input className={`${numCls} text-left`} value={l.description} onChange={e => updateLine(i, { description: e.target.value })} placeholder="Internal description" />
-                  </td>
-                )}
+                <td className="py-1.5 pl-3 pr-1 text-slate-600 text-xs tabular-nums">{i + 1}</td>
+                <td className="py-1.5 px-2 min-w-[140px]">
+                  <input className={`${cellCls} text-left`} value={l.description} onChange={e => updateLine(i, { description: e.target.value })} placeholder="Description" />
+                </td>
                 <td className="py-1.5 px-2">
-                  <input className={`${numCls} text-left`} value={l.clientDescription} onChange={e => updateLine(i, { clientDescription: e.target.value })} placeholder="Client description" />
+                  <select className={`${cellCls} appearance-none cursor-pointer`} value={l.lineType || 'Labour'} onChange={e => updateLine(i, { lineType: e.target.value })}>
+                    {LINE_TYPES.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </td>
+                <td className="py-1.5 px-2">
+                  <select className={`${cellCls} appearance-none cursor-pointer`} value={l.unit} onChange={e => updateLine(i, { unit: e.target.value })}>
+                    {UNITS.map(u => <option key={u}>{u}</option>)}
+                  </select>
                 </td>
                 <td className="py-1.5 px-2">
                   <input type="number" min="0" step="any" className={numCls} value={l.quantity} onChange={e => updateLine(i, { quantity: parseFloat(e.target.value) || 0 })} />
-                </td>
-                <td className="py-1.5 px-2">
-                  <select className={`${numCls} text-left`} value={l.unit} onChange={e => updateLine(i, { unit: e.target.value })}>
-                    {UNITS.map(u => <option key={u}>{u}</option>)}
-                  </select>
                 </td>
                 {canViewPricing && (
                   <>
@@ -417,11 +423,11 @@ function LineItemEditor({
                       <input type="number" min="0" step="any" className={numCls} value={l.internalRate} onChange={e => updateLine(i, { internalRate: parseFloat(e.target.value) || 0 })} />
                     </td>
                     <td className="py-1.5 pr-2">
-                      <input type="number" min="0" max="100" step="0.1" className={numCls} value={l.markupPct ?? ''} onChange={e => updateLine(i, { markupPct: e.target.value ? parseFloat(e.target.value) : null })} placeholder="—" />
+                      <input type="number" min="0" max="200" step="0.1" className={numCls} value={l.markupPct ?? ''} onChange={e => updateLine(i, { markupPct: e.target.value ? parseFloat(e.target.value) : null })} placeholder="—" />
                     </td>
                   </>
                 )}
-                <td className="py-1.5 pr-2">
+                <td className="py-1.5 px-2">
                   <input type="number" min="0" step="any" className={numCls} value={l.clientRate} onChange={e => updateLine(i, { clientRate: parseFloat(e.target.value) || 0 })} />
                 </td>
                 <td className="py-1.5 pr-2 text-right text-slate-300 font-mono">
@@ -446,12 +452,12 @@ function LineItemEditor({
           <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg p-3 min-w-[240px] space-y-1.5 text-xs">
             {canViewPricing && (
               <div className="flex justify-between text-slate-400">
-                <span>Total Internal Cost</span>
+                <span>Total Cost</span>
                 <span className="font-mono text-slate-300">{fmtCurrency(totals.totalInternal)}</span>
               </div>
             )}
             <div className="flex justify-between text-slate-400">
-              <span>Total Client Value</span>
+              <span>Total Sales Value</span>
               <span className="font-mono text-white font-semibold">{fmtCurrency(totals.totalClient)}</span>
             </div>
             {canViewPricing && (
@@ -575,6 +581,16 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
   const [pendingFiles, setPendingFiles] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
 
+  // Stable ID: generated once at mount for new records, or taken from existing record
+  const [stableId] = useState<string>(() =>
+    isNew
+      ? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); })
+      : (record?.id ?? '')
+  );
+
+  // Pending comments for new records (flushed to DB at save time)
+  const [pendingComments, setPendingComments] = useState<DBCommercialRecordComment[]>([]);
+
   const [form, setForm] = useState({
     recordType:    (record?.recordType ?? 'early_warning_notice') as CommercialRecordType,
     reference:     record?.reference ?? '',
@@ -586,10 +602,8 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
     dateSubmitted: record?.dateSubmitted ?? '',
     dateAgreed:    record?.dateAgreed ?? '',
     notes:         record?.notes ?? '',
-    // Supporting evidence / doc reference (Priority 5)
     documentRef:   (record?.extraData?.document_ref as string) ?? '',
     relatedRefs:   (record?.extraData?.related_refs as string) ?? '',
-    // Delay Notice specific fields (Priority 4)
     ewnRef:           (record?.extraData?.ewn_ref as string) ?? '',
     causeOfDelay:     (record?.extraData?.cause_of_delay as string) ?? '',
     responsibleParty: (record?.extraData?.responsible_party as string) ?? '',
@@ -603,7 +617,13 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
   const [lineItems, setLineItems] = useState<DraftLineItem[]>([]);
   const [lineItemsLoaded, setLineItemsLoaded] = useState(false);
 
+  // For new records, show pending files as a preview list; for existing records, show uploaded attachments
   const attachments = store.attachments.filter(a => a.linked_type === 'commercial' && a.linked_id === (record?.id ?? ''));
+
+  // Comments: local pending state for new records, store state for existing
+  const recordComments = isNew
+    ? pendingComments
+    : store.commercialRecordComments.filter(c => c.record_id === (record?.id ?? ''));
 
   function handleProjectChange(projectId: string) {
     const proj = projects.find(p => p.id === projectId);
@@ -617,6 +637,24 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
       setLineItemsLoaded(true);
     });
   }, [record?.id, lineItemsLoaded]);
+
+  // For new records, mark line items as "loaded" immediately so the save path works
+  useEffect(() => {
+    if (isNew && !lineItemsLoaded) setLineItemsLoaded(true);
+  }, [isNew, lineItemsLoaded]);
+
+  function buildLineRow(l: DraftLineItem, idx: number, id: string) {
+    return {
+      id: l.id ?? `li-${Date.now()}-${idx}`,
+      org_id: orgId, record_id: id, sort_order: idx,
+      description: l.description,
+      client_description: l.description,
+      line_type: l.lineType || 'Labour',
+      unit: l.unit, quantity: l.quantity,
+      internal_rate: l.internalRate, client_rate: l.clientRate,
+      markup_pct: l.markupPct,
+    };
+  }
 
   async function handleSave() {
     if (!form.title.trim()) { setError('Title is required'); return; }
@@ -646,26 +684,31 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
         extra_data: extra,
         updated_at: now,
       };
+      const projectName = projects.find(p => p.id === form.projectId)?.name;
+
       if (isNew) {
-        const id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-          const r = Math.random() * 16 | 0;
-          return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-        });
+        const id = stableId;
         const { data, error: err } = await supabase.from('vy_commercial_records').insert({ ...row, id, created_at: now }).select('*').single();
         if (err) throw err;
         if (lineItems.length > 0) {
-          await supabase.from('vy_commercial_line_items').insert(
-            lineItems.map((l, idx) => ({
-              id: l.id ?? `li-${Date.now()}-${idx}`,
-              org_id: orgId, record_id: id, sort_order: idx,
-              description: l.description, client_description: l.clientDescription,
-              unit: l.unit, quantity: l.quantity,
-              internal_rate: l.internalRate, client_rate: l.clientRate,
-              markup_pct: l.markupPct,
-            }))
-          );
+          await supabase.from('vy_commercial_line_items').insert(lineItems.map((l, idx) => buildLineRow(l, idx, id)));
         }
-        const projectName = projects.find(p => p.id === form.projectId)?.name;
+        // Flush pending comments
+        for (const c of pendingComments) {
+          await store.addCommercialRecordComment({ ...c, record_id: id });
+        }
+        // Flush pending file attachments
+        for (const f of pendingFiles) {
+          await store.addAttachment({
+            id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            linked_type: 'commercial', linked_id: id,
+            project_id: form.projectId || '', project_name: projectName ?? '',
+            name: f.name, type: f.type, size: f.size,
+            category: f.type.startsWith('image/') ? 'Photo' : f.type === 'application/pdf' ? 'Document' : 'Other',
+            data_url: f.dataUrl ?? '', uploaded_by: store.currentUser?.name ?? '',
+            created_at: now,
+          });
+        }
         onSaved(dbToRecord(data as Record<string, unknown>, projectName));
       } else {
         const { data, error: err } = await supabase.from('vy_commercial_records').update(row).eq('id', record!.id).select('*').single();
@@ -673,19 +716,9 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
         if (lineItemsLoaded) {
           await supabase.from('vy_commercial_line_items').delete().eq('record_id', record!.id);
           if (lineItems.length > 0) {
-            await supabase.from('vy_commercial_line_items').insert(
-              lineItems.map((l, idx) => ({
-                id: l.id ?? `li-${Date.now()}-${idx}`,
-                org_id: orgId, record_id: record!.id, sort_order: idx,
-                description: l.description, client_description: l.clientDescription,
-                unit: l.unit, quantity: l.quantity,
-                internal_rate: l.internalRate, client_rate: l.clientRate,
-                markup_pct: l.markupPct,
-              }))
-            );
+            await supabase.from('vy_commercial_line_items').insert(lineItems.map((l, idx) => buildLineRow(l, idx, record!.id)));
           }
         }
-        const projectName = projects.find(p => p.id === form.projectId)?.name;
         onSaved(dbToRecord(data as Record<string, unknown>, projectName));
       }
     } catch (e) {
@@ -733,8 +766,6 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
     );
     openPrintTab(html);
   }
-
-  const recordComments = store.commercialRecordComments.filter(c => c.record_id === (record?.id ?? ''));
 
   const HAS_TYPE_FIELDS = form.recordType === 'delay_notice';
 
@@ -886,11 +917,15 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
           {tab === 'comments' && (
             <RecordCommentsSection
               comments={recordComments}
-              recordId={record?.id ?? ''}
+              recordId={stableId}
               currentUser={store.currentUser}
-              canAdd={!isNew && canEdit}
-              onAdd={store.addCommercialRecordComment}
-              onRemove={store.removeCommercialRecordComment}
+              canAdd={canEdit}
+              onAdd={isNew
+                ? async (c) => { setPendingComments(prev => [...prev, c]); }
+                : store.addCommercialRecordComment}
+              onRemove={isNew
+                ? async (id) => { setPendingComments(prev => prev.filter(x => x.id !== id)); }
+                : store.removeCommercialRecordComment}
             />
           )}
 
@@ -908,7 +943,30 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
           {tab === 'attachments' && (
             <div className="space-y-4">
               {isNew ? (
-                <p className="text-sm text-slate-500 text-center py-8">Save the record first, then attach files.</p>
+                <>
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-sky-900/20 border border-sky-800/30 text-sky-300 text-xs">
+                    <Paperclip size={13} /><span>Files will be attached when you click Create Record.</span>
+                  </div>
+                  <FileUploadComponent files={pendingFiles} onChange={setPendingFiles} label="Drop files, photos or documents here" maxFiles={20} />
+                  {pendingFiles.length > 0 && (
+                    <div className="space-y-1.5 mt-1">
+                      {pendingFiles.map((f, i) => (
+                        <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0d1628] border border-[#1e2d4a] text-xs text-slate-300">
+                          <FileText size={12} className="text-slate-500 shrink-0" />
+                          <span className="truncate flex-1">{f.name}</span>
+                          <span className="text-slate-600 shrink-0">{f.size ? `${(f.size / 1024).toFixed(0)} KB` : ''}</span>
+                          <button onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))} className="p-0.5 text-slate-600 hover:text-red-400 shrink-0"><Trash2 size={11} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {pendingFiles.length === 0 && (
+                    <div className="text-center py-6">
+                      <Paperclip size={22} className="text-slate-700 mx-auto mb-2" />
+                      <p className="text-sm text-slate-500">No files selected yet</p>
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
                   <FileUploadComponent files={pendingFiles} onChange={setPendingFiles} label="Drop files, photos or documents here" maxFiles={20} />
