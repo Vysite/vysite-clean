@@ -33,190 +33,211 @@ function todayStr(): string {
 // ─── Shared CSS ───────────────────────────────────────────────────────────────
 
 export const COMM_PDF_CSS = `
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'Georgia', 'Times New Roman', serif;
-    color: #1a1a2e;
-    background: white;
-    font-size: 10.5px;
-    line-height: 1.6;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  .page { max-width: 860px; margin: 0 auto; padding: 48px 52px; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+/* Zero page margins eliminate browser URL / date / title print chrome */
+@page { margin: 0; size: A4; }
+@media print { html { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+html, body {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9pt;
+  color: #0f172a;
+  background: #fff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.page { padding: 40px 52px 36px; }
 
-  /* ── Document header ─────────────────────────────────────────────────────── */
-  .doc-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding-bottom: 20px;
-    border-bottom: 0.75px solid #1a1a2e;
-    margin-bottom: 32px;
-  }
-  .doc-brand { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; font-weight: 800; color: #ea6c00; letter-spacing: 0.08em; line-height: 1; }
-  .doc-tagline { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 7.5px; color: #94a3b8; margin-top: 4px; letter-spacing: 0.1em; text-transform: uppercase; }
-  .doc-header-right { text-align: right; }
-  .doc-type { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 5px; }
-  .doc-title { font-size: 20px; font-weight: 700; color: #1a1a2e; line-height: 1.15; margin-bottom: 4px; }
-  .doc-project { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10px; color: #475569; }
+/* ── Executive header ── */
+.exec-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  padding-bottom: 14px; border-bottom: 1.5px solid #0f172a; margin-bottom: 28px;
+}
+.exec-brand { font-size: 10pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; line-height: 1; }
+.exec-brand-sub { font-size: 6.5pt; color: #94a3b8; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
+.exec-head-right { text-align: right; }
+.exec-doc-type { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8; margin-bottom: 3px; }
+.exec-doc-title { font-size: 11pt; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
 
-  /* ── Project summary strip ───────────────────────────────────────────────── */
-  .project-strip {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    padding: 0 0 14px;
-    border-bottom: 0.75px solid #e2e8f0;
-    margin-bottom: 32px;
-  }
-  .project-strip-name { font-size: 15px; font-weight: 700; color: #1a1a2e; }
-  .project-strip-client { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9.5px; color: #64748b; }
-  .project-strip-meta { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 8.5px; color: #94a3b8; text-align: right; }
+/* ── Project band ── */
+.exec-project-band {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding-bottom: 20px; border-bottom: 0.5px solid #e2e8f0; margin-bottom: 28px;
+}
+.exec-project-name { font-size: 17pt; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; line-height: 1.1; }
+.exec-client { font-size: 9.5pt; color: #64748b; margin-top: 4px; }
+.exec-report-date { font-size: 7.5pt; color: #94a3b8; text-align: right; line-height: 1.6; }
 
-  /* ── Section headings ────────────────────────────────────────────────────── */
-  .section-rule { border: none; border-top: 0.75px solid #e2e8f0; margin: 36px 0 22px; }
-  .section-label {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 7.5px;
-    font-weight: 700;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    margin-bottom: 18px;
-  }
+/* ── Section label ── */
+.exec-section-label {
+  font-size: 6.5pt; font-weight: 800; letter-spacing: 0.18em;
+  text-transform: uppercase; color: #94a3b8; margin-bottom: 16px;
+}
 
-  /* ── Financial statement ─────────────────────────────────────────────────── */
-  .fin-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-  .fin-row td { padding: 6px 0; vertical-align: baseline; }
-  .fin-row td:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .fin-label { font-size: 10.5px; color: #334155; padding-right: 12px; }
-  .fin-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 8px; color: #94a3b8; display: block; margin-top: 1px; }
-  .fin-value { font-size: 11px; font-weight: 600; color: #1a1a2e; }
-  .fin-rule td { border-top: 0.75px solid #e2e8f0; padding-top: 0; height: 10px; }
-  .fin-total td { padding: 8px 0 10px; border-top: 0.75px solid #1a1a2e; }
-  .fin-total .fin-label { font-size: 11px; font-weight: 700; color: #1a1a2e; }
-  .fin-total .fin-value { font-size: 15px; font-weight: 700; color: #ea6c00; letter-spacing: -0.01em; }
-  .fin-accent .fin-label { color: #92400e; }
-  .fin-accent .fin-value { color: #92400e; }
+/* ── Primary 2-col financial figures ── */
+.fin-primary-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-bottom: 0; }
+.fin-primary-fig { padding: 0 36px 20px 0; }
+.fin-primary-fig + .fin-primary-fig { border-left: 0.5px solid #e2e8f0; padding-left: 36px; padding-right: 0; }
+.fin-fig-label { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #64748b; margin-bottom: 7px; }
+.fin-fig-xl { font-size: 26pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; line-height: 1; }
+.fin-fig-xl.accent { color: #ea6c00; }
 
-  /* ── Applications valuation summary ─────────────────────────────────────── */
-  .val-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-bottom: 32px; }
-  .val-row { display: flex; align-items: baseline; justify-content: space-between; padding: 7px 0; border-bottom: 0.75px solid #f1f5f9; }
-  .val-row:last-child { border-bottom: none; }
-  .val-col { padding: 0 0 0 28px; }
-  .val-col:first-child { padding: 0 28px 0 0; border-right: 0.75px solid #f1f5f9; }
-  .val-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 8.5px; color: #64748b; }
-  .val-value { font-size: 11px; font-weight: 600; color: #1a1a2e; font-variant-numeric: tabular-nums; }
-  .val-value.warn { color: #92400e; }
-  .val-value.danger { color: #991b1b; }
-  .val-total-block { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; margin-top: 14px; padding-top: 12px; border-top: 0.75px solid #1a1a2e; }
-  .val-total-label { font-size: 11px; font-weight: 700; color: #1a1a2e; }
-  .val-total-value { font-size: 16px; font-weight: 700; color: #ea6c00; font-variant-numeric: tabular-nums; }
+/* ── Exposure / shortfall highlighted band ── */
+.exposure-band {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 20px; border-left: 3px solid #ea6c00; background: #fff7ed; margin: 16px 0 20px;
+}
+.exposure-band.zero { border-left-color: #16a34a; background: #f0fdf4; }
+.exposure-label { font-size: 7pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #92400e; }
+.exposure-band.zero .exposure-label { color: #166534; }
+.exposure-sub { font-size: 7pt; color: #a16207; margin-top: 2px; }
+.exposure-band.zero .exposure-sub { color: #166534; }
+.exposure-value { font-size: 22pt; font-weight: 700; color: #ea6c00; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.exposure-band.zero .exposure-value { color: #16a34a; }
 
-  /* ── Data table (clean, minimal) ─────────────────────────────────────────── */
-  .data-table { width: 100%; border-collapse: collapse; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9.5px; }
-  .data-table th {
-    padding: 0 10px 8px 0;
-    text-align: left;
-    font-size: 7.5px;
-    font-weight: 700;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    border-bottom: 0.75px solid #1a1a2e;
-    white-space: nowrap;
-  }
-  .data-table th.num { text-align: right; padding-right: 0; }
-  .data-table td { padding: 8px 10px 8px 0; border-bottom: 0.75px solid #f1f5f9; color: #1e293b; vertical-align: top; }
-  .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; padding-right: 0; }
-  .data-table tr:last-child td { border-bottom: none; }
-  .data-table .ref { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9px; font-weight: 700; color: #ea6c00; }
-  .data-table .strong { font-weight: 600; color: #1a1a2e; }
-  .data-table .muted { color: #94a3b8; }
+/* ── Secondary 3-col figures ── */
+.fin-secondary-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0;
+  padding: 16px 0; border-top: 0.5px solid #e2e8f0; border-bottom: 0.5px solid #e2e8f0; margin-bottom: 16px;
+}
+.fin-sec-fig { padding-right: 24px; }
+.fin-sec-fig + .fin-sec-fig { border-left: 0.5px solid #e2e8f0; padding-left: 24px; }
+.fin-sec-fig:last-child { padding-right: 0; }
+.fin-sec-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; }
+.fin-sec-value { font-size: 15pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.fin-sec-value.warn { color: #b45309; }
 
-  /* ── Record entry (register) ─────────────────────────────────────────────── */
-  .record-entry { padding: 18px 0; border-bottom: 0.75px solid #f1f5f9; page-break-inside: avoid; }
-  .record-entry:last-child { border-bottom: none; }
-  .record-entry-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
-  .record-ref { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9px; font-weight: 700; color: #ea6c00; margin-right: 10px; letter-spacing: 0.04em; }
-  .record-title { font-size: 12px; font-weight: 700; color: #1a1a2e; }
-  .record-meta { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 8.5px; color: #64748b; margin-top: 6px; display: flex; gap: 20px; flex-wrap: wrap; }
-  .record-meta-item { display: flex; gap: 5px; }
-  .record-meta-key { color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 7.5px; }
-  .record-notes { font-size: 9.5px; color: #475569; margin-top: 8px; padding-top: 8px; border-top: 0.75px solid #f1f5f9; line-height: 1.5; white-space: pre-wrap; }
+/* ── Remaining / total band ── */
+.fin-remaining-band {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 14px 0 13px; border-bottom: 1.5px solid #0f172a; margin-bottom: 24px;
+}
+.fin-remaining-label { font-size: 9.5pt; font-weight: 700; color: #0f172a; }
+.fin-remaining-value { font-size: 22pt; font-weight: 700; color: #ea6c00; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 
-  /* ── Status tag (inline text, no box) ───────────────────────────────────── */
-  .tag { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
-  .tag-green  { background: #f0fdf4; color: #166534; }
-  .tag-amber  { background: #fffbeb; color: #92400e; }
-  .tag-orange { background: #fff7ed; color: #c2410c; }
-  .tag-blue   { background: #eff6ff; color: #1e40af; }
-  .tag-red    { background: #fef2f2; color: #991b1b; }
-  .tag-slate  { background: #f8fafc; color: #475569; }
+/* ── Financial statement waterfall (contract sum cascade) ── */
+.fin-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.fin-row td { padding: 7px 0; vertical-align: baseline; }
+.fin-row td:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fin-label { font-size: 9pt; color: #334155; padding-right: 16px; }
+.fin-sub { font-size: 7.5pt; color: #94a3b8; display: block; margin-top: 1px; }
+.fin-value { font-size: 9.5pt; font-weight: 600; color: #0f172a; }
+.fin-rule td { border-top: 0.5px solid #e2e8f0; padding-top: 0; height: 8px; }
+.fin-total td { padding: 9px 0 11px; border-top: 0.75px solid #0f172a; }
+.fin-total .fin-label { font-size: 9.5pt; font-weight: 700; color: #0f172a; }
+.fin-total .fin-value { font-size: 13pt; font-weight: 700; color: #ea6c00; letter-spacing: -0.01em; }
+.fin-accent .fin-label { color: #92400e; }
+.fin-accent .fin-value { color: #b45309; }
 
-  /* ── Timeline ────────────────────────────────────────────────────────────── */
-  .tl-wrap { padding-left: 24px; }
-  .tl-entry { display: flex; gap: 16px; margin-bottom: 0; page-break-inside: avoid; }
-  .tl-left { text-align: right; min-width: 80px; padding-top: 1px; flex-shrink: 0; }
-  .tl-date { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9px; color: #64748b; }
-  .tl-right { flex: 1; padding-bottom: 20px; border-left: 1px solid #e2e8f0; padding-left: 18px; position: relative; }
-  .tl-right::before { content: ''; position: absolute; left: -4.5px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--dot-color, #94a3b8); }
-  .tl-kind { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 3px; }
-  .tl-title { font-size: 11px; font-weight: 600; color: #1a1a2e; margin-bottom: 3px; }
-  .tl-ref { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9px; color: #ea6c00; margin-right: 6px; font-weight: 700; }
-  .tl-val { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9px; font-weight: 700; margin-left: 8px; font-variant-numeric: tabular-nums; }
-  .tl-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 8.5px; color: #94a3b8; }
-  .tl-entry:last-child .tl-right { border-left-color: transparent; }
+/* ── Project meta strip ── */
+.proj-meta { display: flex; flex-wrap: wrap; gap: 0 32px; padding: 14px 0; border-top: 0.5px solid #e2e8f0; border-bottom: 0.5px solid #e2e8f0; margin-bottom: 24px; }
+.proj-meta-item { min-width: 120px; margin-bottom: 8px; }
+.proj-meta-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 2px; }
+.proj-meta-value { font-size: 8.5pt; font-weight: 600; color: #334155; }
 
-  /* ── Key dates ───────────────────────────────────────────────────────────── */
-  .kd-table { width: 100%; border-collapse: collapse; }
-  .kd-table td { padding: 8px 12px 8px 0; border-bottom: 0.75px solid #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9.5px; vertical-align: baseline; }
-  .kd-table tr:last-child td { border-bottom: none; }
-  .kd-date { color: #64748b; width: 80px; white-space: nowrap; font-size: 9px; }
-  .kd-title { font-weight: 600; color: #1a1a2e; }
-  .kd-desc { color: #64748b; padding-left: 12px; }
-  .kd-status { width: 70px; text-align: right; }
-  .kd-days { width: 90px; text-align: right; color: #94a3b8; font-size: 8.5px; }
+/* ── Data table (VA schedule, compact register) ── */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table thead th {
+  font-size: 6.5pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #64748b;
+  padding: 0 12px 12px 0; text-align: left; border-bottom: 1.5px solid #0f172a; white-space: nowrap; vertical-align: bottom;
+}
+.data-table thead th.r { text-align: right; padding-right: 0; padding-left: 12px; }
+.data-table thead th.muted { color: #94a3b8; }
+.data-table tbody td {
+  font-size: 8.5pt; color: #1e293b; padding: 12px 12px 11px 0; border-bottom: 0.5px solid #f1f5f9; vertical-align: top;
+}
+.data-table tbody td.r { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; padding-right: 0; padding-left: 12px; }
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tfoot td { padding: 11px 12px 10px 0; border-top: 1.5px solid #0f172a; font-size: 8.5pt; font-weight: 700; }
+.data-table tfoot td.r { text-align: right; padding-right: 0; padding-left: 12px; font-variant-numeric: tabular-nums; }
+.dt-ref { font-size: 9pt; font-weight: 800; color: #ea6c00; letter-spacing: -0.01em; }
+.dt-title { font-weight: 700; color: #0f172a; line-height: 1.3; }
+.dt-muted { color: #64748b; font-size: 8pt; }
+.dt-val-pos { color: #166534; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dt-val-neg { color: #991b1b; font-weight: 700; font-variant-numeric: tabular-nums; }
 
-  /* ── Cover page ──────────────────────────────────────────────────────────── */
-  .cover { padding: 0 0 40px; border-bottom: 0.75px solid #1a1a2e; margin-bottom: 40px; }
-  .cover-brand { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; font-weight: 800; color: #ea6c00; letter-spacing: 0.1em; margin-bottom: 60px; }
-  .cover-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 14px; }
-  .cover-title { font-size: 32px; font-weight: 700; color: #1a1a2e; line-height: 1.1; margin-bottom: 24px; }
-  .cover-project { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
-  .cover-client { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; color: #64748b; margin-bottom: 28px; }
-  .cover-figures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 0.75px solid #e2e8f0; border-bottom: 0.75px solid #e2e8f0; padding: 20px 0; margin-bottom: 28px; }
-  .cover-figure { padding: 0 20px 0 0; }
-  .cover-figure:not(:last-child) { border-right: 0.75px solid #e2e8f0; margin-right: 20px; }
-  .cover-figure-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 7.5px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
-  .cover-figure-value { font-size: 18px; font-weight: 700; color: #1a1a2e; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-  .cover-figure-value.accent { color: #ea6c00; }
-  .cover-date { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 8.5px; color: #94a3b8; }
+/* ── Register record entry ── */
+.record-entry { padding: 16px 0; border-bottom: 0.5px solid #f1f5f9; page-break-inside: avoid; }
+.record-entry:last-child { border-bottom: none; }
+.record-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.record-ref { font-size: 9pt; font-weight: 800; color: #ea6c00; margin-right: 10px; letter-spacing: -0.01em; }
+.record-title { font-size: 10pt; font-weight: 700; color: #0f172a; line-height: 1.3; }
+.record-badges { display: flex; gap: 6px; align-items: center; flex-shrink: 0; margin-left: 12px; }
+.record-meta { font-size: 7.5pt; color: #64748b; margin-top: 6px; display: flex; gap: 20px; flex-wrap: wrap; line-height: 1.4; }
+.record-meta-key { color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 6.5pt; margin-right: 4px; }
+.record-notes { font-size: 8.5pt; color: #475569; margin-top: 8px; padding-top: 8px; border-top: 0.5px solid #f1f5f9; line-height: 1.5; white-space: pre-wrap; }
 
-  /* ── Page break ──────────────────────────────────────────────────────────── */
-  .page-break { page-break-before: always; padding-top: 48px; }
+/* ── Register summary bar ── */
+.register-summary { display: flex; gap: 28px; padding: 14px 0; border-top: 0.5px solid #e2e8f0; border-bottom: 0.5px solid #e2e8f0; margin-bottom: 24px; }
+.reg-sum-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 3px; }
+.reg-sum-value { font-size: 13pt; font-weight: 700; color: #0f172a; }
+.reg-sum-value.accent { color: #ea6c00; }
 
-  /* ── Footer ──────────────────────────────────────────────────────────────── */
-  .doc-footer {
-    margin-top: 48px;
-    padding-top: 12px;
-    border-top: 0.75px solid #e2e8f0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  }
-  .doc-footer-left { font-size: 7.5px; color: #94a3b8; }
-  .doc-footer-right { font-size: 7.5px; color: #94a3b8; text-align: right; }
+/* ── Timeline ── */
+.tl-wrap { padding-left: 8px; }
+.tl-entry { display: flex; gap: 20px; margin-bottom: 0; page-break-inside: avoid; }
+.tl-left { text-align: right; min-width: 90px; padding-top: 2px; flex-shrink: 0; }
+.tl-date { font-size: 8.5pt; color: #64748b; font-weight: 500; }
+.tl-right { flex: 1; padding-bottom: 18px; border-left: 1px solid #e2e8f0; padding-left: 20px; position: relative; }
+.tl-right::before { content: ''; position: absolute; left: -4.5px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--dot-color, #94a3b8); }
+.tl-kind { font-size: 6.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #94a3b8; margin-bottom: 3px; }
+.tl-title { font-size: 9.5pt; font-weight: 600; color: #0f172a; margin-bottom: 3px; line-height: 1.3; }
+.tl-ref { font-size: 8.5pt; color: #ea6c00; margin-right: 6px; font-weight: 700; }
+.tl-val { font-size: 8.5pt; font-weight: 700; margin-left: 8px; font-variant-numeric: tabular-nums; }
+.tl-sub { font-size: 8pt; color: #94a3b8; }
+.tl-entry:last-child .tl-right { border-left-color: transparent; }
+.tl-summary-item { flex: 1; padding-right: 20px; }
+.tl-summary-value { font-size: 18pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+.tl-summary-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-top: 2px; }
 
-  .empty-notice { padding: 24px; text-align: center; color: #94a3b8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 9.5px; border-top: 0.75px solid #f1f5f9; }
+/* ── Key dates ── */
+.kd-table { width: 100%; border-collapse: collapse; }
+.kd-table th {
+  font-size: 6.5pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #64748b;
+  padding: 0 12px 10px 0; text-align: left; border-bottom: 1.5px solid #0f172a; white-space: nowrap;
+}
+.kd-table td { padding: 10px 12px 9px 0; border-bottom: 0.5px solid #f1f5f9; font-size: 8.5pt; vertical-align: top; }
+.kd-table tr:last-child td { border-bottom: none; }
+.kd-date { color: #64748b; width: 80px; white-space: nowrap; font-size: 8pt; }
+.kd-title { font-weight: 700; color: #0f172a; }
+.kd-desc { color: #64748b; padding-left: 12px; font-size: 8pt; }
+.kd-status { width: 70px; text-align: right; }
+.kd-days { width: 90px; text-align: right; color: #94a3b8; font-size: 8pt; }
 
-  @media print {
-    .page { padding: 32px 36px; }
-    .record-entry { page-break-inside: avoid; }
-    .tl-entry { page-break-inside: avoid; }
-  }
+/* ── Status tags / pills ── */
+.tag { font-size: 6.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 7px 3px; border-radius: 3px; white-space: nowrap; display: inline-block; }
+.tag-green  { background: #f0fdf4; color: #166534; }
+.tag-amber  { background: #fffbeb; color: #92400e; }
+.tag-orange { background: #fff7ed; color: #c2410c; }
+.tag-blue   { background: #eff6ff; color: #1e40af; }
+.tag-red    { background: #fef2f2; color: #991b1b; }
+.tag-slate  { background: #f8fafc; color: #475569; }
+
+/* ── Footer ── */
+.doc-footer { margin-top: 44px; padding-top: 10px; border-top: 0.5px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
+.doc-footer-l { font-size: 7pt; color: #94a3b8; }
+.doc-footer-r { font-size: 7pt; color: #94a3b8; text-align: right; }
+
+/* ── Page break ── */
+.page-break { page-break-before: always; padding-top: 40px; }
+
+/* ── Full report cover ── */
+.fr-cover { padding-bottom: 28px; border-bottom: 1.5px solid #0f172a; margin-bottom: 28px; }
+.fr-cover-brand { font-size: 10pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; margin-bottom: 48px; }
+.fr-cover-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: #94a3b8; margin-bottom: 12px; }
+.fr-cover-title { font-size: 28pt; font-weight: 700; color: #0f172a; line-height: 1.1; letter-spacing: -0.02em; margin-bottom: 24px; }
+.fr-cover-project { font-size: 15pt; font-weight: 700; color: #0f172a; margin-bottom: 4px; letter-spacing: -0.01em; }
+.fr-cover-client { font-size: 10pt; color: #64748b; margin-bottom: 36px; }
+.fr-cover-figures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 0.5px solid #e2e8f0; border-bottom: 0.5px solid #e2e8f0; padding: 18px 0; margin-bottom: 24px; }
+.fr-cover-fig { padding-right: 24px; }
+.fr-cover-fig + .fr-cover-fig { border-left: 0.5px solid #e2e8f0; padding-left: 24px; }
+.fr-cover-fig:last-child { padding-right: 0; }
+.fr-cover-fig-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; }
+.fr-cover-fig-value { font-size: 16pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.fr-cover-fig-value.accent { color: #ea6c00; }
+.fr-cover-date { font-size: 7.5pt; color: #94a3b8; }
+
+/* ── Empty notice ── */
+.empty-notice { padding: 20px 0; text-align: center; color: #94a3b8; font-size: 9pt; border-top: 0.5px solid #f1f5f9; }
 `;
 
 // ─── Shared page shell ────────────────────────────────────────────────────────
@@ -240,30 +261,26 @@ ${body}
 
 // ─── Shared header ────────────────────────────────────────────────────────────
 
-function docHeader(docType: string, title: string, projectName: string, client?: string, today?: string): string {
-  return `
-  <div class="doc-header">
-    <div>
-      <div class="doc-brand">VYSITE</div>
-      <div class="doc-tagline">Construction Operating System</div>
-    </div>
-    <div class="doc-header-right">
-      <div class="doc-type">${esc(docType)}</div>
-      <div class="doc-title">${esc(title)}</div>
-      <div class="doc-project">${esc(projectName)}${client ? ' &mdash; ' + esc(client) : ''}</div>
-    </div>
+function docHeader(docType: string, title: string, _projectName: string, _client?: string, _today?: string): string {
+  return `<div class="exec-head">
+  <div>
+    <div class="exec-brand">VYSITE</div>
+    <div class="exec-brand-sub">Construction Operating System</div>
   </div>
-  ${today ? `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:8px;color:#94a3b8;text-align:right;margin-top:-22px;margin-bottom:28px;">${today}</div>` : ''}`;
+  <div class="exec-head-right">
+    <div class="exec-doc-type">${esc(docType)}</div>
+    <div class="exec-doc-title">${esc(title)}</div>
+  </div>
+</div>`;
 }
 
 // ─── Shared footer ────────────────────────────────────────────────────────────
 
 function docFooter(generatedBy: string, today: string): string {
-  return `
-  <div class="doc-footer">
-    <div class="doc-footer-left">Confidential &mdash; VYSITE Commercial Document</div>
-    <div class="doc-footer-right">${esc(generatedBy || 'VYSITE')} &bull; ${today} &bull; &copy; VYSITE</div>
-  </div>`;
+  return `<div class="doc-footer">
+  <div class="doc-footer-l">Confidential &mdash; VYSITE Commercial Document</div>
+  <div class="doc-footer-r">${esc(generatedBy || 'VYSITE')} &bull; ${today}</div>
+</div>`;
 }
 
 // ─── Status tag helper ────────────────────────────────────────────────────────
@@ -333,7 +350,14 @@ function keyDatesTable(keyDates: DBKeyDate[]): string {
       <td class="kd-days">${dr}</td>
     </tr>`;
   }).join('');
-  return `<table class="kd-table">${rows}</table>`;
+  const thead = `<thead><tr>
+    <th class="kd-date">Date</th>
+    <th>Title</th>
+    <th class="kd-desc">Description</th>
+    <th class="kd-status">Status</th>
+    <th class="kd-days">Days</th>
+  </tr></thead>`;
+  return `<table class="kd-table">${thead}<tbody>${rows}</tbody></table>`;
 }
 
 // ─── Position statement body ──────────────────────────────────────────────────
@@ -354,54 +378,74 @@ function positionStatementBody(d: PositionData): string {
   const adjustedContractSum = d.contractNum + d.agreedVariations;
   const remainingValue = d.completedNum != null ? adjustedContractSum - d.completedNum : null;
 
-  const statRows: StatRow[] = [
-    { label: 'Original Contract Sum', value: d.contractNum > 0 ? fv(d.contractNum) : '—' },
-  ];
-  if (d.variationExposure !== 0) {
-    statRows.push({ label: 'Outstanding Variation Exposure', sub: 'Submitted + Under Review', value: `+${fv(d.variationExposure)}`, style: 'accent' });
-  }
-  statRows.push({ label: 'Forecast Contract Sum', value: d.contractNum > 0 ? fv(forecastContractSum) : '—', style: 'total' });
-  if (d.agreedVariations !== 0) {
-    statRows.push({ label: 'Agreed Variations', value: `+${fv(d.agreedVariations)}` });
-  }
-  statRows.push({ label: 'Adjusted Contract Sum', value: d.contractNum > 0 ? fv(adjustedContractSum) : '—', style: 'total' });
-  if (d.completedNum != null) {
-    statRows.push({ label: 'Completed / Certified Value', value: fv(d.completedNum) });
-  }
-  if (remainingValue != null) {
-    statRows.push({ label: 'Remaining Value', value: fv(remainingValue) });
-  }
-
-  const meta = [
+  const metaItems: [string, string][] = [
     ['Project Manager', d.project.projectManager || '—'],
-    ['Location', d.project.location || '—'],
-    ['Start Date', fmtD(d.project.startDate)],
-    ['Completion Date', fmtD(d.project.completionDate)],
-    ['Status', d.project.status || '—'],
-    ['Generated By', d.currentUserName || '—'],
-  ].map(([k, v]) => `<span style="margin-right:28px;"><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;font-size:7.5px;">${esc(k)}&ensp;</span><span style="color:#334155;">${esc(v)}</span></span>`).join('');
+    ['Location',        d.project.location       || '—'],
+    ['Start Date',      fmtD(d.project.startDate)],
+    ['Completion',      fmtD(d.project.completionDate)],
+    ['Status',          d.project.status         || '—'],
+  ];
 
   return `
-  ${docHeader('Commercial Document', 'Position Statement', d.project.name, d.project.client, today)}
-
-  <div class="project-strip">
+  ${docHeader('Commercial Document', 'Commercial Position Statement', d.project.name, d.project.client, today)}
+  <div class="exec-project-band">
     <div>
-      <div class="project-strip-name">${esc(d.project.name)}</div>
-      ${d.project.client ? `<div class="project-strip-client">${esc(d.project.client)}</div>` : ''}
+      <div class="exec-project-name">${esc(d.project.name)}</div>
+      ${d.project.client ? `<div class="exec-client">${esc(d.project.client)}</div>` : ''}
     </div>
-    <div class="project-strip-meta" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:8.5px;color:#94a3b8;text-align:right;">
-      ${d.contractNum > 0 ? `<div style="font-size:18px;font-weight:700;color:#1a1a2e;font-variant-numeric:tabular-nums;">${fv(d.contractNum)}</div><div style="font-size:7.5px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">Original Contract Sum</div>` : ''}
+    <div class="exec-report-date">
+      <div>${today}</div>
+      <div>Prepared by ${esc(d.currentUserName || 'VYSITE')}</div>
     </div>
   </div>
 
-  <div class="section-label">Commercial Position</div>
-  ${finStatement(statRows)}
+  <div class="exec-section-label">Commercial Position</div>
 
-  <div style="margin-top:24px;padding-top:16px;border-top:0.75px solid #f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:8.5px;color:#475569;line-height:2;">${meta}</div>
+  <div class="fin-primary-row">
+    <div class="fin-primary-fig">
+      <div class="fin-fig-label">Original Contract Sum</div>
+      <div class="fin-fig-xl">${d.contractNum > 0 ? fv(d.contractNum) : '—'}</div>
+    </div>
+    <div class="fin-primary-fig">
+      <div class="fin-fig-label">Forecast Contract Sum</div>
+      <div class="fin-fig-xl accent">${d.contractNum > 0 ? fv(forecastContractSum) : '—'}</div>
+    </div>
+  </div>
+
+  ${d.variationExposure > 0 ? `
+  <div class="exposure-band">
+    <div>
+      <div class="exposure-label">Outstanding Variation Exposure</div>
+      <div class="exposure-sub">Submitted &amp; Under Review &mdash; not yet agreed</div>
+    </div>
+    <div class="exposure-value">+${fv(d.variationExposure)}</div>
+  </div>` : ''}
+
+  ${d.agreedVariations !== 0 || adjustedContractSum !== forecastContractSum ? `<div style="margin-top:16px;">
+  ${finStatement([
+    { label: 'Agreed Variations', value: d.agreedVariations !== 0 ? '+' + fv(d.agreedVariations) : fv(0) },
+    { label: 'Adjusted Contract Sum', value: d.contractNum > 0 ? fv(adjustedContractSum) : '—', style: 'total' },
+  ])}</div>` : ''}
+
+  ${d.completedNum != null ? `
+  <div class="fin-secondary-row" style="margin-top:16px;">
+    <div class="fin-sec-fig">
+      <div class="fin-sec-label">Completed / Certified Value</div>
+      <div class="fin-sec-value">${fv(d.completedNum)}</div>
+    </div>
+    ${remainingValue != null ? `
+    <div class="fin-sec-fig">
+      <div class="fin-sec-label">Remaining Value</div>
+      <div class="fin-sec-value${remainingValue < 0 ? ' warn' : ''}">${fv(remainingValue)}</div>
+    </div>` : ''}
+  </div>` : ''}
+
+  <div class="proj-meta">
+    ${metaItems.map(([k, v]) => `<div class="proj-meta-item"><div class="proj-meta-label">${esc(k)}</div><div class="proj-meta-value">${esc(v)}</div></div>`).join('')}
+  </div>
 
   ${d.keyDates.length > 0 ? `
-  <hr class="section-rule">
-  <div class="section-label">Key Dates</div>
+  <div class="exec-section-label">Key Dates</div>
   ${keyDatesTable(d.keyDates)}` : ''}
 
   ${docFooter(d.currentUserName, today)}`;
@@ -419,32 +463,37 @@ function registerBody(d: RegisterData): string {
   const today = todayStr();
   const projName = d.project?.name ?? 'All Projects';
 
+  const byType = {
+    variation:          d.records.filter(r => r.recordType === 'variation').length,
+    delay_notice:       d.records.filter(r => r.recordType === 'delay_notice').length,
+    compensation_event: d.records.filter(r => r.recordType === 'compensation_event').length,
+  };
+  const agreedCount  = d.records.filter(r => ['agreed','added_to_valuation','paid','complete'].includes(r.status)).length;
+  const pendingCount = d.records.filter(r => ['submitted','awaiting_agreement','under_review'].includes(r.status)).length;
+  const rejectedCount = d.records.filter(r => r.status === 'rejected').length;
+
   const entries = d.records.map(r => {
     const ti = typeInfo(r.recordType);
     const si = statusInfo(r.status);
-    const dateMeta = [
-      r.dateRaised ? `Raised ${fmtD(r.dateRaised)}` : null,
-      r.dateSubmitted ? `Submitted ${fmtD(r.dateSubmitted)}` : null,
-      r.dateAgreed ? `Agreed ${fmtD(r.dateAgreed)}` : null,
-    ].filter(Boolean).join(' &bull; ');
-
-    return `
-    <div class="record-entry">
-      <div class="record-entry-header">
+    const dateMeta: string[] = [];
+    if (r.dateRaised)    dateMeta.push(`Raised ${fmtD(r.dateRaised)}`);
+    if (r.dateSubmitted) dateMeta.push(`Submitted ${fmtD(r.dateSubmitted)}`);
+    if (r.dateAgreed)    dateMeta.push(`Agreed ${fmtD(r.dateAgreed)}`);
+    return `<div class="record-entry">
+      <div class="record-header">
         <div>
           <span class="record-ref">${esc(r.reference || '—')}</span>
           <span class="record-title">${esc(r.title || 'Untitled')}</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;margin-left:12px;">
+        <div class="record-badges">
           ${typeTag(r.recordType, ti.label)}
           ${statusTag(r.status, si.label)}
         </div>
       </div>
       <div class="record-meta">
-        ${r.projectName ? `<span class="record-meta-item"><span class="record-meta-key">Project</span><span>${esc(r.projectName)}</span></span>` : ''}
-        ${r.client ? `<span class="record-meta-item"><span class="record-meta-key">Client</span><span>${esc(r.client)}</span></span>` : ''}
-        ${r.createdBy ? `<span class="record-meta-item"><span class="record-meta-key">By</span><span>${esc(r.createdBy)}</span></span>` : ''}
-        ${dateMeta ? `<span style="color:#94a3b8;">${dateMeta}</span>` : ''}
+        ${r.createdBy ? `<span><span class="record-meta-key">By</span>${esc(r.createdBy)}</span>` : ''}
+        ${dateMeta.length ? `<span>${dateMeta.join(' &bull; ')}</span>` : ''}
+        ${(r as any).description ? `<span>${esc(((r as any).description as string).substring(0, 120))}${((r as any).description as string).length > 120 ? '…' : ''}</span>` : ''}
       </div>
       ${r.notes ? `<div class="record-notes">${esc(r.notes)}</div>` : ''}
     </div>`;
@@ -452,20 +501,30 @@ function registerBody(d: RegisterData): string {
 
   return `
   ${docHeader('Commercial Document', 'Commercial Register', projName, d.project?.client, today)}
-
-  <div class="project-strip">
+  <div class="exec-project-band">
     <div>
-      <div class="project-strip-name">${esc(projName)}</div>
-      ${d.project?.client ? `<div class="project-strip-client">${esc(d.project.client)}</div>` : ''}
+      <div class="exec-project-name">${esc(projName)}</div>
+      ${d.project?.client ? `<div class="exec-client">${esc(d.project.client)}</div>` : ''}
     </div>
-    <div class="project-strip-meta">
-      <div style="font-size:18px;font-weight:700;color:#1a1a2e;">${d.records.length}</div>
-      <div style="font-size:7.5px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">Record${d.records.length !== 1 ? 's' : ''}</div>
+    <div class="exec-report-date">
+      <div>${today}</div>
+      <div>Prepared by ${esc(d.currentUserName || 'VYSITE')}</div>
     </div>
   </div>
 
-  <div class="section-label">Commercial Records</div>
+  <div class="register-summary">
+    <div><div class="reg-sum-label">Total Records</div><div class="reg-sum-value accent">${d.records.length}</div></div>
+    ${byType.variation > 0          ? `<div><div class="reg-sum-label">Variations</div><div class="reg-sum-value">${byType.variation}</div></div>` : ''}
+    ${byType.delay_notice > 0       ? `<div><div class="reg-sum-label">Delay Notices</div><div class="reg-sum-value">${byType.delay_notice}</div></div>` : ''}
+    ${byType.compensation_event > 0 ? `<div><div class="reg-sum-label">Comp. Events</div><div class="reg-sum-value">${byType.compensation_event}</div></div>` : ''}
+    ${agreedCount > 0   ? `<div><div class="reg-sum-label">Agreed / Complete</div><div class="reg-sum-value">${agreedCount}</div></div>` : ''}
+    ${pendingCount > 0  ? `<div><div class="reg-sum-label">Pending</div><div class="reg-sum-value">${pendingCount}</div></div>` : ''}
+    ${rejectedCount > 0 ? `<div><div class="reg-sum-label">Rejected</div><div class="reg-sum-value">${rejectedCount}</div></div>` : ''}
+  </div>
+
+  <div class="exec-section-label">Commercial Records &mdash; ${d.records.length} record${d.records.length !== 1 ? 's' : ''}</div>
   ${d.records.length === 0 ? '<div class="empty-notice">No commercial records found for this project.</div>' : entries}
+
   ${docFooter(d.currentUserName, today)}`;
 }
 
@@ -492,56 +551,74 @@ function variationAccountBody(d: VAData): string {
 
   const rows = d.items.map(item => {
     const val = item.is_positive ? item.value : -item.value;
-    const valColor = val >= 0 ? '#166534' : '#991b1b';
+    const desc = (item.description || '').substring(0, 80);
     return `<tr>
-      <td class="ref">${esc(item.reference || '—')}</td>
-      <td class="strong">${esc(item.title || 'Untitled')}</td>
-      <td style="color:#64748b;font-size:9px;">${esc(item.description || '—')}</td>
-      <td style="color:#64748b;font-size:9px;">${esc(item.reason || '—')}</td>
-      <td class="num" style="color:${valColor};font-weight:700;">${val >= 0 ? '+' : ''}${fv(val)}</td>
+      <td><span class="dt-ref">${esc(item.reference || '—')}</span></td>
+      <td>
+        <div class="dt-title">${esc(item.title || 'Untitled')}</div>
+        ${desc ? `<div class="dt-muted" style="margin-top:2px;">${esc(desc)}${(item.description || '').length > 80 ? '…' : ''}</div>` : ''}
+      </td>
+      <td><span class="dt-muted">${esc(item.reason || '—')}</span></td>
+      <td class="r"><span class="${val >= 0 ? 'dt-val-pos' : 'dt-val-neg'}">${val >= 0 ? '+' : ''}${fv(val)}</span></td>
       <td>${statusTag(item.status, vaStatusLabels[item.status] || item.status)}</td>
-      <td style="color:#64748b;font-size:9px;">${fmtD(item.date_raised)}</td>
-      <td style="color:#64748b;font-size:9px;">${fmtD(item.date_agreed)}</td>
+      <td><span class="dt-muted">${fmtD(item.date_raised)}</span></td>
+      <td><span class="dt-muted">${fmtD(item.date_agreed)}</span></td>
     </tr>`;
   }).join('');
 
-  const statRows: StatRow[] = [
-    { label: 'Outstanding Variation Exposure', sub: 'Submitted + Under Review', value: fv(d.vaExposure), style: 'accent' },
-    { label: 'Forecast Contract Sum', value: d.forecastContractSum > 0 ? fv(d.forecastContractSum) : '—', style: 'total' },
-    { label: 'Agreed Variations', value: fv(d.vaAgreed) },
-    { label: 'Adjusted Contract Sum', value: d.adjustedContractSum > 0 ? fv(d.adjustedContractSum) : '—', style: 'total' },
-  ];
-
   return `
   ${docHeader('Commercial Document', 'Variation Account', projName, d.project?.client, today)}
-
-  <div class="project-strip">
+  <div class="exec-project-band">
     <div>
-      <div class="project-strip-name">${esc(projName)}</div>
-      ${d.project?.client ? `<div class="project-strip-client">${esc(d.project.client)}</div>` : ''}
+      <div class="exec-project-name">${esc(projName)}</div>
+      ${d.project?.client ? `<div class="exec-client">${esc(d.project.client)}</div>` : ''}
     </div>
-    <div class="project-strip-meta">
-      <div style="font-size:18px;font-weight:700;color:#ea6c00;font-variant-numeric:tabular-nums;">${fv(d.vaExposure)}</div>
-      <div style="font-size:7.5px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">Variation Exposure</div>
+    <div class="exec-report-date">
+      <div>${today}</div>
+      <div>Prepared by ${esc(d.currentUserName || 'VYSITE')}</div>
     </div>
   </div>
 
-  <div class="section-label">Account Position</div>
-  ${finStatement(statRows)}
+  <div class="exec-section-label">Account Position</div>
+
+  <div class="fin-primary-row">
+    <div class="fin-primary-fig">
+      <div class="fin-fig-label">Forecast Contract Sum</div>
+      <div class="fin-fig-xl">${d.forecastContractSum > 0 ? fv(d.forecastContractSum) : '—'}</div>
+    </div>
+    <div class="fin-primary-fig">
+      <div class="fin-fig-label">Adjusted Contract Sum</div>
+      <div class="fin-fig-xl accent">${d.adjustedContractSum > 0 ? fv(d.adjustedContractSum) : '—'}</div>
+    </div>
+  </div>
+
+  ${d.vaExposure > 0 ? `
+  <div class="exposure-band">
+    <div>
+      <div class="exposure-label">Outstanding Variation Exposure</div>
+      <div class="exposure-sub">Submitted &amp; Under Review &mdash; not yet agreed</div>
+    </div>
+    <div class="exposure-value">+${fv(d.vaExposure)}</div>
+  </div>` : ''}
+
+  <div style="margin-top:16px;">
+  ${finStatement([
+    { label: 'Agreed Variations', value: fv(d.vaAgreed) },
+    { label: 'Adjusted Contract Sum', value: d.adjustedContractSum > 0 ? fv(d.adjustedContractSum) : '—', style: 'total' },
+  ])}
+  </div>
 
   ${d.items.length > 0 ? `
-  <hr class="section-rule">
-  <div class="section-label">Variation Account Items &mdash; ${d.items.length} item${d.items.length !== 1 ? 's' : ''}</div>
+  <div class="exec-section-label" style="margin-top:28px;">Variation Account Schedule &mdash; ${d.items.length} item${d.items.length !== 1 ? 's' : ''}</div>
   <table class="data-table">
     <thead><tr>
       <th style="width:60px">Ref</th>
-      <th>Title</th>
-      <th>Description</th>
-      <th>Reason</th>
-      <th class="num">Value</th>
+      <th>Title / Description</th>
+      <th>Reason / Cause</th>
+      <th class="r">Value</th>
       <th>Status</th>
-      <th style="width:68px">Raised</th>
-      <th style="width:68px">Agreed</th>
+      <th style="width:72px">Raised</th>
+      <th style="width:72px">Agreed</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>` : '<div class="empty-notice">No variation account items recorded for this project.</div>'}
@@ -1215,6 +1292,17 @@ function timelineBody(d: TimelineData): string {
   const today = todayStr();
   const projName = d.project?.name ?? '—';
 
+  // Kind summary counts
+  const kindCounts: Record<string, number> = {};
+  for (const e of d.events) kindCounts[e.kind] = (kindCounts[e.kind] || 0) + 1;
+  const kindOrder = ['va-raised', 'va-agreed', 'cr-added', 'cr-submitted', 'cr-agreed'];
+  const summaryItems = kindOrder
+    .filter(k => kindCounts[k])
+    .map(k => `<div class="tl-summary-item">
+        <div class="tl-summary-value">${kindCounts[k]}</div>
+        <div class="tl-summary-label">${KIND_LABEL[k] || k}</div>
+      </div>`).join('');
+
   const eventRows = d.events.map(e => {
     const dot  = KIND_DOT[e.kind]  || '#94a3b8';
     const klbl = KIND_LABEL[e.kind] || e.kind;
@@ -1234,42 +1322,27 @@ function timelineBody(d: TimelineData): string {
   return `
   ${docHeader('Commercial Document', 'Commercial Timeline', projName, d.project?.client, today)}
 
-  <div class="project-strip">
+  <div class="exec-project-band">
     <div>
-      <div class="project-strip-name">${esc(projName)}</div>
-      ${d.project?.client ? `<div class="project-strip-client">${esc(d.project.client)}</div>` : ''}
+      <div class="exec-project-name">${esc(projName)}</div>
+      ${d.project?.client ? `<div style="font-size:9pt;color:#64748b;margin-top:2px;">${esc(d.project.client)}</div>` : ''}
     </div>
-    <div class="project-strip-meta">
-      <div style="font-size:18px;font-weight:700;color:#1a1a2e;">${d.events.length}</div>
-      <div style="font-size:7.5px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">Event${d.events.length !== 1 ? 's' : ''}</div>
+    <div style="text-align:right;">
+      <div style="font-size:22pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${d.events.length}</div>
+      <div class="exec-section-label" style="margin-bottom:0;">Total Event${d.events.length !== 1 ? 's' : ''}</div>
     </div>
   </div>
 
-  <div class="section-label">Timeline</div>
+  ${d.events.length > 0 && summaryItems ? `
+  <div style="display:flex;gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:14px 0;margin-bottom:28px;">
+    ${summaryItems}
+  </div>` : ''}
+
+  <div class="exec-section-label">Chronological Events — ${d.events.length} event${d.events.length !== 1 ? 's' : ''}</div>
   ${d.events.length === 0
-    ? '<div class="empty-notice">No timeline events recorded for this project.</div>'
+    ? '<div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:24px 0;">No timeline events recorded for this project.</div>'
     : `<div class="tl-wrap">${eventRows}</div>`}
   ${docFooter(d.currentUserName, today)}`;
-}
-
-// ─── Full Commercial Report body ──────────────────────────────────────────────
-
-interface FullReportData {
-  project: Project;
-  keyDates: DBKeyDate[];
-  records: CommercialRecord[];
-  vaItems: DBVariationAccountItem[];
-  apps: DBCommercialApplication[];
-  events: TimelineEvent[];
-  contractNum: number;
-  completedNum: number | null;
-  variationExposure: number;
-  agreedVariations: number;
-  forecastContractSum: number;
-  adjustedContractSum: number;
-  vaExposure: number;
-  vaAgreed: number;
-  currentUserName: string;
 }
 
 function fullReportBody(d: FullReportData): string {
@@ -1289,84 +1362,154 @@ function fullReportBody(d: FullReportData): string {
   const remaining       = d.forecastContractSum > 0 ? d.forecastContractSum - appliedToDate : null;
 
   // ── Cover ──
-  const cover = `
-  <div class="cover">
-    <div class="cover-brand">VYSITE</div>
-    <div class="cover-label">Commercial Report</div>
-    <div class="cover-title">Full Commercial<br>Report</div>
-    <div class="cover-project">${esc(p.name)}</div>
-    ${p.client ? `<div class="cover-client">${esc(p.client)}</div>` : ''}
+  const cover = `<div class="fr-cover">
+    <div class="fr-cover-brand">VYSITE</div>
+    <div class="fr-cover-label">Full Commercial Report</div>
+    <div class="fr-cover-title">Full Commercial<br>Report</div>
+    <div class="fr-cover-project">${esc(p.name)}</div>
+    ${p.client ? `<div class="fr-cover-client">${esc(p.client)}</div>` : ''}
     ${d.contractNum > 0 ? `
-    <div class="cover-figures">
-      <div class="cover-figure">
-        <div class="cover-figure-label">Contract Sum</div>
-        <div class="cover-figure-value">${fv(d.contractNum)}</div>
+    <div class="fr-cover-figures">
+      <div class="fr-cover-fig">
+        <div class="fr-cover-fig-label">Original Contract Sum</div>
+        <div class="fr-cover-fig-value">${fv(d.contractNum)}</div>
       </div>
-      <div class="cover-figure">
-        <div class="cover-figure-label">Forecast Contract Sum</div>
-        <div class="cover-figure-value accent">${fv(forecastContractSum)}</div>
+      <div class="fr-cover-fig">
+        <div class="fr-cover-fig-label">Forecast Contract Sum</div>
+        <div class="fr-cover-fig-value accent">${fv(forecastContractSum)}</div>
       </div>
-      ${d.completedNum != null ? `
-      <div class="cover-figure">
-        <div class="cover-figure-label">Completed Value</div>
-        <div class="cover-figure-value">${fv(d.completedNum)}</div>
-      </div>` : `
-      <div class="cover-figure">
-        <div class="cover-figure-label">Variation Exposure</div>
-        <div class="cover-figure-value accent">${fv(d.vaExposure)}</div>
-      </div>`}
+      <div class="fr-cover-fig">
+        <div class="fr-cover-fig-label">${d.completedNum != null ? 'Completed Value' : 'Variation Exposure'}</div>
+        <div class="fr-cover-fig-value${d.completedNum != null ? '' : ' accent'}">${fv(d.completedNum != null ? d.completedNum : d.vaExposure)}</div>
+      </div>
     </div>` : ''}
-    <div class="cover-date">Generated ${today} by ${esc(d.currentUserName || 'VYSITE')}</div>
+    <div class="fr-cover-date">Generated ${today} by ${esc(d.currentUserName || 'VYSITE')}</div>
   </div>`;
 
-  // ── Position statement rows ──
-  const statRows: StatRow[] = [
-    { label: 'Original Contract Sum', value: d.contractNum > 0 ? fv(d.contractNum) : '—' },
-  ];
-  if (d.variationExposure !== 0) statRows.push({ label: 'Outstanding Variation Exposure', sub: 'Submitted + Under Review', value: `+${fv(d.variationExposure)}`, style: 'accent' });
-  statRows.push({ label: 'Forecast Contract Sum', value: d.contractNum > 0 ? fv(forecastContractSum) : '—', style: 'total' });
-  if (d.agreedVariations !== 0) statRows.push({ label: 'Agreed Variations', value: `+${fv(d.agreedVariations)}` });
-  statRows.push({ label: 'Adjusted Contract Sum', value: d.contractNum > 0 ? fv(adjustedContractSum) : '—', style: 'total' });
-  if (d.completedNum != null) statRows.push({ label: 'Completed Value', value: fv(d.completedNum) });
-  if (remainingValue != null) statRows.push({ label: 'Remaining Value', value: fv(remainingValue) });
+  // ── Section 1: Commercial Position ──
+  const ocs = d.contractNum > 0 ? fv(d.contractNum) : '—';
+  const fcs = d.contractNum > 0 ? fv(forecastContractSum) : '—';
+  const positionSection = `
+  <div class="exec-section-label">1. Commercial Position</div>
+  <div class="fin-primary-row" style="gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:16px 0;margin-bottom:16px;">
+    <div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Original Contract Sum</div>
+      <div class="fin-fig-xl">${ocs}</div>
+    </div>
+    <div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Forecast Contract Sum</div>
+      <div class="fin-fig-xl accent">${fcs}</div>
+    </div>
+  </div>
+  ${d.variationExposure > 0 ? `
+  <div class="exposure-band" style="margin-bottom:16px;">
+    <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#b45309;margin-bottom:4px;">Outstanding Variation Exposure</div>
+    <div class="exposure-value">${fv(d.variationExposure)}</div>
+  </div>` : ''}
+  ${finStatement((() => {
+    const rows: StatRow[] = [{ label: 'Original Contract Sum', value: ocs }];
+    if (d.agreedVariations !== 0) rows.push({ label: 'Agreed Variations', value: `+${fv(d.agreedVariations)}` });
+    rows.push({ label: 'Adjusted Contract Sum', value: d.contractNum > 0 ? fv(adjustedContractSum) : '—', style: 'total' });
+    if (d.completedNum != null) rows.push({ label: 'Completed Value', value: fv(d.completedNum) });
+    if (remainingValue != null) rows.push({ label: 'Remaining Value', value: fv(remainingValue) });
+    return rows;
+  })())}`;
 
-  // ── Register rows ──
+  // ── Section 2: Key Dates ──
+  const keyDatesSection = `
+  <div class="exec-section-label" style="margin-top:20px;">2. Key Dates</div>
+  ${keyDatesTable(d.keyDates)}`;
+
+  // ── Section 3: Register ──
   const regRows = d.records.map(r => {
     const ti = typeInfo(r.recordType);
     const si = statusInfo(r.status);
     return `<tr>
+      <td class="dt-ref">${esc(r.reference || '—')}</td>
+      <td style="font-size:9pt;font-weight:600;color:#0f172a;">${esc(r.title || 'Untitled')}</td>
       <td>${typeTag(r.recordType, ti.label)}</td>
-      <td class="ref">${esc(r.reference || '—')}</td>
-      <td class="strong">${esc(r.title || 'Untitled')}</td>
       <td>${statusTag(r.status, si.label)}</td>
-      <td style="color:#64748b;font-size:9px;">${fmtD(r.dateRaised)}</td>
+      <td style="font-size:8pt;color:#64748b;">${fmtD(r.dateRaised)}</td>
     </tr>`;
   }).join('');
 
-  // ── VA rows ──
+  const registerSection = `
+  <div class="exec-section-label">3. Commercial Register — ${d.records.length} record${d.records.length !== 1 ? 's' : ''}</div>
+  ${d.records.length === 0
+    ? '<div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:16px 0;">No commercial register records for this project.</div>'
+    : `<table class="data-table" style="width:100%;font-size:9pt;"><thead><tr>
+        <th style="width:56px;">Ref</th><th>Title</th><th>Type</th><th>Status</th><th style="width:72px;">Raised</th>
+      </tr></thead><tbody>${regRows}</tbody></table>`}`;
+
+  // ── Section 4: Variation Account ──
   const vaStatusLabels: Record<string, string> = { draft:'Draft', submitted:'Submitted', under_review:'Under Review', agreed:'Agreed', rejected:'Rejected', paid:'Paid', withdrawn:'Withdrawn' };
   const vaRows = d.vaItems.map(item => {
     const val = item.is_positive ? item.value : -item.value;
     return `<tr>
-      <td class="ref">${esc(item.reference || '—')}</td>
-      <td class="strong">${esc(item.title)}</td>
-      <td class="num" style="color:${val >= 0 ? '#166534' : '#991b1b'};font-weight:700;">${val >= 0 ? '+' : ''}${fv(val)}</td>
+      <td class="dt-ref">${esc(item.reference || '—')}</td>
+      <td style="font-size:9pt;font-weight:600;color:#0f172a;">${esc(item.title)}</td>
+      <td class="${val >= 0 ? 'dt-val-pos' : 'dt-val-neg'}">${val >= 0 ? '+' : ''}${fv(val)}</td>
       <td>${statusTag(item.status, vaStatusLabels[item.status] || item.status)}</td>
-      <td style="color:#64748b;font-size:9px;">${fmtD(item.date_raised)}</td>
+      <td style="font-size:8pt;color:#64748b;">${fmtD(item.date_raised)}</td>
     </tr>`;
   }).join('');
 
-  // ── App rows ──
+  const vaSection = `
+  <div class="exec-section-label" style="margin-top:20px;">4. Variation Account — ${d.vaItems.length} item${d.vaItems.length !== 1 ? 's' : ''}</div>
+  ${d.vaItems.length === 0
+    ? '<div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:16px 0;">No variation account items for this project.</div>'
+    : `<table class="data-table" style="width:100%;font-size:9pt;"><thead><tr>
+        <th style="width:56px;">Ref</th><th>Title</th><th class="num" style="width:90px;">Value</th><th>Status</th><th style="width:72px;">Raised</th>
+      </tr></thead><tbody>${vaRows}</tbody></table>`}`;
+
+  // ── Section 5: Applications ──
   const appRows = d.apps.map(a => `<tr>
-    <td class="ref">${String(a.app_number).padStart(2, '0')}</td>
-    <td class="strong">${esc(a.period || '—')}</td>
-    <td class="num">${fv(a.applied_value)}</td>
-    <td class="num">${fv(a.certified_value)}</td>
-    <td class="num">${fv(a.paid_value)}</td>
+    <td class="dt-ref">${String(a.app_number).padStart(2, '0')}</td>
+    <td style="font-size:9pt;font-weight:600;color:#0f172a;">${esc(a.period || '—')}</td>
+    <td class="num" style="font-size:9pt;">${fv(a.applied_value)}</td>
+    <td class="num" style="font-size:9pt;">${fv(a.certified_value)}</td>
+    <td class="num" style="font-size:9pt;">${fv(a.paid_value)}</td>
     <td>${statusTag(a.status, APP_STATUS_LABELS[a.status] || a.status)}</td>
   </tr>`).join('');
 
-  // ── Timeline rows ──
+  const appSection = `
+  <div class="exec-section-label">5. Valuation Applications — ${d.apps.length} application${d.apps.length !== 1 ? 's' : ''}</div>
+  <div class="fin-primary-row" style="gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:14px 0;margin-bottom:14px;">
+    <div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Applied To Date</div>
+      <div class="fin-fig-xl">${fv(appliedToDate)}</div>
+    </div>
+    <div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Certified To Date</div>
+      <div class="fin-fig-xl accent">${fv(certifiedToDate)}</div>
+    </div>
+  </div>
+  ${certShortfall > 0 ? `
+  <div class="exposure-band" style="margin-bottom:14px;">
+    <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#b45309;margin-bottom:4px;">Certification Shortfall</div>
+    <div class="exposure-value">${fv(certShortfall)}</div>
+  </div>` : ''}
+  <div class="fin-secondary-row" style="gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:12px 0;margin-bottom:16px;">
+    <div>
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:3px;">Paid To Date</div>
+      <div style="font-size:15pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fv(paidToDate)}</div>
+    </div>
+    <div>
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:3px;">Outstanding</div>
+      <div style="font-size:15pt;font-weight:700;color:${outstanding > 0 ? '#b45309' : '#0f172a'};font-variant-numeric:tabular-nums;">${fv(outstanding)}</div>
+    </div>
+    <div>
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:3px;">Retention</div>
+      <div style="font-size:15pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fv(totalRetention)}</div>
+    </div>
+  </div>
+  ${d.apps.length === 0
+    ? '<div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:16px 0;">No applications recorded for this project.</div>'
+    : `<table class="data-table" style="width:100%;font-size:9pt;"><thead><tr>
+        <th style="width:32px;">No.</th><th>Period</th><th class="num">Applied</th><th class="num">Certified</th><th class="num">Paid</th><th>Status</th>
+      </tr></thead><tbody>${appRows}</tbody></table>`}`;
+
+  // ── Section 6: Timeline ──
   const tlRows = d.events.map(e => {
     const dot  = KIND_DOT[e.kind]  || '#94a3b8';
     const klbl = KIND_LABEL[e.kind] || e.kind;
@@ -1381,56 +1524,37 @@ function fullReportBody(d: FullReportData): string {
     </div>`;
   }).join('');
 
+  const tlSection = `
+  <div class="exec-section-label">6. Commercial Timeline — ${d.events.length} event${d.events.length !== 1 ? 's' : ''}</div>
+  ${d.events.length === 0
+    ? '<div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:16px 0;">No timeline events for this project.</div>'
+    : `<div class="tl-wrap">${tlRows}</div>`}`;
+
   return `
   ${cover}
 
-  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:8.5px;color:#64748b;line-height:2;margin-bottom:36px;">
-    <span style="margin-right:28px;"><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;font-size:7.5px;">Project Manager&ensp;</span>${esc(p.projectManager || '—')}</span>
-    <span style="margin-right:28px;"><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;font-size:7.5px;">Location&ensp;</span>${esc(p.location || '—')}</span>
-    <span style="margin-right:28px;"><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;font-size:7.5px;">Start&ensp;</span>${fmtD(p.startDate)}</span>
-    <span><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;font-size:7.5px;">Completion&ensp;</span>${fmtD(p.completionDate)}</span>
+  <div class="exec-section-label" style="margin-bottom:6px;margin-top:0;">Project Details</div>
+  <div style="font-size:8.5pt;color:#64748b;line-height:2;margin-bottom:28px;display:flex;flex-wrap:wrap;gap:0 28px;">
+    <span><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Project Manager&ensp;</span>${esc(p.projectManager || '—')}</span>
+    <span><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Location&ensp;</span>${esc(p.location || '—')}</span>
+    <span><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Start&ensp;</span>${fmtD(p.startDate)}</span>
+    <span><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Completion&ensp;</span>${fmtD(p.completionDate)}</span>
   </div>
 
-  <div class="section-label">1. Commercial Position</div>
-  ${finStatement(statRows)}
-
-  <hr class="section-rule">
-  <div class="section-label">2. Key Dates</div>
-  ${keyDatesTable(d.keyDates)}
+  ${positionSection}
+  ${keyDatesSection}
 
   <div class="page-break">
-  <div class="section-label">3. Commercial Register &mdash; ${d.records.length} record${d.records.length !== 1 ? 's' : ''}</div>
-  ${d.records.length === 0
-    ? '<div class="empty-notice">No commercial register records for this project.</div>'
-    : `<table class="data-table"><thead><tr><th>Type</th><th style="width:60px">Ref</th><th>Title</th><th>Status</th><th style="width:72px">Raised</th></tr></thead><tbody>${regRows}</tbody></table>`}
-
-  <hr class="section-rule">
-  <div class="section-label">4. Variation Account &mdash; ${d.vaItems.length} item${d.vaItems.length !== 1 ? 's' : ''}</div>
-  ${d.vaItems.length === 0
-    ? '<div class="empty-notice">No variation account items for this project.</div>'
-    : `<table class="data-table"><thead><tr><th style="width:60px">Ref</th><th>Title</th><th class="num">Value</th><th>Status</th><th style="width:72px">Raised</th></tr></thead><tbody>${vaRows}</tbody></table>`}
+  ${registerSection}
+  ${vaSection}
   </div>
 
   <div class="page-break">
-  <div class="section-label">5. Valuation Applications &mdash; ${d.apps.length} application${d.apps.length !== 1 ? 's' : ''}</div>
-  <div class="val-summary" style="margin-bottom:20px;">
-    <div class="val-col">
-      ${[['Applied To Date', fv(appliedToDate), false], ['Certified To Date', fv(certifiedToDate), false], ['Certification Shortfall', fv(certShortfall), certShortfall > 0]].map(([l, v, w]) => `<div class="val-row"><div class="val-label">${l}</div><div class="val-value${w ? ' warn' : ''}">${v}</div></div>`).join('')}
-    </div>
-    <div class="val-col">
-      ${[['Paid To Date', fv(paidToDate), false], ['Outstanding', fv(outstanding), outstanding > 0], ['Retention', fv(totalRetention), false]].map(([l, v, w]) => `<div class="val-row"><div class="val-label">${l}</div><div class="val-value${w ? ' warn' : ''}">${v}</div></div>`).join('')}
-    </div>
-    ${remaining != null ? `<div class="val-total-block"><div class="val-total-label">Remaining Contract Value</div><div class="val-total-value">${fv(remaining)}</div></div>` : ''}
+  ${appSection}
   </div>
-  ${d.apps.length === 0
-    ? '<div class="empty-notice">No applications for this project.</div>'
-    : `<table class="data-table" style="font-size:9px;"><thead><tr><th style="width:28px">No.</th><th>Period</th><th class="num">Applied</th><th class="num">Certified</th><th class="num">Paid</th><th>Status</th></tr></thead><tbody>${appRows}</tbody></table>`}
 
-  <hr class="section-rule">
-  <div class="section-label">6. Commercial Timeline &mdash; ${d.events.length} event${d.events.length !== 1 ? 's' : ''}</div>
-  ${d.events.length === 0
-    ? '<div class="empty-notice">No timeline events for this project.</div>'
-    : `<div class="tl-wrap">${tlRows}</div>`}
+  <div class="page-break">
+  ${tlSection}
   </div>
 
   ${docFooter(d.currentUserName, today)}`;
