@@ -15,9 +15,20 @@ export interface BannerValues {
 }
 
 export const RECORD_TYPES: { value: CommercialRecordType; label: string; prefix: string; color: string }[] = [
-  { value: 'variation',           label: 'Variation',           prefix: 'V',  color: 'bg-blue-900/40 text-blue-300 border-blue-700/50' },
-  { value: 'delay_notice',        label: 'Delay Notice',        prefix: 'DN', color: 'bg-amber-900/40 text-amber-300 border-amber-700/50' },
-  { value: 'compensation_event',  label: 'Compensation Event',  prefix: 'CE', color: 'bg-rose-900/40 text-rose-300 border-rose-700/50' },
+  { value: 'early_warning_notice',   label: 'Early Warning Notice',   prefix: 'EWN', color: 'bg-yellow-900/40 text-yellow-300 border-yellow-700/50' },
+  { value: 'extension_of_time',      label: 'Extension of Time',      prefix: 'EOT', color: 'bg-sky-900/40 text-sky-300 border-sky-700/50' },
+  { value: 'loss_and_expense',       label: 'Loss & Expense',         prefix: 'L&E', color: 'bg-rose-900/40 text-rose-300 border-rose-700/50' },
+  { value: 'payment_notice',         label: 'Payment Notice',         prefix: 'PN',  color: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50' },
+  { value: 'pay_less_notice',        label: 'Pay Less Notice',        prefix: 'PLN', color: 'bg-red-900/40 text-red-300 border-red-700/50' },
+  { value: 'client_instruction',     label: 'Client Instruction',     prefix: 'CI',  color: 'bg-violet-900/40 text-violet-300 border-violet-700/50' },
+  { value: 'delay_notice',           label: 'Delay Notice',           prefix: 'DN',  color: 'bg-amber-900/40 text-amber-300 border-amber-700/50' },
+  { value: 'compensation_event',     label: 'Compensation Event',     prefix: 'CE',  color: 'bg-orange-900/40 text-orange-300 border-orange-700/50' },
+  { value: 'commercial_risk',        label: 'Commercial Risk',        prefix: 'CR',  color: 'bg-red-900/60 text-red-200 border-red-700/60' },
+  { value: 'commercial_opportunity', label: 'Commercial Opportunity', prefix: 'CO',  color: 'bg-teal-900/40 text-teal-300 border-teal-700/50' },
+  { value: 'dispute_query',          label: 'Dispute / Query',        prefix: 'DQ',  color: 'bg-fuchsia-900/40 text-fuchsia-300 border-fuchsia-700/50' },
+  { value: 'evidence_record',        label: 'Evidence Record',        prefix: 'ER',  color: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/50' },
+  { value: 'commercial_note',        label: 'Commercial Note',        prefix: 'CN',  color: 'bg-slate-700/60 text-slate-300 border-slate-600/50' },
+  { value: 'variation',              label: 'Variation',              prefix: 'V',   color: 'bg-blue-900/40 text-blue-300 border-blue-700/50' },
 ];
 
 export const STATUSES: { value: CommercialRecordStatus; label: string; color: string }[] = [

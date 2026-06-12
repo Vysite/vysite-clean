@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   TrendingUp, Plus, X, Save,
   Paperclip, Trash2, Eye, Download, FileText,
   Banknote,
   ChevronRight, AlertCircle, CheckCircle2, Clock, CircleDot,
-  GitBranch,
+  GitBranch, MessageSquare, Send,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
@@ -12,7 +12,7 @@ import { useAppStore, usePermissions } from '../lib/StoreContext';
 import FileUploadComponent from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
 import type { CommercialRecord, CommercialLineItem, CommercialRecordType, CommercialRecordStatus } from '../data/types';
-import type { DBAttachment } from '../lib/store';
+import type { DBAttachment, DBCommercialRecordComment } from '../lib/store';
 
 import CommercialOverview from './commercial/CommercialOverview';
 import CommercialRegister from './commercial/CommercialRegister';
@@ -68,6 +68,7 @@ function dbToRecord(r: Record<string, unknown>, projectName?: string): Commercia
     createdBy:     r.created_by as string | null,
     createdAt:     r.created_at as string,
     updatedAt:     r.updated_at as string,
+    extraData:     r.extra_data as Record<string, unknown> | null ?? null,
   };
 }
 
@@ -284,6 +285,17 @@ function buildExportHTML(
     variation: 'This variation record has been prepared using the information available at the date of issue. The value contained within this record remains subject to review, substantiation, amendment and agreement until formally accepted by the relevant parties. Nothing within this record shall be construed as agreement of entitlement, liability, quantum or final account position.',
     delay_notice: 'This delay notice has been issued to notify an event which may affect progress, completion or resource requirements. The duration, effects and associated costs of the delaying event remain under review and may be amended whilst the event remains ongoing. This notice is issued without prejudice to any contractual entitlement or future assessment of time and cost.',
     compensation_event: 'This compensation event record has been prepared using the information available at the time of issue. The value and impact recorded may be revised as further information becomes available. This record does not constitute final agreement of entitlement, assessment or valuation.',
+    early_warning_notice: 'This Early Warning Notice (EWN) has been issued in accordance with the contract to give notice of a matter which could increase the total price, delay completion, or impair performance. This notice is issued without prejudice to any assessment of time and cost impact and does not constitute admission of entitlement or liability.',
+    extension_of_time: 'This Extension of Time (EOT) application has been prepared based on information available at the date of issue. The programme impact and entitlement claimed remain subject to substantiation, review and formal assessment by the contract administrator. This record is issued without prejudice.',
+    loss_and_expense: 'This Loss and Expense notice has been prepared using the information available at the date of issue. The amounts recorded are preliminary assessments and remain subject to full substantiation, review and agreement. Nothing in this record constitutes final settlement of the claim.',
+    payment_notice: 'This Payment Notice has been issued in accordance with the contract payment provisions. The sum stated is subject to any pay less notice issued by the paying party within the prescribed period. This document should be read in conjunction with the contract conditions.',
+    pay_less_notice: 'This Pay Less Notice has been issued in accordance with the contract payment provisions and applicable legislation. The paying party intends to pay less than the notified sum for the reasons stated herein. This notice is issued within the required contractual timeframe.',
+    client_instruction: 'This Client Instruction has been recorded for traceability purposes. Where the instruction has cost, programme or scope implications, a corresponding commercial record should be raised. The existence of this record does not imply that cost or time implications have been agreed.',
+    commercial_risk: 'This commercial risk record is an internal document prepared for risk management purposes. The potential values stated are estimates only and do not represent agreed entitlement or liability. This document is confidential and must not be disclosed to external parties without authorisation.',
+    commercial_opportunity: 'This commercial opportunity record is an internal document prepared for commercial management purposes. The potential values stated are estimates only and remain subject to realisation, substantiation and agreement. This document is confidential.',
+    dispute_query: 'This dispute / query record has been raised for commercial management and traceability purposes. Nothing in this record constitutes a formal dispute notice under the contract. Legal advice should be sought before escalating any matter to formal dispute resolution.',
+    evidence_record: 'This evidence record has been prepared to document events, instructions, site conditions or circumstances relevant to commercial entitlement. The information contained should be read in conjunction with the relevant contractual provisions and supporting documentation.',
+    commercial_note: 'This commercial note is an internal record for information and reference purposes. It does not represent a formal contractual communication and should not be disclosed externally without authorisation.',
   };
   const contractualNotice = COMMERCIAL_NOTICES[record.recordType] ?? '';
   const noticeBar = contractualNotice ? `<div class="legal-notice-bar"><div class="legal-notice-label">Contractual Notice</div><div class="legal-notice-text">${esc(contractualNotice)}</div></div>` : '';
@@ -422,9 +434,90 @@ function LineItemEditor({
   );
 }
 
+// ─── Record Comments Section ──────────────────────────────────────────────────
+
+function RecordCommentsSection({
+  comments, recordId, currentUser, canAdd, onAdd, onRemove,
+}: {
+  comments: DBCommercialRecordComment[];
+  recordId: string;
+  currentUser: { id?: string; name?: string; auth_user_id?: string } | null;
+  canAdd: boolean;
+  onAdd: (c: DBCommercialRecordComment) => Promise<void>;
+  onRemove: (id: string) => Promise<void>;
+}) {
+  const [body, setBody] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (!body.trim() || !recordId) return;
+    setSubmitting(true);
+    const c: DBCommercialRecordComment = {
+      id: `crc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      record_id: recordId,
+      body: body.trim(),
+      author_name: currentUser?.name ?? 'Unknown',
+      author_id: currentUser?.auth_user_id ?? currentUser?.id ?? '',
+      created_at: new Date().toISOString(),
+    };
+    await onAdd(c);
+    setBody('');
+    setSubmitting(false);
+  }
+
+  return (
+    <div className="space-y-4">
+      {comments.length === 0 && (
+        <div className="text-center py-10">
+          <MessageSquare size={24} className="text-slate-700 mx-auto mb-2" />
+          <p className="text-sm text-slate-500">No comments yet</p>
+        </div>
+      )}
+      <div className="space-y-3">
+        {comments.map(c => (
+          <div key={c.id} className="flex gap-3">
+            <div className="w-7 h-7 rounded-full bg-[#1e2d4a] flex items-center justify-center text-xs font-bold text-[#f97316] shrink-0">
+              {(c.author_name || '?').slice(0, 1).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-semibold text-white">{c.author_name}</span>
+                <span className="text-[10px] text-slate-600">{c.created_at ? new Date(c.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+              </div>
+              <div className="text-sm text-slate-300 bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 whitespace-pre-wrap">{c.body}</div>
+            </div>
+            {currentUser && (c.author_id === currentUser.auth_user_id || c.author_id === currentUser.id) && (
+              <button onClick={() => onRemove(c.id)} className="p-1 text-slate-600 hover:text-red-400 transition-colors self-start mt-6"><Trash2 size={12} /></button>
+            )}
+          </div>
+        ))}
+      </div>
+      {canAdd && (
+        <div className="flex gap-2 pt-2 border-t border-[#1e2d4a]">
+          <textarea
+            className="flex-1 bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-[#f97316] resize-none"
+            rows={2}
+            placeholder="Add a comment..."
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit(); }}
+          />
+          <button
+            onClick={submit}
+            disabled={!body.trim() || submitting}
+            className="self-end px-3 py-2 rounded-lg bg-[#f97316] hover:bg-orange-400 text-white disabled:opacity-50 transition-colors"
+          >
+            <Send size={14} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Record Detail Modal ───────────────────────────────────────────────────────
 
-type ModalTab = 'overview' | 'cost' | 'attachments';
+type ModalTab = 'overview' | 'type_fields' | 'cost' | 'comments' | 'attachments';
 
 interface DetailModalProps {
   record: CommercialRecord | null;
@@ -450,7 +543,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
   const [uploading, setUploading] = useState(false);
 
   const [form, setForm] = useState({
-    recordType:    (record?.recordType ?? 'variation') as CommercialRecordType,
+    recordType:    (record?.recordType ?? 'early_warning_notice') as CommercialRecordType,
     reference:     record?.reference ?? '',
     title:         record?.title ?? '',
     projectId:     record?.projectId ?? '',
@@ -460,6 +553,18 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
     dateSubmitted: record?.dateSubmitted ?? '',
     dateAgreed:    record?.dateAgreed ?? '',
     notes:         record?.notes ?? '',
+    // Supporting evidence / doc reference (Priority 5)
+    documentRef:   (record?.extraData?.document_ref as string) ?? '',
+    relatedRefs:   (record?.extraData?.related_refs as string) ?? '',
+    // Delay Notice specific fields (Priority 4)
+    ewnRef:           (record?.extraData?.ewn_ref as string) ?? '',
+    causeOfDelay:     (record?.extraData?.cause_of_delay as string) ?? '',
+    responsibleParty: (record?.extraData?.responsible_party as string) ?? '',
+    delayStartDate:   (record?.extraData?.delay_start_date as string) ?? '',
+    noticeIssuedDate: (record?.extraData?.notice_issued_date as string) ?? '',
+    impactedWorks:    (record?.extraData?.impacted_works as string) ?? '',
+    programmeDays:    (record?.extraData?.programme_days as string) ?? '',
+    potentialCost:    (record?.extraData?.potential_cost as string) ?? '',
   });
 
   const [lineItems, setLineItems] = useState<DraftLineItem[]>([]);
@@ -484,6 +589,19 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
     if (!form.title.trim()) { setError('Title is required'); return; }
     setSaving(true); setError(null);
     try {
+      const extra: Record<string, unknown> = {};
+      if (form.documentRef.trim()) extra.document_ref = form.documentRef.trim();
+      if (form.relatedRefs.trim()) extra.related_refs = form.relatedRefs.trim();
+      if (form.recordType === 'delay_notice') {
+        if (form.ewnRef.trim()) extra.ewn_ref = form.ewnRef.trim();
+        if (form.causeOfDelay.trim()) extra.cause_of_delay = form.causeOfDelay.trim();
+        if (form.responsibleParty.trim()) extra.responsible_party = form.responsibleParty.trim();
+        if (form.delayStartDate) extra.delay_start_date = form.delayStartDate;
+        if (form.noticeIssuedDate) extra.notice_issued_date = form.noticeIssuedDate;
+        if (form.impactedWorks.trim()) extra.impacted_works = form.impactedWorks.trim();
+        if (form.programmeDays.trim()) extra.programme_days = form.programmeDays.trim();
+        if (form.potentialCost.trim()) extra.potential_cost = form.potentialCost.trim();
+      }
       const now = new Date().toISOString();
       const row = {
         org_id: orgId, project_id: form.projectId || null,
@@ -492,6 +610,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
         status: form.status, date_raised: form.dateRaised || null,
         date_submitted: form.dateSubmitted || null, date_agreed: form.dateAgreed || null,
         notes: form.notes.trim(), created_by: null,
+        extra_data: extra,
         updated_at: now,
       };
       if (isNew) {
@@ -558,9 +677,15 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
     setTimeout(() => win.print(), 400);
   }
 
+  const recordComments = store.commercialRecordComments.filter(c => c.record_id === (record?.id ?? ''));
+
+  const HAS_TYPE_FIELDS = form.recordType === 'delay_notice';
+
   const MODAL_TABS: { key: ModalTab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview',    label: 'Details',    icon: <FileText size={13} /> },
+    ...(HAS_TYPE_FIELDS ? [{ key: 'type_fields' as ModalTab, label: 'Notice Fields', icon: <AlertCircle size={13} /> }] : []),
     { key: 'cost',        label: 'Cost Breakdown', icon: <TrendingUp size={13} /> },
+    { key: 'comments',    label: `Comments${recordComments.length ? ` (${recordComments.length})` : ''}`, icon: <MessageSquare size={13} /> },
     { key: 'attachments', label: `Attachments${attachments.length ? ` (${attachments.length})` : ''}`, icon: <Paperclip size={13} /> },
   ];
 
@@ -651,7 +776,65 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
                 <label className={labelCls}>Notes</label>
                 <textarea className={`${inputCls} resize-none`} rows={4} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Internal notes, background, instructions..." disabled={!canEdit} />
               </div>
+              <div>
+                <label className={labelCls}>Document Reference</label>
+                <input className={inputCls} value={form.documentRef} onChange={e => setForm(f => ({ ...f, documentRef: e.target.value }))} placeholder="e.g. EWN-001, drawing ref, letter ref" disabled={!canEdit} />
+              </div>
+              <div>
+                <label className={labelCls}>Related Records / Cross-References</label>
+                <input className={inputCls} value={form.relatedRefs} onChange={e => setForm(f => ({ ...f, relatedRefs: e.target.value }))} placeholder="e.g. EWN-003, V-012" disabled={!canEdit} />
+              </div>
             </div>
+          )}
+
+          {tab === 'type_fields' && form.recordType === 'delay_notice' && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                <div>
+                  <label className={labelCls}>Related EWN Reference</label>
+                  <input className={inputCls} value={form.ewnRef} onChange={e => setForm(f => ({ ...f, ewnRef: e.target.value }))} placeholder="e.g. EWN-002" disabled={!canEdit} />
+                </div>
+                <div>
+                  <label className={labelCls}>Responsible Party</label>
+                  <input className={inputCls} value={form.responsibleParty} onChange={e => setForm(f => ({ ...f, responsibleParty: e.target.value }))} placeholder="Contractor / Employer / Third Party" disabled={!canEdit} />
+                </div>
+                <div>
+                  <label className={labelCls}>Date Delay First Occurred</label>
+                  <input type="date" className={inputCls} value={form.delayStartDate} onChange={e => setForm(f => ({ ...f, delayStartDate: e.target.value }))} disabled={!canEdit} />
+                </div>
+                <div>
+                  <label className={labelCls}>Date Notice Issued</label>
+                  <input type="date" className={inputCls} value={form.noticeIssuedDate} onChange={e => setForm(f => ({ ...f, noticeIssuedDate: e.target.value }))} disabled={!canEdit} />
+                </div>
+                <div>
+                  <label className={labelCls}>Potential Programme Impact (days)</label>
+                  <input className={inputCls} type="text" inputMode="decimal" value={form.programmeDays} onChange={e => setForm(f => ({ ...f, programmeDays: e.target.value }))} placeholder="0" disabled={!canEdit} />
+                </div>
+                <div>
+                  <label className={labelCls}>Potential Cost Impact (£)</label>
+                  <input className={inputCls} type="text" inputMode="decimal" value={form.potentialCost} onChange={e => setForm(f => ({ ...f, potentialCost: e.target.value }))} placeholder="0.00" disabled={!canEdit} />
+                </div>
+                <div className="md:col-span-2">
+                  <label className={labelCls}>Cause of Delay</label>
+                  <textarea className={`${inputCls} resize-none`} rows={3} value={form.causeOfDelay} onChange={e => setForm(f => ({ ...f, causeOfDelay: e.target.value }))} placeholder="Describe the cause of the delaying event..." disabled={!canEdit} />
+                </div>
+                <div className="md:col-span-2">
+                  <label className={labelCls}>Impacted Works</label>
+                  <textarea className={`${inputCls} resize-none`} rows={3} value={form.impactedWorks} onChange={e => setForm(f => ({ ...f, impactedWorks: e.target.value }))} placeholder="Describe the works impacted by this delay..." disabled={!canEdit} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'comments' && (
+            <RecordCommentsSection
+              comments={recordComments}
+              recordId={record?.id ?? ''}
+              currentUser={store.currentUser}
+              canAdd={!isNew && canEdit}
+              onAdd={store.addCommercialRecordComment}
+              onRemove={store.removeCommercialRecordComment}
+            />
           )}
 
           {tab === 'cost' && (

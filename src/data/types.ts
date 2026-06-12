@@ -222,7 +222,18 @@ export interface EstimateItem {
 export type CommercialRecordType =
   | 'variation'
   | 'delay_notice'
-  | 'compensation_event';
+  | 'compensation_event'
+  | 'early_warning_notice'
+  | 'extension_of_time'
+  | 'loss_and_expense'
+  | 'payment_notice'
+  | 'pay_less_notice'
+  | 'client_instruction'
+  | 'commercial_risk'
+  | 'commercial_opportunity'
+  | 'dispute_query'
+  | 'evidence_record'
+  | 'commercial_note';
 
 export type CommercialRecordStatus =
   | 'draft'
@@ -252,6 +263,7 @@ export interface CommercialRecord {
   createdAt: string;
   updatedAt: string;
   lineItems?: CommercialLineItem[];
+  extraData?: Record<string, unknown> | null;
 }
 
 export interface CommercialLineItem {

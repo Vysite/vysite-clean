@@ -177,6 +177,51 @@ function calcLine(f: LineFormState) {
   return { qty, cost, mkup, costTotal, salesPrice, lineTotal };
 }
 
+// Module-scope constants — must NOT be inside any component to prevent React from
+// treating LineFormRow as a new component type on every parent render.
+const buCellCls = 'px-2 py-2 text-xs';
+const buThCls   = 'px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500';
+const buNumIn   = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded px-1.5 py-1 text-xs text-white text-right placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]';
+const buTxtIn   = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded px-1.5 py-1 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]';
+const buSelIn   = `${buTxtIn} appearance-none cursor-pointer`;
+
+function LineFormRow({ form, onChange, onSave, onCancel }: { form: LineFormState; onChange: (f: LineFormState) => void; onSave: () => void; onCancel: () => void }) {
+  const c = calcLine(form);
+  return (
+    <tr className="bg-[#1a2236]">
+      <td className={buCellCls}></td>
+      <td className={buCellCls} style={{ minWidth: 140 }}>
+        <input className={buTxtIn} value={form.description} onChange={e => onChange({ ...form, description: e.target.value })} placeholder="Description" autoFocus />
+      </td>
+      <td className={buCellCls} style={{ minWidth: 110 }}>
+        <select className={buSelIn} value={form.type} onChange={e => onChange({ ...form, type: e.target.value })}>
+          {LINE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </td>
+      <td className={buCellCls} style={{ minWidth: 60 }}>
+        <input className={buNumIn} value={form.unit} onChange={e => onChange({ ...form, unit: e.target.value })} placeholder="nr" />
+      </td>
+      <td className={buCellCls} style={{ minWidth: 70 }}>
+        <input className={buNumIn} type="text" inputMode="decimal" value={form.quantity} onChange={e => onChange({ ...form, quantity: e.target.value })} placeholder="0" />
+      </td>
+      <td className={buCellCls} style={{ minWidth: 80 }}>
+        <input className={buNumIn} type="text" inputMode="decimal" value={form.cost_price} onChange={e => onChange({ ...form, cost_price: e.target.value })} placeholder="0.00" />
+      </td>
+      <td className={buCellCls} style={{ minWidth: 70 }}>
+        <input className={buNumIn} type="text" inputMode="decimal" value={form.markup_pct} onChange={e => onChange({ ...form, markup_pct: e.target.value })} placeholder="0" />
+      </td>
+      <td className={`${buCellCls} text-right tabular-nums text-slate-400`}>{fmtCurrency(c.salesPrice)}</td>
+      <td className={`${buCellCls} text-right tabular-nums font-semibold text-white`}>{fmtCurrency(c.lineTotal)}</td>
+      <td className={buCellCls}>
+        <div className="flex items-center gap-1">
+          <button onClick={onSave} className="p-1 rounded bg-[#f97316] hover:bg-orange-400 text-white transition-colors"><Save size={12} /></button>
+          <button onClick={onCancel} className="p-1 rounded text-slate-500 hover:text-white hover:bg-[#1e2d4a] transition-colors"><X size={12} /></button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function BuildUpTable({
   lines, vaItemId, orgId, projectId, canEdit,
   onAdd, onUpdate, onRemove,
@@ -224,65 +269,22 @@ function BuildUpTable({
     setAddingNew(false);
   }
 
-  const cellCls = 'px-2 py-2 text-xs';
-  const thCls   = 'px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500';
-  const numIn   = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded px-1.5 py-1 text-xs text-white text-right placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]';
-  const txtIn   = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded px-1.5 py-1 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]';
-  const selIn   = `${txtIn} appearance-none cursor-pointer`;
-
-  function LineFormRow({ form, onChange, onSave, onCancel }: { form: LineFormState; onChange: (f: LineFormState) => void; onSave: () => void; onCancel: () => void }) {
-    const c = calcLine(form);
-    return (
-      <tr className="bg-[#1a2236]">
-        <td className={cellCls}></td>
-        <td className={cellCls} style={{ minWidth: 140 }}>
-          <input className={txtIn} value={form.description} onChange={e => onChange({ ...form, description: e.target.value })} placeholder="Description" autoFocus />
-        </td>
-        <td className={cellCls} style={{ minWidth: 110 }}>
-          <select className={selIn} value={form.type} onChange={e => onChange({ ...form, type: e.target.value })}>
-            {LINE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </td>
-        <td className={cellCls} style={{ minWidth: 60 }}>
-          <input className={numIn} value={form.unit} onChange={e => onChange({ ...form, unit: e.target.value })} placeholder="nr" />
-        </td>
-        <td className={cellCls} style={{ minWidth: 70 }}>
-          <input className={numIn} type="text" inputMode="decimal" value={form.quantity} onChange={e => onChange({ ...form, quantity: e.target.value })} placeholder="0" />
-        </td>
-        <td className={cellCls} style={{ minWidth: 80 }}>
-          <input className={numIn} type="text" inputMode="decimal" value={form.cost_price} onChange={e => onChange({ ...form, cost_price: e.target.value })} placeholder="0.00" />
-        </td>
-        <td className={cellCls} style={{ minWidth: 70 }}>
-          <input className={numIn} type="text" inputMode="decimal" value={form.markup_pct} onChange={e => onChange({ ...form, markup_pct: e.target.value })} placeholder="0" />
-        </td>
-        <td className={`${cellCls} text-right tabular-nums text-slate-400`}>{fmtCurrency(c.salesPrice)}</td>
-        <td className={`${cellCls} text-right tabular-nums font-semibold text-white`}>{fmtCurrency(c.lineTotal)}</td>
-        <td className={cellCls}>
-          <div className="flex items-center gap-1">
-            <button onClick={onSave} className="p-1 rounded bg-[#f97316] hover:bg-orange-400 text-white transition-colors"><Save size={12} /></button>
-            <button onClick={onCancel} className="p-1 rounded text-slate-500 hover:text-white hover:bg-[#1e2d4a] transition-colors"><X size={12} /></button>
-          </div>
-        </td>
-      </tr>
-    );
-  }
-
   return (
     <div className="space-y-3">
       <div className="overflow-x-auto rounded-lg border border-[#1e2d4a]">
         <table className="w-full text-xs min-w-[700px]">
           <thead className="bg-[#0d1628]">
             <tr>
-              <th className={`${thCls} w-8`}>No.</th>
-              <th className={thCls}>Description</th>
-              <th className={thCls}>Type</th>
-              <th className={thCls}>Unit</th>
-              <th className={`${thCls} text-right`}>Qty</th>
-              <th className={`${thCls} text-right`}>Cost</th>
-              <th className={`${thCls} text-right`}>Markup %</th>
-              <th className={`${thCls} text-right`}>Sales</th>
-              <th className={`${thCls} text-right`}>Total</th>
-              {canEdit && <th className={`${thCls} w-16`}></th>}
+              <th className={`${buThCls} w-8`}>No.</th>
+              <th className={buThCls}>Description</th>
+              <th className={buThCls}>Type</th>
+              <th className={buThCls}>Unit</th>
+              <th className={`${buThCls} text-right`}>Qty</th>
+              <th className={`${buThCls} text-right`}>Cost</th>
+              <th className={`${buThCls} text-right`}>Markup %</th>
+              <th className={`${buThCls} text-right`}>Sales</th>
+              <th className={`${buThCls} text-right`}>Total</th>
+              {canEdit && <th className={`${buThCls} w-16`}></th>}
             </tr>
           </thead>
           <tbody>
@@ -297,21 +299,21 @@ function BuildUpTable({
                 />
               ) : (
                 <tr key={l.id} className="border-t border-[#1e2d4a]/50 hover:bg-[#1a2236]/40 transition-colors">
-                  <td className={`${cellCls} text-slate-600 font-mono`}>{l.line_no}</td>
-                  <td className={`${cellCls} text-slate-200`}>{l.description}</td>
-                  <td className={cellCls}>
+                  <td className={`${buCellCls} text-slate-600 font-mono`}>{l.line_no}</td>
+                  <td className={`${buCellCls} text-slate-200`}>{l.description}</td>
+                  <td className={buCellCls}>
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#1e2d4a] text-slate-400 font-medium">
                       <HardHat size={10} />{l.type}
                     </span>
                   </td>
-                  <td className={`${cellCls} text-slate-500`}>{l.unit || '—'}</td>
-                  <td className={`${cellCls} text-right tabular-nums text-slate-300`}>{l.quantity}</td>
-                  <td className={`${cellCls} text-right tabular-nums text-slate-400`}>{fmtCurrency(l.cost_price)}</td>
-                  <td className={`${cellCls} text-right tabular-nums text-slate-400`}>{l.markup_pct}%</td>
-                  <td className={`${cellCls} text-right tabular-nums text-slate-300`}>{fmtCurrency(l.sales_price)}</td>
-                  <td className={`${cellCls} text-right tabular-nums font-semibold text-white`}>{fmtCurrency(l.line_total)}</td>
+                  <td className={`${buCellCls} text-slate-500`}>{l.unit || '—'}</td>
+                  <td className={`${buCellCls} text-right tabular-nums text-slate-300`}>{l.quantity}</td>
+                  <td className={`${buCellCls} text-right tabular-nums text-slate-400`}>{fmtCurrency(l.cost_price)}</td>
+                  <td className={`${buCellCls} text-right tabular-nums text-slate-400`}>{l.markup_pct}%</td>
+                  <td className={`${buCellCls} text-right tabular-nums text-slate-300`}>{fmtCurrency(l.sales_price)}</td>
+                  <td className={`${buCellCls} text-right tabular-nums font-semibold text-white`}>{fmtCurrency(l.line_total)}</td>
                   {canEdit && (
-                    <td className={cellCls}>
+                    <td className={buCellCls}>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
                         <button onClick={() => startEdit(l)} className="p-1 rounded text-slate-500 hover:text-[#f97316] hover:bg-[#1e2d4a] transition-colors" title="Edit">
                           <Save size={12} />
