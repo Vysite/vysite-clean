@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   TrendingUp, Plus, X, Save,
   Paperclip, Trash2, Eye, Download, FileText,
-  Banknote,
+  Banknote, HardHat, Calculator,
   ChevronRight, AlertCircle, CheckCircle2, Clock, CircleDot,
   GitBranch, MessageSquare, Send,
 } from 'lucide-react';
@@ -350,125 +350,284 @@ const LINE_TYPES = ['Labour', 'Material', 'Plant', 'Subcontractor', 'Prelims', '
 
 type DraftLineItem = Omit<CommercialLineItem, 'id' | 'orgId' | 'recordId'> & { id?: string };
 
+// Shared cell/input styles matching VA build-up table
+const liCellCls = 'px-2 py-2 text-xs';
+const liThCls   = 'px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500';
+const liNumIn   = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded px-1.5 py-1 text-xs text-white text-right placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]';
+const liTxtIn   = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded px-1.5 py-1 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]';
+const liSelIn   = `${liTxtIn} appearance-none cursor-pointer`;
+
+interface LineEntryForm {
+  description: string;
+  lineType: string;
+  unit: string;
+  quantity: string;
+  internalRate: string;
+  markupPct: string;
+  clientRate: string;
+}
+
+const BLANK_ENTRY: LineEntryForm = { description: '', lineType: 'Labour', unit: 'nr', quantity: '', internalRate: '', markupPct: '', clientRate: '' };
+
+function calcEntryTotals(f: LineEntryForm) {
+  const qty      = parseFloat(f.quantity)     || 0;
+  const cost     = parseFloat(f.internalRate) || 0;
+  const mkup     = parseFloat(f.markupPct)    || 0;
+  const sales    = f.clientRate !== '' ? (parseFloat(f.clientRate) || 0) : cost * (1 + mkup / 100);
+  const total    = qty * sales;
+  return { qty, cost, mkup, sales, total };
+}
+
+function LineEntryRow({
+  form, onChange, onSave, onCancel, canViewPricing,
+}: {
+  form: LineEntryForm;
+  onChange: (f: LineEntryForm) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  canViewPricing: boolean;
+}) {
+  const c = calcEntryTotals(form);
+  return (
+    <tr className="bg-[#1a2236]">
+      <td className={liCellCls}></td>
+      <td className={liCellCls} style={{ minWidth: 140 }}>
+        <input className={liTxtIn} value={form.description} onChange={e => onChange({ ...form, description: e.target.value })} placeholder="Description" autoFocus />
+      </td>
+      <td className={liCellCls} style={{ minWidth: 110 }}>
+        <select className={liSelIn} value={form.lineType} onChange={e => onChange({ ...form, lineType: e.target.value })}>
+          {LINE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </td>
+      <td className={liCellCls} style={{ minWidth: 70 }}>
+        <select className={liSelIn} value={form.unit} onChange={e => onChange({ ...form, unit: e.target.value })}>
+          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+        </select>
+      </td>
+      <td className={liCellCls} style={{ minWidth: 60 }}>
+        <input className={liNumIn} type="text" inputMode="decimal" value={form.quantity} onChange={e => onChange({ ...form, quantity: e.target.value })} placeholder="0" />
+      </td>
+      {canViewPricing && (
+        <>
+          <td className={liCellCls} style={{ minWidth: 80 }}>
+            <input className={liNumIn} type="text" inputMode="decimal" value={form.internalRate} onChange={e => {
+              const next = { ...form, internalRate: e.target.value };
+              const cost2 = parseFloat(e.target.value) || 0;
+              const mkup2 = parseFloat(form.markupPct) || 0;
+              next.clientRate = String((cost2 * (1 + mkup2 / 100)).toFixed(2));
+              onChange(next);
+            }} placeholder="0.00" />
+          </td>
+          <td className={liCellCls} style={{ minWidth: 70 }}>
+            <input className={liNumIn} type="text" inputMode="decimal" value={form.markupPct} onChange={e => {
+              const next = { ...form, markupPct: e.target.value };
+              const cost2 = parseFloat(form.internalRate) || 0;
+              const mkup2 = parseFloat(e.target.value) || 0;
+              next.clientRate = String((cost2 * (1 + mkup2 / 100)).toFixed(2));
+              onChange(next);
+            }} placeholder="0" />
+          </td>
+        </>
+      )}
+      <td className={liCellCls} style={{ minWidth: 80 }}>
+        <input className={liNumIn} type="text" inputMode="decimal" value={form.clientRate} onChange={e => onChange({ ...form, clientRate: e.target.value })} placeholder="0.00" />
+      </td>
+      <td className={`${liCellCls} text-right tabular-nums font-semibold text-white`} style={{ minWidth: 80 }}>{fmtCurrency(c.total)}</td>
+      <td className={liCellCls}>
+        <div className="flex items-center gap-1">
+          <button onClick={onSave} className="p-1 rounded bg-[#f97316] hover:bg-orange-400 text-white transition-colors"><Save size={12} /></button>
+          <button onClick={onCancel} className="p-1 rounded text-slate-500 hover:text-white hover:bg-[#1e2d4a] transition-colors"><X size={12} /></button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function LineItemEditor({
   lines, onChange, canViewPricing,
 }: { lines: DraftLineItem[]; onChange: (l: DraftLineItem[]) => void; canViewPricing: boolean }) {
-  const cellCls = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded px-2 py-1 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]/60 focus:border-[#f97316]/60 transition-colors';
-  const numCls  = `${cellCls} text-right`;
-
-  function addLine() {
-    onChange([...lines, { sortOrder: lines.length, description: '', clientDescription: '', lineType: 'Labour', unit: 'item', quantity: 1, internalRate: 0, clientRate: 0, markupPct: null }]);
-  }
-
-  function removeLine(i: number) { onChange(lines.filter((_, idx) => idx !== i)); }
-
-  function updateLine(i: number, patch: Partial<DraftLineItem>) {
-    const next = [...lines];
-    next[i] = { ...next[i], ...patch };
-    if (patch.description !== undefined) next[i].clientDescription = patch.description;
-    if (patch.internalRate !== undefined) {
-      const markup = next[i].markupPct ?? null;
-      if (markup != null) next[i].clientRate = parseFloat(((patch.internalRate as number) * (1 + markup / 100)).toFixed(2));
-    }
-    if (patch.markupPct !== undefined) {
-      const markup = patch.markupPct as number | null;
-      if (markup != null) next[i].clientRate = parseFloat((next[i].internalRate * (1 + markup / 100)).toFixed(2));
-    }
-    onChange(next);
-  }
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<LineEntryForm>(BLANK_ENTRY);
+  const [addingNew, setAddingNew] = useState(false);
+  const [newForm, setNewForm] = useState<LineEntryForm>(BLANK_ENTRY);
 
   const totals = recordTotals(lines as CommercialLineItem[]);
 
+  function startEdit(i: number) {
+    const l = lines[i];
+    setEditingIdx(i);
+    setEditForm({
+      description: l.description,
+      lineType: l.lineType || 'Labour',
+      unit: l.unit,
+      quantity: String(l.quantity),
+      internalRate: String(l.internalRate),
+      markupPct: l.markupPct != null ? String(l.markupPct) : '',
+      clientRate: String(l.clientRate),
+    });
+  }
+
+  function commitEdit(i: number) {
+    const c = calcEntryTotals(editForm);
+    const next = [...lines];
+    next[i] = {
+      ...next[i],
+      description: editForm.description.trim(),
+      clientDescription: editForm.description.trim(),
+      lineType: editForm.lineType,
+      unit: editForm.unit,
+      quantity: c.qty,
+      internalRate: c.cost,
+      markupPct: editForm.markupPct !== '' ? c.mkup : null,
+      clientRate: c.sales,
+    };
+    onChange(next);
+    setEditingIdx(null);
+  }
+
+  function saveNew() {
+    if (!newForm.description.trim()) return;
+    const c = calcEntryTotals(newForm);
+    onChange([...lines, {
+      sortOrder: lines.length,
+      description: newForm.description.trim(),
+      clientDescription: newForm.description.trim(),
+      lineType: newForm.lineType,
+      unit: newForm.unit,
+      quantity: c.qty,
+      internalRate: c.cost,
+      markupPct: newForm.markupPct !== '' ? c.mkup : null,
+      clientRate: c.sales,
+    }]);
+    setNewForm(BLANK_ENTRY);
+    setAddingNew(false);
+  }
+
+  function removeLine(i: number) {
+    onChange(lines.filter((_, idx) => idx !== i));
+    if (editingIdx === i) setEditingIdx(null);
+  }
+
+  const colCount = canViewPricing ? 10 : 8;
+
   return (
-    <div>
+    <div className="space-y-3">
       <div className="overflow-x-auto rounded-lg border border-[#1e2d4a]">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-[#1e2d4a] bg-[#0d1628]">
-              <th className="px-2 py-2 text-left text-slate-500 font-semibold w-6">#</th>
-              <th className="px-2 py-2 text-left text-slate-500 font-semibold">Description</th>
-              <th className="px-2 py-2 text-left text-slate-500 font-semibold w-28">Type</th>
-              <th className="px-2 py-2 text-left text-slate-500 font-semibold w-20">Unit</th>
-              <th className="px-2 py-2 text-right text-slate-500 font-semibold w-16">Qty</th>
-              {canViewPricing && <th className="px-2 py-2 text-right text-slate-500 font-semibold w-24">Cost Price</th>}
-              {canViewPricing && <th className="px-2 py-2 text-right text-slate-500 font-semibold w-20">Markup %</th>}
-              <th className="px-2 py-2 text-right text-slate-500 font-semibold w-24">Sales Price</th>
-              <th className="px-2 py-2 text-right text-slate-500 font-semibold w-24">Total</th>
-              <th className="w-8" />
+        <table className="w-full text-xs min-w-[600px]">
+          <thead className="bg-[#0d1628]">
+            <tr>
+              <th className={`${liThCls} w-8`}>No.</th>
+              <th className={liThCls}>Description</th>
+              <th className={liThCls}>Type</th>
+              <th className={liThCls}>Unit</th>
+              <th className={`${liThCls} text-right`}>Qty</th>
+              {canViewPricing && <th className={`${liThCls} text-right`}>Cost Price</th>}
+              {canViewPricing && <th className={`${liThCls} text-right`}>Markup %</th>}
+              <th className={`${liThCls} text-right`}>Sales Price</th>
+              <th className={`${liThCls} text-right`}>Total</th>
+              <th className={`${liThCls} w-16`}></th>
             </tr>
           </thead>
           <tbody>
             {lines.map((l, i) => (
-              <tr key={i} className="border-b border-[#1e2d4a]/50 group hover:bg-[#0d1628]/40 transition-colors">
-                <td className="py-1.5 pl-3 pr-1 text-slate-600 text-xs tabular-nums">{i + 1}</td>
-                <td className="py-1.5 px-2 min-w-[140px]">
-                  <input className={`${cellCls} text-left`} value={l.description} onChange={e => updateLine(i, { description: e.target.value })} placeholder="Description" />
-                </td>
-                <td className="py-1.5 px-2">
-                  <select className={`${cellCls} appearance-none cursor-pointer`} value={l.lineType || 'Labour'} onChange={e => updateLine(i, { lineType: e.target.value })}>
-                    {LINE_TYPES.map(t => <option key={t}>{t}</option>)}
-                  </select>
-                </td>
-                <td className="py-1.5 px-2">
-                  <select className={`${cellCls} appearance-none cursor-pointer`} value={l.unit} onChange={e => updateLine(i, { unit: e.target.value })}>
-                    {UNITS.map(u => <option key={u}>{u}</option>)}
-                  </select>
-                </td>
-                <td className="py-1.5 px-2">
-                  <input type="number" min="0" step="any" className={numCls} value={l.quantity} onChange={e => updateLine(i, { quantity: parseFloat(e.target.value) || 0 })} />
-                </td>
-                {canViewPricing && (
-                  <>
-                    <td className="py-1.5 px-2">
-                      <input type="number" min="0" step="any" className={numCls} value={l.internalRate} onChange={e => updateLine(i, { internalRate: parseFloat(e.target.value) || 0 })} />
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <input type="number" min="0" max="200" step="0.1" className={numCls} value={l.markupPct ?? ''} onChange={e => updateLine(i, { markupPct: e.target.value ? parseFloat(e.target.value) : null })} placeholder="—" />
-                    </td>
-                  </>
-                )}
-                <td className="py-1.5 px-2">
-                  <input type="number" min="0" step="any" className={numCls} value={l.clientRate} onChange={e => updateLine(i, { clientRate: parseFloat(e.target.value) || 0 })} />
-                </td>
-                <td className="py-1.5 pr-2 text-right text-slate-300 font-mono">
-                  {fmtCurrency(lineTotal(l as CommercialLineItem, 'client'))}
-                </td>
-                <td className="py-1.5">
-                  <button onClick={() => removeLine(i)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-all rounded">
-                    <Trash2 size={13} />
-                  </button>
+              editingIdx === i ? (
+                <LineEntryRow
+                  key={i}
+                  form={editForm}
+                  onChange={setEditForm}
+                  onSave={() => commitEdit(i)}
+                  onCancel={() => setEditingIdx(null)}
+                  canViewPricing={canViewPricing}
+                />
+              ) : (
+                <tr key={i} className="border-t border-[#1e2d4a]/50 hover:bg-[#1a2236]/40 transition-colors group">
+                  <td className={`${liCellCls} text-slate-600 font-mono`}>{i + 1}</td>
+                  <td className={`${liCellCls} text-slate-200`}>{l.description || <span className="text-slate-600 italic">—</span>}</td>
+                  <td className={liCellCls}>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#1e2d4a] text-slate-400 font-medium">
+                      <HardHat size={10} />{l.lineType || 'Labour'}
+                    </span>
+                  </td>
+                  <td className={`${liCellCls} text-slate-500`}>{l.unit || '—'}</td>
+                  <td className={`${liCellCls} text-right tabular-nums text-slate-300`}>{l.quantity}</td>
+                  {canViewPricing && (
+                    <>
+                      <td className={`${liCellCls} text-right tabular-nums text-slate-400`}>{fmtCurrency(l.internalRate)}</td>
+                      <td className={`${liCellCls} text-right tabular-nums text-slate-400`}>{l.markupPct != null ? `${l.markupPct}%` : '—'}</td>
+                    </>
+                  )}
+                  <td className={`${liCellCls} text-right tabular-nums text-slate-300`}>{fmtCurrency(l.clientRate)}</td>
+                  <td className={`${liCellCls} text-right tabular-nums font-semibold text-white`}>{fmtCurrency(lineTotal(l as CommercialLineItem, 'client'))}</td>
+                  <td className={liCellCls}>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => startEdit(i)} className="p-1 rounded text-slate-500 hover:text-[#f97316] hover:bg-[#1e2d4a] transition-colors" title="Edit">
+                        <Save size={12} />
+                      </button>
+                      <button onClick={() => removeLine(i)} className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-[#1e2d4a] transition-colors" title="Delete">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            ))}
+            {addingNew && (
+              <LineEntryRow
+                form={newForm}
+                onChange={setNewForm}
+                onSave={saveNew}
+                onCancel={() => { setAddingNew(false); setNewForm(BLANK_ENTRY); }}
+                canViewPricing={canViewPricing}
+              />
+            )}
+            {lines.length === 0 && !addingNew && (
+              <tr>
+                <td colSpan={colCount} className="px-4 py-8 text-center text-xs text-slate-600">
+                  No cost lines yet — click Add Line to build up the cost.
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
+          {lines.length > 0 && (
+            <tfoot>
+              <tr className="border-t border-[#1e2d4a] bg-[#0d1628]">
+                <td colSpan={canViewPricing ? 8 : 6} className="px-2 py-2.5 text-xs font-semibold text-slate-400 text-right">Totals</td>
+                <td className="px-2 py-2.5 text-right tabular-nums text-sm font-bold text-[#f97316]">{fmtCurrency(totals.totalClient)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
-      <div className="mt-3 flex items-start justify-between gap-4">
-        <button onClick={addLine} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-[#1e2d4a] text-slate-400 hover:text-white hover:border-[#f97316] text-xs transition-colors">
-          <Plus size={13} /> Add Line
+      {!addingNew && editingIdx === null && (
+        <button
+          onClick={() => setAddingNew(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-[#1e2d4a] hover:border-[#f97316]/50 text-slate-500 hover:text-[#f97316] text-xs font-medium transition-colors"
+        >
+          <Plus size={12} /> Add Line
         </button>
-        {lines.length > 0 && (
-          <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg p-3 min-w-[240px] space-y-1.5 text-xs">
+      )}
+
+      {lines.length > 0 && (
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#0d1628] border border-[#1e2d4a]">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Calculator size={12} />
+            <span>{lines.length} line{lines.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="flex items-center gap-4 text-xs">
             {canViewPricing && (
-              <div className="flex justify-between text-slate-400">
-                <span>Total Cost</span>
-                <span className="font-mono text-slate-300">{fmtCurrency(totals.totalInternal)}</span>
-              </div>
+              <span className="text-slate-500">Cost: <span className="font-mono text-slate-400">{fmtCurrency(totals.totalInternal)}</span></span>
             )}
-            <div className="flex justify-between text-slate-400">
-              <span>Total Sales Value</span>
-              <span className="font-mono text-white font-semibold">{fmtCurrency(totals.totalClient)}</span>
-            </div>
+            <span className="text-slate-500">Sales: <span className="font-mono font-semibold text-white">{fmtCurrency(totals.totalClient)}</span></span>
             {canViewPricing && (
-              <div className={`flex justify-between border-t border-[#1e2d4a] pt-1.5 font-semibold ${totals.margin >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                <span>Gross Margin</span>
-                <span className="font-mono">{fmtCurrency(totals.margin)} ({totals.marginPct.toFixed(1)}%)</span>
-              </div>
+              <span className={`font-semibold ${totals.margin >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                Margin: <span className="font-mono">{fmtCurrency(totals.margin)} ({totals.marginPct.toFixed(1)}%)</span>
+              </span>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
