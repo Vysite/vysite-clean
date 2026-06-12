@@ -948,7 +948,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
   const MODAL_TABS: { key: ModalTab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview',    label: 'Details',    icon: <FileText size={13} /> },
     ...(HAS_TYPE_FIELDS ? [{ key: 'type_fields' as ModalTab, label: 'Notice Fields', icon: <AlertCircle size={13} /> }] : []),
-    { key: 'cost',        label: 'Cost Breakdown', icon: <TrendingUp size={13} /> },
+    { key: 'cost',        label: `Cost Breakdown${lineItems.length ? ` (${lineItems.length})` : ''}`, icon: <TrendingUp size={13} /> },
     { key: 'comments',    label: `Comments${recordComments.length ? ` (${recordComments.length})` : ''}`, icon: <MessageSquare size={13} /> },
     { key: 'attachments', label: `Attachments${attachments.length ? ` (${attachments.length})` : ''}`, icon: <Paperclip size={13} /> },
   ];
