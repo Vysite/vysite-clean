@@ -344,7 +344,12 @@ function buildExportHTML(
     </div></body></html>`;
 }
 
-// ─── Line Item Editor ──────────────────────────────────────────────────────────
+function genLineId(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
 
 const LINE_TYPES = ['Labour', 'Material', 'Plant', 'Subcontractor', 'Prelims', 'Other'];
 
@@ -444,8 +449,14 @@ function LineEntryRow({
 }
 
 function LineItemEditor({
-  lines, onChange, canViewPricing,
-}: { lines: DraftLineItem[]; onChange: (l: DraftLineItem[]) => void; canViewPricing: boolean }) {
+  lines, onChange, canViewPricing, onPersistLine, onDeleteLine,
+}: {
+  lines: DraftLineItem[];
+  onChange: (l: DraftLineItem[]) => void;
+  canViewPricing: boolean;
+  onPersistLine?: (line: DraftLineItem, sortOrder: number) => Promise<void>;
+  onDeleteLine?: (id: string) => Promise<void>;
+}) {
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<LineEntryForm>(BLANK_ENTRY);
   const [addingNew, setAddingNew] = useState(false);
@@ -482,13 +493,15 @@ function LineItemEditor({
       clientRate: c.sales,
     };
     onChange(next);
+    onPersistLine?.(next[i], i);
     setEditingIdx(null);
   }
 
   function saveNew() {
     if (!newForm.description.trim()) return;
     const c = calcEntryTotals(newForm);
-    onChange([...lines, {
+    const newLine: DraftLineItem = {
+      id: genLineId(),
       sortOrder: lines.length,
       description: newForm.description.trim(),
       clientDescription: newForm.description.trim(),
@@ -498,13 +511,17 @@ function LineItemEditor({
       internalRate: c.cost,
       markupPct: newForm.markupPct !== '' ? c.mkup : null,
       clientRate: c.sales,
-    }]);
+    };
+    onChange([...lines, newLine]);
+    onPersistLine?.(newLine, lines.length);
     setNewForm(BLANK_ENTRY);
     setAddingNew(false);
   }
 
   function removeLine(i: number) {
+    const removed = lines[i];
     onChange(lines.filter((_, idx) => idx !== i));
+    if (removed.id) onDeleteLine?.(removed.id);
     if (editingIdx === i) setEditingIdx(null);
   }
 
@@ -1095,7 +1112,31 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
                   <AlertCircle size={15} /><span>Internal rates and pricing are restricted to authorised commercial users.</span>
                 </div>
               )}
-              <LineItemEditor lines={lineItems} onChange={setLineItems} canViewPricing={canViewPricing} />
+              <LineItemEditor
+                lines={lineItems}
+                onChange={setLineItems}
+                canViewPricing={canViewPricing}
+                onPersistLine={!isNew ? async (line, sortOrder) => {
+                  const rowId = line.id ?? `li-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                  await supabase.from('vy_commercial_line_items').upsert({
+                    id: rowId,
+                    org_id: orgId,
+                    record_id: record!.id,
+                    sort_order: sortOrder,
+                    description: line.description,
+                    client_description: line.description,
+                    line_type: line.lineType || 'Labour',
+                    unit: line.unit,
+                    quantity: line.quantity,
+                    internal_rate: line.internalRate,
+                    client_rate: line.clientRate,
+                    markup_pct: line.markupPct,
+                  }, { onConflict: 'id' });
+                } : undefined}
+                onDeleteLine={!isNew ? async (id) => {
+                  await supabase.from('vy_commercial_line_items').delete().eq('id', id);
+                } : undefined}
+              />
             </div>
           )}
 
