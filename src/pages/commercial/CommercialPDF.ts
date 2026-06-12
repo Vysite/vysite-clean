@@ -5,7 +5,7 @@
  */
 
 import { openPrintTab } from '../../lib/printTab';
-import type { DBVariationAccountItem, DBCommercialApplication } from '../../lib/store';
+import type { DBVariationAccountItem, DBCommercialApplication, DBVABuildUpLine, DBVAComment, DBAttachment } from '../../lib/store';
 import type { CommercialRecord } from './types';
 import { typeInfo, statusInfo, parseRawValue } from './types';
 import type { DBKeyDate } from '../../data/types';
@@ -1562,6 +1562,264 @@ function fullReportBody(d: FullReportData): string {
 
 // ─── Public export functions ──────────────────────────────────────────────────
 
+// ── VA Build-Up PDF helpers ────────────────────────────────────────────────────
+
+interface VABuildUpData {
+  item: DBVariationAccountItem;
+  lines: DBVABuildUpLine[];
+  buildUpTotal: number;
+  comments?: DBVAComment[];
+  attachments?: DBAttachment[];
+}
+
+const VA_BUILD_UP_CSS = `
+@page { margin: 0; size: A4; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #fff; color: #0f172a; }
+.page { padding: 40px 52px 36px; }
+.exec-head { display:flex; align-items:flex-end; justify-content:space-between; border-bottom:1.5px solid #0f172a; padding-bottom:14px; margin-bottom:24px; }
+.exec-brand { font-size:10pt; font-weight:900; letter-spacing:0.18em; color:#ea6c00; text-transform:uppercase; }
+.exec-brand-sub { font-size:7pt; color:#94a3b8; letter-spacing:0.08em; text-transform:uppercase; margin-top:2px; }
+.exec-doc-type { font-size:6.5pt; font-weight:800; letter-spacing:0.18em; text-transform:uppercase; color:#94a3b8; text-align:right; }
+.exec-doc-title { font-size:10pt; font-weight:700; color:#0f172a; text-align:right; margin-top:2px; }
+.var-header { border-bottom:0.5px solid #e2e8f0; padding-bottom:18px; margin-bottom:20px; }
+.var-ref { font-size:9pt; font-weight:800; letter-spacing:0.08em; color:#ea6c00; text-transform:uppercase; margin-bottom:4px; }
+.var-title { font-size:18pt; font-weight:700; color:#0f172a; line-height:1.2; letter-spacing:-0.02em; margin-bottom:10px; }
+.var-meta-row { display:flex; flex-wrap:wrap; gap:0 28px; margin-top:10px; }
+.var-meta-item { font-size:8pt; color:#64748b; line-height:1.8; }
+.var-meta-label { font-size:6.5pt; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#94a3b8; }
+.status-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:7.5pt; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; }
+.desc-block { margin-bottom:20px; }
+.section-label { font-size:6.5pt; font-weight:800; letter-spacing:0.18em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; border-bottom:0.5px solid #e2e8f0; padding-bottom:6px; }
+.build-table { width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:16px; }
+.build-table thead th { font-size:6pt; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#94a3b8; border-bottom:1.5px solid #0f172a; padding:0 8px 8px 0; text-align:left; }
+.build-table thead th.num { text-align:right; }
+.build-table tbody td { padding:9px 8px 8px 0; border-bottom:0.5px solid #f1f5f9; vertical-align:top; }
+.build-table tbody td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.build-table tfoot td { padding:10px 8px 0 0; border-top:1.5px solid #0f172a; font-weight:700; font-variant-numeric:tabular-nums; }
+.build-table tfoot td.num { text-align:right; }
+.bt-ref { font-size:7.5pt; color:#94a3b8; }
+.bt-desc { font-size:9pt; font-weight:600; color:#0f172a; }
+.bt-type { display:inline-block; padding:1px 6px; border-radius:3px; background:#f1f5f9; color:#64748b; font-size:7pt; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }
+.bt-total { font-size:11pt; font-weight:700; color:#ea6c00; }
+.grand-band { border-left:3px solid #ea6c00; background:#fff7ed; padding:12px 18px; margin-bottom:20px; }
+.grand-label { font-size:6.5pt; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#b45309; margin-bottom:4px; }
+.grand-value { font-size:20pt; font-weight:700; color:#ea6c00; font-variant-numeric:tabular-nums; }
+.comments-block { margin-top:16px; }
+.comment-entry { padding:10px 0; border-bottom:0.5px solid #f1f5f9; }
+.comment-author { font-size:7.5pt; font-weight:700; color:#0f172a; }
+.comment-ts { font-size:7pt; color:#94a3b8; margin-left:8px; }
+.comment-body { font-size:8.5pt; color:#334155; margin-top:3px; line-height:1.5; }
+.att-list { margin-top:10px; }
+.att-item { font-size:8pt; color:#64748b; padding:4px 0; border-bottom:0.5px solid #f8fafc; }
+.doc-footer { margin-top:32px; padding-top:10px; border-top:0.5px solid #e2e8f0; display:flex; justify-content:space-between; }
+.doc-footer-l { font-size:7pt; color:#94a3b8; }
+.doc-footer-r { font-size:7pt; color:#94a3b8; text-align:right; }
+`;
+
+function statusBadgeHtml(status: string): string {
+  const colours: Record<string, string> = {
+    draft: 'background:#374151;color:#d1d5db;',
+    submitted: 'background:#0c4a6e;color:#7dd3fc;',
+    under_review: 'background:#78350f;color:#fcd34d;',
+    agreed: 'background:#065f46;color:#6ee7b7;',
+    rejected: 'background:#7f1d1d;color:#fca5a5;',
+    paid: 'background:#14532d;color:#86efac;',
+    withdrawn: 'background:#1e293b;color:#64748b;',
+  };
+  const labels: Record<string, string> = { draft:'Draft', submitted:'Submitted', under_review:'Under Review', agreed:'Agreed', rejected:'Rejected', paid:'Paid', withdrawn:'Withdrawn' };
+  const style = colours[status] ?? 'background:#374151;color:#d1d5db;';
+  return `<span class="status-badge" style="${style}">${labels[status] ?? status}</span>`;
+}
+
+function buildUpTableHtml(lines: DBVABuildUpLine[], total: number, showCost: boolean): string {
+  if (lines.length === 0) {
+    return '<p style="font-size:8.5pt;color:#94a3b8;font-style:italic;padding:10px 0;">No cost build-up lines recorded.</p>';
+  }
+  const costCols = showCost
+    ? `<th class="num" style="width:70px;">Cost</th><th class="num" style="width:55px;">Markup</th>`
+    : '';
+  const rows = lines.map((l, i) => {
+    const salesVal = `£${l.sales_price.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const totalVal = `£${l.line_total.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const costVal  = `£${l.cost_price.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const costCells = showCost ? `<td class="num">${costVal}</td><td class="num">${l.markup_pct}%</td>` : '';
+    return `<tr>
+      <td><span class="bt-ref">${i + 1}</span></td>
+      <td><span class="bt-desc">${esc(l.description)}</span></td>
+      <td><span class="bt-type">${esc(l.type)}</span></td>
+      <td>${esc(l.unit || '—')}</td>
+      <td class="num">${l.quantity}</td>
+      ${costCells}
+      <td class="num">${salesVal}</td>
+      <td class="num bt-total">${totalVal}</td>
+    </tr>`;
+  }).join('');
+
+  const totalVal = `£${total.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const colCount = showCost ? 9 : 7;
+  return `
+  <table class="build-table">
+    <thead>
+      <tr>
+        <th style="width:24px;">No.</th>
+        <th>Description</th>
+        <th style="width:90px;">Type</th>
+        <th style="width:40px;">Unit</th>
+        <th class="num" style="width:50px;">Qty</th>
+        ${costCols}
+        <th class="num" style="width:70px;">Sales Price</th>
+        <th class="num" style="width:70px;">Line Total</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+    <tfoot>
+      <tr>
+        <td colspan="${colCount - 1}" style="text-align:right;font-size:8pt;color:#64748b;padding-right:12px;">Build-Up Total</td>
+        <td class="num bt-total">${totalVal}</td>
+      </tr>
+    </tfoot>
+  </table>`;
+}
+
+function vaDocHeader(docType: string, variant: string): string {
+  return `<div class="exec-head">
+    <div>
+      <div class="exec-brand">VYSITE</div>
+      <div class="exec-brand-sub">Construction Operating System</div>
+    </div>
+    <div>
+      <div class="exec-doc-type">${esc(docType)}</div>
+      <div class="exec-doc-title">${esc(variant)}</div>
+    </div>
+  </div>`;
+}
+
+function vaDocFooter(today: string, variant: string): string {
+  const conf = variant === 'Internal' ? 'Confidential — Internal Use Only' : 'Commercial Document — Client Copy';
+  return `<div class="doc-footer">
+    <div class="doc-footer-l">${conf}</div>
+    <div class="doc-footer-r">VYSITE &bull; ${today}</div>
+  </div>`;
+}
+
+function vaInternalBody(d: VABuildUpData): string {
+  const today = todayStr();
+  const item = d.item;
+  const signedVal = item.is_positive ? item.value : -item.value;
+  const signedStr = (signedVal >= 0 ? '+' : '') + fv(Math.abs(signedVal));
+
+  const commentsHtml = (d.comments ?? []).length > 0
+    ? `<div class="comments-block">
+        <div class="section-label">Comments (${d.comments!.length})</div>
+        ${(d.comments ?? []).map(c => `<div class="comment-entry">
+          <span class="comment-author">${esc(c.author_name)}</span>
+          <span class="comment-ts">${fmtD(c.created_at)}</span>
+          <div class="comment-body">${esc(c.body)}</div>
+        </div>`).join('')}
+      </div>`
+    : '';
+
+  const attHtml = (d.attachments ?? []).length > 0
+    ? `<div class="att-list">
+        <div class="section-label">Attachments / Evidence (${d.attachments!.length})</div>
+        ${(d.attachments ?? []).map(a => `<div class="att-item">${esc(a.name)}${a.category ? ` — ${esc(a.category)}` : ''}</div>`).join('')}
+      </div>`
+    : '';
+
+  return `<div class="page">
+    ${vaDocHeader('Variation Account', 'Internal Build-Up')}
+
+    <div class="var-header">
+      <div class="var-ref">${esc(item.reference || 'VAR')}</div>
+      <div class="var-title">${esc(item.title || 'Untitled Variation')}</div>
+      <div style="margin-bottom:8px;">${statusBadgeHtml(item.status)}</div>
+      <div class="var-meta-row">
+        <div class="var-meta-item"><span class="var-meta-label">Date Raised&ensp;</span>${fmtD(item.date_raised)}</div>
+        ${item.date_agreed ? `<div class="var-meta-item"><span class="var-meta-label">Date Agreed&ensp;</span>${fmtD(item.date_agreed)}</div>` : ''}
+        <div class="var-meta-item"><span class="var-meta-label">Direction&ensp;</span>${item.is_positive ? 'Addition (+)' : 'Omission (-)'}</div>
+        <div class="var-meta-item"><span class="var-meta-label">Manual Value&ensp;</span>${fv(item.value)}</div>
+        ${item.created_by ? `<div class="var-meta-item"><span class="var-meta-label">Raised By&ensp;</span>${esc(item.created_by)}</div>` : ''}
+      </div>
+    </div>
+
+    ${item.description ? `<div class="desc-block"><div class="section-label">Description of Works</div><p style="font-size:9pt;color:#334155;line-height:1.6;">${esc(item.description)}</p></div>` : ''}
+    ${item.reason ? `<div class="desc-block"><div class="section-label">Reason / Cause</div><p style="font-size:9pt;color:#334155;line-height:1.6;">${esc(item.reason)}</p></div>` : ''}
+    ${item.notes ? `<div class="desc-block"><div class="section-label">Internal Notes</div><p style="font-size:9pt;color:#334155;line-height:1.6;">${esc(item.notes)}</p></div>` : ''}
+
+    <div class="section-label">Cost Build-Up</div>
+    ${buildUpTableHtml(d.lines, d.buildUpTotal, true)}
+
+    ${d.buildUpTotal > 0 ? `<div class="grand-band">
+      <div class="grand-label">Build-Up Total (Internal)</div>
+      <div class="grand-value">${fv(d.buildUpTotal)}</div>
+    </div>` : ''}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:12px 0;margin-bottom:20px;">
+      <div>
+        <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Manual Variation Value</div>
+        <div style="font-size:14pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${signedStr}</div>
+      </div>
+      ${d.buildUpTotal > 0 ? `<div>
+        <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Build-Up Total</div>
+        <div style="font-size:14pt;font-weight:700;color:#ea6c00;font-variant-numeric:tabular-nums;">${fv(d.buildUpTotal)}</div>
+      </div>` : ''}
+    </div>
+
+    ${commentsHtml}
+    ${attHtml}
+    ${vaDocFooter(today, 'Internal')}
+  </div>`;
+}
+
+function vaClientBody(d: VABuildUpData): string {
+  const today = todayStr();
+  const item = d.item;
+
+  return `<div class="page">
+    ${vaDocHeader('Variation Account', 'Client Copy')}
+
+    <div class="var-header">
+      <div class="var-ref">${esc(item.reference || 'VAR')}</div>
+      <div class="var-title">${esc(item.title || 'Untitled Variation')}</div>
+      <div style="margin-bottom:8px;">${statusBadgeHtml(item.status)}</div>
+      <div class="var-meta-row">
+        <div class="var-meta-item"><span class="var-meta-label">Date Raised&ensp;</span>${fmtD(item.date_raised)}</div>
+        ${item.date_agreed ? `<div class="var-meta-item"><span class="var-meta-label">Date Agreed&ensp;</span>${fmtD(item.date_agreed)}</div>` : ''}
+        <div class="var-meta-item"><span class="var-meta-label">Direction&ensp;</span>${item.is_positive ? 'Addition (+)' : 'Omission (-)'}</div>
+      </div>
+    </div>
+
+    ${item.description ? `<div class="desc-block"><div class="section-label">Description of Works</div><p style="font-size:9pt;color:#334155;line-height:1.6;">${esc(item.description)}</p></div>` : ''}
+    ${item.reason ? `<div class="desc-block"><div class="section-label">Reason / Cause</div><p style="font-size:9pt;color:#334155;line-height:1.6;">${esc(item.reason)}</p></div>` : ''}
+
+    <div class="section-label">Cost Build-Up</div>
+    ${buildUpTableHtml(d.lines, d.buildUpTotal, false)}
+
+    ${d.buildUpTotal > 0 ? `<div class="grand-band">
+      <div class="grand-label">Variation Total</div>
+      <div class="grand-value">${fv(d.buildUpTotal)}</div>
+    </div>` : ''}
+
+    ${vaDocFooter(today, 'Client')}
+  </div>`;
+}
+
+function vaBuildUpShell(title: string, body: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${esc(title)}</title>
+<style>${VA_BUILD_UP_CSS}</style>
+<script>window.onload=function(){window.print();};<\/script>
+</head>
+<body>${body}</body>
+</html>`;
+}
+
+
+
 export function exportPositionStatementPDF(data: PositionData): void {
   openPrintTab(pageShell(`Commercial Position Statement — ${data.project.name}`, positionStatementBody(data)));
 }
@@ -1574,6 +1832,16 @@ export function exportRegisterPDF(data: RegisterData): void {
 export function exportVariationAccountPDF(data: VAData): void {
   const name = data.project?.name ?? '—';
   openPrintTab(pageShell(`Variation Account — ${name}`, variationAccountBody(data)));
+}
+
+export function exportVAInternalPDF(data: VABuildUpData): void {
+  const ref = data.item.reference || 'VAR';
+  openPrintTab(vaBuildUpShell(`${ref} — Internal Build-Up`, vaInternalBody(data)));
+}
+
+export function exportVAClientPDF(data: VABuildUpData): void {
+  const ref = data.item.reference || 'VAR';
+  openPrintTab(vaBuildUpShell(`${ref} — Client Copy`, vaClientBody(data)));
 }
 
 export function exportApplicationsPDF(data: ApplicationsData): void {

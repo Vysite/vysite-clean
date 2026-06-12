@@ -944,6 +944,35 @@ export interface DBVariationAccountItem {
   updated_at?: string;
 }
 
+export interface DBVABuildUpLine {
+  id: string;
+  org_id?: string;
+  project_id: string;
+  va_item_id: string;
+  line_no: number;
+  description: string;
+  type: string;
+  unit: string;
+  quantity: number;
+  cost_price: number;
+  markup_pct: number;
+  sales_price: number;
+  line_total: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DBVAComment {
+  id: string;
+  org_id?: string;
+  project_id: string;
+  va_item_id: string;
+  body: string;
+  author_name: string;
+  author_id: string;
+  created_at?: string;
+}
+
 export interface DBCommercialApplication {
   id: string;
   org_id?: string;
@@ -1086,6 +1115,17 @@ export interface AppStore {
   updateVariationAccountItem: (v: DBVariationAccountItem) => Promise<void>;
   removeVariationAccountItem: (id: string) => Promise<void>;
 
+  // VA Build-Up Lines
+  vaBuildUpLines: DBVABuildUpLine[];
+  addVABuildUpLine: (l: DBVABuildUpLine) => Promise<void>;
+  updateVABuildUpLine: (l: DBVABuildUpLine) => Promise<void>;
+  removeVABuildUpLine: (id: string) => Promise<void>;
+
+  // VA Comments
+  vaComments: DBVAComment[];
+  addVAComment: (c: DBVAComment) => Promise<void>;
+  removeVAComment: (id: string) => Promise<void>;
+
   // Commercial Applications
   commercialApplications: DBCommercialApplication[];
   addCommercialApplication: (a: DBCommercialApplication) => Promise<void>;
@@ -1143,6 +1183,8 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [platformUsers, setPlatformUsers] = useState<DBPlatformUser[]>([]);
   const [notifications, setNotifications] = useState<DBNotification[]>([]);
   const [variationAccountItems, setVariationAccountItems] = useState<DBVariationAccountItem[]>([]);
+  const [vaBuildUpLines, setVABuildUpLines] = useState<DBVABuildUpLine[]>([]);
+  const [vaComments, setVAComments] = useState<DBVAComment[]>([]);
   const [commercialApplications, setCommercialApplications] = useState<DBCommercialApplication[]>([]);
   const [settings, setSettings] = useState<DBSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
@@ -1171,6 +1213,8 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setKeyDates([]);
       setNotifications([]);
       setVariationAccountItems([]);
+      setVABuildUpLines([]);
+      setVAComments([]);
       setCommercialApplications([]);
       // Keep platformUsers/settings as-is — they load below with org filter
       setLoading(false);
@@ -1188,7 +1232,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       const ATT_COLS = 'id,linked_type,linked_id,project_id,project_name,name,type,size,category,uploaded_by,created_at';
 
       // All queries are explicitly scoped to the resolved org — no global reads.
-      const [projRes, docRes, attRes, actRes, snaRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, kdRes, puRes, notifRes, settingsRes, vaRes, appRes] = await Promise.all([
+      const [projRes, docRes, attRes, actRes, snaRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, kdRes, puRes, notifRes, settingsRes, vaRes, appRes, vaLinesRes, vaCommentsRes] = await Promise.all([
         supabase.from('vy_projects').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
         supabase.from('vy_project_documents').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
@@ -1207,6 +1251,8 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
         supabase.from('vy_settings').select('*').eq('org_id', orgId).maybeSingle(),
         supabase.from('vy_variation_account').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_commercial_applications').select('*').eq('org_id', orgId).order('app_number', { ascending: true }),
+        supabase.from('vy_va_build_up_lines').select('*').eq('org_id', orgId).order('line_no', { ascending: true }),
+        supabase.from('vy_va_comments').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
       ]);
 
       if (cancelled) return;
@@ -1248,6 +1294,8 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setNotifications((notifRes.data ?? []) as DBNotification[]);
       if (settingsRes.data) setSettings({ ...DEFAULT_SETTINGS, ...(settingsRes.data as DBSettings) });
       setVariationAccountItems((vaRes.data ?? []) as DBVariationAccountItem[]);
+      setVABuildUpLines((vaLinesRes.data ?? []) as DBVABuildUpLine[]);
+      setVAComments((vaCommentsRes.data ?? []) as DBVAComment[]);
       setCommercialApplications((appRes.data ?? []) as DBCommercialApplication[]);
       setLoading(false);
     }
@@ -1670,6 +1718,46 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('removeVariationAccountItem', 'vy_variation_account', error);
   }, []);
 
+  // ── VA Build-Up Lines ─────────────────────────────────────────────────────────
+
+  const addVABuildUpLine = useCallback(async (l: DBVABuildUpLine) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setVABuildUpLines(prev => [...prev, l].sort((a, b) => a.line_no - b.line_no));
+    const { error } = await supabase.from('vy_va_build_up_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
+    logWrite('addVABuildUpLine', 'vy_va_build_up_lines', error);
+  }, []);
+
+  const updateVABuildUpLine = useCallback(async (l: DBVABuildUpLine) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setVABuildUpLines(prev => prev.map(x => x.id === l.id ? l : x));
+    const { error } = await supabase.from('vy_va_build_up_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateVABuildUpLine', 'vy_va_build_up_lines', error);
+  }, []);
+
+  const removeVABuildUpLine = useCallback(async (id: string) => {
+    setVABuildUpLines(prev => prev.filter(l => l.id !== id));
+    const { error } = await supabase.from('vy_va_build_up_lines').delete().eq('id', id);
+    logWrite('removeVABuildUpLine', 'vy_va_build_up_lines', error);
+  }, []);
+
+  // ── VA Comments ───────────────────────────────────────────────────────────────
+
+  const addVAComment = useCallback(async (c: DBVAComment) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setVAComments(prev => [...prev, c]);
+    const { error } = await supabase.from('vy_va_comments').upsert({ ...c, org_id: oid }, { onConflict: 'id' });
+    logWrite('addVAComment', 'vy_va_comments', error);
+  }, []);
+
+  const removeVAComment = useCallback(async (id: string) => {
+    setVAComments(prev => prev.filter(c => c.id !== id));
+    const { error } = await supabase.from('vy_va_comments').delete().eq('id', id);
+    logWrite('removeVAComment', 'vy_va_comments', error);
+  }, []);
+
   // ── Commercial Applications ────────────────────────────────────────────────
 
   const addCommercialApplication = useCallback(async (a: DBCommercialApplication) => {
@@ -1749,6 +1837,10 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addNotification, markNotificationRead, markAllNotificationsRead,
     variationAccountItems,
     addVariationAccountItem, updateVariationAccountItem, removeVariationAccountItem,
+    vaBuildUpLines,
+    addVABuildUpLine, updateVABuildUpLine, removeVABuildUpLine,
+    vaComments,
+    addVAComment, removeVAComment,
     commercialApplications,
     addCommercialApplication, updateCommercialApplication, removeCommercialApplication,
   };
