@@ -653,23 +653,37 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
         });
         const { data, error: err } = await supabase.from('vy_commercial_records').insert({ ...row, id, created_at: now }).select('*').single();
         if (err) throw err;
-        const projectName = projects.find(p => p.id === form.projectId)?.name;
-        onSaved(dbToRecord(data as Record<string, unknown>, projectName));
-      } else {
-        const { data, error: err } = await supabase.from('vy_commercial_records').update(row).eq('id', record!.id).select('*').single();
-        if (err) throw err;
-        if (lineItemsLoaded && lineItems.length > 0) {
-          await supabase.from('vy_commercial_line_items').delete().eq('record_id', record!.id);
+        if (lineItems.length > 0) {
           await supabase.from('vy_commercial_line_items').insert(
             lineItems.map((l, idx) => ({
               id: l.id ?? `li-${Date.now()}-${idx}`,
-              org_id: orgId, record_id: record!.id, sort_order: idx,
+              org_id: orgId, record_id: id, sort_order: idx,
               description: l.description, client_description: l.clientDescription,
               unit: l.unit, quantity: l.quantity,
               internal_rate: l.internalRate, client_rate: l.clientRate,
               markup_pct: l.markupPct,
             }))
           );
+        }
+        const projectName = projects.find(p => p.id === form.projectId)?.name;
+        onSaved(dbToRecord(data as Record<string, unknown>, projectName));
+      } else {
+        const { data, error: err } = await supabase.from('vy_commercial_records').update(row).eq('id', record!.id).select('*').single();
+        if (err) throw err;
+        if (lineItemsLoaded) {
+          await supabase.from('vy_commercial_line_items').delete().eq('record_id', record!.id);
+          if (lineItems.length > 0) {
+            await supabase.from('vy_commercial_line_items').insert(
+              lineItems.map((l, idx) => ({
+                id: l.id ?? `li-${Date.now()}-${idx}`,
+                org_id: orgId, record_id: record!.id, sort_order: idx,
+                description: l.description, client_description: l.clientDescription,
+                unit: l.unit, quantity: l.quantity,
+                internal_rate: l.internalRate, client_rate: l.clientRate,
+                markup_pct: l.markupPct,
+              }))
+            );
+          }
         }
         const projectName = projects.find(p => p.id === form.projectId)?.name;
         onSaved(dbToRecord(data as Record<string, unknown>, projectName));
