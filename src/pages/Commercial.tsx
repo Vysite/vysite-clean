@@ -1312,7 +1312,7 @@ const TABS: { key: CommercialTab; label: string; icon: React.ReactNode; comingSo
   { key: 'overview',          label: 'Overview',            icon: <TrendingUp size={13} /> },
   { key: 'register',          label: 'Register',            icon: <FileText size={13} /> },
   { key: 'variation-account', label: 'Variation Account',   icon: <GitBranch size={13} /> },
-  { key: 'applications',      label: 'Applications',        icon: <div className="text-current"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>, comingSoon: true },
+  { key: 'applications',      label: 'Applications',        icon: <div className="text-current"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div> },
   { key: 'timeline',          label: 'Commercial Timeline', icon: <Clock size={13} /> },
 ];
 
