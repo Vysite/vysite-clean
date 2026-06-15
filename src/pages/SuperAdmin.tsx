@@ -4,7 +4,7 @@ import {
   Shield, Building2, ChevronRight, ChevronLeft, ToggleLeft, ToggleRight,
   Save, AlertCircle, CheckCircle, RefreshCw, UserPlus, Trash2, Ban, Search,
   FlaskConical, X, Clock, Archive, RotateCcw, AlertTriangle, ChevronDown,
-  Upload, Mail, Phone, Globe, Hash, Send,
+  Upload, Mail, Phone, Globe, Hash, Send, Zap, Plus,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { env } from '../lib/env';
@@ -36,6 +36,10 @@ interface OrgSettings {
   user_limit: number | null;
   updated_at: string;
   updated_by: string;
+  // Free access override
+  free_access_enabled?: boolean;
+  free_access_enabled_at?: string | null;
+  free_access_enabled_by?: string | null;
 }
 
 interface OrgWithSettings extends OrgRow {
@@ -413,6 +417,254 @@ function NewTrialModal({ onClose, onCreated }: NewTrialModalProps) {
   );
 }
 
+// ─── Subscription status label ────────────────────────────────────────────────
+
+function getSubLabel(s: OrgSettings | null): 'free_access' | 'trial_active' | 'trial_expired' | 'active_sub' | 'suspended' | 'none' {
+  if (s?.free_access_enabled) return 'free_access';
+  if (s?.account_status === 'disabled') return 'suspended';
+  if (s?.account_type === 'trial') {
+    const expired = s.trial_expires_at && new Date(s.trial_expires_at) < new Date();
+    return expired ? 'trial_expired' : 'trial_active';
+  }
+  if (s?.account_type === 'paid' || s?.account_type === 'internal') return 'active_sub';
+  return 'none';
+}
+
+function SubStatusBadge({ settings }: { settings: OrgSettings | null }) {
+  const label = getSubLabel(settings);
+  if (label === 'free_access') return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-900/50 text-violet-300 border border-violet-700/50">
+      <Zap size={9} />Free Access
+    </span>
+  );
+  if (label === 'active_sub') return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/50 text-emerald-400">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Active Sub
+    </span>
+  );
+  if (label === 'trial_active') return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-900/60 text-sky-400">
+      <Clock size={9} />Trial Active
+    </span>
+  );
+  if (label === 'trial_expired') return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-900/60 text-amber-400">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Trial Expired
+    </span>
+  );
+  if (label === 'suspended') return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-900/60 text-red-400">
+      <span className="w-1.5 h-1.5 rounded-full bg-red-400" />Suspended
+    </span>
+  );
+  return null;
+}
+
+// ─── Subscription Override Section (embedded in ManagePanel) ──────────────────
+
+function SubscriptionOverrideSection({
+  orgId,
+  settings,
+  onSaved,
+}: {
+  orgId: string;
+  settings: OrgSettings | null;
+  onSaved: (updated: Partial<OrgSettings>) => void;
+}) {
+  const [extendDays, setExtendDays] = useState<number>(14);
+  const [extendLoading, setExtendLoading] = useState(false);
+  const [extendMsg, setExtendMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const [freeAccess, setFreeAccess] = useState<boolean>(settings?.free_access_enabled ?? false);
+  const [freeLoading, setFreeLoading] = useState(false);
+  const [freeMsg, setFreeMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  // Mirror settings changes from parent (e.g. after a loadOrgs refresh)
+  useEffect(() => {
+    setFreeAccess(settings?.free_access_enabled ?? false);
+  }, [settings?.free_access_enabled]);
+
+  const currentExpiry = settings?.trial_expires_at ?? null;
+
+  async function handleExtend() {
+    if (extendDays < 1) return;
+    setExtendLoading(true);
+    setExtendMsg(null);
+
+    const base = currentExpiry ? new Date(currentExpiry) : new Date();
+    if (base < new Date()) base.setTime(Date.now());
+    const newExpiry = new Date(base.getTime() + extendDays * 86400000).toISOString();
+
+    const { error } = await supabase
+      .from('org_settings')
+      .update({
+        trial_expires_at: newExpiry,
+        account_type: 'trial',
+        account_status: 'active',
+        updated_by: 'super-admin:extend-trial',
+      })
+      .eq('org_id', orgId);
+
+    if (error) {
+      setExtendMsg({ type: 'err', text: error.message });
+    } else {
+      setExtendMsg({ type: 'ok', text: `Trial extended to ${new Date(newExpiry).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}` });
+      onSaved({ trial_expires_at: newExpiry, account_type: 'trial', account_status: 'active' });
+    }
+    setExtendLoading(false);
+  }
+
+  async function handleToggleFreeAccess() {
+    const enabling = !freeAccess;
+    setFreeLoading(true);
+    setFreeMsg(null);
+
+    const now = new Date().toISOString();
+    const patch = enabling
+      ? { free_access_enabled: true, free_access_enabled_at: now, free_access_enabled_by: 'super-admin', updated_by: 'super-admin:free-access-on' }
+      : { free_access_enabled: false, free_access_enabled_at: null, free_access_enabled_by: null, updated_by: 'super-admin:free-access-off' };
+
+    const { error } = await supabase.from('org_settings').update(patch).eq('org_id', orgId);
+
+    if (error) {
+      setFreeMsg({ type: 'err', text: error.message });
+    } else {
+      setFreeAccess(enabling);
+      setFreeMsg({ type: 'ok', text: enabling ? 'Free access override enabled.' : 'Free access override removed.' });
+      onSaved(patch);
+    }
+    setFreeLoading(false);
+  }
+
+  const isOverrideActive = freeAccess;
+
+  return (
+    <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5 lg:col-span-2">
+      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-2">
+        <Shield size={12} />Subscription Override
+      </h3>
+      <p className="text-[11px] text-slate-600 mb-4">Admin-only controls. Free Access bypasses all trial/subscription checks entirely.</p>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* ── Current status ── */}
+        <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] p-3 space-y-2">
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Current Status</p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <SubStatusBadge settings={settings ? { ...settings, free_access_enabled: freeAccess } : null} />
+            {settings?.account_type && (
+              <span className="text-[10px] text-slate-500 capitalize">{settings.account_type}</span>
+            )}
+          </div>
+          {currentExpiry && (
+            <p className={`text-[11px] flex items-center gap-1 ${new Date(currentExpiry) < new Date() ? 'text-red-400' : 'text-slate-500'}`}>
+              <Clock size={9} />
+              Trial expiry: {new Date(currentExpiry).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </p>
+          )}
+          {isOverrideActive && settings?.free_access_enabled_at && (
+            <p className="text-[11px] text-violet-400 flex items-center gap-1">
+              <Zap size={9} />
+              Active since {new Date(settings.free_access_enabled_at).toLocaleDateString('en-GB')}
+            </p>
+          )}
+        </div>
+
+        {/* ── Free Access toggle ── */}
+        <div className={`rounded-lg border p-3 transition-colors ${isOverrideActive ? 'bg-violet-900/15 border-violet-700/50' : 'bg-[#0d1628] border-[#1e2d4a]'}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-white flex items-center gap-1.5">
+                <Zap size={12} className={isOverrideActive ? 'text-violet-300' : 'text-slate-500'} />
+                Free Access Override
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                Bypasses trial, subscription, and account_status checks. For internal orgs, beta testers, and partners.
+              </p>
+            </div>
+            <button
+              onClick={handleToggleFreeAccess}
+              disabled={freeLoading}
+              className="shrink-0 mt-0.5"
+              aria-label={isOverrideActive ? 'Disable free access' : 'Enable free access'}
+            >
+              {isOverrideActive
+                ? <ToggleRight size={28} className="text-violet-400" />
+                : <ToggleLeft size={28} className="text-slate-600" />}
+            </button>
+          </div>
+          {isOverrideActive && (
+            <div className="mt-2 px-2.5 py-1.5 rounded bg-violet-900/30 border border-violet-800/40">
+              <p className="text-[10px] font-semibold text-violet-300">Free Access Active</p>
+              {settings?.free_access_enabled_at && (
+                <p className="text-[10px] text-violet-400/70 mt-0.5">
+                  Enabled {new Date(settings.free_access_enabled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  {settings.free_access_enabled_by ? ` · ${settings.free_access_enabled_by}` : ''}
+                </p>
+              )}
+            </div>
+          )}
+          {freeMsg && (
+            <p className={`text-[11px] mt-2 ${freeMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{freeMsg.text}</p>
+          )}
+        </div>
+
+        {/* ── Extend Trial ── */}
+        <div className="bg-[#0d1628] rounded-lg border border-[#1e2d4a] p-3 lg:col-span-2">
+          <p className="text-xs font-semibold text-white mb-2 flex items-center gap-1.5">
+            <Plus size={12} className="text-sky-400" />Extend Trial
+          </p>
+          <p className="text-[11px] text-slate-500 mb-3">
+            Moves trial expiry forward from today or the current expiry date, whichever is later. Also resets account to Active Trial.
+          </p>
+          <div className="flex flex-wrap gap-2 items-center">
+            {[7, 14, 30, 90].map(d => (
+              <button
+                key={d}
+                onClick={() => setExtendDays(d)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
+                  extendDays === d
+                    ? 'bg-sky-700 border-sky-600 text-white'
+                    : 'bg-[#1a2236] border-[#1e2d4a] text-slate-400 hover:text-white hover:border-[#2e3d5a]'
+                }`}
+              >
+                +{d}d
+              </button>
+            ))}
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={extendDays}
+                onChange={e => setExtendDays(Math.max(1, Math.min(365, Number(e.target.value))))}
+                className="w-16 text-center bg-[#1a2236] border border-[#1e2d4a] rounded-lg px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-sky-600 transition-colors"
+              />
+              <span className="text-[11px] text-slate-500">days</span>
+            </div>
+            <button
+              onClick={handleExtend}
+              disabled={extendLoading || isOverrideActive}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-sky-700 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold transition-colors"
+            >
+              {extendLoading
+                ? <><span className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />Extending…</>
+                : <><Plus size={12} />Extend +{extendDays}d</>}
+            </button>
+          </div>
+          {isOverrideActive && (
+            <p className="text-[11px] text-slate-600 mt-2">Trial extension not needed — Free Access override is active.</p>
+          )}
+          {extendMsg && (
+            <p className={`text-[11px] mt-2 ${extendMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{extendMsg.text}</p>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ─── Company list row ─────────────────────────────────────────────────────────
 
 function CompanyRow({
@@ -464,14 +716,14 @@ function CompanyRow({
   function openMenu() {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    const menuHeight = 130; // approx px for 3 items
+    const menuHeight = 160;
     const spaceBelow = window.innerHeight - rect.bottom;
     const openUpward = spaceBelow < menuHeight + 8;
 
     setMenuStyle({
       position: 'fixed',
       right: window.innerWidth - rect.right,
-      width: 208,
+      width: 220,
       zIndex: 9999,
       ...(openUpward
         ? { bottom: window.innerHeight - rect.top + 4 }
@@ -487,11 +739,16 @@ function CompanyRow({
         <div className="flex items-center gap-2 flex-wrap">
           <p className={`text-sm font-semibold ${org.status === 'archived' ? 'text-slate-400' : 'text-white'}`}>{org.name}</p>
           {isTrial && <TrialBadge expiresAt={s?.trial_expires_at ?? null} />}
+          {s?.free_access_enabled && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-900/50 text-violet-300 border border-violet-700/50">
+              <Zap size={8} />Free
+            </span>
+          )}
         </div>
         <p className="text-[11px] text-slate-500">{org.slug}</p>
       </div>
 
-      {/* Status — now shows org lifecycle status */}
+      {/* Status */}
       <div className="flex flex-col gap-1">
         <OrgStatusBadge status={org.status} />
         {org.status === 'archived' && org.archived_at && (
@@ -536,7 +793,6 @@ function CompanyRow({
 
       {/* Actions */}
       <div className="flex items-center gap-1.5">
-        {/* Manage button — hidden for archived orgs */}
         {org.status === 'active' && (
           <button
             onClick={onManage}
@@ -546,26 +802,34 @@ function CompanyRow({
           </button>
         )}
 
-        {/* Lifecycle dropdown trigger */}
         <button
           ref={triggerRef}
           onClick={openMenu}
           disabled={actionLoading}
           className="flex items-center gap-1 px-2 py-1.5 bg-[#1a2236] border border-[#1e2d4a] hover:border-[#2e3d5a] text-slate-400 hover:text-white rounded-lg text-xs transition-colors disabled:opacity-50"
-          title="Lifecycle actions"
+          title="More actions"
         >
           {actionLoading
             ? <RefreshCw size={12} className="animate-spin" />
             : <ChevronDown size={12} />}
         </button>
 
-        {/* Portal menu — escapes overflow:hidden and clips */}
         {menuOpen && ReactDOM.createPortal(
           <div
             ref={menuRef}
             style={menuStyle}
             className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl shadow-2xl shadow-black/60 py-1"
           >
+            {org.status === 'active' && (
+              <button
+                onClick={() => { onManage(); setMenuOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-300 hover:bg-[#1e2d4a] transition-colors"
+              >
+                <Shield size={13} />
+                Subscription Override
+              </button>
+            )}
+            {org.status === 'active' && <div className="border-t border-[#1e2d4a] my-1" />}
             {org.status === 'active' && (
               <button
                 onClick={() => { onArchive(); setMenuOpen(false); }}
@@ -1083,6 +1347,16 @@ function ManagePanel({
           </div>
         </div>
       </div>
+
+      {/* ── Subscription Override ─────────────────────────────────────────── */}
+      <SubscriptionOverrideSection
+        orgId={org.id}
+        settings={existing}
+        onSaved={(patch) => {
+          const merged = existing ? { ...existing, ...patch } : (patch as OrgSettings);
+          onSaved(merged as OrgSettings);
+        }}
+      />
 
       {/* ── Company Profile ──────────────────────────────────────────────────── */}
       <CompanyProfileSection orgId={org.id} />
