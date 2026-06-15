@@ -547,9 +547,28 @@ function BillingSection() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { id: 'starter', name: 'Starter', desc: 'Core modules for small teams' },
-              { id: 'professional', name: 'Professional', desc: 'AI features + priority support', popular: true },
-              { id: 'business', name: 'Business', desc: 'Full access + Commercial Module' },
+              {
+                id: 'starter',
+                name: 'Starter',
+                desc: 'Core modules for small teams',
+                monthly: '£84',
+                annual: '£799',
+              },
+              {
+                id: 'professional',
+                name: 'Professional',
+                desc: 'AI features + priority support',
+                monthly: '£156',
+                annual: '£1,495',
+                popular: true,
+              },
+              {
+                id: 'business',
+                name: 'Business',
+                desc: 'Full access + Commercial Module',
+                monthly: '£260',
+                annual: '£2,495',
+              },
             ].map(plan => (
               <div key={plan.id} className={`relative rounded-xl border p-4 ${plan.popular ? 'border-[#f97316] bg-orange-950/10' : 'border-[#1e2d4a] bg-[#0d1628]'}`}>
                 {plan.popular && (
@@ -558,7 +577,15 @@ function BillingSection() {
                   </div>
                 )}
                 <p className="text-sm font-bold text-white mb-0.5">{plan.name}</p>
-                <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">{plan.desc}</p>
+                <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">{plan.desc}</p>
+                <div className="mb-3">
+                  <span className="text-xl font-black text-white">
+                    {billingInterval === 'monthly' ? plan.monthly : plan.annual}
+                  </span>
+                  <span className="text-xs text-slate-500 ml-1">
+                    /{billingInterval === 'monthly' ? 'mo' : 'yr'}
+                  </span>
+                </div>
                 <button
                   onClick={() => startCheckout(plan.id)}
                   disabled={checkoutLoading}
@@ -568,7 +595,7 @@ function BillingSection() {
                       : 'bg-[#1a2236] border border-[#1e2d4a] hover:border-[#f97316] text-slate-200'
                   }`}
                 >
-                  {checkoutLoading && selecting === plan.id ? 'Redirecting…' : `Subscribe`}
+                  {checkoutLoading && selecting === plan.id ? 'Redirecting…' : 'Subscribe'}
                 </button>
               </div>
             ))}

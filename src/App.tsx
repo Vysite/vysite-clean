@@ -166,6 +166,8 @@ const PLANS = [
     name: 'Starter',
     description: 'Core project and tender management for small teams.',
     features: ['Tender & Estimating', 'Projects & Programmes', 'Site Forms & Snagging', 'Actions & Testing', 'Maintenance & Servicing', 'Reports'],
+    monthly: '£84',
+    annual: '£799',
     highlight: false,
   },
   {
@@ -173,6 +175,8 @@ const PLANS = [
     name: 'Professional',
     description: 'Advanced tools and AI features for growing contractors.',
     features: ['Everything in Starter', 'AI Contract Review', 'AI Tender Assistant', 'Priority Support'],
+    monthly: '£156',
+    annual: '£1,495',
     highlight: true,
   },
   {
@@ -180,6 +184,8 @@ const PLANS = [
     name: 'Business',
     description: 'Full platform access including the Commercial Module.',
     features: ['Everything in Professional', 'Commercial Module', 'Variations & Compensation Events', 'Delay Notices'],
+    monthly: '£260',
+    annual: '£2,495',
     highlight: false,
   },
 ] as const;
@@ -234,7 +240,15 @@ function PlanSelector({
               </div>
             )}
             <h3 className="text-base font-bold text-white mb-1">{plan.name}</h3>
-            <p className="text-xs text-slate-400 mb-4 leading-relaxed">{plan.description}</p>
+            <p className="text-xs text-slate-400 mb-3 leading-relaxed">{plan.description}</p>
+            <div className="mb-4">
+              <span className="text-2xl font-black text-white">
+                {billingInterval === 'monthly' ? plan.monthly : plan.annual}
+              </span>
+              <span className="text-xs text-slate-500 ml-1">
+                /{billingInterval === 'monthly' ? 'mo' : 'yr'}
+              </span>
+            </div>
             <ul className="space-y-1.5 mb-5">
               {plan.features.map(f => (
                 <li key={f} className="flex items-start gap-2 text-xs text-slate-300">
