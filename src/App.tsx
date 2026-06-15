@@ -301,7 +301,7 @@ function OrgGatedApp({
   navigateTo, pendingOpen, setPendingOpen, pendingFilter, setPendingFilter,
   pendingProjectId, setPendingProjectId, handleNotificationNavigate, isSuperAdmin,
 }: OrgGatedAppProps) {
-  const { orgSettings, isModuleEnabled, isTrialExpired } = useOrgSettings();
+  const { orgSettings, isModuleEnabled, isTrialExpired, isFreeAccessOverride } = useOrgSettings();
   const { signOut, session } = useAuth();
 
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -376,7 +376,8 @@ function OrgGatedApp({
   const subscriptionStatus = orgSettings.subscription_status;
   const isPaymentFailed = subscriptionStatus === 'past_due';
   const isSubscriptionEnded = subscriptionStatus === 'canceled' || subscriptionStatus === 'unpaid';
-  const isBlocked = isTrialExpired || orgSettings.account_status === 'disabled' || isSubscriptionEnded;
+  // Free access override bypasses all subscription/trial gates
+  const isBlocked = !isFreeAccessOverride && (isTrialExpired || orgSettings.account_status === 'disabled' || isSubscriptionEnded);
 
   if (isBlocked) {
     const isExpiredTrial = isTrialExpired && !isSubscriptionEnded;

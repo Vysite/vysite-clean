@@ -20,6 +20,10 @@ export interface OrgSettings {
   billing_interval: string | null;
   current_period_end: string | null;
   subscription_status: string | null;
+  // Free access override — bypasses trial/subscription checks entirely
+  free_access_enabled: boolean;
+  free_access_enabled_at: string | null;
+  free_access_enabled_by: string | null;
 }
 
 // All modules default to enabled — preserves existing behaviour when no
@@ -52,19 +56,19 @@ const DEFAULT_ORG_SETTINGS: OrgSettings = {
   billing_interval: null,
   current_period_end: null,
   subscription_status: null,
+  free_access_enabled: false,
+  free_access_enabled_at: null,
+  free_access_enabled_by: null,
 };
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface OrgSettingsState {
   orgSettings: OrgSettings;
-  // Returns true if the module key is enabled at the org level.
-  // Defaults to true when org_settings row does not exist.
   isModuleEnabled: (moduleKey: string) => boolean;
-  // True when a trial org's trial_expires_at is in the past.
-  // Checked client-side on every load so expiry is detected immediately
-  // regardless of whether the server has updated account_status yet.
   isTrialExpired: boolean;
+  // True when free_access_enabled override is active — bypasses all subscription/trial gates
+  isFreeAccessOverride: boolean;
   loading: boolean;
 }
 
@@ -97,7 +101,7 @@ export function OrgSettingsProvider({
 
     supabase
       .from('org_settings')
-      .select('org_id,account_status,account_type,trial_expires_at,modules_enabled,ai_enabled,ai_monthly_limit,ai_used_this_month,ai_bonus_credits,stripe_customer_id,stripe_subscription_id,plan_name,billing_interval,current_period_end,subscription_status')
+      .select('org_id,account_status,account_type,trial_expires_at,modules_enabled,ai_enabled,ai_monthly_limit,ai_used_this_month,ai_bonus_credits,stripe_customer_id,stripe_subscription_id,plan_name,billing_interval,current_period_end,subscription_status,free_access_enabled,free_access_enabled_at,free_access_enabled_by')
       .eq('org_id', orgId)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -121,6 +125,9 @@ export function OrgSettingsProvider({
             billing_interval: data.billing_interval ?? null,
             current_period_end: data.current_period_end ?? null,
             subscription_status: data.subscription_status ?? null,
+            free_access_enabled: data.free_access_enabled ?? false,
+            free_access_enabled_at: data.free_access_enabled_at ?? null,
+            free_access_enabled_by: data.free_access_enabled_by ?? null,
           });
         } else {
           setOrgSettings({ ...DEFAULT_ORG_SETTINGS, org_id: orgId });
@@ -134,9 +141,10 @@ export function OrgSettingsProvider({
   }
 
   const isTrialExpired = computeIsTrialExpired(orgSettings);
+  const isFreeAccessOverride = orgSettings.free_access_enabled === true;
 
   return (
-    <OrgSettingsContext.Provider value={{ orgSettings, isModuleEnabled, isTrialExpired, loading }}>
+    <OrgSettingsContext.Provider value={{ orgSettings, isModuleEnabled, isTrialExpired, isFreeAccessOverride, loading }}>
       {children}
     </OrgSettingsContext.Provider>
   );
