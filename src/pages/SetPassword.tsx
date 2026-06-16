@@ -37,11 +37,12 @@ export default function SetPassword({ onSetupComplete }: Props = {}) {
     const hash = window.location.hash;
     const hashParams = hash ? new URLSearchParams(hash.replace(/^#/, '')) : null;
 
-    const tokenHash =
-      params.get('token_hash') ??
-      hashParams?.get('token_hash') ??
-      hashParams?.get('access_token') ??
-      null;
+    // token_hash is used by invite links (PKCE flow)
+    const tokenHash = params.get('token_hash') ?? hashParams?.get('token_hash') ?? null;
+
+    // access_token in hash = recovery link using legacy implicit flow.
+    // Supabase JS auto-processes this and fires PASSWORD_RECOVERY via onAuthStateChange.
+    const hasImplicitToken = !!hashParams?.get('access_token');
 
     const type = (
       params.get('type') ??
@@ -52,9 +53,42 @@ export default function SetPassword({ onSetupComplete }: Props = {}) {
     const emailHint = params.get('email') ?? hashParams?.get('email');
     if (emailHint) setUserEmail(decodeURIComponent(emailHint));
 
+    if (hasImplicitToken) {
+      // Recovery link — Supabase already exchanged the hash and fires PASSWORD_RECOVERY.
+      // Listen for that event; if it doesn't fire within a short window, check for an
+      // existing session (handles page reloads after the hash has been cleared).
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+          subscription.unsubscribe();
+          window.history.replaceState({}, '', window.location.pathname + window.location.search);
+          if (session?.user?.email) setUserEmail(session.user.email);
+          setStage('ready');
+        }
+      });
+
+      // Fallback: if the event already fired before our listener registered, check session.
+      const timeout = setTimeout(() => {
+        supabase.auth.getSession().then(({ data }) => {
+          if (data.session?.user) {
+            subscription.unsubscribe();
+            if (data.session.user.email) setUserEmail(data.session.user.email);
+            setStage('ready');
+          } else {
+            subscription.unsubscribe();
+            setExchangeError('This link has expired or already been used. Please request a new password reset.');
+            setStage('error');
+          }
+        });
+      }, 3000);
+
+      return () => {
+        clearTimeout(timeout);
+        subscription.unsubscribe();
+      };
+    }
+
     if (tokenHash) {
-      // Token present — exchange it to establish/refresh the session.
-      // Sign out first so any stale session doesn't interfere.
+      // Invite link (PKCE token_hash flow) — exchange manually.
       supabase.auth.signOut({ scope: 'local' }).finally(() => {
         supabase.auth
           .verifyOtp({ token_hash: tokenHash, type })
@@ -73,20 +107,19 @@ export default function SetPassword({ onSetupComplete }: Props = {}) {
             setStage('ready');
           });
       });
-    } else {
-      // No token in URL — session was already established by Supabase before
-      // we could redirect (invite hash was auto-exchanged). The AppInner gate
-      // sent us here via the needsPasswordSetup flag. Use the existing session.
-      supabase.auth.getSession().then(({ data }) => {
-        if (data.session?.user) {
-          if (data.session.user.email) setUserEmail(data.session.user.email);
-          setStage('ready');
-        } else {
-          setExchangeError('No active session found. Please request a new invite link.');
-          setStage('error');
-        }
-      });
+      return;
     }
+
+    // No token in URL — session already established (AppInner gate sent us here).
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) {
+        if (data.session.user.email) setUserEmail(data.session.user.email);
+        setStage('ready');
+      } else {
+        setExchangeError('No active session found. Please request a new invite link.');
+        setStage('error');
+      }
+    });
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -121,7 +154,7 @@ export default function SetPassword({ onSetupComplete }: Props = {}) {
       <Screen>
         <div className="flex flex-col items-center gap-4 py-6">
           <div className="w-10 h-10 border-2 border-[#f97316] border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-400">Verifying your invite link…</p>
+          <p className="text-sm text-slate-400">Verifying your link…</p>
         </div>
       </Screen>
     );
@@ -155,10 +188,10 @@ export default function SetPassword({ onSetupComplete }: Props = {}) {
             <CheckCircle size={28} className="text-emerald-400" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white mb-1">Password set</h1>
+            <h1 className="text-lg font-bold text-white mb-1">Password updated</h1>
             <p className="text-sm text-slate-400 leading-relaxed">
               {userEmail && <><span className="text-slate-200">{userEmail}</span> — </>}
-              Loading your dashboard…
+              Signing you in…
             </p>
           </div>
           <div className="w-5 h-5 border-2 border-[#f97316] border-t-transparent rounded-full animate-spin mt-2" />
@@ -171,8 +204,8 @@ export default function SetPassword({ onSetupComplete }: Props = {}) {
     <Screen>
       <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl overflow-hidden">
         <div className="px-8 pt-8 pb-6 border-b border-[#1e2d4a]">
-          <h1 className="text-lg font-bold text-white">Create your password</h1>
-          <p className="text-xs text-slate-500 mt-1">Choose a secure password to activate your VYSITE account.</p>
+          <h1 className="text-lg font-bold text-white">Set your password</h1>
+          <p className="text-xs text-slate-500 mt-1">Choose a secure password for your VYSITE account.</p>
           {userEmail && <p className="text-xs text-[#f97316] mt-2 font-medium">{userEmail}</p>}
         </div>
 
