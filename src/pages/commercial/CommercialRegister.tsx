@@ -12,7 +12,6 @@ import { exportRegisterPDF } from './CommercialPDF';
 interface CommercialRegisterProps {
   records: CommercialRecord[];
   loading: boolean;
-  projects: { id: string; name: string; client: string }[];
   canCreate: boolean;
   canEdit: boolean;
   currentProject: Project | null;
@@ -57,34 +56,31 @@ function StatusBadge({ status }: { status: CommercialRecordStatus }) {
 }
 
 export default function CommercialRegister({
-  records, loading, projects, canCreate, currentProject,
+  records, loading, canCreate, currentProject,
   currentUserName, onNewRecord, onOpenRecord,
 }: CommercialRegisterProps) {
   const [searchQuery, setSearchQuery]   = useState('');
   const [filterType, setFilterType]     = useState<CommercialRecordType | ''>('');
   const [filterStatus, setFilterStatus] = useState<CommercialRecordStatus | ''>('');
-  const [filterProject, setFilterProject] = useState('');
   const [showFilters, setShowFilters]   = useState(false);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
 
-  const activeFilterCount = [filterType, filterStatus, filterProject].filter(Boolean).length;
+  const activeFilterCount = [filterType, filterStatus].filter(Boolean).length;
 
   const filteredRecords = useMemo(() => {
     let list = records;
-    if (filterType)    list = list.filter(r => r.recordType === filterType);
-    if (filterStatus)  list = list.filter(r => r.status === filterStatus);
-    if (filterProject) list = list.filter(r => r.projectId === filterProject);
+    if (filterType)   list = list.filter(r => r.recordType === filterType);
+    if (filterStatus) list = list.filter(r => r.status === filterStatus);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter(r =>
         r.reference.toLowerCase().includes(q) ||
         r.title.toLowerCase().includes(q) ||
-        r.client.toLowerCase().includes(q) ||
-        (r.projectName ?? '').toLowerCase().includes(q)
+        r.client.toLowerCase().includes(q)
       );
     }
     return list;
-  }, [records, filterType, filterStatus, filterProject, searchQuery]);
+  }, [records, filterType, filterStatus, searchQuery]);
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
@@ -140,7 +136,7 @@ export default function CommercialRegister({
           </button>
           {activeFilterCount > 0 && (
             <button
-              onClick={() => { setFilterType(''); setFilterStatus(''); setFilterProject(''); }}
+              onClick={() => { setFilterType(''); setFilterStatus(''); }}
               className="text-xs text-slate-500 hover:text-white transition-colors shrink-0"
             >
               Clear
@@ -180,13 +176,6 @@ export default function CommercialRegister({
             <select className={selectCls} value={filterStatus} onChange={e => setFilterStatus(e.target.value as CommercialRecordStatus | '')}>
               <option value="">All statuses</option>
               {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </div>
-          <div className="min-w-[220px]">
-            <label className={labelCls}>Project</label>
-            <select className={selectCls} value={filterProject} onChange={e => setFilterProject(e.target.value)}>
-              <option value="">All projects</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
         </div>

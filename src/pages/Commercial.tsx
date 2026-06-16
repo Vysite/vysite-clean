@@ -1518,9 +1518,9 @@ export default function Commercial() {
 
       {activeTab === 'register' && (
         <CommercialRegister
-          records={records}
+          key={effectiveBannerProjectId}
+          records={records.filter(r => r.projectId === effectiveBannerProjectId)}
           loading={loadingRecords}
-          projects={projectsForModal}
           canCreate={canCreate}
           canEdit={canEdit}
           currentProject={bannerProject}
