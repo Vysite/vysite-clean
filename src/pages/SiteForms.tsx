@@ -42,6 +42,7 @@ const FORM_CATEGORIES = [
       { type: 'Plantroom Commissioning Record', title: 'Plantroom Fill, Test & Commissioning', description: 'Mechanical plantroom asset register, fill, pressure test, flushing, water treatment, commissioning checks and defects' },
       { type: 'HIU Commissioning Record', title: 'HIU Commissioning Record', description: 'Heat Interface Unit commissioning — plot info, HIU details, heat meter, valve checks, temperature/pressure readings, DHW, controls, defects and sign-off' },
       { type: 'MVHR Commissioning Record', title: 'MVHR Commissioning Record', description: 'Mechanical Ventilation with Heat Recovery commissioning — unit details, installation checks, airflow readings per room, functional testing, defects and sign-off' },
+      { type: 'Temperature Water Readings', title: 'Temperature Water Readings', description: 'Domestic hot and cold water temperature survey — outlet readings, 20s/60s temps, pass/fail assessment and sign-off' },
     ],
   },
   {

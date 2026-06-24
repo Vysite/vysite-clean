@@ -10,7 +10,8 @@ export type ExtendedFormType =
   | 'Accident / Incident Report'
   | 'Plantroom Commissioning Record'
   | 'HIU Commissioning Record'
-  | 'MVHR Commissioning Record';
+  | 'MVHR Commissioning Record'
+  | 'Temperature Water Readings';
 
 export type ExtendedFormStatus =
   | FormStatus
@@ -408,6 +409,12 @@ export interface ExtendedSiteForm extends Omit<SiteForm, 'type' | 'status'> {
   mvhrWitnessName?: string;
   mvhrSignOffDate?: string;
   mvhrFinalComments?: string;
+  // Temperature Water Readings
+  twrSystem?: string;
+  twrLocation?: string;
+  twrArea?: string;
+  twrWitnessedBy?: string;
+  twrReadings?: string;          // JSON: TWRReadingRecord[]
 }
 
 export const TYPE_MAP: Record<string, { bg: string; text: string; label: string; border: string }> = {
@@ -435,6 +442,7 @@ export const TYPE_MAP: Record<string, { bg: string; text: string; label: string;
   'Plantroom Commissioning Record': { bg: 'bg-sky-900/60',    text: 'text-sky-300',    label: 'Plantroom Comm.',   border: 'border-l-sky-500' },
   'HIU Commissioning Record':       { bg: 'bg-teal-900/60',   text: 'text-teal-300',   label: 'HIU Commissioning', border: 'border-l-teal-500' },
   'MVHR Commissioning Record':      { bg: 'bg-sky-900/60',    text: 'text-sky-300',    label: 'MVHR Commissioning', border: 'border-l-sky-500' },
+  'Temperature Water Readings':     { bg: 'bg-blue-900/60',   text: 'text-blue-300',   label: 'Temp Water',         border: 'border-l-blue-500' },
 };
 
 export const inputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600';

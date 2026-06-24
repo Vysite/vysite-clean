@@ -14,6 +14,7 @@ import {
   type RamsSignOffRecord, RamsSignOffRows,
   type PlantAssetRecord, PlantAssetRows,
   type PlantDefectRecord, PlantDefectRows,
+  type TWRReadingRecord, TWRReadingRows,
 } from './SubComponents';
 
 // counter lives in module scope — resets on full page reload, which is fine
@@ -405,6 +406,11 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     mvhrWitnessName:             sv('mvhrWitnessName'),
     mvhrSignOffDate:             sv('mvhrSignOffDate', new Date().toISOString().split('T')[0]),
     mvhrFinalComments:           sv('mvhrFinalComments'),
+    // Temperature Water Readings
+    twrSystem:                   sv('twrSystem'),
+    twrLocation:                 sv('twrLocation'),
+    twrArea:                     sv('twrArea'),
+    twrWitnessedBy:              sv('twrWitnessedBy'),
   }));
 
   // Site Walk checklist state — stored separately due to nested structure
@@ -556,6 +562,12 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
   const [mvhrFunctionalChecklist, setMvhrFunctionalChecklist] = useState<Record<string, string>>(() => parseMvhrCheck('mvhrFunctionalChecklist'));
   const [mvhrNoiseChecklist,      setMvhrNoiseChecklist]      = useState<Record<string, string>>(() => parseMvhrCheck('mvhrNoiseChecklist'));
 
+  // Temperature Water Readings — dynamic rows
+  const [twrReadings, setTwrReadings] = useState<TWRReadingRecord[]>(() => {
+    if (!init?.twrReadings) return [];
+    try { return JSON.parse(init.twrReadings as string) as TWRReadingRecord[]; } catch { return []; }
+  });
+
   const set = (key: string) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [key]: e.target.value }));
 
@@ -570,7 +582,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
       completedBy: form.completedBy,
       description: form.description,
       comments: form.comments,
-      status: (['Early Warning Notice', 'Site Instruction'].includes(type) ? form.status : status) as ExtendedFormStatus,
+      status: (['Early Warning Notice', 'Site Instruction', 'RFI'].includes(type) ? form.status : status) as ExtendedFormStatus,
       submittedDate: status === 'Submitted' || status === 'Issued' ? new Date().toISOString().split('T')[0] : undefined,
       notes: form.notes,
     };
@@ -989,6 +1001,16 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
         mvhrFinalComments:         form.mvhrFinalComments,
       });
     }
+    if (type === 'Temperature Water Readings') {
+      Object.assign(base, {
+        twrSystem:      form.twrSystem,
+        twrLocation:    form.twrLocation,
+        twrArea:        form.twrArea,
+        twrWitnessedBy: form.twrWitnessedBy,
+        twrReadings:    JSON.stringify(twrReadings),
+        engineer:       form.completedBy,
+      });
+    }
     onSave(base, uploadedFiles);
     onClose();
   };
@@ -1017,6 +1039,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
   const isSiteWalkAudit = type === 'Site Walk Audit';
   const isHIU = type === 'HIU Commissioning Record';
   const isMVHR = type === 'MVHR Commissioning Record';
+  const isTWR = type === 'Temperature Water Readings';
 
   const accentColor = isRAMS
     ? 'bg-orange-600 hover:bg-orange-700'
@@ -1060,6 +1083,8 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     ? 'bg-teal-600 hover:bg-teal-700'
     : isMVHR
     ? 'bg-sky-600 hover:bg-sky-700'
+    : isTWR
+    ? 'bg-blue-600 hover:bg-blue-700'
     : 'bg-[#f97316] hover:bg-orange-600';
 
   const rfiStatuses = ['Draft', 'Issued', 'Awaiting Response', 'Closed'];
@@ -4384,11 +4409,73 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
             );
           })()}
 
+          {/* ── Temperature Water Readings ── */}
+          {isTWR && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Project</label>
+                  <div className="relative">
+                    <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
+                      <option value="">Select project...</option>
+                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelCls}>Date *</label>
+                  <input type="date" value={form.date} onChange={set('date')} className={inputCls} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Completed By *</label>
+                  <input value={form.completedBy} onChange={set('completedBy')} className={inputCls} placeholder="Engineer name" />
+                </div>
+                <div>
+                  <label className={labelCls}>Witnessed By</label>
+                  <input value={form.twrWitnessedBy} onChange={set('twrWitnessedBy')} className={inputCls} placeholder="Witness / client rep" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>System / Service</label>
+                  <input value={form.twrSystem} onChange={set('twrSystem')} className={inputCls} placeholder="e.g. DHWS, CWS" />
+                </div>
+                <div>
+                  <label className={labelCls}>Location / Building</label>
+                  <input value={form.twrLocation} onChange={set('twrLocation')} className={inputCls} placeholder="e.g. Block A, Level 2" />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Area / Zone</label>
+                <input value={form.twrArea} onChange={set('twrArea')} className={inputCls} placeholder="e.g. North wing, riser 1" />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className={labelCls}>Temperature Readings</label>
+                  <span className="text-[10px] text-slate-600">{twrReadings.length} outlet{twrReadings.length !== 1 ? 's' : ''} recorded</span>
+                </div>
+                <TWRReadingRows rows={twrReadings} onChange={setTwrReadings} />
+              </div>
+
+              <div>
+                <label className={labelCls}>Attachments / Photos</label>
+                <FileUploadComponent files={uploadedFiles} onChange={setUploadedFiles} label="Upload temperature data sheets or photos" />
+              </div>
+            </>
+          )}
+
           {/* Common fields fallback */}
           {!isRFI && !isHoldUp && !isDelay && !isVariation && !isEWN && !isSI && !isTQ && !isHS
             && !isPressureTest && !isFlushingRecord && !isValveChecklist && !isAHUCommissioning
             && !isDeadTesting && !isContinuityTest && !isToolboxTalk && !isSiteWalkAudit
-            && !isECR && !isDaily && !isRAMS && !isAIR && !isPCR && !isHIU && !isMVHR && (
+            && !isECR && !isDaily && !isRAMS && !isAIR && !isPCR && !isHIU && !isMVHR && !isTWR && (
             <>
               <div>
                 <label className={labelCls}>Project</label>
@@ -4453,6 +4540,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
               : isPCR ? 'Submit Commissioning Record'
               : isHIU ? 'Submit HIU Commissioning Record'
               : isMVHR ? 'Submit MVHR Commissioning Record'
+              : isTWR ? 'Submit Temperature Water Readings'
               : 'Submit Form'}
           </button>
         </div>

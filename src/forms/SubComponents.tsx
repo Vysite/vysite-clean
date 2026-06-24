@@ -759,3 +759,86 @@ export function PlantDefectRows({ rows, onChange }: { rows: PlantDefectRecord[];
     </div>
   );
 }
+
+// ─── Temperature Water Readings ───────────────────────────────────────────────
+
+export interface TWRReadingRecord {
+  id: string;
+  area: string;
+  description: string;
+  temp20s: string;
+  temp60s: string;
+  passFail: string;
+  notes: string;
+}
+
+export const DEFAULT_TWR_READING: TWRReadingRecord = {
+  id: '', area: '', description: '', temp20s: '', temp60s: '', passFail: 'Pass', notes: '',
+};
+
+export function TWRReadingRows({ rows, onChange }: { rows: TWRReadingRecord[]; onChange: (rows: TWRReadingRecord[]) => void }) {
+  const update = (i: number, field: keyof TWRReadingRecord, val: string) =>
+    onChange(rows.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+  const add = () => onChange([...rows, { ...DEFAULT_TWR_READING, id: `R${rows.length + 1}` }]);
+  const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
+
+  return (
+    <div className="space-y-3">
+      {rows.map((r, i) => (
+        <div key={i} className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-3.5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-blue-400">Reading {i + 1}{r.id ? ` — ${r.id}` : ''}</span>
+            <button type="button" onClick={() => remove(i)} className="text-slate-700 hover:text-red-400 transition-colors"><X size={13} /></button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Point ID / Ref</label>
+              <input value={r.id} onChange={e => update(i, 'id', e.target.value)} className={inputCls} placeholder="e.g. CW-01" />
+            </div>
+            <div>
+              <label className={labelCls}>Area / Location</label>
+              <input value={r.area} onChange={e => update(i, 'area', e.target.value)} className={inputCls} placeholder="e.g. Floor 2, Riser B" />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Outlet / Service Description</label>
+            <input value={r.description} onChange={e => update(i, 'description', e.target.value)} className={inputCls} placeholder="e.g. Basin tap, shower, calorifier outlet..." />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Temp @ 20s (°C)</label>
+              <input value={r.temp20s} onChange={e => update(i, 'temp20s', e.target.value)} className={inputCls} placeholder="°C" />
+            </div>
+            <div>
+              <label className={labelCls}>Temp @ 60s (°C)</label>
+              <input value={r.temp60s} onChange={e => update(i, 'temp60s', e.target.value)} className={inputCls} placeholder="°C" />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Pass / Fail</label>
+            <div className="flex gap-2 mt-1.5">
+              {(['Pass', 'Fail', 'N/A'] as const).map(v => (
+                <button key={v} type="button" onClick={() => update(i, 'passFail', v)}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${r.passFail === v
+                    ? v === 'Pass' ? 'bg-emerald-600 border-emerald-600 text-white'
+                      : v === 'Fail' ? 'bg-red-700 border-red-700 text-white'
+                      : 'bg-slate-600 border-slate-600 text-white'
+                    : 'bg-transparent border-[#1e2d4a] text-slate-500 hover:border-slate-500'}`}>
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Notes</label>
+            <input value={r.notes} onChange={e => update(i, 'notes', e.target.value)} className={inputCls} placeholder="Observations, remedial actions..." />
+          </div>
+        </div>
+      ))}
+      <button type="button" onClick={add}
+        className="w-full py-2 border border-dashed border-blue-900/40 rounded-xl text-xs text-blue-900 hover:text-blue-400 hover:border-blue-700/40 transition-colors">
+        + Add Reading
+      </button>
+    </div>
+  );
+}

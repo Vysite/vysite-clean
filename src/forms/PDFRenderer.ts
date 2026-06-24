@@ -433,6 +433,8 @@ const CONTRACTUAL_NOTICE: Partial<Record<string, string>> = {
     'This report has been completed in accordance with the Health and Safety at Work Act 1974, the Reporting of Injuries, Diseases and Dangerous Occurrences Regulations 2013 (RIDDOR), and the project Health & Safety management plan. This record forms part of the statutory accident book and the project health and safety file. Where RIDDOR reporting indicators are identified, the responsible person must assess the obligation to report to the HSE within the statutory timescales (immediate for fatalities and specified injuries; within 15 days for over-seven-day injuries). This document does not constitute formal notification to the HSE. Further investigation may alter conclusions. Photographs, witness statements and associated documentation form part of the permanent accident record.',
   'Plantroom Commissioning Record':
     'This record has been compiled in accordance with BSRIA BG 29/2021 (Pre-Commission Cleaning), BSRIA BG 8/2009 (Commissioning Management), CIBSE Commissioning Codes, and the project specification. All test results, asset details, serial numbers, valve numbers and photographic evidence recorded in this document form part of the project O&M documentation, commissioning handover package, and Health & Safety file. This document must be retained as part of the permanent project record.',
+  'Temperature Water Readings':
+    'Temperature measurements have been taken in accordance with CIBSE TM13, HSG274 (Part 2), the Water Supply (Water Fittings) Regulations 1999, and the project specification. All readings form part of the Legionella risk management programme and must be retained as part of the permanent water hygiene record. Where temperatures fall outside the recommended range, remedial action must be taken immediately and the results re-tested and recorded.',
 };
 
 // ─── Reusable report footer / legal block ─────────────────────────────────────
@@ -1307,6 +1309,56 @@ function buildGenericBody(f: Record<string, unknown>): string {
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
+function buildTWRBody(f: Record<string, unknown>): string {
+  interface TWRReading { id: string; area: string; description: string; temp20s: string; temp60s: string; passFail: string; notes: string; }
+  let readings: TWRReading[] = [];
+  try { readings = JSON.parse(safeStr(f.twrReadings) || '[]'); } catch { /* */ }
+
+  const readingsHtml = readings.length > 0
+    ? `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px">
+        <thead>
+          <tr style="background:#1a2236">
+            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">ID / Ref</th>
+            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Area</th>
+            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Outlet / Description</th>
+            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Temp @ 20s (°C)</th>
+            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Temp @ 60s (°C)</th>
+            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Result</th>
+            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${readings.map(r => {
+            const passColor = r.passFail === 'Pass' ? '#065f46' : r.passFail === 'Fail' ? '#7f1d1d' : '#334155';
+            const passText  = r.passFail === 'Pass' ? '#6ee7b7' : r.passFail === 'Fail' ? '#fca5a5' : '#94a3b8';
+            return `<tr>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0">${esc(r.id)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0">${esc(r.area)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0">${esc(r.description)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0;text-align:center">${esc(r.temp20s)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0;text-align:center">${esc(r.temp60s)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;text-align:center">
+                <span style="background:${passColor};color:${passText};padding:2px 8px;border-radius:12px;font-size:9px;font-weight:700">${esc(r.passFail)}</span>
+              </td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#94a3b8;font-style:italic">${esc(r.notes)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`
+    : '<p style="color:#64748b;font-size:11px;font-style:italic">No readings recorded.</p>';
+
+  return `
+    ${sectionHtml('Survey Information', dataGrid([
+      ['System / Service', safeStr(f.twrSystem)],
+      ['Location / Building', safeStr(f.twrLocation)],
+      ['Area / Zone', safeStr(f.twrArea)],
+      ['Completed By', safeStr(f.completedBy)],
+      ['Witnessed By', safeStr(f.twrWitnessedBy)],
+    ], 3))}
+    ${sectionHtml(`Temperature Readings (${readings.length} outlet${readings.length !== 1 ? 's' : ''})`, readingsHtml)}
+  `;
+}
+
 export interface OrgSettings {
   company_name?: string;
   logo_data_url?: string;
@@ -1336,6 +1388,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
       'Plantroom Commissioning Record': 'Mechanical Plantroom Fill, Test & Commissioning Record',
       'HIU Commissioning Record': 'HIU Commissioning Record',
       'MVHR Commissioning Record': 'MVHR Commissioning Record',
+      'Temperature Water Readings': 'Temperature Water Readings — Survey Record',
     };
     return map[form.type] ?? form.type;
   })();
@@ -1400,6 +1453,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
     case 'Plantroom Commissioning Record': formBody = buildPCRBody(f); break;
     case 'HIU Commissioning Record':       formBody = buildHIUBody(f); break;
     case 'MVHR Commissioning Record':      formBody = buildMVHRBody(f); break;
+    case 'Temperature Water Readings':     formBody = buildTWRBody(f); break;
     case 'QA Inspection':                  formBody = buildQABody(f); break;
     case 'Hold Up Notice': case 'Delay Notice':
     case 'Variation': case 'Early Warning Notice':

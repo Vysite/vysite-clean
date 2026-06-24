@@ -137,6 +137,7 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
   const isAIR  = form.type === 'Accident / Incident Report';
   const isPCR  = form.type === 'Plantroom Commissioning Record';
   const isMVHR = form.type === 'MVHR Commissioning Record';
+  const isTWR  = form.type === 'Temperature Water Readings';
   const isQA   = form.type === 'QA Inspection';
 
   // Parse JSON arrays for view
@@ -180,6 +181,10 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
     if (!f[key]) return [];
     try { return JSON.parse(f[key] as string) as string[]; } catch { return []; }
   };
+
+  interface TWRReading { id: string; area: string; description: string; temp20s: string; temp60s: string; passFail: string; notes: string; }
+  let twrReadings: TWRReading[] = [];
+  if (isTWR && form.twrReadings) { try { twrReadings = JSON.parse(form.twrReadings as string); } catch { /* */ } }
 
   const attachments = f.attachments;
 
@@ -885,8 +890,50 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
             </Section>
           </>}
 
+          {/* ── Temperature Water Readings ── */}
+          {isTWR && <>
+            <Section label="Survey Details">
+              <Field2Col items={[
+                ['System / Service', s('twrSystem')],
+                ['Location / Building', s('twrLocation')],
+                ['Area / Zone', s('twrArea')],
+                ['Completed By', s('completedBy')],
+                ['Witnessed By', s('twrWitnessedBy')],
+                ['Date', fmtDate(s('date'))],
+              ]} />
+            </Section>
+
+            {twrReadings.length > 0 && (
+              <Section label={`Temperature Readings (${twrReadings.length} outlet${twrReadings.length !== 1 ? 's' : ''})`}>
+                <div className="space-y-2">
+                  {twrReadings.map((r, i) => {
+                    const isPass = r.passFail === 'Pass';
+                    const isFail = r.passFail === 'Fail';
+                    return (
+                      <div key={i} className={`bg-[#0d1628] border rounded-xl p-3 ${isPass ? 'border-emerald-700/30' : isFail ? 'border-red-700/30' : 'border-[#1e2d4a]'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white">{r.id || `#${i + 1}`}</span>
+                            {r.area && <span className="text-[10px] text-slate-400">{r.area}</span>}
+                          </div>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${isPass ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700/40' : isFail ? 'bg-red-900/60 text-red-300 border-red-700/40' : 'bg-slate-700 text-slate-400 border-slate-600'}`}>{r.passFail}</span>
+                        </div>
+                        {r.description && <p className="text-xs text-slate-300 mb-2">{r.description}</p>}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <span className="text-slate-400">@ 20s: <span className="text-slate-200 font-semibold">{r.temp20s ? `${r.temp20s}°C` : '—'}</span></span>
+                          <span className="text-slate-400">@ 60s: <span className="text-slate-200 font-semibold">{r.temp60s ? `${r.temp60s}°C` : '—'}</span></span>
+                        </div>
+                        {r.notes && <p className="text-xs text-slate-400 mt-1.5 italic">{r.notes}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </Section>
+            )}
+          </>}
+
           {/* Generic comments/notes fallback */}
-          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isQA && (form.comments || form.notes) && (
+          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isTWR && !isQA && (form.comments || form.notes) && (
             <ViewField label="Comments / Notes" value={String(form.comments || form.notes || '')} />
           )}
 
