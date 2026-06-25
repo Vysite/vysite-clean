@@ -7,7 +7,7 @@ import { RECORD_TYPES, STATUSES, typeInfo, statusInfo } from './types';
 import type { CommercialRecord, CommercialRecordType, CommercialRecordStatus } from './types';
 import type { DBKeyDate } from '../../lib/store';
 import type { Project } from '../../data/types';
-import { exportRegisterPDF } from './CommercialPDF';
+import { exportRegisterPDF, exportFullRegisterPDF } from './CommercialPDF';
 
 interface CommercialRegisterProps {
   records: CommercialRecord[];
@@ -99,6 +99,10 @@ export default function CommercialRegister({
     exportRegisterPDF({ project: currentProject, records: list, currentUserName: currentUserName || '' });
   }
 
+  function handleExportFullPDF(list: CommercialRecord[]) {
+    exportFullRegisterPDF({ project: currentProject, records: list, currentUserName: currentUserName || '' });
+  }
+
   const inputCls = 'bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-[#f97316] focus:border-[#f97316] transition-colors';
   const selectCls = `${inputCls} appearance-none cursor-pointer`;
   const labelCls  = 'block text-xs font-medium text-slate-400 mb-1';
@@ -148,7 +152,14 @@ export default function CommercialRegister({
           <button
             onClick={() => handleExportPDF(exportList)}            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-[#f97316] rounded-lg transition-colors"
           >
-            <FileText size={12} />Export PDF
+            <FileText size={12} />Export
+          </button>
+          <button
+            onClick={() => handleExportFullPDF(exportList)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-[#f97316] rounded-lg transition-colors"
+            title="Export full individual record sheets — one page per record"
+          >
+            <Printer size={12} />Export Full
           </button>
           {canCreate && (
             <button
@@ -265,11 +276,20 @@ export default function CommercialRegister({
             {selectedIds.size > 0 && <span className="text-[#f97316] ml-2">{selectedIds.size} selected</span>}
           </p>
           {selectedIds.size > 0 && (
-            <button
-              onClick={() => handleExportPDF(exportList)}              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#f97316] border border-[#f97316]/30 hover:bg-[#f97316]/10 rounded-lg transition-colors"
-            >
-              <Printer size={12} /> Export Selected ({selectedIds.size})
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleExportPDF(exportList)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#f97316] border border-[#f97316]/30 hover:bg-[#f97316]/10 rounded-lg transition-colors"
+              >
+                <FileText size={12} /> Export Selected ({selectedIds.size})
+              </button>
+              <button
+                onClick={() => handleExportFullPDF(exportList)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#f97316] border border-[#f97316]/30 hover:bg-[#f97316]/10 rounded-lg transition-colors"
+              >
+                <Printer size={12} /> Export Full ({selectedIds.size})
+              </button>
+            </div>
           )}
         </div>
       )}

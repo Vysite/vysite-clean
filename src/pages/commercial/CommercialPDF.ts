@@ -1867,6 +1867,211 @@ export function exportRegisterPDF(data: RegisterData): void {
   openPrintTab(pageShell(`Commercial Register — ${name}`, registerBody(data)));
 }
 
+// ─── Full Record Sheets ───────────────────────────────────────────────────────
+
+function fullRecordSheets(data: RegisterData): string {
+  const today = todayStr();
+  const projName = data.project?.name ?? 'All Projects';
+
+  const field = (label: string, value: string | null | undefined): string => {
+    if (!value) return '';
+    return `<div class="frs-field">
+      <div class="frs-field-label">${esc(label)}</div>
+      <div class="frs-field-value">${esc(value)}</div>
+    </div>`;
+  };
+
+  const longField = (label: string, value: string | null | undefined): string => {
+    if (!value) return '';
+    return `<div class="frs-long-field">
+      <div class="frs-field-label">${esc(label)}</div>
+      <div class="frs-long-value">${esc(value)}</div>
+    </div>`;
+  };
+
+  const sheets = data.records.map((r, i) => {
+    const ti = typeInfo(r.recordType);
+    const si = statusInfo(r.status);
+    const ex  = (r.extraData ?? {}) as Record<string, unknown>;
+
+    // Line items financial summary
+    const lines = r.lineItems ?? [];
+    const totalInternal = lines.reduce((s, l) => s + (l.internalRate * l.quantity), 0);
+    const totalClient   = lines.reduce((s, l) => s + (l.clientRate   * l.quantity), 0);
+    const lineRowsHtml  = lines.length > 0
+      ? `<table class="frs-line-table">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th class="r">Type</th>
+              <th class="r">Unit</th>
+              <th class="r">Qty</th>
+              <th class="r">Client Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lines.map(l => {
+              const cv = fv(l.clientRate * l.quantity);
+              return `<tr>
+                <td>${esc(l.clientDescription || l.description)}</td>
+                <td class="r">${esc(l.lineType)}</td>
+                <td class="r">${esc(l.unit)}</td>
+                <td class="r">${l.quantity}</td>
+                <td class="r">${cv}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4" class="r" style="font-weight:800;font-size:8.5pt;text-transform:uppercase;letter-spacing:0.08em">Total Client Value</td>
+              <td class="r" style="font-size:10pt;font-weight:800;color:#ea6c00">${fv(totalClient)}</td>
+            </tr>
+          </tfoot>
+        </table>`
+      : '';
+
+    // Type-specific extra data (delay notice fields)
+    let typeSpecificHtml = '';
+    if (r.recordType === 'delay_notice') {
+      const dnFields = [
+        ['Related EWN Reference',       ex.ewn_ref as string],
+        ['Responsible Party',           ex.responsible_party as string],
+        ['Date Delay First Occurred',   ex.delay_start_date ? fmtD(ex.delay_start_date as string) : undefined],
+        ['Date Notice Issued',          ex.notice_issued_date ? fmtD(ex.notice_issued_date as string) : undefined],
+        ['Potential Programme Impact',  ex.programme_days ? `${ex.programme_days} days` : undefined],
+        ['Potential Cost Impact',       ex.potential_cost ? `£${ex.potential_cost}` : undefined],
+        ['Cause of Delay',              ex.cause_of_delay as string],
+        ['Impacted Works',              ex.impacted_works as string],
+      ].filter(([, v]) => v) as [string, string][];
+      if (dnFields.length) {
+        const grid = dnFields.map(([l, v]) => field(l, v)).join('');
+        typeSpecificHtml = `<div class="frs-section">
+          <div class="frs-section-label">Delay Details</div>
+          <div class="frs-grid">${grid}</div>
+        </div>`;
+      }
+    }
+
+    // Document references
+    const docRefHtml = (ex.document_ref || ex.related_refs)
+      ? `<div class="frs-section">
+          <div class="frs-section-label">Document References</div>
+          <div class="frs-grid">
+            ${field('Document Reference', ex.document_ref as string)}
+            ${field('Related References', ex.related_refs as string)}
+          </div>
+        </div>`
+      : '';
+
+    const pageBreak = i > 0 ? `<div class="page-break"></div>` : '';
+
+    return `${pageBreak}
+    ${docHeader('Commercial Record Sheet', ti.label, projName, data.project?.client, today)}
+
+    <div class="exec-project-band">
+      <div>
+        <div class="exec-project-name">${esc(projName)}</div>
+        ${data.project?.client ? `<div class="exec-client">${esc(data.project.client)}</div>` : ''}
+      </div>
+      <div class="exec-report-date">
+        <div>${today}</div>
+        <div>Prepared by ${esc(data.currentUserName || 'VYSITE')}</div>
+      </div>
+    </div>
+
+    <div class="frs-title-band">
+      <div class="frs-title-left">
+        <div class="frs-ref">${esc(r.reference || '—')}</div>
+        <div class="frs-title">${esc(r.title || 'Untitled')}</div>
+      </div>
+      <div class="frs-badges">
+        ${typeTag(r.recordType, ti.label)}
+        ${statusTag(r.status, si.label)}
+      </div>
+    </div>
+
+    <div class="frs-section">
+      <div class="frs-section-label">Record Details</div>
+      <div class="frs-grid">
+        ${field('Record Type',    ti.label)}
+        ${field('Status',        si.label)}
+        ${field('Reference',     r.reference)}
+        ${field('Client',        r.client)}
+        ${field('Created By',    r.createdBy)}
+        ${field('Project',       r.projectName)}
+        ${field('Date Raised',   fmtD(r.dateRaised))}
+        ${field('Date Submitted', fmtD(r.dateSubmitted))}
+        ${field('Date Agreed',   fmtD(r.dateAgreed))}
+        ${field('Last Updated',  fmtD(r.updatedAt))}
+      </div>
+    </div>
+
+    ${r.notes ? `<div class="frs-section">
+      <div class="frs-section-label">Notes</div>
+      ${longField('', r.notes)}
+    </div>` : ''}
+
+    ${typeSpecificHtml}
+    ${docRefHtml}
+
+    ${lines.length > 0 ? `<div class="frs-section">
+      <div class="frs-section-label">Line Items &mdash; ${lines.length} item${lines.length !== 1 ? 's' : ''}${totalClient > 0 ? ` &mdash; Total Client Value ${fv(totalClient)}` : ''}${totalInternal > 0 && totalInternal !== totalClient ? ` &mdash; Total Internal ${fv(totalInternal)}` : ''}</div>
+      ${lineRowsHtml}
+    </div>` : ''}
+
+    ${docFooter(data.currentUserName, today)}`;
+  }).join('');
+
+  return sheets;
+}
+
+// Append extra CSS for full record sheets into the shared page shell
+function fullSheetsPageShell(title: string, body: string): string {
+  const extraCss = `
+.frs-title-band { display:flex; align-items:flex-start; justify-content:space-between; padding:18px 0 16px; border-bottom:1.5px solid #0f172a; margin-bottom:24px; gap:16px; }
+.frs-title-left { flex:1; min-width:0; }
+.frs-ref { font-size:11pt; font-weight:900; color:#ea6c00; letter-spacing:-0.01em; margin-bottom:4px; }
+.frs-title { font-size:15pt; font-weight:700; color:#0f172a; letter-spacing:-0.02em; line-height:1.2; }
+.frs-badges { display:flex; gap:6px; align-items:center; flex-shrink:0; padding-top:4px; }
+.frs-section { margin-bottom:20px; }
+.frs-section-label { font-size:6.5pt; font-weight:800; letter-spacing:0.18em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; padding-bottom:4px; border-bottom:0.5px solid #e2e8f0; }
+.frs-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px 20px; }
+.frs-field { }
+.frs-field-label { font-size:6.5pt; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#94a3b8; margin-bottom:2px; }
+.frs-field-value { font-size:8.5pt; font-weight:600; color:#1e293b; }
+.frs-long-field { grid-column:1/-1; }
+.frs-long-value { font-size:8.5pt; color:#334155; line-height:1.6; white-space:pre-wrap; }
+.frs-line-table { width:100%; border-collapse:collapse; }
+.frs-line-table thead th { font-size:6.5pt; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#64748b; padding:0 8px 8px 0; text-align:left; border-bottom:1.5px solid #0f172a; }
+.frs-line-table thead th.r { text-align:right; padding-right:0; padding-left:8px; }
+.frs-line-table tbody td { font-size:8pt; color:#1e293b; padding:9px 8px 8px 0; border-bottom:0.5px solid #f1f5f9; vertical-align:top; }
+.frs-line-table tbody td.r { text-align:right; padding-right:0; padding-left:8px; font-variant-numeric:tabular-nums; }
+.frs-line-table tbody tr:last-child td { border-bottom:none; }
+.frs-line-table tfoot td { padding:9px 8px 8px 0; border-top:1.5px solid #0f172a; font-size:8pt; font-weight:700; }
+.frs-line-table tfoot td.r { text-align:right; padding-right:0; padding-left:8px; font-variant-numeric:tabular-nums; }
+`;
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${esc(title)}</title>
+<style>${COMM_PDF_CSS}${extraCss}</style>
+<script>window.onload=function(){window.print();};<\/script>
+</head>
+<body>
+<div class="page">
+${body}
+</div>
+</body>
+</html>`;
+}
+
+export function exportFullRegisterPDF(data: RegisterData): void {
+  const name = data.project?.name ?? 'All Projects';
+  openPrintTab(fullSheetsPageShell(`Commercial Register — Full Sheets — ${name}`, fullRecordSheets(data)));
+}
+
+
 export function exportVariationAccountPDF(data: VAData): void {
   const name = data.project?.name ?? '—';
   openPrintTab(pageShell(`Variation Account — ${name}`, variationAccountBody(data)));
