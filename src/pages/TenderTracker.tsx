@@ -1317,9 +1317,10 @@ interface EditTenderModalProps {
   onClose: () => void;
   onSave: (t: Tender) => void;
   onDelete: (id: string) => void;
+  canDelete: boolean;
 }
 
-function EditTenderModal({ tender, onClose, onSave, onDelete }: EditTenderModalProps) {
+function EditTenderModal({ tender, onClose, onSave, onDelete, canDelete }: EditTenderModalProps) {
   const store = useAppStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [form, setForm] = useState({
@@ -1457,6 +1458,7 @@ function EditTenderModal({ tender, onClose, onSave, onDelete }: EditTenderModalP
                 <Save size={14} />Save Changes
               </button>
             </div>
+            {canDelete && (
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
@@ -1464,6 +1466,7 @@ function EditTenderModal({ tender, onClose, onSave, onDelete }: EditTenderModalP
             >
               <Trash2 size={13} />Delete Tender
             </button>
+            )}
           </div>
         </form>
       </div>
@@ -3290,6 +3293,7 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
           onClose={() => setShowEditTender(false)}
           onSave={updated => { onUpdate(updated); setShowEditTender(false); }}
           onDelete={async (id) => { await store.removeTender(id); setShowEditTender(false); onBack(); }}
+          canDelete={isAdmin}
         />
       )}
       {showExport && (
