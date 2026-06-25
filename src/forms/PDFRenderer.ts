@@ -1310,7 +1310,7 @@ function buildGenericBody(f: Record<string, unknown>): string {
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 function buildTWRBody(f: Record<string, unknown>): string {
-  interface TWRReading { id: string; area: string; description: string; temp20s: string; temp60s: string; passFail: string; notes: string; }
+  interface TWRReading { id: string; area: string; description: string; flowRate: string; temp20s: string; temp60s: string; passFail: string; notes: string; }
   let readings: TWRReading[] = [];
   try { readings = JSON.parse(safeStr(f.twrReadings) || '[]'); } catch { /* */ }
 
@@ -1321,6 +1321,7 @@ function buildTWRBody(f: Record<string, unknown>): string {
             <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">ID / Ref</th>
             <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Area</th>
             <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Outlet / Description</th>
+            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Flow Rate (L/min)</th>
             <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Temp @ 20s (°C)</th>
             <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Temp @ 60s (°C)</th>
             <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Result</th>
@@ -1335,6 +1336,7 @@ function buildTWRBody(f: Record<string, unknown>): string {
               <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0">${esc(r.id)}</td>
               <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0">${esc(r.area)}</td>
               <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0">${esc(r.description)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0;text-align:center">${r.flowRate ? `${esc(r.flowRate)} L/min` : '—'}</td>
               <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0;text-align:center">${esc(r.temp20s)}</td>
               <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0;text-align:center">${esc(r.temp60s)}</td>
               <td style="padding:5px 7px;border:1px solid #1e2d4a;text-align:center">

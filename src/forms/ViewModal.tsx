@@ -182,7 +182,7 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
     try { return JSON.parse(f[key] as string) as string[]; } catch { return []; }
   };
 
-  interface TWRReading { id: string; area: string; description: string; temp20s: string; temp60s: string; passFail: string; notes: string; }
+  interface TWRReading { id: string; area: string; description: string; flowRate: string; temp20s: string; temp60s: string; passFail: string; notes: string; }
   let twrReadings: TWRReading[] = [];
   if (isTWR && form.twrReadings) { try { twrReadings = JSON.parse(form.twrReadings as string); } catch { /* */ } }
 
@@ -919,7 +919,8 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
                           <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${isPass ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700/40' : isFail ? 'bg-red-900/60 text-red-300 border-red-700/40' : 'bg-slate-700 text-slate-400 border-slate-600'}`}>{r.passFail}</span>
                         </div>
                         {r.description && <p className="text-xs text-slate-300 mb-2">{r.description}</p>}
-                        <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <span className="text-slate-400">Flow Rate: <span className="text-slate-200 font-semibold">{r.flowRate ? `${r.flowRate} L/min` : '—'}</span></span>
                           <span className="text-slate-400">@ 20s: <span className="text-slate-200 font-semibold">{r.temp20s ? `${r.temp20s}°C` : '—'}</span></span>
                           <span className="text-slate-400">@ 60s: <span className="text-slate-200 font-semibold">{r.temp60s ? `${r.temp60s}°C` : '—'}</span></span>
                         </div>

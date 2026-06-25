@@ -766,6 +766,7 @@ export interface TWRReadingRecord {
   id: string;
   area: string;
   description: string;
+  flowRate: string;
   temp20s: string;
   temp60s: string;
   passFail: string;
@@ -773,7 +774,7 @@ export interface TWRReadingRecord {
 }
 
 export const DEFAULT_TWR_READING: TWRReadingRecord = {
-  id: '', area: '', description: '', temp20s: '', temp60s: '', passFail: 'Pass', notes: '',
+  id: '', area: '', description: '', flowRate: '', temp20s: '', temp60s: '', passFail: 'Pass', notes: '',
 };
 
 export function TWRReadingRows({ rows, onChange }: { rows: TWRReadingRecord[]; onChange: (rows: TWRReadingRecord[]) => void }) {
@@ -804,7 +805,11 @@ export function TWRReadingRows({ rows, onChange }: { rows: TWRReadingRecord[]; o
             <label className={labelCls}>Outlet / Service Description</label>
             <input value={r.description} onChange={e => update(i, 'description', e.target.value)} className={inputCls} placeholder="e.g. Basin tap, shower, calorifier outlet..." />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className={labelCls}>Flow Rate (L/min)</label>
+              <input value={r.flowRate} onChange={e => update(i, 'flowRate', e.target.value)} className={inputCls} placeholder="L/min" />
+            </div>
             <div>
               <label className={labelCls}>Temp @ 20s (°C)</label>
               <input value={r.temp20s} onChange={e => update(i, 'temp20s', e.target.value)} className={inputCls} placeholder="°C" />
