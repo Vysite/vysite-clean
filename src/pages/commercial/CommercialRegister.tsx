@@ -7,7 +7,7 @@ import { RECORD_TYPES, STATUSES, typeInfo, statusInfo } from './types';
 import type { CommercialRecord, CommercialRecordType, CommercialRecordStatus } from './types';
 import type { DBKeyDate } from '../../lib/store';
 import type { Project } from '../../data/types';
-import { exportRegisterPDF, exportFullRegisterPDF } from './CommercialPDF';
+import { exportRegisterPDF } from './CommercialPDF';
 
 interface CommercialRegisterProps {
   records: CommercialRecord[];
@@ -20,6 +20,7 @@ interface CommercialRegisterProps {
   settings?: { company_name?: string; logo_data_url?: string } | null;
   onNewRecord: () => void;
   onOpenRecord: (r: CommercialRecord) => void;
+  onExportFull: (records: CommercialRecord[]) => void;
 }
 
 function fmtCurrency(n: number): string {
@@ -57,7 +58,7 @@ function StatusBadge({ status }: { status: CommercialRecordStatus }) {
 
 export default function CommercialRegister({
   records, loading, canCreate, currentProject,
-  currentUserName, onNewRecord, onOpenRecord,
+  currentUserName, onNewRecord, onOpenRecord, onExportFull,
 }: CommercialRegisterProps) {
   const [searchQuery, setSearchQuery]   = useState('');
   const [filterType, setFilterType]     = useState<CommercialRecordType | ''>('');
@@ -97,10 +98,6 @@ export default function CommercialRegister({
 
   function handleExportPDF(list: CommercialRecord[]) {
     exportRegisterPDF({ project: currentProject, records: list, currentUserName: currentUserName || '' });
-  }
-
-  function handleExportFullPDF(list: CommercialRecord[]) {
-    exportFullRegisterPDF({ project: currentProject, records: list, currentUserName: currentUserName || '' });
   }
 
   const inputCls = 'bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-[#f97316] focus:border-[#f97316] transition-colors';
@@ -155,7 +152,7 @@ export default function CommercialRegister({
             <FileText size={12} />Export
           </button>
           <button
-            onClick={() => handleExportFullPDF(exportList)}
+            onClick={() => onExportFull(exportList)}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-[#f97316] rounded-lg transition-colors"
             title="Export full individual record sheets — one page per record"
           >
@@ -284,7 +281,7 @@ export default function CommercialRegister({
                 <FileText size={12} /> Export Selected ({selectedIds.size})
               </button>
               <button
-                onClick={() => handleExportFullPDF(exportList)}
+                onClick={() => onExportFull(exportList)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#f97316] border border-[#f97316]/30 hover:bg-[#f97316]/10 rounded-lg transition-colors"
               >
                 <Printer size={12} /> Export Full ({selectedIds.size})

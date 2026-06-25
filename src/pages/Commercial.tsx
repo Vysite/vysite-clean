@@ -126,25 +126,7 @@ function fmtFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function buildExportHTML(
-  record: CommercialRecord,
-  lines: CommercialLineItem[],
-  view: 'internal' | 'client',
-  attachments: DBAttachment[],
-  logoUrl?: string,
-  companyName?: string,
-): string {
-  const t = typeInfo(record.recordType);
-  const s = statusInfo(record.status);
-  const totals = recordTotals(lines);
-  const orgName = companyName || 'VYSITE';
-  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const docRef = record.reference || `COM-${record.id.slice(0, 8).toUpperCase()}`;
-  const viewLabel = view === 'internal' ? 'Internal Copy \u2014 Confidential' : 'Client Copy';
-  const fmtD = (d: string | null | undefined) =>
-    d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '\u2014';
-
-  const CSS = `
+export const CLIENT_COPY_CSS = `
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #1e293b; background: white; font-size: 11px; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page { max-width: 860px; margin: 0 auto; padding: 36px 40px; }
@@ -196,7 +178,30 @@ function buildExportHTML(
     .legal-branding-left { font-size: 8px; color: #94a3b8; }
     .legal-branding-right { font-size: 8px; color: #94a3b8; text-align: right; }
     @media print { .page { padding: 20px 24px; } .section { page-break-inside: avoid; } }
+    .page-break-before { page-break-before: always; }
   `;
+
+interface ClientCopyParams {
+  record: CommercialRecord;
+  lines: CommercialLineItem[];
+  view: 'internal' | 'client';
+  attachments: DBAttachment[];
+  logoUrl?: string;
+  companyName?: string;
+  pageBreakBefore?: boolean;
+}
+
+export function buildClientCopyPageContent(p: ClientCopyParams): string {
+  const { record, lines, view, attachments, logoUrl, companyName, pageBreakBefore } = p;
+  const t = typeInfo(record.recordType);
+  const s = statusInfo(record.status);
+  const totals = recordTotals(lines);
+  const orgName = companyName || 'VYSITE';
+  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const docRef = record.reference || `COM-${record.id.slice(0, 8).toUpperCase()}`;
+  const viewLabel = view === 'internal' ? 'Internal Copy \u2014 Confidential' : 'Client Copy';
+  const fmtD = (d: string | null | undefined) =>
+    d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '\u2014';
 
   const logoHtml = logoUrl
     ? `<img class="doc-logo-img" src="${logoUrl}" alt="${esc(orgName)}" />`
@@ -334,14 +339,28 @@ function buildExportHTML(
   const contractualNotice = COMMERCIAL_NOTICES[record.recordType] ?? '';
   const noticeBar = contractualNotice ? `<div class="legal-notice-bar"><div class="legal-notice-label">Contractual Notice</div><div class="legal-notice-text">${esc(contractualNotice)}</div></div>` : '';
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(record.reference || 'Record')} — ${esc(record.title || '')}</title><style>${CSS}</style></head>
-    <body><div class="page">${header}${metaBlock}${refRow}${notesSection}${typeFieldsSection}${costSection}${evidenceSection}
+  const pageBreakDiv = pageBreakBefore ? '<div class="page-break-before"></div>' : '';
+
+  return `${pageBreakDiv}<div class="page">${header}${metaBlock}${refRow}${notesSection}${typeFieldsSection}${costSection}${evidenceSection}
     <div class="legal-footer">
       <div class="legal-footer-header"><span class="legal-footer-title">Legal &amp; Contractual Information</span><span class="legal-footer-ref">Ref: ${esc(docRef)}</span></div>
       ${noticeBar}
       <div class="legal-branding"><div class="legal-branding-left">VYSITE &bull; Construction Operating System &bull; Generated ${today}</div><div class="legal-branding-right">&copy; VYSITE. All rights reserved. Confidential.</div></div>
     </div>
-    </div></body></html>`;
+    </div>`;
+}
+
+function buildExportHTML(
+  record: CommercialRecord,
+  lines: CommercialLineItem[],
+  view: 'internal' | 'client',
+  attachments: DBAttachment[],
+  logoUrl?: string,
+  companyName?: string,
+): string {
+  const ref = record.reference || 'Record';
+  const body = buildClientCopyPageContent({ record, lines, view, attachments, logoUrl, companyName });
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(ref)} — ${esc(record.title || '')}</title><style>${CLIENT_COPY_CSS}</style></head><body>${body}</body></html>`;
 }
 
 function genLineId(): string {
@@ -1369,6 +1388,55 @@ export default function Commercial() {
   function openNew() { setSelectedRecord(null); setIsNewRecord(true); setModalOpen(true); }
   function openRecord(r: CommercialRecord) { setSelectedRecord(r); setIsNewRecord(false); setModalOpen(true); }
 
+  async function handleExportFull(selectedRecords: CommercialRecord[]) {
+    if (!selectedRecords.length) return;
+    const ids = selectedRecords.map(r => r.id);
+
+    const [lineItemsRes, attachmentsRes] = await Promise.all([
+      supabase.from('vy_commercial_line_items').select('*').in('record_id', ids).order('sort_order'),
+      supabase.from('vy_attachments').select('*').in('record_id', ids),
+    ]);
+
+    const allLines: Record<string, CommercialLineItem[]> = {};
+    for (const row of (lineItemsRes.data ?? [])) {
+      const li = dbToLineItem(row as Record<string, unknown>);
+      if (!allLines[li.recordId]) allLines[li.recordId] = [];
+      allLines[li.recordId].push(li);
+    }
+
+    const rawAtts = (attachmentsRes.data ?? []) as DBAttachment[];
+    const attsWithData = await Promise.all(
+      rawAtts.map(async a => a.data_url ? a : { ...a, data_url: await store.fetchAttachmentData(a.id) })
+    );
+    const allAtts: Record<string, DBAttachment[]> = {};
+    for (const a of attsWithData) {
+      const rid = (a as DBAttachment & { record_id?: string }).record_id;
+      if (!rid) continue;
+      if (!allAtts[rid]) allAtts[rid] = [];
+      allAtts[rid].push(a);
+    }
+
+    const logoUrl = store.settings?.logo_data_url;
+    const companyName = store.settings?.company_name;
+
+    const pages = selectedRecords.map((r, i) =>
+      buildClientCopyPageContent({
+        record: r,
+        lines: allLines[r.id] ?? [],
+        view: 'client',
+        attachments: allAtts[r.id] ?? [],
+        logoUrl,
+        companyName,
+        pageBreakBefore: i > 0,
+      })
+    ).join('');
+
+    const name = bannerProject?.name ?? 'Export';
+    openPrintTab(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(name)} — Commercial Records</title><style>${CLIENT_COPY_CSS}</style><script>window.onload=function(){window.print();};<\/script></head><body>${pages}</body></html>`
+    );
+  }
+
   function handleSaved(r: CommercialRecord) {
     setRecords(prev => {
       const idx = prev.findIndex(x => x.id === r.id);
@@ -1528,6 +1596,7 @@ export default function Commercial() {
           currentUserName={store.currentUser?.name ?? ''}
           onNewRecord={openNew}
           onOpenRecord={openRecord}
+          onExportFull={handleExportFull}
         />
       )}
 
