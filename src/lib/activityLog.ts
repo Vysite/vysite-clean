@@ -39,26 +39,12 @@ export interface ActivityLogParams {
 }
 
 export async function logActivity(params: ActivityLogParams): Promise<void> {
-  console.log('[ActivityLog] called:', params.actionType, '| orgId:', params.orgId || '(empty)', '| module:', params.module);
-
-  if (!params.orgId) {
-    console.warn('[ActivityLog] EARLY EXIT — orgId is empty/null. No insert will occur.');
-    return;
-  }
-
+  if (!params.orgId) return;
   try {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) {
-      console.error('[ActivityLog] getSession() error:', sessionError.message);
-    }
+    const { data: { session } } = await supabase.auth.getSession();
     const authUserId = session?.user?.id ?? null;
-    console.log('[ActivityLog] authUserId:', authUserId ?? '(null — no active session)');
 
-    if (!authUserId) {
-      console.warn('[ActivityLog] WARNING — no auth session. Insert may fail RLS if policies require auth.uid().');
-    }
-
-    const payload = {
+    const { error } = await supabase.from('vy_activity_log').insert({
       org_id:       params.orgId,
       user_id:      authUserId,
       user_name:    params.userName,
@@ -74,17 +60,12 @@ export async function logActivity(params: ActivityLogParams): Promise<void> {
       new_value:    params.newValue ?? null,
       reason:       params.reason ?? null,
       metadata:     params.metadata ?? null,
-    };
-    console.log('[ActivityLog] inserting payload:', payload);
-
-    const { error } = await supabase.from('vy_activity_log').insert(payload);
+    });
 
     if (error) {
-      console.error('[ActivityLog] INSERT FAILED:', error.message, '| code:', error.code, '| details:', error.details, '| hint:', error.hint);
-    } else {
-      console.log('[ActivityLog] INSERT OK:', params.actionType, params.description);
+      console.error('[ActivityLog] Insert failed:', error.message, '| code:', error.code);
     }
   } catch (err) {
-    console.error('[ActivityLog] Unexpected exception:', err);
+    console.error('[ActivityLog] Unexpected error:', err);
   }
 }
