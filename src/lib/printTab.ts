@@ -23,6 +23,7 @@ export function buildPrintDocument(title: string, styles: string, body: string):
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111;background:white;padding:40px;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    @page{margin:0;size:A4}
     ${styles}
     @media print{body{padding:24px}}
   </style>

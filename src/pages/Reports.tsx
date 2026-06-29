@@ -448,6 +448,7 @@ function buildReportHTML(
   tenders: Tender[],
   today: string,
   projects: Project[],
+  logoUrl?: string,
 ): string {
   const title = mode.kind === 'bulk'
     ? (REPORT_TYPE_CARDS.find(r => r.id === mode.reportId)?.name ?? 'Report')
@@ -459,7 +460,10 @@ function buildReportHTML(
   const filterProject = mode.kind === 'bulk' ? mode.filterProject : 'All';
   const subtitle = `Generated: ${today} · VY Construction Ltd · Confidential${filterProject !== 'All' ? ` · Project: ${filterProject}` : ''}`;
 
-  const header = `<div class="rpt-header"><div><div class="rpt-logo">VYSITE</div></div><div class="rpt-dateline">${today}<br>VY Construction Ltd</div></div>
+  const logoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block">`
+    : `<div class="rpt-logo">VYSITE</div>`;
+  const header = `<div class="rpt-header"><div>${logoHtml}</div><div class="rpt-dateline">${today}<br>VY Construction Ltd</div></div>
     <div class="rpt-title">${title}</div><div class="rpt-subtitle">${subtitle}</div>`;
 
   let content = '';
@@ -835,7 +839,7 @@ export default function Reports() {
         <PrintPreviewModal
           printMode={printMode}
           onClose={handleClose}
-          onPrint={() => openPrintTab(buildReportHTML(printMode, snags, actions, forms, store.tenders, today, store.projects))}
+          onPrint={() => openPrintTab(buildReportHTML(printMode, snags, actions, forms, store.tenders, today, store.projects, store.settings?.logo_data_url))}
           snags={snags}
           actions={actions}
           forms={forms}

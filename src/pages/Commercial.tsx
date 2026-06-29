@@ -179,6 +179,7 @@ export const CLIENT_COPY_CSS = `
     .legal-branding-left { font-size: 8px; color: #94a3b8; }
     .legal-branding-right { font-size: 8px; color: #94a3b8; text-align: right; }
     @media print { .page { padding: 20px 24px; } .section { page-break-inside: avoid; } }
+    @page { margin: 0; size: A4; }
     .page-break-before { page-break-before: always; }
   `;
 
