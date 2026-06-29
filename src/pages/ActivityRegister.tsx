@@ -544,9 +544,9 @@ export default function ActivityRegister() {
       )}
 
       {/* Log table */}
-      <div className="bg-[#111827] border border-[#1e2d4a] rounded-xl overflow-hidden">
-        {/* Column headers */}
-        <div className="grid grid-cols-[160px_130px_120px_120px_1fr_130px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+      <div className="bg-[#111827] border border-[#1e2d4a] rounded-xl overflow-hidden flex flex-col">
+        {/* Column headers — fixed above scroll area */}
+        <div className="grid grid-cols-[160px_130px_120px_120px_1fr_130px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] text-[10px] font-semibold text-slate-500 uppercase tracking-wide shrink-0">
           <span>Date & Time</span>
           <span>User</span>
           <span>Module</span>
@@ -555,6 +555,8 @@ export default function ActivityRegister() {
           <span>Record</span>
         </div>
 
+        {/* Scrollable body */}
+        <div className="overflow-y-auto" style={{ maxHeight: '600px' }}>
         {loading ? (
           <div className="py-14 text-center text-slate-500">
             <div className="w-5 h-5 border-2 border-[#f97316] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -646,6 +648,7 @@ export default function ActivityRegister() {
             )}
           </>
         )}
+        </div>
       </div>
 
       {/* Footer count */}
