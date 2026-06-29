@@ -7,7 +7,7 @@ import {
 const WORKFLOW_STEPS = [
   {
     number: '01',
-    title: 'Capture evidence during the project',
+    title: 'Capture project information during delivery',
     description: 'Site forms, T&C certificates, QA records, documents, and attachments are recorded as normal inside VYSITE — no extra work required.',
     icon: ClipboardList,
     color: 'text-[#f97316]',
@@ -107,7 +107,7 @@ export default function OAndMManual() {
               Users should never have to upload or enter information twice.
             </p>
             <p className="text-slate-400 text-sm mt-2 leading-relaxed">
-              VYSITE allows records and documents to be tagged as "Include in O&M" at the point of creation. When it's time to produce the manual, everything is already waiting — organised, traceable, and branded.
+              The O&amp;M Manual will allow records and documents to be tagged for inclusion throughout the project. When it's time to produce the manual, everything will already be organised, traceable and ready to assemble.
             </p>
           </div>
         </div>

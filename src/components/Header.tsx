@@ -244,7 +244,7 @@ const pageTitles: Record<Page, string> = {
   'site-forms': 'Site Forms',
   snagging: 'Snagging',
   actions: 'Actions Tracker',
-  testing: 'Testing & Commissioning',
+  testing: 'O&M Manual',
   reports: 'Reports',
   'beta-feedback': 'BETA Feedback',
   settings: 'Settings',
