@@ -9,7 +9,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
 import FileUploadComponent, { type UploadedFile } from '../components/FileUpload';
 import type { DBMaintenanceJob, MaintenanceStatus, MaintenancePriority, MaintenanceMaterial, MaintenanceComment } from '../lib/store';
-import { logActivity } from '../lib/activityLog';
+import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -883,6 +883,17 @@ function JobRow({ job, onOpen, onDelete, canDelete, dimmed }: JobRowProps) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+const MAINTENANCE_FIELDS: FieldSpec[] = [
+  { label: 'Status',            key: 'status' },
+  { label: 'Priority',          key: 'priority' },
+  { label: 'Assigned Engineer', key: 'assigned_engineer' },
+  { label: 'Description',       key: 'description' },
+  { label: 'Client',            key: 'client_name' },
+  { label: 'Site Address',      key: 'site_address' },
+  { label: 'Target Date',       key: 'target_date' },
+  { label: 'Completion Date',   key: 'completion_date' },
+];
+
 export default function MaintenanceServicing() {
   const store = useAppStore();
   const perms = usePermissions();
@@ -1225,13 +1236,13 @@ export default function MaintenanceServicing() {
           const prev = selectedJob;
           store.updateMaintenanceJob(updated);
           setSelectedJob(updated);
-          const changes: string[] = [];
-          if (prev.status !== updated.status)     changes.push(`status: ${prev.status} → ${updated.status}`);
-          if (prev.priority !== updated.priority) changes.push(`priority: ${prev.priority} → ${updated.priority}`);
-          if (prev.assigned_engineer !== updated.assigned_engineer) changes.push(`engineer: ${prev.assigned_engineer || '—'} → ${updated.assigned_engineer || '—'}`);
-          const changeDetail = changes.length ? ` Changes: ${changes.join(', ')}.` : '';
-          const isStatusChange = changes.some(c => c.startsWith('status'));
-          logActivity({ orgId, userName, module: 'maintenance', recordId: updated.id, recordRef: updated.job_number ?? updated.id, recordType: 'Maintenance Job', actionType: isStatusChange ? 'status_changed' : 'record_updated', description: `${userName} updated maintenance job ${updated.job_number ?? updated.id} — ${updated.description ?? updated.client_name}.${changeDetail}`, prevValue: isStatusChange ? prev.status : undefined, newValue: isStatusChange ? updated.status : undefined });
+          const { changesText, prevValue, newValue, actionType } = buildDiff(
+            prev as unknown as Record<string, unknown>,
+            updated as unknown as Record<string, unknown>,
+            MAINTENANCE_FIELDS,
+          );
+          const changePart = changesText ? ` Changes: ${changesText}.` : '';
+          logActivity({ orgId, userName, module: 'maintenance', recordId: updated.id, recordRef: updated.job_number ?? updated.id, recordType: 'Maintenance Job', actionType, description: `${userName} updated Maintenance Job ${updated.job_number ?? updated.id} — ${updated.description ?? updated.client_name}.${changePart}`, prevValue, newValue });
         }}
         onDelete={id => {
           const target = store.maintenanceJobs.find(j => j.id === id);

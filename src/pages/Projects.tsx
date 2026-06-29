@@ -13,7 +13,7 @@ import type { DBProjectDocument, DBProgramme, DBProgrammeTask, ProgrammeTaskStat
 import FileUpload from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
 import type { PendingOpen } from '../App';
-import { logActivity } from '../lib/activityLog';
+import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 
 // Normalise any project value input into £X,XXX format for consistent display
 function formatProjectValue(raw: string): string {
@@ -2206,6 +2206,17 @@ interface ProjectsProps {
   onPendingProjectConsumed?: () => void;
 }
 
+const PROJECT_FIELDS: FieldSpec[] = [
+  { label: 'Project Name',      key: 'name' },
+  { label: 'Status',            key: 'status' },
+  { label: 'Contract Value',    key: 'value' },
+  { label: 'Client',            key: 'client' },
+  { label: 'Project Manager',   key: 'projectManager' },
+  { label: 'Start Date',        key: 'startDate' },
+  { label: 'Completion Date',   key: 'completionDate' },
+  { label: 'Location',          key: 'location' },
+];
+
 export default function Projects({ onNavigate, pendingProjectId, onPendingProjectConsumed }: ProjectsProps) {
   const store = useAppStore();
   const perms = usePermissions();
@@ -2252,16 +2263,13 @@ export default function Projects({ onNavigate, pendingProjectId, onPendingProjec
             onClose={() => setShowEdit(false)}
             onSave={p => {
               store.updateProject(p);
-              const prev = liveSelected;
-              const changes: string[] = [];
-              if (prev.name !== p.name)             changes.push(`name: "${prev.name}" → "${p.name}"`);
-              if (prev.status !== p.status)         changes.push(`status: ${prev.status} → ${p.status}`);
-              if (prev.value !== p.value)           changes.push(`value: ${prev.value || '—'} → ${p.value || '—'}`);
-              if (prev.client !== p.client)         changes.push(`client: "${prev.client}" → "${p.client}"`);
-              if (prev.startDate !== p.startDate)   changes.push(`start: ${prev.startDate || '—'} → ${p.startDate || '—'}`);
-              if (prev.completionDate !== p.completionDate) changes.push(`completion: ${prev.completionDate || '—'} → ${p.completionDate || '—'}`);
-              const changeDetail = changes.length ? ` Changes: ${changes.join(', ')}.` : '';
-              logActivity({ orgId, userName, module: 'projects', recordId: p.id, recordRef: p.name, actionType: changes.some(c => c.startsWith('status')) ? 'status_changed' : 'record_updated', description: `${userName} edited project ${p.name}.${changeDetail}`, prevValue: changes.some(c => c.startsWith('status')) ? prev.status : undefined, newValue: changes.some(c => c.startsWith('status')) ? p.status : undefined });
+              const { changesText, prevValue, newValue, actionType } = buildDiff(
+                liveSelected as unknown as Record<string, unknown>,
+                p as unknown as Record<string, unknown>,
+                PROJECT_FIELDS,
+              );
+              const changePart = changesText ? ` Changes: ${changesText}.` : '';
+              logActivity({ orgId, userName, module: 'projects', recordId: p.id, recordRef: p.name, actionType, description: `${userName} updated project ${p.name}.${changePart}`, prevValue, newValue });
               setShowEdit(false);
             }}
           />

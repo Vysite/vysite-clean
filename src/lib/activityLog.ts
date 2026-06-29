@@ -38,6 +38,74 @@ export interface ActivityLogParams {
   metadata?: Record<string, unknown> | null;
 }
 
+// ─── Field-diff helper ────────────────────────────────────────────────────────
+
+export interface FieldSpec {
+  /** Human-readable label shown in the audit trail */
+  label: string;
+  /** Key to read from the before/after objects */
+  key: string;
+  /** Optional value formatter; defaults to string coercion with '—' for empty */
+  format?: (v: unknown) => string;
+}
+
+function fmtValue(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'number') return String(v);
+  return String(v);
+}
+
+/**
+ * Compare two plain objects field-by-field using the provided field spec.
+ * Returns:
+ *   changesText  — semicolon-joined list of "Label: old → new" strings
+ *   prevValue    — single prev value if exactly one field changed, else null
+ *   newValue     — single new value if exactly one field changed, else null
+ *   hasChanges   — whether any fields changed
+ *   actionType   — 'status_changed' if the 'status' key changed, else 'record_updated'
+ */
+export function buildDiff(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  fields: FieldSpec[],
+): {
+  changesText: string;
+  prevValue: string | null;
+  newValue: string | null;
+  hasChanges: boolean;
+  actionType: 'status_changed' | 'record_updated';
+} {
+  const changes: string[] = [];
+  let statusChanged = false;
+  let singlePrev: string | null = null;
+  let singleNew: string | null = null;
+
+  for (const { label, key, format } of fields) {
+    const fmt = format ?? fmtValue;
+    const bv = fmt(before[key]);
+    const av = fmt(after[key]);
+    if (bv === av) continue;
+    changes.push(`${label}: ${bv} → ${av}`);
+    if (key === 'status') {
+      statusChanged = true;
+      singlePrev = bv;
+      singleNew = av;
+    }
+  }
+
+  const hasChanges = changes.length > 0;
+
+  return {
+    changesText: changes.join('; '),
+    prevValue:   changes.length === 1 ? singlePrev ?? changes[0].split(' → ')[0].split(': ').slice(1).join(': ') : (statusChanged ? singlePrev : null),
+    newValue:    changes.length === 1 ? singleNew  ?? changes[0].split(' → ')[1]                                  : (statusChanged ? singleNew  : null),
+    hasChanges,
+    actionType:  statusChanged ? 'status_changed' : 'record_updated',
+  };
+}
+
+// ─── Core insert ─────────────────────────────────────────────────────────────
+
 export async function logActivity(params: ActivityLogParams): Promise<void> {
   if (!params.orgId) return;
   try {

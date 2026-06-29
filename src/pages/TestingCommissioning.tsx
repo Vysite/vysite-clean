@@ -6,7 +6,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
 import FileUploadComponent, { type UploadedFile } from '../components/FileUpload';
 import type { DBTCRecord } from '../lib/store';
-import { logActivity } from '../lib/activityLog';
+import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -615,6 +615,16 @@ interface TCProps {
   onPendingFilterConsumed?: () => void;
 }
 
+const TC_FIELDS: FieldSpec[] = [
+  { label: 'Status',    key: 'status' },
+  { label: 'Result',    key: 'result' },
+  { label: 'Title',     key: 'title' },
+  { label: 'Area',      key: 'area' },
+  { label: 'Engineer',  key: 'engineer' },
+  { label: 'Date',      key: 'date' },
+  { label: 'Notes',     key: 'notes' },
+];
+
 export default function TestingCommissioning({ pendingOpen, onPendingOpenConsumed, pendingFilter, onPendingFilterConsumed }: TCProps) {
   const store = useAppStore();
   const orgId = store.currentOrgId ?? '';
@@ -948,11 +958,13 @@ export default function TestingCommissioning({ pendingOpen, onPendingOpenConsume
         <RecordDetail record={selectedRecord} onClose={() => setSelectedRecord(null)}
           onUpdate={updated => {
             const prev = records.find(r => r.id === updated.id);
-            if (prev && prev.status !== updated.status) {
-              logActivity({ orgId, userName, module: 'testing', recordId: updated.id, recordRef: updated.ref, recordType: updated.category, projectId: updated.projectId, projectName: updated.projectName, actionType: 'status_changed', description: `${userName} changed ${updated.ref} status from ${prev.status} to ${updated.status}.`, prevValue: prev.status, newValue: updated.status });
-            } else if (prev) {
-              logActivity({ orgId, userName, module: 'testing', recordId: updated.id, recordRef: updated.ref, recordType: updated.category, projectId: updated.projectId, projectName: updated.projectName, actionType: 'record_updated', description: `${userName} edited T&C record ${updated.ref} on project ${updated.projectName}.` });
-            }
+            const { changesText, prevValue, newValue, actionType } = buildDiff(
+              (prev ?? {}) as unknown as Record<string, unknown>,
+              updated as unknown as Record<string, unknown>,
+              TC_FIELDS,
+            );
+            const changePart = changesText ? ` Changes: ${changesText}.` : '';
+            logActivity({ orgId, userName, module: 'testing', recordId: updated.id, recordRef: updated.ref, recordType: updated.category, projectId: updated.projectId, projectName: updated.projectName, actionType, description: `${userName} updated ${updated.category} ${updated.ref} "${updated.title}" on project ${updated.projectName}.${changePart}`, prevValue, newValue });
             store.updateTCRecord(tcToDB(updated));
             setSelectedRecord(updated);
           }}

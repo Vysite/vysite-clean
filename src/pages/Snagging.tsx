@@ -8,6 +8,7 @@ import type { DBAttachment, DBSnaggingReport } from '../lib/store';
 import type { Snag, SnagPriority, SnagStatus } from '../data/types';
 import type { UploadedFile } from '../components/FileUpload';
 import FileUploadComponent from '../components/FileUpload';
+import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 import MentionTextarea, { renderWithMentions } from '../components/MentionTextarea';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
@@ -679,8 +680,23 @@ interface ReportViewProps {
   canCreate: boolean;
 }
 
+const SNAG_FIELDS: FieldSpec[] = [
+  { label: 'Status',              key: 'status' },
+  { label: 'Priority',            key: 'priority' },
+  { label: 'Title',               key: 'title' },
+  { label: 'Location',            key: 'location' },
+  { label: 'Trade',               key: 'trade' },
+  { label: 'Assigned To',         key: 'assignedTo' },
+  { label: 'Responsible Party',   key: 'responsibleParty' },
+  { label: 'Description',         key: 'description' },
+  { label: 'Rectification',       key: 'rectification' },
+  { label: 'Target Completion',   key: 'targetCompletionDate' },
+];
+
 function ReportView({ report, onClose, onEdit, onDelete, canEdit, canDelete, canExport, canCreate }: ReportViewProps) {
   const store   = useAppStore();
+  const orgId   = store.currentOrgId ?? '';
+  const userName = store.currentUser?.name ?? '';
   const orgSettings = { company_name: store.settings?.company_name ?? '', logo_data_url: store.settings?.logo_data_url ?? '' };
 
   const snags = useMemo(
@@ -745,9 +761,17 @@ function ReportView({ report, onClose, onEdit, onDelete, canEdit, canDelete, can
       targetCompletionDate: data.targetCompletionDate,
     };
     if (editingSnag) {
+      const { changesText, prevValue, newValue, actionType } = buildDiff(
+        editingSnag as unknown as Record<string, unknown>,
+        snag as unknown as Record<string, unknown>,
+        SNAG_FIELDS,
+      );
       store.updateSnag(snag as Snag);
+      const changePart = changesText ? ` Changes: ${changesText}.` : '';
+      logActivity({ orgId, userName, module: 'snagging', recordId: snag.id, recordRef: snagNum, recordType: 'Snag', projectId: report.project_id, projectName: report.project_name, actionType, description: `${userName} updated Snag ${snagNum} "${snag.title}" on project ${report.project_name}.${changePart}`, prevValue, newValue });
     } else {
       await store.addSnag(snag as Snag);
+      logActivity({ orgId, userName, module: 'snagging', recordId: snag.id, recordRef: snagNum, recordType: 'Snag', projectId: report.project_id, projectName: report.project_name, actionType: 'record_created', description: `${userName} created Snag ${snagNum} "${snag.title}" on project ${report.project_name}.` });
     }
     if (files.length > 0) {
       for (const f of files) {
@@ -960,7 +984,18 @@ function ReportView({ report, onClose, onEdit, onDelete, canEdit, canDelete, can
           onClose={() => setSelectedSnag(null)}
           onEdit={() => { setEditingSnag(liveSnag); setSelectedSnag(null); setShowSnagModal(true); }}
           onDelete={() => { setDeleteSnagId(liveSnag.id); setSelectedSnag(null); }}
-          onUpdate={s => { store.updateSnag(s as Snag); setSelectedSnag(s); }}
+          onUpdate={s => {
+            const prev = liveSnag;
+            store.updateSnag(s as Snag);
+            setSelectedSnag(s);
+            const { changesText, prevValue, newValue, actionType } = buildDiff(
+              prev as unknown as Record<string, unknown>,
+              s as unknown as Record<string, unknown>,
+              SNAG_FIELDS,
+            );
+            const changePart = changesText ? ` Changes: ${changesText}.` : '';
+            logActivity({ orgId, userName, module: 'snagging', recordId: s.id, recordRef: s.snagNumber ?? s.id, recordType: 'Snag', projectId: report.project_id, projectName: report.project_name, actionType, description: `${userName} updated Snag ${s.snagNumber ?? s.id} "${s.title}" on project ${report.project_name}.${changePart}`, prevValue, newValue });
+          }}
           canEdit={canEdit}
           canDelete={canDelete}
         />
@@ -970,7 +1005,12 @@ function ReportView({ report, onClose, onEdit, onDelete, canEdit, canDelete, can
         <ConfirmDeleteModal
           title="Delete Snag Item"
           description="This snag item and all linked attachments will be permanently deleted."
-          onConfirm={() => { store.removeSnag(deleteSnagId); setDeleteSnagId(null); }}
+          onConfirm={() => {
+            const target = (store.snags as ExtendedSnag[]).find(s => s.id === deleteSnagId);
+            logActivity({ orgId, userName, module: 'snagging', recordId: deleteSnagId, recordRef: target?.snagNumber ?? deleteSnagId, recordType: 'Snag', projectId: report.project_id, projectName: report.project_name, actionType: 'record_deleted', description: `${userName} deleted Snag ${target?.snagNumber ?? deleteSnagId} "${target?.title ?? ''}" on project ${report.project_name}.` });
+            store.removeSnag(deleteSnagId);
+            setDeleteSnagId(null);
+          }}
           onCancel={() => setDeleteSnagId(null)}
         />
       )}

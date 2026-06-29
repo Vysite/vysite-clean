@@ -24,7 +24,7 @@ import type { UploadedFile } from '../components/FileUpload';
 import { Paperclip, Eye, Download, Sparkles } from 'lucide-react';
 import AITenderAssistant from '../components/AITenderAssistant';
 import AIContractReview from '../components/AIContractReview';
-import { logActivity } from '../lib/activityLog';
+import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 
@@ -3544,6 +3544,16 @@ function openPipelineReport(tenders: Tender[], companyName: string, generatedBy:
 
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
+const TENDER_FIELDS: FieldSpec[] = [
+  { label: 'Tender Name',     key: 'name' },
+  { label: 'Status',          key: 'status' },
+  { label: 'Priority',        key: 'priority' },
+  { label: 'Estimated Value', key: 'estimatedValue' },
+  { label: 'Client',          key: 'client' },
+  { label: 'Owner',           key: 'owner' },
+  { label: 'Return Date',     key: 'returnDate' },
+];
+
 interface TenderTrackerProps {
   onConvertToProject: (t: Tender) => void;
   pendingOpen?: { linkedType: string; linkedId: string } | null;
@@ -3580,16 +3590,13 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
     const prev = store.tenders.find(t => t.id === updated.id);
     store.updateTender(updated);
     setSelectedTender(updated);
-    const changes: string[] = [];
-    if (prev) {
-      if (prev.status !== updated.status)     changes.push(`status: ${prev.status} → ${updated.status}`);
-      if (prev.priority !== updated.priority) changes.push(`priority: ${prev.priority} → ${updated.priority}`);
-      if (prev.name !== updated.name)         changes.push(`name: "${prev.name}" → "${updated.name}"`);
-      if (prev.estimatedValue !== updated.estimatedValue) changes.push(`value: ${prev.estimatedValue || '—'} → ${updated.estimatedValue || '—'}`);
-    }
-    const changeDetail = changes.length ? ` Changes: ${changes.join(', ')}.` : '';
-    const isStatusChange = changes.some(c => c.startsWith('status'));
-    logActivity({ orgId, userName, module: 'tenders', recordId: updated.id, recordRef: updated.ref ?? updated.name, recordType: 'Tender', actionType: isStatusChange ? 'status_changed' : 'record_updated', description: `${userName} edited tender ${updated.ref ?? updated.name} — ${updated.name}.${changeDetail}`, prevValue: isStatusChange ? prev?.status : undefined, newValue: isStatusChange ? updated.status : undefined });
+    const { changesText, prevValue, newValue, actionType } = buildDiff(
+      (prev ?? {}) as Record<string, unknown>,
+      updated as unknown as Record<string, unknown>,
+      TENDER_FIELDS,
+    );
+    const changePart = changesText ? ` Changes: ${changesText}.` : '';
+    logActivity({ orgId, userName, module: 'tenders', recordId: updated.id, recordRef: updated.ref ?? updated.name, recordType: 'Tender', actionType, description: `${userName} updated Tender ${updated.ref ?? updated.name} — ${updated.name}.${changePart}`, prevValue, newValue });
   };
 
   const [convertError, setConvertError] = useState<string | null>(null);

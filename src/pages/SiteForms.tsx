@@ -13,7 +13,7 @@ import type { UploadedFile } from '../components/FileUpload';
 import { type ExtendedFormType, type ExtendedSiteForm, TYPE_MAP } from '../forms/types';
 import { FormBuilder } from '../forms/FormBuilder';
 import { ViewModal } from '../forms/ViewModal';
-import { logActivity } from '../lib/activityLog';
+import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 
 // ─── Page props ───────────────────────────────────────────────────────────────
 interface SiteFormsProps {
@@ -135,6 +135,57 @@ function CategoryDrawer({ cat, onSelect, canCreate }: CategoryDrawerProps) {
   );
 }
 
+// ─── Audit field specs ────────────────────────────────────────────────────────
+
+// Standard fields common to all form types
+const SITE_FORM_COMMON_FIELDS: FieldSpec[] = [
+  { label: 'Status',       key: 'status' },
+  { label: 'Date',         key: 'date' },
+  { label: 'Completed By', key: 'completedBy' },
+  { label: 'Description',  key: 'description' },
+  { label: 'Notes',        key: 'notes' },
+];
+
+// Type-specific meaningful fields (keyed on ExtendedSiteForm field names)
+const SITE_FORM_TYPE_FIELDS: FieldSpec[] = [
+  // RFI / TQ / Notices
+  { label: 'Subject',          key: 'subject' },
+  { label: 'Question',         key: 'question' },
+  { label: 'Response',         key: 'response' },
+  { label: 'Cause',            key: 'cause' },
+  { label: 'Impact',           key: 'impact' },
+  { label: 'Programme Impact', key: 'programmeImpact' },
+  { label: 'Commercial Impact',key: 'commercialImpact' },
+  // Variation
+  { label: 'Cost Impact',      key: 'costImpact' },
+  { label: 'Variation Status', key: 'variationStatus' },
+  { label: 'Instruction Source', key: 'instructionSource' },
+  // H&S / Audit
+  { label: 'Risk Level',       key: 'riskLevel' },
+  { label: 'Findings',         key: 'findings' },
+  { label: 'Actions Required', key: 'actionsRequired' },
+  // Pressure Test
+  { label: 'System / Service', key: 'systemService' },
+  { label: 'Test Pressure',    key: 'testPressure' },
+  { label: 'Test Medium',      key: 'testMedium' },
+  { label: 'Test Result',      key: 'testResult' },
+  { label: 'Witnessed By',     key: 'witnessedBy' },
+  // Flushing
+  { label: 'Flush Result',     key: 'flushResult' },
+  { label: 'Turbidity',        key: 'turbidity' },
+  { label: 'Chlorine Residual',key: 'chlorineResidual' },
+  // Electrical
+  { label: 'Dead Test Result', key: 'deadTestResult' },
+  { label: 'Continuity Result',key: 'continuityResult' },
+  // General
+  { label: 'Area / Location',  key: 'areaLocation' },
+  { label: 'Comments',         key: 'comments' },
+  { label: 'Priority',         key: 'priority' },
+  { label: 'Assigned To',      key: 'assignedTo' },
+];
+
+const ALL_SITE_FORM_FIELDS = [...SITE_FORM_COMMON_FIELDS, ...SITE_FORM_TYPE_FIELDS];
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function SiteForms(_props: SiteFormsProps = {}) {
   const store    = useAppStore();
@@ -247,7 +298,6 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     const extra = { ...data } as Record<string, unknown>;
     ['id', 'type', 'projectId', 'projectName', 'date', 'completedBy', 'description', 'comments', 'status', 'submittedDate', 'notes'].forEach(k => delete extra[k]);
     const isEdit = !!editingForm;
-    const prevStatus = editingForm?.status;
     const dbForm: DBSiteForm = {
       id: editingForm?.id ?? data.id ?? `f${Date.now()}`,
       type: data.type,
@@ -265,11 +315,14 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     const ref = formRef(data);
     if (isEdit) {
       store.updateSiteForm(dbForm);
-      if (prevStatus && prevStatus !== data.status) {
-        logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'status_changed', description: `${userName} changed ${data.type} ${ref !== data.type ? ref + ' ' : ''}status from ${prevStatus} to ${data.status} on project ${dbForm.project_name}.`, prevValue: prevStatus, newValue: data.status ?? null });
-      } else {
-        logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'record_updated', description: formDesc('edited', data, dbForm.project_name) });
-      }
+      const { changesText, prevValue, newValue, actionType } = buildDiff(
+        editingForm as unknown as Record<string, unknown>,
+        data as unknown as Record<string, unknown>,
+        ALL_SITE_FORM_FIELDS,
+      );
+      const baseDesc = formDesc(actionType === 'status_changed' ? 'updated' : 'updated', data, dbForm.project_name);
+      const changePart = changesText ? ` Changes: ${changesText}.` : '';
+      logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType, description: `${baseDesc}${changePart}`, prevValue, newValue });
     } else {
       store.addSiteForm(dbForm);
       logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'record_created', description: formDesc('created', data, dbForm.project_name) });
