@@ -45,22 +45,39 @@ export interface FieldSpec {
   label: string;
   /** Key to read from the before/after objects */
   key: string;
+  /**
+   * Mark as true for important free-text narrative fields (description,
+   * notes, comments, scope, etc.). These fields are stored in full in
+   * metadata.diffs so the complete before/after text is always retrievable,
+   * not just a truncated inline summary.
+   */
+  isNarrative?: boolean;
   /** Optional value formatter; defaults to string coercion with '—' for empty */
   format?: (v: unknown) => string;
 }
 
+/** Full before/after record for a single changed field, stored in metadata */
+export interface FieldDiff {
+  label: string;
+  prev: string;
+  new: string;
+}
+
 function fmtValue(v: unknown): string {
   if (v === null || v === undefined || v === '') return '—';
-  if (typeof v === 'number') return String(v);
   return String(v);
 }
 
 /**
  * Compare two plain objects field-by-field using the provided field spec.
+ *
  * Returns:
- *   changesText  — semicolon-joined list of "Label: old → new" strings
- *   prevValue    — single prev value if exactly one field changed, else null
- *   newValue     — single new value if exactly one field changed, else null
+ *   changesText  — semicolon-joined "Label: old → new" for short fields;
+ *                  narrative fields appear as "Label was edited"
+ *   fieldDiffs   — full before/after objects for every changed field
+ *                  (pass to logActivity as metadata.diffs)
+ *   prevValue    — single prev string when exactly one short field changed
+ *   newValue     — single new string when exactly one short field changed
  *   hasChanges   — whether any fields changed
  *   actionType   — 'status_changed' if the 'status' key changed, else 'record_updated'
  */
@@ -70,37 +87,71 @@ export function buildDiff(
   fields: FieldSpec[],
 ): {
   changesText: string;
+  fieldDiffs: FieldDiff[];
   prevValue: string | null;
   newValue: string | null;
   hasChanges: boolean;
   actionType: 'status_changed' | 'record_updated';
 } {
-  const changes: string[] = [];
+  const inlineChanges: string[] = [];
+  const fieldDiffs: FieldDiff[] = [];
   let statusChanged = false;
-  let singlePrev: string | null = null;
-  let singleNew: string | null = null;
+  let statusPrev: string | null = null;
+  let statusNew: string | null = null;
+  let shortFieldCount = 0;
+  let singleShortPrev: string | null = null;
+  let singleShortNew: string | null = null;
 
-  for (const { label, key, format } of fields) {
+  for (const { label, key, isNarrative, format } of fields) {
     const fmt = format ?? fmtValue;
     const bv = fmt(before[key]);
     const av = fmt(after[key]);
     if (bv === av) continue;
-    changes.push(`${label}: ${bv} → ${av}`);
-    if (key === 'status') {
-      statusChanged = true;
-      singlePrev = bv;
-      singleNew = av;
+
+    // Always collect full diff for every changed field
+    fieldDiffs.push({ label, prev: bv, new: av });
+
+    if (isNarrative) {
+      // Narrative fields: note they changed but don't inline the full text
+      inlineChanges.push(`${label} was edited`);
+    } else {
+      // Short fields: inline the old → new values
+      inlineChanges.push(`${label}: ${bv} → ${av}`);
+      shortFieldCount++;
+      singleShortPrev = bv;
+      singleShortNew = av;
+
+      if (key === 'status') {
+        statusChanged = true;
+        statusPrev = bv;
+        statusNew = av;
+      }
     }
   }
 
-  const hasChanges = changes.length > 0;
+  const hasChanges = fieldDiffs.length > 0;
+  const changesText = inlineChanges.join('; ');
+
+  // prevValue / newValue: use status values if status changed, otherwise
+  // use the single short-field values if only one short field changed.
+  const prevValue = statusChanged
+    ? statusPrev
+    : shortFieldCount === 1
+    ? singleShortPrev
+    : null;
+  const newValue = statusChanged
+    ? statusNew
+    : shortFieldCount === 1
+    ? singleShortNew
+    : null;
 
   return {
-    changesText: changes.join('; '),
-    prevValue:   changes.length === 1 ? singlePrev ?? changes[0].split(' → ')[0].split(': ').slice(1).join(': ') : (statusChanged ? singlePrev : null),
-    newValue:    changes.length === 1 ? singleNew  ?? changes[0].split(' → ')[1]                                  : (statusChanged ? singleNew  : null),
+    changesText,
+    fieldDiffs,
+    prevValue,
+    newValue,
     hasChanges,
-    actionType:  statusChanged ? 'status_changed' : 'record_updated',
+    actionType: statusChanged ? 'status_changed' : 'record_updated',
   };
 }
 

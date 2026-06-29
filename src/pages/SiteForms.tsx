@@ -142,46 +142,47 @@ const SITE_FORM_COMMON_FIELDS: FieldSpec[] = [
   { label: 'Status',       key: 'status' },
   { label: 'Date',         key: 'date' },
   { label: 'Completed By', key: 'completedBy' },
-  { label: 'Description',  key: 'description' },
-  { label: 'Notes',        key: 'notes' },
+  { label: 'Description',  key: 'description',  isNarrative: true },
+  { label: 'Notes',        key: 'notes',         isNarrative: true },
 ];
 
 // Type-specific meaningful fields (keyed on ExtendedSiteForm field names)
 const SITE_FORM_TYPE_FIELDS: FieldSpec[] = [
-  // RFI / TQ / Notices
-  { label: 'Subject',          key: 'subject' },
-  { label: 'Question',         key: 'question' },
-  { label: 'Response',         key: 'response' },
-  { label: 'Cause',            key: 'cause' },
-  { label: 'Impact',           key: 'impact' },
-  { label: 'Programme Impact', key: 'programmeImpact' },
-  { label: 'Commercial Impact',key: 'commercialImpact' },
+  // RFI / TQ / Notices — commercially critical narrative fields
+  { label: 'Subject',          key: 'subject',          isNarrative: true },
+  { label: 'Question',         key: 'question',         isNarrative: true },
+  { label: 'Response',         key: 'response',         isNarrative: true },
+  { label: 'Cause',            key: 'cause',            isNarrative: true },
+  { label: 'Impact',           key: 'impact',           isNarrative: true },
+  { label: 'Programme Impact', key: 'programmeImpact',  isNarrative: true },
+  { label: 'Commercial Impact',key: 'commercialImpact', isNarrative: true },
   // Variation
-  { label: 'Cost Impact',      key: 'costImpact' },
-  { label: 'Variation Status', key: 'variationStatus' },
-  { label: 'Instruction Source', key: 'instructionSource' },
+  { label: 'Cost Impact',        key: 'costImpact',       isNarrative: true },
+  { label: 'Variation Status',   key: 'variationStatus' },
+  { label: 'Instruction Source', key: 'instructionSource', isNarrative: true },
   // H&S / Audit
-  { label: 'Risk Level',       key: 'riskLevel' },
-  { label: 'Findings',         key: 'findings' },
-  { label: 'Actions Required', key: 'actionsRequired' },
-  // Pressure Test
-  { label: 'System / Service', key: 'systemService' },
-  { label: 'Test Pressure',    key: 'testPressure' },
-  { label: 'Test Medium',      key: 'testMedium' },
-  { label: 'Test Result',      key: 'testResult' },
-  { label: 'Witnessed By',     key: 'witnessedBy' },
+  { label: 'Risk Level',        key: 'riskLevel' },
+  { label: 'Findings',          key: 'findings',         isNarrative: true },
+  { label: 'Actions Required',  key: 'actionsRequired',  isNarrative: true },
+  // Pressure Test / commissioning
+  { label: 'System / Service',  key: 'systemService' },
+  { label: 'Test Pressure',     key: 'testPressure' },
+  { label: 'Test Medium',       key: 'testMedium' },
+  { label: 'Test Result',       key: 'testResult' },
+  { label: 'Witnessed By',      key: 'witnessedBy' },
+  { label: 'Observations',      key: 'observations',     isNarrative: true },
   // Flushing
-  { label: 'Flush Result',     key: 'flushResult' },
-  { label: 'Turbidity',        key: 'turbidity' },
-  { label: 'Chlorine Residual',key: 'chlorineResidual' },
+  { label: 'Flush Result',      key: 'flushResult' },
+  { label: 'Turbidity',         key: 'turbidity' },
+  { label: 'Chlorine Residual', key: 'chlorineResidual' },
   // Electrical
-  { label: 'Dead Test Result', key: 'deadTestResult' },
-  { label: 'Continuity Result',key: 'continuityResult' },
+  { label: 'Dead Test Result',  key: 'deadTestResult' },
+  { label: 'Continuity Result', key: 'continuityResult' },
   // General
-  { label: 'Area / Location',  key: 'areaLocation' },
-  { label: 'Comments',         key: 'comments' },
-  { label: 'Priority',         key: 'priority' },
-  { label: 'Assigned To',      key: 'assignedTo' },
+  { label: 'Area / Location',   key: 'areaLocation' },
+  { label: 'Comments',          key: 'comments',         isNarrative: true },
+  { label: 'Priority',          key: 'priority' },
+  { label: 'Assigned To',       key: 'assignedTo' },
 ];
 
 const ALL_SITE_FORM_FIELDS = [...SITE_FORM_COMMON_FIELDS, ...SITE_FORM_TYPE_FIELDS];
@@ -315,14 +316,14 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     const ref = formRef(data);
     if (isEdit) {
       store.updateSiteForm(dbForm);
-      const { changesText, prevValue, newValue, actionType } = buildDiff(
+      const { changesText, fieldDiffs, prevValue, newValue, actionType } = buildDiff(
         editingForm as unknown as Record<string, unknown>,
         data as unknown as Record<string, unknown>,
         ALL_SITE_FORM_FIELDS,
       );
-      const baseDesc = formDesc(actionType === 'status_changed' ? 'updated' : 'updated', data, dbForm.project_name);
+      const baseDesc = formDesc('updated', data, dbForm.project_name);
       const changePart = changesText ? ` Changes: ${changesText}.` : '';
-      logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType, description: `${baseDesc}${changePart}`, prevValue, newValue });
+      logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType, description: `${baseDesc}${changePart}`, prevValue, newValue, metadata: fieldDiffs.length ? { diffs: fieldDiffs } : null });
     } else {
       store.addSiteForm(dbForm);
       logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'record_created', description: formDesc('created', data, dbForm.project_name) });

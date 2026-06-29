@@ -3590,13 +3590,13 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
     const prev = store.tenders.find(t => t.id === updated.id);
     store.updateTender(updated);
     setSelectedTender(updated);
-    const { changesText, prevValue, newValue, actionType } = buildDiff(
+    const { changesText, fieldDiffs, prevValue, newValue, actionType } = buildDiff(
       (prev ?? {}) as Record<string, unknown>,
       updated as unknown as Record<string, unknown>,
       TENDER_FIELDS,
     );
     const changePart = changesText ? ` Changes: ${changesText}.` : '';
-    logActivity({ orgId, userName, module: 'tenders', recordId: updated.id, recordRef: updated.ref ?? updated.name, recordType: 'Tender', actionType, description: `${userName} updated Tender ${updated.ref ?? updated.name} — ${updated.name}.${changePart}`, prevValue, newValue });
+    logActivity({ orgId, userName, module: 'tenders', recordId: updated.id, recordRef: updated.ref ?? updated.name, recordType: 'Tender', actionType, description: `${userName} updated Tender ${updated.ref ?? updated.name} — ${updated.name}.${changePart}`, prevValue, newValue, metadata: fieldDiffs.length ? { diffs: fieldDiffs } : null });
   };
 
   const [convertError, setConvertError] = useState<string | null>(null);

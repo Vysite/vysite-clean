@@ -622,7 +622,7 @@ const TC_FIELDS: FieldSpec[] = [
   { label: 'Area',      key: 'area' },
   { label: 'Engineer',  key: 'engineer' },
   { label: 'Date',      key: 'date' },
-  { label: 'Notes',     key: 'notes' },
+  { label: 'Notes',     key: 'notes', isNarrative: true },
 ];
 
 export default function TestingCommissioning({ pendingOpen, onPendingOpenConsumed, pendingFilter, onPendingFilterConsumed }: TCProps) {
@@ -958,13 +958,13 @@ export default function TestingCommissioning({ pendingOpen, onPendingOpenConsume
         <RecordDetail record={selectedRecord} onClose={() => setSelectedRecord(null)}
           onUpdate={updated => {
             const prev = records.find(r => r.id === updated.id);
-            const { changesText, prevValue, newValue, actionType } = buildDiff(
+            const { changesText, fieldDiffs, prevValue, newValue, actionType } = buildDiff(
               (prev ?? {}) as unknown as Record<string, unknown>,
               updated as unknown as Record<string, unknown>,
               TC_FIELDS,
             );
             const changePart = changesText ? ` Changes: ${changesText}.` : '';
-            logActivity({ orgId, userName, module: 'testing', recordId: updated.id, recordRef: updated.ref, recordType: updated.category, projectId: updated.projectId, projectName: updated.projectName, actionType, description: `${userName} updated ${updated.category} ${updated.ref} "${updated.title}" on project ${updated.projectName}.${changePart}`, prevValue, newValue });
+            logActivity({ orgId, userName, module: 'testing', recordId: updated.id, recordRef: updated.ref, recordType: updated.category, projectId: updated.projectId, projectName: updated.projectName, actionType, description: `${userName} updated ${updated.category} ${updated.ref} "${updated.title}" on project ${updated.projectName}.${changePart}`, prevValue, newValue, metadata: fieldDiffs.length ? { diffs: fieldDiffs } : null });
             store.updateTCRecord(tcToDB(updated));
             setSelectedRecord(updated);
           }}

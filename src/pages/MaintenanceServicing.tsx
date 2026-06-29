@@ -887,11 +887,13 @@ const MAINTENANCE_FIELDS: FieldSpec[] = [
   { label: 'Status',            key: 'status' },
   { label: 'Priority',          key: 'priority' },
   { label: 'Assigned Engineer', key: 'assigned_engineer' },
-  { label: 'Description',       key: 'description' },
   { label: 'Client',            key: 'client_name' },
   { label: 'Site Address',      key: 'site_address' },
   { label: 'Target Date',       key: 'target_date' },
   { label: 'Completion Date',   key: 'completion_date' },
+  { label: 'Description',       key: 'description',    isNarrative: true },
+  { label: 'Engineer Notes',    key: 'engineer_notes', isNarrative: true },
+  { label: 'Internal Notes',    key: 'internal_notes', isNarrative: true },
 ];
 
 export default function MaintenanceServicing() {
@@ -1236,13 +1238,13 @@ export default function MaintenanceServicing() {
           const prev = selectedJob;
           store.updateMaintenanceJob(updated);
           setSelectedJob(updated);
-          const { changesText, prevValue, newValue, actionType } = buildDiff(
+          const { changesText, fieldDiffs, prevValue, newValue, actionType } = buildDiff(
             prev as unknown as Record<string, unknown>,
             updated as unknown as Record<string, unknown>,
             MAINTENANCE_FIELDS,
           );
           const changePart = changesText ? ` Changes: ${changesText}.` : '';
-          logActivity({ orgId, userName, module: 'maintenance', recordId: updated.id, recordRef: updated.job_number ?? updated.id, recordType: 'Maintenance Job', actionType, description: `${userName} updated Maintenance Job ${updated.job_number ?? updated.id} — ${updated.description ?? updated.client_name}.${changePart}`, prevValue, newValue });
+          logActivity({ orgId, userName, module: 'maintenance', recordId: updated.id, recordRef: updated.job_number ?? updated.id, recordType: 'Maintenance Job', actionType, description: `${userName} updated Maintenance Job ${updated.job_number ?? updated.id} — ${updated.description ?? updated.client_name}.${changePart}`, prevValue, newValue, metadata: fieldDiffs.length ? { diffs: fieldDiffs } : null });
         }}
         onDelete={id => {
           const target = store.maintenanceJobs.find(j => j.id === id);

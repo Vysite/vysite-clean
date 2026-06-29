@@ -688,9 +688,9 @@ const SNAG_FIELDS: FieldSpec[] = [
   { label: 'Trade',               key: 'trade' },
   { label: 'Assigned To',         key: 'assignedTo' },
   { label: 'Responsible Party',   key: 'responsibleParty' },
-  { label: 'Description',         key: 'description' },
-  { label: 'Rectification',       key: 'rectification' },
   { label: 'Target Completion',   key: 'targetCompletionDate' },
+  { label: 'Description',         key: 'description',    isNarrative: true },
+  { label: 'Rectification',       key: 'rectification',  isNarrative: true },
 ];
 
 function ReportView({ report, onClose, onEdit, onDelete, canEdit, canDelete, canExport, canCreate }: ReportViewProps) {
@@ -761,14 +761,14 @@ function ReportView({ report, onClose, onEdit, onDelete, canEdit, canDelete, can
       targetCompletionDate: data.targetCompletionDate,
     };
     if (editingSnag) {
-      const { changesText, prevValue, newValue, actionType } = buildDiff(
+      const { changesText, fieldDiffs, prevValue, newValue, actionType } = buildDiff(
         editingSnag as unknown as Record<string, unknown>,
         snag as unknown as Record<string, unknown>,
         SNAG_FIELDS,
       );
       store.updateSnag(snag as Snag);
       const changePart = changesText ? ` Changes: ${changesText}.` : '';
-      logActivity({ orgId, userName, module: 'snagging', recordId: snag.id, recordRef: snagNum, recordType: 'Snag', projectId: report.project_id, projectName: report.project_name, actionType, description: `${userName} updated Snag ${snagNum} "${snag.title}" on project ${report.project_name}.${changePart}`, prevValue, newValue });
+      logActivity({ orgId, userName, module: 'snagging', recordId: snag.id, recordRef: snagNum, recordType: 'Snag', projectId: report.project_id, projectName: report.project_name, actionType, description: `${userName} updated Snag ${snagNum} "${snag.title}" on project ${report.project_name}.${changePart}`, prevValue, newValue, metadata: fieldDiffs.length ? { diffs: fieldDiffs } : null });
     } else {
       await store.addSnag(snag as Snag);
       logActivity({ orgId, userName, module: 'snagging', recordId: snag.id, recordRef: snagNum, recordType: 'Snag', projectId: report.project_id, projectName: report.project_name, actionType: 'record_created', description: `${userName} created Snag ${snagNum} "${snag.title}" on project ${report.project_name}.` });
@@ -988,13 +988,13 @@ function ReportView({ report, onClose, onEdit, onDelete, canEdit, canDelete, can
             const prev = liveSnag;
             store.updateSnag(s as Snag);
             setSelectedSnag(s);
-            const { changesText, prevValue, newValue, actionType } = buildDiff(
+            const { changesText, fieldDiffs, prevValue, newValue, actionType } = buildDiff(
               prev as unknown as Record<string, unknown>,
               s as unknown as Record<string, unknown>,
               SNAG_FIELDS,
             );
             const changePart = changesText ? ` Changes: ${changesText}.` : '';
-            logActivity({ orgId, userName, module: 'snagging', recordId: s.id, recordRef: s.snagNumber ?? s.id, recordType: 'Snag', projectId: report.project_id, projectName: report.project_name, actionType, description: `${userName} updated Snag ${s.snagNumber ?? s.id} "${s.title}" on project ${report.project_name}.${changePart}`, prevValue, newValue });
+            logActivity({ orgId, userName, module: 'snagging', recordId: s.id, recordRef: s.snagNumber ?? s.id, recordType: 'Snag', projectId: report.project_id, projectName: report.project_name, actionType, description: `${userName} updated Snag ${s.snagNumber ?? s.id} "${s.title}" on project ${report.project_name}.${changePart}`, prevValue, newValue, metadata: fieldDiffs.length ? { diffs: fieldDiffs } : null });
           }}
           canEdit={canEdit}
           canDelete={canDelete}

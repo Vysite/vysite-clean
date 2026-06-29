@@ -25,6 +25,12 @@ interface ActivityLogEntry {
   created_at: string;
 }
 
+interface FieldDiff {
+  label: string;
+  prev: string;
+  new: string;
+}
+
 // ─── Action type config ───────────────────────────────────────────────────────
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -224,7 +230,7 @@ function EntryDetail({ entry, onClose }: { entry: ActivityLogEntry; onClose: () 
             ))}
           </div>
 
-          {/* Value change */}
+          {/* Single-field value change (short fields like status) */}
           {(entry.prev_value || entry.new_value) && (
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Change</p>
@@ -245,21 +251,50 @@ function EntryDetail({ entry, onClose }: { entry: ActivityLogEntry; onClose: () 
             </div>
           )}
 
+          {/* Full field diffs — stored in metadata.diffs for narrative/text fields */}
+          {Array.isArray((entry.metadata as Record<string, unknown> | null)?.diffs) && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Field Changes</p>
+              <div className="space-y-3">
+                {((entry.metadata as { diffs: FieldDiff[] }).diffs).map((diff, i) => (
+                  <div key={i} className="rounded-xl border border-[#1e2d4a] overflow-hidden">
+                    <div className="px-3 py-1.5 bg-[#0d1628] border-b border-[#1e2d4a]">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{diff.label}</span>
+                    </div>
+                    <div className="divide-y divide-[#1e2d4a]">
+                      <div className="px-3 py-2 bg-red-900/10">
+                        <p className="text-[9px] text-red-500 font-bold uppercase tracking-wider mb-1">Before</p>
+                        <p className="text-xs text-red-200 leading-relaxed whitespace-pre-wrap break-words">{diff.prev === '—' ? <span className="italic text-slate-500">empty</span> : diff.prev}</p>
+                      </div>
+                      <div className="px-3 py-2 bg-emerald-900/10">
+                        <p className="text-[9px] text-emerald-500 font-bold uppercase tracking-wider mb-1">After</p>
+                        <p className="text-xs text-emerald-200 leading-relaxed whitespace-pre-wrap break-words">{diff.new === '—' ? <span className="italic text-slate-500">empty</span> : diff.new}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Other metadata (non-diffs) */}
+          {entry.metadata && Object.keys(entry.metadata).some(k => k !== 'diffs') && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Additional Info</p>
+              <pre className="text-[10px] text-slate-400 bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 overflow-x-auto whitespace-pre-wrap">
+                {JSON.stringify(
+                  Object.fromEntries(Object.entries(entry.metadata).filter(([k]) => k !== 'diffs')),
+                  null, 2
+                )}
+              </pre>
+            </div>
+          )}
+
           {/* Reason */}
           {entry.reason && (
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Reason</p>
               <p className="text-sm text-slate-300 bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2">{entry.reason}</p>
-            </div>
-          )}
-
-          {/* Metadata */}
-          {entry.metadata && Object.keys(entry.metadata).length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Metadata</p>
-              <pre className="text-[10px] text-slate-400 bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 overflow-x-auto whitespace-pre-wrap">
-                {JSON.stringify(entry.metadata, null, 2)}
-              </pre>
             </div>
           )}
 
@@ -571,7 +606,15 @@ export default function ActivityRegister() {
                 <div><ActionBadge actionType={entry.action_type} /></div>
 
                 {/* Description */}
-                <p className="text-xs text-slate-400 truncate">{entry.description}</p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-xs text-slate-400 truncate">{entry.description}</p>
+                  {Array.isArray((entry.metadata as Record<string, unknown> | null)?.diffs) &&
+                    ((entry.metadata as { diffs: unknown[] }).diffs).length > 0 && (
+                    <span className="shrink-0 text-[9px] font-semibold text-[#f97316] bg-[#f97316]/10 border border-[#f97316]/30 rounded px-1 py-0.5 leading-none">
+                      {((entry.metadata as { diffs: unknown[] }).diffs).length} field{((entry.metadata as { diffs: unknown[] }).diffs).length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
 
                 {/* Record ref */}
                 <div className="min-w-0">

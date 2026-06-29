@@ -2263,13 +2263,13 @@ export default function Projects({ onNavigate, pendingProjectId, onPendingProjec
             onClose={() => setShowEdit(false)}
             onSave={p => {
               store.updateProject(p);
-              const { changesText, prevValue, newValue, actionType } = buildDiff(
+              const { changesText, fieldDiffs, prevValue, newValue, actionType } = buildDiff(
                 liveSelected as unknown as Record<string, unknown>,
                 p as unknown as Record<string, unknown>,
                 PROJECT_FIELDS,
               );
               const changePart = changesText ? ` Changes: ${changesText}.` : '';
-              logActivity({ orgId, userName, module: 'projects', recordId: p.id, recordRef: p.name, actionType, description: `${userName} updated project ${p.name}.${changePart}`, prevValue, newValue });
+              logActivity({ orgId, userName, module: 'projects', recordId: p.id, recordRef: p.name, actionType, description: `${userName} updated project ${p.name}.${changePart}`, prevValue, newValue, metadata: fieldDiffs.length ? { diffs: fieldDiffs } : null });
               setShowEdit(false);
             }}
           />
