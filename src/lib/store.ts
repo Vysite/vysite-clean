@@ -74,6 +74,7 @@ export type PermissionKey =
   | 'admin.edit_users'
   | 'admin.assign_permissions'
   | 'admin.view_audit_logs'
+  | 'admin.view_activity_register'
   | 'admin.manage_settings'
   // Module-level access gates (sidebar visibility + route access)
   | 'modules.projects'
@@ -157,7 +158,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'ai.import': true, 'ai.export': true,
     'docs.view': true, 'docs.upload': true, 'docs.download': true, 'docs.delete': true, 'docs.view_confidential': true,
     'admin.invite_users': true, 'admin.edit_users': true, 'admin.assign_permissions': true,
-    'admin.view_audit_logs': true, 'admin.manage_settings': true,
+    'admin.view_audit_logs': true, 'admin.view_activity_register': true, 'admin.manage_settings': true,
     'modules.projects': true, 'modules.snagging': true, 'modules.site_forms': true, 'modules.testing': true,
     'modules.actions': true, 'modules.comments': true, 'modules.reports': true,
     'snagging.create': true, 'snagging.edit': true, 'snagging.delete': true, 'snagging.export': true,

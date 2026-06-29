@@ -9,6 +9,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
+import { logActivity } from '../lib/activityLog';
 import FileUploadComponent from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
 import type { CommercialRecord, CommercialLineItem, CommercialRecordType, CommercialRecordStatus } from '../data/types';
@@ -904,7 +905,17 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
             created_at: now,
           });
         }
-        onSaved(dbToRecord(data as Record<string, unknown>, projectName));
+        const saved = dbToRecord(data as Record<string, unknown>, projectName);
+        logActivity({
+          orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+          userName: store.currentUser?.name ?? '',
+          module: 'commercial', recordId: id,
+          recordRef: form.reference.trim() || form.title.trim(),
+          recordType: form.recordType, projectId: form.projectId || null, projectName: projectName ?? null,
+          actionType: 'record_created',
+          description: `${store.currentUser?.name ?? 'Unknown'} created ${form.recordType.replace(/_/g, ' ')} ${form.reference ? form.reference + ' — ' : ''}${form.title}`,
+        });
+        onSaved(saved);
       } else {
         const { data, error: err } = await supabase.from('vy_commercial_records').update(row).eq('id', record!.id).select('*').single();
         if (err) throw err;
@@ -914,7 +925,31 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
             await supabase.from('vy_commercial_line_items').insert(lineItems.map((l, idx) => buildLineRow(l, idx, record!.id)));
           }
         }
-        onSaved(dbToRecord(data as Record<string, unknown>, projectName));
+        const prevStatus = record!.status;
+        const saved = dbToRecord(data as Record<string, unknown>, projectName);
+        if (prevStatus !== form.status) {
+          logActivity({
+            orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+            userName: store.currentUser?.name ?? '',
+            module: 'commercial', recordId: record!.id,
+            recordRef: form.reference.trim() || form.title.trim(),
+            recordType: form.recordType, projectId: form.projectId || null, projectName: projectName ?? null,
+            actionType: 'status_changed',
+            description: `${store.currentUser?.name ?? 'Unknown'} changed status of ${form.reference ? form.reference + ' — ' : ''}${form.title} from ${prevStatus.replace(/_/g, ' ')} to ${form.status.replace(/_/g, ' ')}`,
+            prevValue: prevStatus, newValue: form.status,
+          });
+        } else {
+          logActivity({
+            orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+            userName: store.currentUser?.name ?? '',
+            module: 'commercial', recordId: record!.id,
+            recordRef: form.reference.trim() || form.title.trim(),
+            recordType: form.recordType, projectId: form.projectId || null, projectName: projectName ?? null,
+            actionType: 'record_updated',
+            description: `${store.currentUser?.name ?? 'Unknown'} updated ${form.recordType.replace(/_/g, ' ')} ${form.reference ? form.reference + ' — ' : ''}${form.title}`,
+          });
+        }
+        onSaved(saved);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
@@ -928,6 +963,15 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
     setDeleting(true);
     await supabase.from('vy_commercial_line_items').delete().eq('record_id', record.id);
     await supabase.from('vy_commercial_records').delete().eq('id', record.id);
+    logActivity({
+      orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+      userName: store.currentUser?.name ?? '',
+      module: 'commercial', recordId: record.id,
+      recordRef: record.reference || record.title,
+      recordType: record.recordType, projectId: record.projectId ?? null, projectName: record.projectName ?? null,
+      actionType: 'record_deleted',
+      description: `${store.currentUser?.name ?? 'Unknown'} deleted ${record.recordType.replace(/_/g, ' ')} ${record.reference ? record.reference + ' — ' : ''}${record.title}`,
+    });
     onDeleted(record.id);
     setDeleting(false);
   }
@@ -960,6 +1004,17 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
       store.settings?.company_name,
     );
     openPrintTab(html);
+    logActivity({
+      orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+      userName: store.currentUser?.name ?? '',
+      module: 'commercial', recordId: record.id,
+      recordRef: form.reference || form.title,
+      recordType: form.recordType, projectId: form.projectId || null,
+      projectName: projects.find(p => p.id === form.projectId)?.name ?? record.projectName ?? null,
+      actionType: 'pdf_exported',
+      description: `${store.currentUser?.name ?? 'Unknown'} exported ${view} PDF for ${form.reference ? form.reference + ' — ' : ''}${form.title}`,
+      metadata: { view },
+    });
   }
 
   const HAS_TYPE_FIELDS = form.recordType === 'delay_notice';
@@ -1117,7 +1172,19 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
               canAdd={canEdit}
               onAdd={isNew
                 ? async (c) => { setPendingComments(prev => [...prev, c]); }
-                : store.addCommercialRecordComment}
+                : async (c) => {
+                    await store.addCommercialRecordComment(c);
+                    logActivity({
+                      orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+                      userName: store.currentUser?.name ?? '',
+                      module: 'commercial', recordId: record!.id,
+                      recordRef: form.reference || form.title,
+                      recordType: form.recordType, projectId: form.projectId || null,
+                      projectName: projects.find(p => p.id === form.projectId)?.name ?? record?.projectName ?? null,
+                      actionType: 'comment_added',
+                      description: `${store.currentUser?.name ?? 'Unknown'} added a comment to ${form.reference ? form.reference + ' — ' : ''}${form.title}`,
+                    });
+                  }}
               onRemove={isNew
                 ? async (id) => { setPendingComments(prev => prev.filter(x => x.id !== id)); }
                 : store.removeCommercialRecordComment}
@@ -1204,6 +1271,17 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
                             created_at: new Date().toISOString(),
                           };
                           await store.addAttachment(att);
+                          logActivity({
+                            orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+                            userName: store.currentUser?.name ?? '',
+                            module: 'commercial', recordId: record!.id,
+                            recordRef: form.reference || form.title,
+                            recordType: form.recordType, projectId: form.projectId || null,
+                            projectName: projects.find(p => p.id === form.projectId)?.name ?? record?.projectName ?? null,
+                            actionType: 'attachment_uploaded',
+                            description: `${store.currentUser?.name ?? 'Unknown'} uploaded attachment "${f.name}" to ${form.reference ? form.reference + ' — ' : ''}${form.title}`,
+                            metadata: { fileName: f.name, fileType: f.type },
+                          });
                         }
                         setPendingFiles([]);
                         setUploading(false);
@@ -1435,6 +1513,14 @@ export default function Commercial() {
     openPrintTab(
       `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(name)} — Commercial Records</title><style>${CLIENT_COPY_CSS}</style><script>window.onload=function(){window.print();};<\/script></head><body>${pages}</body></html>`
     );
+    logActivity({
+      orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+      userName: store.currentUser?.name ?? '',
+      module: 'commercial',
+      actionType: 'pdf_exported',
+      description: `${store.currentUser?.name ?? 'Unknown'} exported ${selectedRecords.length} commercial record${selectedRecords.length !== 1 ? 's' : ''} (Export Full)`,
+      metadata: { count: selectedRecords.length, recordRefs: selectedRecords.map(r => r.reference || r.title) },
+    });
   }
 
   function handleSaved(r: CommercialRecord) {

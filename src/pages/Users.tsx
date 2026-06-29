@@ -11,6 +11,7 @@ import { env } from '../lib/env';
 import { supabase } from '../lib/supabase';
 import type { DBPlatformUser, PlatformUserRole, PermissionKey, UserPermissions } from '../lib/store';
 import { ROLE_PERMISSIONS, resolvePermissions } from '../lib/store';
+import { logActivity } from '../lib/activityLog';
 
 // ─── Role config ──────────────────────────────────────────────────────────────
 
@@ -206,11 +207,12 @@ const PERM_GROUPS: PermGroup[] = [
   {
     label: 'Administration',
     keys: [
-      { key: 'admin.invite_users',        label: 'Invite users' },
-      { key: 'admin.edit_users',          label: 'Edit users' },
-      { key: 'admin.assign_permissions',  label: 'Assign permissions' },
-      { key: 'admin.view_audit_logs',     label: 'View audit logs' },
-      { key: 'admin.manage_settings',     label: 'Manage company settings' },
+      { key: 'admin.invite_users',              label: 'Invite users' },
+      { key: 'admin.edit_users',                label: 'Edit users' },
+      { key: 'admin.assign_permissions',        label: 'Assign permissions' },
+      { key: 'admin.view_audit_logs',           label: 'View audit logs' },
+      { key: 'admin.view_activity_register',    label: 'View Activity Register' },
+      { key: 'admin.manage_settings',           label: 'Manage company settings' },
     ],
   },
 ];
@@ -965,10 +967,40 @@ export default function Users() {
   }), [platformUsers]);
 
   const handleSaveUser = async (u: DBPlatformUser) => {
-    if (platformUsers.find(x => x.id === u.id)) {
+    const isEdit = !!platformUsers.find(x => x.id === u.id);
+    if (isEdit) {
+      const prev = platformUsers.find(x => x.id === u.id);
       await store.updatePlatformUser(u);
+      const permChanged = JSON.stringify(prev?.permissions) !== JSON.stringify(u.permissions);
+      const roleChanged = prev?.role !== u.role;
+      if (permChanged || roleChanged) {
+        logActivity({
+          orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+          userName: store.currentUser?.name ?? '',
+          module: 'users', recordRef: u.name,
+          actionType: 'permission_changed',
+          description: `${store.currentUser?.name ?? 'Unknown'} updated permissions/role for ${u.name}${roleChanged ? ` (role: ${prev?.role} → ${u.role})` : ''}`,
+          prevValue: roleChanged ? prev?.role : undefined,
+          newValue: roleChanged ? u.role : undefined,
+        });
+      } else {
+        logActivity({
+          orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+          userName: store.currentUser?.name ?? '',
+          module: 'users', recordRef: u.name,
+          actionType: 'user_updated',
+          description: `${store.currentUser?.name ?? 'Unknown'} updated user profile for ${u.name}`,
+        });
+      }
     } else {
       await store.addPlatformUser(u);
+      logActivity({
+        orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+        userName: store.currentUser?.name ?? '',
+        module: 'users', recordRef: u.name,
+        actionType: 'user_created',
+        description: `${store.currentUser?.name ?? 'Unknown'} created user ${u.name} (${u.email}) with role ${u.role}`,
+      });
     }
   };
 
@@ -988,7 +1020,14 @@ export default function Users() {
       }
     );
     if (res.ok) {
-      // Optimistically remove from local store view
+      logActivity({
+        orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+        userName: store.currentUser?.name ?? '',
+        module: 'users', recordRef: deleteTarget.name,
+        actionType: 'user_removed',
+        description: `${store.currentUser?.name ?? 'Unknown'} removed user ${deleteTarget.name} (${deleteTarget.email})`,
+        metadata: { removedEmail: deleteTarget.email, removedRole: deleteTarget.role },
+      });
       store.removePlatformUser(deleteTarget.id);
     } else {
       const body = await res.json().catch(() => ({}));
@@ -1271,7 +1310,17 @@ export default function Users() {
           mode="invite"
           onClose={() => setShowInvite(false)}
           onSave={() => {/* not used for invite mode */}}
-          onInviteSuccess={async (u) => { await store.addPlatformUser(u); }}
+          onInviteSuccess={async (u) => {
+            await store.addPlatformUser(u);
+            logActivity({
+              orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+              userName: store.currentUser?.name ?? '',
+              module: 'users', recordRef: u.name,
+              actionType: 'user_invited',
+              description: `${store.currentUser?.name ?? 'Unknown'} invited ${u.name} (${u.email}) with role ${u.role}`,
+              metadata: { invitedEmail: u.email, role: u.role },
+            });
+          }}
         />
       )}
       {showAdd && (

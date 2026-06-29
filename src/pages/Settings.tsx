@@ -3,13 +3,16 @@ import {
   Bell, Shield, Users, Globe,
   ChevronRight, ToggleLeft, ToggleRight, Save,
   Hash, CheckSquare, ArrowLeft, Eye, EyeOff, Lock, CheckCircle, AlertCircle,
-  CreditCard, ExternalLink, Zap,
+  CreditCard, ExternalLink, Zap, Activity,
 } from 'lucide-react';
 import type { LucideIcon } from '../data/types';
 import { useAppStore } from '../lib/StoreContext';
+import { usePermissions } from '../lib/StoreContext';
 import { supabase } from '../lib/supabase';
 import { useOrgSettings } from '../lib/OrgSettingsContext';
 import type { DBSettings } from '../lib/store';
+import { logActivity } from '../lib/activityLog';
+import ActivityRegister from './ActivityRegister';
 
 type ToggleKey =
   | 'snag_email' | 'action_email' | 'daily_digest' | 'overdue_alert'
@@ -632,6 +635,7 @@ const settingsSections = [
   { id: 'billing',       title: 'Billing',              description: 'Subscription, plan and payment management',    icon: CreditCard,  color: 'bg-sky-900/60 text-sky-400' },
   { id: 'users',         title: 'User Management',      description: 'Roles, permissions and access control',       icon: Users,       color: 'bg-teal-900/60 text-teal-400' },
   { id: 'security',      title: 'Security',             description: 'Password policy, 2FA and session control',    icon: Shield,      color: 'bg-red-900/60 text-red-400' },
+  { id: 'activity',      title: 'Activity Register',    description: 'Permanent audit log of all platform activity', icon: Activity,    color: 'bg-orange-900/60 text-orange-400' },
   { id: 'integrations',  title: 'Integrations',         description: 'Connect to third-party tools and services',  icon: Globe,       color: 'bg-slate-700 text-slate-400' },
 ] as const;
 
@@ -641,11 +645,22 @@ type SectionId = typeof settingsSections[number]['id'];
 
 export default function Settings() {
   const store = useAppStore();
+  const perms = usePermissions();
   const isAdmin = store.currentUser?.role === 'Admin';
+  const canViewActivity = perms['admin.view_activity_register'] || isAdmin;
   const [activeSection, setActiveSection] = useState<SectionId | null>('notifications');
 
   const handleSave = async (updated: DBSettings) => {
     await store.updateSettings(updated);
+    const sectionLabel = activeSection === 'notifications' ? 'Notification Preferences' : 'Operational Settings';
+    logActivity({
+      orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+      userName: store.currentUser?.name ?? '',
+      module: 'settings',
+      actionType: 'settings_changed',
+      description: `${store.currentUser?.name ?? 'Unknown'} updated ${sectionLabel}`,
+      metadata: { section: activeSection },
+    });
   };
 
   const renderContent = () => {
@@ -655,6 +670,7 @@ export default function Settings() {
       case 'billing':       return <BillingSection />;
       case 'users':         return <ComingSoon title="User Management" icon={Users} />;
       case 'security':      return <ChangePasswordSection />;
+      case 'activity':      return canViewActivity ? <ActivityRegister /> : <ComingSoon title="Activity Register" icon={Activity} />;
       case 'integrations':  return <ComingSoon title="Integrations" icon={Globe} />;
       default:              return null;
     }
@@ -700,13 +716,22 @@ export default function Settings() {
         {/* Content panel */}
         <div className={`lg:col-span-2 ${activeSection ? 'block' : 'hidden lg:block'}`}>
           {activeSection ? (
-            <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5 lg:p-6">
+            <div className={`bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden ${activeSection === 'activity' ? '' : 'p-5 lg:p-6'}`}>
               {/* Mobile back button */}
-              <button
-                onClick={() => setActiveSection(null)}
-                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors mb-5 lg:hidden">
-                <ArrowLeft size={13} />{activeLabel}
-              </button>
+              {activeSection !== 'activity' && (
+                <button
+                  onClick={() => setActiveSection(null)}
+                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors mb-5 lg:hidden">
+                  <ArrowLeft size={13} />{activeLabel}
+                </button>
+              )}
+              {activeSection === 'activity' && (
+                <button
+                  onClick={() => setActiveSection(null)}
+                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors px-4 pt-4 lg:hidden">
+                  <ArrowLeft size={13} />{activeLabel}
+                </button>
+              )}
               {renderContent()}
             </div>
           ) : (
