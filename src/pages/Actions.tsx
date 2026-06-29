@@ -8,6 +8,7 @@ import { useAppStore, usePermissions } from '../lib/StoreContext';
 import type { DBAttachment } from '../lib/store';
 import MentionTextarea, { renderWithMentions } from '../components/MentionTextarea';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 
 const statusColors: Record<ActionStatus, string> = {
   'Not Started': 'bg-[#1e2d4a] text-slate-300',
@@ -705,6 +706,15 @@ function SendPdfModal({ selectedActions, onClose }: SendPdfModalProps) {
 
 // ─── Main Actions page ─────────────────────────────────────────────────────────
 
+const ACTION_FIELDS: FieldSpec[] = [
+  { label: 'Status',      key: 'status' },
+  { label: 'Priority',    key: 'priority' },
+  { label: 'Title',       key: 'title' },
+  { label: 'Owner',       key: 'owner' },
+  { label: 'Due Date',    key: 'dueDate' },
+  { label: 'Description', key: 'description', isNarrative: true },
+];
+
 interface ActionsProps {
   pendingOpen?: { linkedType: string; linkedId: string } | null;
   onPendingOpenConsumed?: () => void;
@@ -714,6 +724,8 @@ interface ActionsProps {
 
 export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFilter, onPendingFilterConsumed }: ActionsProps) {
   const store = useAppStore();
+  const orgId   = store.currentOrgId ?? '';
+  const userName = store.currentUser?.name ?? '';
   const actionList = store.visibleProjectIds
     ? store.actions.filter(a => store.visibleProjectIds!.includes(a.projectId))
     : store.actions;
@@ -802,6 +814,7 @@ export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFil
         await store.addAttachment(att);
       }
     }
+    logActivity({ orgId, userName, module: 'actions', recordId: newAction.id, recordRef: newAction.id.toUpperCase(), recordType: 'Action', projectId: newAction.projectId, projectName: newAction.projectName, actionType: 'record_created', description: `${userName} created action "${newAction.title}" on project ${newAction.projectName}.` });
   }
 
   return (
@@ -962,10 +975,24 @@ export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFil
       </div>
 
       {liveSelected && !selectMode && (
-        <ActionDetail
+      <ActionDetail
           action={liveSelected}
           onClose={() => setSelectedAction(null)}
-          onUpdate={async (updated) => { await store.updateAction(updated); setSelectedAction(updated); }}
+          onUpdate={async (updated) => {
+            const prev = liveSelected;
+            await store.updateAction(updated);
+            setSelectedAction(updated);
+            // Only log field edits — comment additions log via their own path
+            if (JSON.stringify(prev.comments) === JSON.stringify(updated.comments)) {
+              const { changesText, fieldDiffs, prevValue, newValue, actionType } = buildDiff(
+                prev as unknown as Record<string, unknown>,
+                updated as unknown as Record<string, unknown>,
+                ACTION_FIELDS,
+              );
+              const changePart = changesText ? ` Changes: ${changesText}.` : '';
+              logActivity({ orgId, userName, module: 'actions', recordId: updated.id, recordRef: updated.id.toUpperCase(), recordType: 'Action', projectId: updated.projectId, projectName: updated.projectName, actionType, description: `${userName} updated action "${updated.title}" on project ${updated.projectName}.${changePart}`, prevValue, newValue, metadata: fieldDiffs.length ? { diffs: fieldDiffs } : null });
+            }
+          }}
           canEdit={canEdit}
           canDelete={canDelete}
         />
@@ -980,7 +1007,13 @@ export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFil
         <ConfirmDeleteModal
           title="Delete Action"
           description="This action and all linked attachments will be permanently deleted."
-          onConfirm={() => { store.removeAction(deleteConfirm); setDeleteConfirm(null); if (selectedAction?.id === deleteConfirm) setSelectedAction(null); }}
+          onConfirm={() => {
+            const target = actionList.find(a => a.id === deleteConfirm);
+            if (target) logActivity({ orgId, userName, module: 'actions', recordId: deleteConfirm, recordRef: deleteConfirm.toUpperCase(), recordType: 'Action', projectId: target.projectId, projectName: target.projectName, actionType: 'record_deleted', description: `${userName} deleted action "${target.title}" on project ${target.projectName}.` });
+            store.removeAction(deleteConfirm);
+            setDeleteConfirm(null);
+            if (selectedAction?.id === deleteConfirm) setSelectedAction(null);
+          }}
           onCancel={() => setDeleteConfirm(null)}
         />
       )}

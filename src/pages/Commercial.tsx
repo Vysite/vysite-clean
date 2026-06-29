@@ -9,7 +9,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
-import { logActivity } from '../lib/activityLog';
+import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 import FileUploadComponent from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
 import type { CommercialRecord, CommercialLineItem, CommercialRecordType, CommercialRecordStatus } from '../data/types';
@@ -767,6 +767,17 @@ interface DetailModalProps {
   onDeleted: (id: string) => void;
 }
 
+const COMMERCIAL_FIELDS: FieldSpec[] = [
+  { label: 'Status',         key: 'status' },
+  { label: 'Reference',      key: 'reference' },
+  { label: 'Title',          key: 'title' },
+  { label: 'Client',         key: 'client' },
+  { label: 'Date Raised',    key: 'dateRaised' },
+  { label: 'Date Submitted', key: 'dateSubmitted' },
+  { label: 'Date Agreed',    key: 'dateAgreed' },
+  { label: 'Notes',          key: 'notes', isNarrative: true },
+];
+
 function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, canDelete, onClose, onSaved, onDeleted }: DetailModalProps) {
   const store = useAppStore();
   const [tab, setTab] = useState<ModalTab>('overview');
@@ -925,30 +936,43 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
             await supabase.from('vy_commercial_line_items').insert(lineItems.map((l, idx) => buildLineRow(l, idx, record!.id)));
           }
         }
-        const prevStatus = record!.status;
         const saved = dbToRecord(data as Record<string, unknown>, projectName);
-        if (prevStatus !== form.status) {
-          logActivity({
-            orgId,
-            userName: store.currentUser?.name ?? '',
-            module: 'commercial', recordId: record!.id,
-            recordRef: form.reference.trim() || form.title.trim(),
-            recordType: form.recordType, projectId: form.projectId || null, projectName: projectName ?? null,
-            actionType: 'status_changed',
-            description: `${store.currentUser?.name ?? 'Unknown'} changed status of ${form.reference ? form.reference + ' — ' : ''}${form.title} from ${prevStatus.replace(/_/g, ' ')} to ${form.status.replace(/_/g, ' ')}`,
-            prevValue: prevStatus, newValue: form.status,
-          });
-        } else {
-          logActivity({
-            orgId,
-            userName: store.currentUser?.name ?? '',
-            module: 'commercial', recordId: record!.id,
-            recordRef: form.reference.trim() || form.title.trim(),
-            recordType: form.recordType, projectId: form.projectId || null, projectName: projectName ?? null,
-            actionType: 'record_updated',
-            description: `${store.currentUser?.name ?? 'Unknown'} updated ${form.recordType.replace(/_/g, ' ')} ${form.reference ? form.reference + ' — ' : ''}${form.title}`,
-          });
-        }
+        const { changesText, fieldDiffs, prevValue, newValue, actionType } = buildDiff(
+          {
+            status:        record!.status,
+            reference:     record!.reference,
+            title:         record!.title,
+            client:        record!.client ?? '',
+            dateRaised:    record!.dateRaised ?? '',
+            dateSubmitted: record!.dateSubmitted ?? '',
+            dateAgreed:    record!.dateAgreed ?? '',
+            notes:         record!.notes ?? '',
+          },
+          {
+            status:        form.status,
+            reference:     form.reference.trim(),
+            title:         form.title.trim(),
+            client:        form.client.trim(),
+            dateRaised:    form.dateRaised,
+            dateSubmitted: form.dateSubmitted,
+            dateAgreed:    form.dateAgreed,
+            notes:         form.notes.trim(),
+          },
+          COMMERCIAL_FIELDS,
+        );
+        const recLabel = `${form.recordType.replace(/_/g, ' ')} ${form.reference ? form.reference + ' — ' : ''}${form.title}`;
+        const changePart = changesText ? ` Changes: ${changesText}.` : '';
+        logActivity({
+          orgId,
+          userName: store.currentUser?.name ?? '',
+          module: 'commercial', recordId: record!.id,
+          recordRef: form.reference.trim() || form.title.trim(),
+          recordType: form.recordType, projectId: form.projectId || null, projectName: projectName ?? null,
+          actionType,
+          description: `${store.currentUser?.name ?? 'Unknown'} updated ${recLabel}.${changePart}`,
+          prevValue, newValue,
+          metadata: fieldDiffs.length ? { diffs: fieldDiffs } : null,
+        });
         onSaved(saved);
       }
     } catch (e) {
