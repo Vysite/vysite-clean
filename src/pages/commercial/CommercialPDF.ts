@@ -261,12 +261,12 @@ ${body}
 
 // ─── Shared header ────────────────────────────────────────────────────────────
 
-function docHeader(docType: string, title: string, _projectName: string, _client?: string, _today?: string): string {
+function docHeader(docType: string, title: string, _projectName: string, _client?: string, _today?: string, logoUrl?: string): string {
+  const brandHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
+    : `<div class="exec-brand">VYSITE</div><div class="exec-brand-sub">Construction Operating System</div>`;
   return `<div class="exec-head">
-  <div>
-    <div class="exec-brand">VYSITE</div>
-    <div class="exec-brand-sub">Construction Operating System</div>
-  </div>
+  <div>${brandHtml}</div>
   <div class="exec-head-right">
     <div class="exec-doc-type">${esc(docType)}</div>
     <div class="exec-doc-title">${esc(title)}</div>
@@ -370,6 +370,7 @@ interface PositionData {
   variationExposure: number;
   agreedVariations: number;
   currentUserName: string;
+  logoUrl?: string;
 }
 
 function positionStatementBody(d: PositionData): string {
@@ -387,7 +388,7 @@ function positionStatementBody(d: PositionData): string {
   ];
 
   return `
-  ${docHeader('Commercial Document', 'Commercial Position Statement', d.project.name, d.project.client, today)}
+  ${docHeader('Commercial Document', 'Commercial Position Statement', d.project.name, d.project.client, today, d.logoUrl)}
   <div class="exec-project-band">
     <div>
       <div class="exec-project-name">${esc(d.project.name)}</div>
@@ -457,6 +458,7 @@ interface RegisterData {
   project: Project | null;
   records: CommercialRecord[];
   currentUserName: string;
+  logoUrl?: string;
 }
 
 function registerBody(d: RegisterData): string {
@@ -500,7 +502,7 @@ function registerBody(d: RegisterData): string {
   }).join('');
 
   return `
-  ${docHeader('Commercial Document', 'Commercial Register', projName, d.project?.client, today)}
+  ${docHeader('Commercial Document', 'Commercial Register', projName, d.project?.client, today, d.logoUrl)}
   <div class="exec-project-band">
     <div>
       <div class="exec-project-name">${esc(projName)}</div>
@@ -538,6 +540,7 @@ interface VAData {
   vaExposure: number;
   vaAgreed: number;
   currentUserName: string;
+  logoUrl?: string;
 }
 
 function variationAccountBody(d: VAData): string {
@@ -567,7 +570,7 @@ function variationAccountBody(d: VAData): string {
   }).join('');
 
   return `
-  ${docHeader('Commercial Document', 'Variation Account', projName, d.project?.client, today)}
+  ${docHeader('Commercial Document', 'Variation Account', projName, d.project?.client, today, d.logoUrl)}
   <div class="exec-project-band">
     <div>
       <div class="exec-project-name">${esc(projName)}</div>
@@ -1271,6 +1274,7 @@ interface TimelineData {
   project: Project | null;
   events: TimelineEvent[];
   currentUserName: string;
+  logoUrl?: string;
 }
 
 const KIND_DOT: Record<string, string> = {
@@ -1320,7 +1324,7 @@ function timelineBody(d: TimelineData): string {
   }).join('');
 
   return `
-  ${docHeader('Commercial Document', 'Commercial Timeline', projName, d.project?.client, today)}
+  ${docHeader('Commercial Document', 'Commercial Timeline', projName, d.project?.client, today, d.logoUrl)}
 
   <div class="exec-project-band">
     <div>
@@ -1362,8 +1366,11 @@ function fullReportBody(d: FullReportData): string {
   const remaining       = d.forecastContractSum > 0 ? d.forecastContractSum - appliedToDate : null;
 
   // ── Cover ──
+  const coverBrandHtml = d.logoUrl
+    ? `<img src="${d.logoUrl}" alt="Logo" style="height:48px;max-width:200px;object-fit:contain;display:block;margin-bottom:8px">`
+    : `<div class="fr-cover-brand">VYSITE</div>`;
   const cover = `<div class="fr-cover">
-    <div class="fr-cover-brand">VYSITE</div>
+    ${coverBrandHtml}
     <div class="fr-cover-label">Full Commercial Report</div>
     <div class="fr-cover-title">Full Commercial<br>Report</div>
     <div class="fr-cover-project">${esc(p.name)}</div>

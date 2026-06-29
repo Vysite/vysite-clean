@@ -139,6 +139,7 @@ const CSS = `
   .sig-box { min-width: 90px; height: 28px; border-bottom: 1px solid #cbd5e1; }
   /* doc-footer retained for any external callers — kept but not emitted by this renderer */
   .doc-footer { margin-top: 32px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; text-align: center; }
+  @page { margin: 0; size: A4; }
   @media print {
     .page { padding: 20px 24px; }
     .section { page-break-inside: avoid; }

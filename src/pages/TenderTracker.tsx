@@ -1746,6 +1746,7 @@ type ExportType = 'rfi' | 'assumptions' | 'exclusions' | 'scope-notes';
 interface TenderExportModalProps {
   tender: Tender;
   companyName: string;
+  logoUrl?: string;
   onClose: () => void;
 }
 
@@ -1756,7 +1757,7 @@ const EXPORT_OPTIONS: { id: ExportType; label: string; icon: string; description
   { id: 'scope-notes',  label: 'Qualifications Schedule',  icon: '≡', description: 'All qualifications and commercial observations' },
 ];
 
-function TenderExportModal({ tender, companyName, onClose }: TenderExportModalProps) {
+function TenderExportModal({ tender, companyName, logoUrl, onClose }: TenderExportModalProps) {
   const store = useAppStore();
   const [selected, setSelected] = useState<Set<ExportType>>(new Set());
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -1885,15 +1886,21 @@ function TenderExportModal({ tender, companyName, onClose }: TenderExportModalPr
       .vtp-status-draft{background:#f1f5f9;color:#475569;padding:2px 7px;border-radius:9999px;font-size:9px;font-weight:700}
     `;
 
+    const headerLogoHtml = logoUrl
+      ? `<img src="${logoUrl}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
+      : `<div class="vtp-logo">VYSITE</div><div class="vtp-logo-sub">${companyName || 'Construction Management Platform'}</div>`;
+    const footerLogoHtml = logoUrl
+      ? `<img src="${logoUrl}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:3px">`
+      : `<div class="vtp-footer-logo">VYSITE</div>`;
     const body = `
       <div class="vtp-header">
-        <div><div class="vtp-logo">VYSITE</div><div class="vtp-logo-sub">${companyName || 'Construction Management Platform'}</div></div>
+        <div>${headerLogoHtml}</div>
         <div><div class="vtp-doc-title">${docTitle}</div><div class="vtp-doc-sub">${docSub}</div></div>
       </div>
       <div class="vtp-meta">${metaHTML}</div>
       ${sectionsHTML}
       <div class="vtp-footer">
-        <div><div class="vtp-footer-logo">VYSITE</div><div style="margin-top:3px">Generated ${today} · ${docTitle} · ${tender.ref}</div></div>
+        <div>${footerLogoHtml}<div style="margin-top:3px">Generated ${today} · ${docTitle} · ${tender.ref}</div></div>
         <div><span class="vtp-confidential">Commercially Sensitive</span></div>
       </div>
     `;
@@ -2018,6 +2025,7 @@ interface EstimatingTabProps {
 }
 
 function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
+  const store = useAppStore();
   const [items, setItems] = useState<EstimateItem[]>(() => tender.estimateItems ?? []);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBuf, setEditBuf] = useState<EstimateItem | null>(null);
@@ -2135,9 +2143,16 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
       .ep-footer{margin-top:32px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8}
       .ep-footer-logo{font-size:13px;font-weight:900;color:#f97316;letter-spacing:1px}
     `;
+    const epLogoUrl = store.settings?.logo_data_url;
+    const epHeaderLogoHtml = epLogoUrl
+      ? `<img src="${epLogoUrl}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
+      : `<div class="ep-logo">VYSITE</div><div class="ep-logo-sub">Construction Management Platform</div>`;
+    const epFooterLogoHtml = epLogoUrl
+      ? `<img src="${epLogoUrl}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:3px">`
+      : `<div class="ep-footer-logo">VYSITE</div>`;
     const body = `
       <div class="ep-header">
-        <div><div class="ep-logo">VYSITE</div><div class="ep-logo-sub">Construction Management Platform</div></div>
+        <div>${epHeaderLogoHtml}</div>
         <div><div class="ep-doc-title">Internal Estimate</div><div class="ep-doc-sub">Commercial — Confidential</div></div>
       </div>
       <div class="ep-meta">
@@ -2158,7 +2173,7 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
         <div class="ep-summary-row"><span class="ep-summary-label">Overall Margin</span><span>${overallMarginPct.toFixed(1)}%</span></div>
       </div>
       <div class="ep-footer">
-        <div><div class="ep-footer-logo">VYSITE</div><div style="margin-top:3px">Generated ${exportDate} · Internal Estimate · ${tender.ref}</div></div>
+        <div>${epFooterLogoHtml}<div style="margin-top:3px">Generated ${exportDate} · Internal Estimate · ${tender.ref}</div></div>
         <div><span class="ep-confidential">Commercially Sensitive — Internal Only</span></div>
       </div>
     `;
@@ -2206,9 +2221,16 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
       .ep-footer{margin-top:32px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8}
       .ep-footer-logo{font-size:13px;font-weight:900;color:#f97316;letter-spacing:1px}
     `;
+    const epLogoUrl2 = store.settings?.logo_data_url;
+    const epHeaderLogoHtml2 = epLogoUrl2
+      ? `<img src="${epLogoUrl2}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
+      : `<div class="ep-logo">VYSITE</div><div class="ep-logo-sub">Construction Management Platform</div>`;
+    const epFooterLogoHtml2 = epLogoUrl2
+      ? `<img src="${epLogoUrl2}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:3px">`
+      : `<div class="ep-footer-logo">VYSITE</div>`;
     const body = `
       <div class="ep-header">
-        <div><div class="ep-logo">VYSITE</div><div class="ep-logo-sub">Construction Management Platform</div></div>
+        <div>${epHeaderLogoHtml2}</div>
         <div><div class="ep-doc-title">Tender Estimate</div><div class="ep-doc-sub">Tender Clarification — Pricing Schedule</div></div>
       </div>
       <div class="ep-meta">
@@ -2226,7 +2248,7 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
         <div class="ep-summary-row"><span class="ep-summary-label">Total Tender Value</span><span style="font-weight:700">${fmtC(totals.sale)}</span></div>
       </div>
       <div class="ep-footer">
-        <div><div class="ep-footer-logo">VYSITE</div><div style="margin-top:3px">Generated ${exportDate} · Tender Estimate · ${tender.ref}</div></div>
+        <div>${epFooterLogoHtml2}<div style="margin-top:3px">Generated ${exportDate} · Tender Estimate · ${tender.ref}</div></div>
         <div></div>
       </div>
     `;
@@ -3306,6 +3328,7 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
         <TenderExportModal
           tender={tender}
           companyName={store.settings.company_name}
+          logoUrl={store.settings?.logo_data_url}
           onClose={() => setShowExport(false)}
         />
       )}
@@ -3466,7 +3489,7 @@ function CreateTenderModal({ onClose, onSave }: { onClose: () => void; onSave: (
 
 // ─── Pipeline Report — Blob URL generator ─────────────────────────────────────
 
-function openPipelineReport(tenders: Tender[], companyName: string, generatedBy: string): void {
+function openPipelineReport(tenders: Tender[], companyName: string, generatedBy: string, logoUrl?: string): void {
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const active = tenders.filter(t => !['Won', 'Lost', 'No Bid'].includes(t.status));
   const totalValue = tenders.reduce((sum, t) => sum + t.estimatedValue, 0);
@@ -3504,12 +3527,15 @@ function openPipelineReport(tenders: Tender[], companyName: string, generatedBy:
     th{background:#f1f5f9;color:#475569;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:7px 9px;text-align:left;border-bottom:2px solid #e2e8f0}
     td{padding:7px 9px;color:#1e293b;border-bottom:1px solid #f1f5f9;vertical-align:top;font-size:11px}
   `;
+  const plHeaderLogoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
+    : `<div style="font-size:24px;font-weight:900;color:#f97316;letter-spacing:2px">VYSITE</div><div style="font-size:10px;color:#94a3b8;margin-top:3px;letter-spacing:1px;text-transform:uppercase">${companyName || 'Construction Management Platform'}</div>`;
+  const plFooterLogoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:2px">`
+    : `<div style="font-size:13px;font-weight:900;color:#f97316;letter-spacing:1px">VYSITE</div>`;
   const body = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #f97316;padding-bottom:18px;margin-bottom:22px">
-      <div>
-        <div style="font-size:24px;font-weight:900;color:#f97316;letter-spacing:2px">VYSITE</div>
-        <div style="font-size:10px;color:#94a3b8;margin-top:3px;letter-spacing:1px;text-transform:uppercase">${companyName || 'Construction Management Platform'}</div>
-      </div>
+      <div>${plHeaderLogoHtml}</div>
       <div style="text-align:right">
         <div style="font-size:18px;font-weight:800;color:#1e293b;margin-bottom:3px">Tender Pipeline Report</div>
         <div style="font-size:11px;color:#64748b">Commercial Summary · All Tenders</div>
@@ -3533,7 +3559,7 @@ function openPipelineReport(tenders: Tender[], companyName: string, generatedBy:
     </table>
     <div style="margin-top:28px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8">
       <div>
-        <div style="font-size:13px;font-weight:900;color:#f97316;letter-spacing:1px">VYSITE</div>
+        ${plFooterLogoHtml}
         <div style="margin-top:2px">Generated ${today} · Tender Pipeline Report · ${generatedBy}</div>
       </div>
       <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#cbd5e1;border:1px solid #e2e8f0;padding:2px 8px;border-radius:4px">Commercially Sensitive</span>
@@ -3676,7 +3702,7 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
         <div className="flex items-center gap-2">
           {canExportPipeline && (
             <button
-              onClick={() => openPipelineReport(tenderList, store.settings.company_name, store.currentUser?.name ?? 'VYSITE')}
+              onClick={() => openPipelineReport(tenderList, store.settings.company_name, store.currentUser?.name ?? 'VYSITE', store.settings?.logo_data_url)}
               className="flex items-center gap-2 px-4 py-2.5 bg-[#1a2236] border border-[#1e2d4a] text-slate-300 rounded-lg text-sm font-semibold hover:border-[#f97316] hover:text-[#f97316] transition-colors"
             >
               <FileText size={15} />Pipeline Report

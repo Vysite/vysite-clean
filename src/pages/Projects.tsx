@@ -292,6 +292,7 @@ function ProgrammesTab({
   onAddProgramme, onUpdateProgramme, onRemoveProgramme,
   onAddTask, onUpdateTask, onRemoveTask,
 }: ProgrammesTabProps) {
+  const store = useAppStore();
   const projectProgrammes = useMemo(
     () => programmes.filter(p => p.project_id === project.id),
     [programmes, project.id]
@@ -380,13 +381,15 @@ function ProgrammesTab({
     .summary-num{font-size:18px;font-weight:800;color:#f97316}
     .summary-lbl{font-size:9px;text-transform:uppercase;color:#888;letter-spacing:0.05em}
     .footer{margin-top:28px;border-top:1px solid #e5e7eb;padding-top:8px;font-size:9px;color:#aaa;display:flex;justify-content:space-between}
-    @media print{body{padding:20px 24px}@page{margin:16mm 14mm}}
+    @media print{body{padding:20px 24px}@page{margin:0;size:A4}}
   </style>
 </head>
 <body>
   <div class="header">
     <div>
-      <div class="logo">VYSITE</div>
+      ${store.settings?.logo_data_url
+        ? `<img src="${store.settings.logo_data_url}" alt="Logo" style="height:32px;max-width:140px;object-fit:contain;display:block;margin-bottom:2px">`
+        : `<div class="logo">VYSITE</div>`}
       <div class="logo-sub">Programme — List View &nbsp;·&nbsp; ${dateStr}</div>
     </div>
     <div>
@@ -520,13 +523,15 @@ function ProgrammesTab({
     .col-status{width:70px;shrink:0;padding:6px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:white;text-align:center;border-right:1px solid rgba(255,255,255,0.2)}
     .col-bar{flex:1;padding:5px 6px;position:relative;height:32px;overflow:hidden}
     .footer{margin-top:20px;border-top:1px solid #e5e7eb;padding-top:7px;font-size:8px;color:#aaa;display:flex;justify-content:space-between}
-    @media print{body{padding:14px 16px}@page{size:A4 landscape;margin:10mm 12mm}}
+    @media print{body{padding:14px 16px}@page{margin:0;size:A4 landscape}}
   </style>
 </head>
 <body>
   <div class="header">
     <div>
-      <div class="logo">VYSITE</div>
+      ${store.settings?.logo_data_url
+        ? `<img src="${store.settings.logo_data_url}" alt="Logo" style="height:28px;max-width:130px;object-fit:contain;display:block;margin-bottom:2px">`
+        : `<div class="logo">VYSITE</div>`}
       <div class="logo-sub">Programme — Gantt View &nbsp;·&nbsp; ${dateStr}</div>
     </div>
     <div>
@@ -1212,14 +1217,16 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
     .badge-slate  { background: #f1f5f9; color: #475569; }
     .badge-orange { background: #fff7ed; color: #c2410c; }
     .footer { margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 10px; display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; }
-    @media print { body { padding: 0; } .page { padding: 20px 24px; } }
+    @media print { body { padding: 0; } .page { padding: 20px 24px; } @page { margin: 0; size: A4; } }
   </style>
 </head>
 <body>
   <div class="page">
     <div class="doc-header">
       <div>
-        <div class="doc-logo">VYSITE</div>
+        ${store.settings?.logo_data_url
+          ? `<img src="${store.settings.logo_data_url}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
+          : `<div class="doc-logo">VYSITE</div>`}
         <div class="doc-type-label">Project Report</div>
       </div>
       <div class="doc-header-right">

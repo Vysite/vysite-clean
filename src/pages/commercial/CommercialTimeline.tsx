@@ -230,6 +230,7 @@ interface CommercialTimelineProps {
   records: CommercialRecord[];
   variationItems: DBVariationAccountItem[];
   currentUserName?: string;
+  logoUrl?: string;
 }
 
 export default function CommercialTimeline({
@@ -237,6 +238,7 @@ export default function CommercialTimeline({
   records,
   variationItems,
   currentUserName,
+  logoUrl,
 }: CommercialTimelineProps) {
   const events = useMemo(() => {
     if (!project) return [];
@@ -268,7 +270,7 @@ export default function CommercialTimeline({
           </span>
         )}
         <button
-          onClick={() => exportTimelinePDF({ project, events, currentUserName: currentUserName || '' })}
+          onClick={() => exportTimelinePDF({ project, events, currentUserName: currentUserName || '', logoUrl })}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-slate-600 rounded-lg transition-colors"
           title="Export Timeline PDF"
         >

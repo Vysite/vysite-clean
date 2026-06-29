@@ -588,6 +588,7 @@ interface SendPdfModalProps {
 }
 
 function SendPdfModal({ selectedActions, onClose }: SendPdfModalProps) {
+  const store = useAppStore();
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const [emailTo, setEmailTo] = useState('');
   const [subject, setSubject] = useState(`Actions Report — VYSITE — ${today}`);
@@ -616,17 +617,22 @@ function SendPdfModal({ selectedActions, onClose }: SendPdfModalProps) {
     }).join('');
     const styles = `
       .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #f97316;padding-bottom:14px;margin-bottom:22px}
-      .logo{font-size:22px;font-weight:900;color:#f97316;letter-spacing:2px}
+      .logo-img{height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px}
+      .logo-text{font-size:22px;font-weight:900;color:#f97316;letter-spacing:2px}
       .dateline{font-size:11px;color:#666;margin-top:3px}
       table{width:100%;border-collapse:collapse;font-size:11px}
       th{background:#f1f5f9;color:#334155;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0}
       td{padding:8px 10px;color:#1e293b;border-bottom:1px solid #f1f5f9;vertical-align:top}
       tr:nth-child(even) td{background:#f8fafc}
     `;
+    const logoUrl = store.settings?.logo_data_url;
+    const logoHtml = logoUrl
+      ? `<img class="logo-img" src="${logoUrl}" alt="Logo">`
+      : `<div class="logo-text">VYSITE</div>`;
     const body = `
       <div class="header">
         <div>
-          <div class="logo">VYSITE</div>
+          ${logoHtml}
           <div class="dateline">Actions Report · Generated ${today} · ${selectedActions.length} action${selectedActions.length !== 1 ? 's' : ''}</div>
         </div>
       </div>

@@ -58,7 +58,7 @@ function StatusBadge({ status }: { status: CommercialRecordStatus }) {
 
 export default function CommercialRegister({
   records, loading, canCreate, currentProject,
-  currentUserName, onNewRecord, onOpenRecord, onExportFull,
+  currentUserName, onNewRecord, onOpenRecord, onExportFull, settings,
 }: CommercialRegisterProps) {
   const [searchQuery, setSearchQuery]   = useState('');
   const [filterType, setFilterType]     = useState<CommercialRecordType | ''>('');
@@ -97,7 +97,7 @@ export default function CommercialRegister({
   }
 
   function handleExportPDF(list: CommercialRecord[]) {
-    exportRegisterPDF({ project: currentProject, records: list, currentUserName: currentUserName || '' });
+    exportRegisterPDF({ project: currentProject, records: list, currentUserName: currentUserName || '', logoUrl: settings?.logo_data_url });
   }
 
   const inputCls = 'bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-[#f97316] focus:border-[#f97316] transition-colors';

@@ -1192,6 +1192,7 @@ export default function VariationAccount({
                   vaExposure: metrics.exposure,
                   vaAgreed: metrics.agreed,
                   currentUserName: currentUserName || '',
+                  logoUrl: store.settings?.logo_data_url,
                 });
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-slate-600 rounded-lg transition-colors"

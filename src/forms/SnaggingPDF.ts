@@ -164,6 +164,7 @@ const CSS = `
   .legal-branding-left { font-size: 8px; color: #94a3b8; }
   .legal-branding-right { font-size: 8px; color: #94a3b8; text-align: right; }
 
+  @page { margin: 0; size: A4; }
   @media print {
     .page { padding: 20px 24px; }
     .snag-card { page-break-inside: avoid; }

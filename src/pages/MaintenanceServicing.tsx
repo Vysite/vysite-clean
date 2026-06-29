@@ -249,11 +249,14 @@ interface JobDetailProps {
   engineers: string[];
 }
 
-function buildJobPrintHTML(job: DBMaintenanceJob, today: string): string {
+function buildJobPrintHTML(job: DBMaintenanceJob, today: string, logoUrl?: string): string {
   const statusColor = isClosedJob(job.status) ? '#059669' : job.status === 'Reattend Required' || job.status === 'Cancelled' ? '#dc2626' : '#f97316';
   const materialsRows = job.materials.map(m =>
     `<tr><td>${m.item}</td><td style="text-align:center">${m.qty}</td><td>${m.unit}</td></tr>`
   ).join('');
+  const mjLogoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="Logo" style="height:32px;max-width:140px;object-fit:contain;display:block;margin-bottom:4px">`
+    : `<div class="mj-logo">VYSITE</div>`;
   const styles = `
     .mj-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid #f97316}
     .mj-logo{font-size:22px;font-weight:900;color:#f97316;letter-spacing:.05em;margin-bottom:4px}
@@ -275,7 +278,7 @@ function buildJobPrintHTML(job: DBMaintenanceJob, today: string): string {
   `;
   const body = `
     <div class="mj-header">
-      <div><div class="mj-logo">VYSITE</div><div class="mj-sub">Maintenance &amp; Servicing Job Sheet</div></div>
+      <div>${mjLogoHtml}<div class="mj-sub">Maintenance &amp; Servicing Job Sheet</div></div>
       <div style="text-align:right;font-size:11px;color:#64748b">
         <div style="font-weight:700;color:#f97316;margin-bottom:2px">${job.job_number}</div>
         <div>Issued: ${today}</div>
@@ -419,7 +422,7 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {canExport && (
-              <button onClick={() => openPrintTab(buildJobPrintHTML(job, today))}
+              <button onClick={() => openPrintTab(buildJobPrintHTML(job, today, store.settings?.logo_data_url))}
                 title="Export job sheet PDF"
                 className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-[#1e2d4a] transition-colors">
                 <Printer size={15} />
@@ -985,6 +988,10 @@ export default function MaintenanceServicing() {
         <td>${j.status}</td>
       </tr>`;
     }).join('');
+    const regLogoUrl = store.settings?.logo_data_url;
+    const regLogoHtml = regLogoUrl
+      ? `<img src="${regLogoUrl}" alt="Logo" style="height:32px;max-width:140px;object-fit:contain;display:block">`
+      : `<div class="logo">VYSITE</div>`;
     const styles = `
       table{width:100%;border-collapse:collapse}
       th{background:#f1f5f9;color:#334155;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0}
@@ -996,7 +1003,7 @@ export default function MaintenanceServicing() {
     `;
     const body = `
       <div class="hdr">
-        <div class="logo">VYSITE</div>
+        <div>${regLogoHtml}</div>
         <div style="text-align:right;font-size:11px;color:#64748b">
           <div>${title}</div>
           <div>${today}</div>

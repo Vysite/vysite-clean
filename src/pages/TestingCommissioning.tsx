@@ -237,11 +237,14 @@ interface RecordDetailProps {
   canExport?: boolean;
 }
 
-function buildTCRecordHTML(record: TCRecord, today: string): string {
+function buildTCRecordHTML(record: TCRecord, today: string, logoUrl?: string): string {
   const statusColor = record.status === 'Complete' ? '#059669' : record.status === 'Failed' ? '#dc2626' : record.status === 'In Progress' ? '#2563eb' : '#64748b';
   const dateFormatted = new Date(record.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const resultBg = record.status === 'Complete' ? '#f0fdf4' : record.status === 'Failed' ? '#fef2f2' : '#f8fafc';
   const resultBorder = record.status === 'Complete' ? '#86efac' : record.status === 'Failed' ? '#fca5a5' : '#e2e8f0';
+  const tcLogoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="Logo" style="height:32px;max-width:140px;object-fit:contain;display:block;margin-bottom:4px">`
+    : `<div class="tc-logo">VYSITE</div>`;
   const styles = `
     .tc-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #f97316}
     .tc-logo{font-size:22px;font-weight:900;color:#f97316;letter-spacing:.05em;margin-bottom:4px}
@@ -259,7 +262,7 @@ function buildTCRecordHTML(record: TCRecord, today: string): string {
   `;
   const body = `
     <div class="tc-header">
-      <div><div class="tc-logo">VYSITE</div><div class="tc-sub">Testing &amp; Commissioning Certificate</div></div>
+      <div>${tcLogoHtml}<div class="tc-sub">Testing &amp; Commissioning Certificate</div></div>
       <div style="text-align:right;font-size:11px;color:#64748b">
         <div class="tc-ref">${record.ref}</div>
         <div>Issued: ${today}</div>
@@ -304,7 +307,7 @@ function RecordDetail({ record, onClose, onUpdate, canEdit = true, canExport = t
   const Icon = cfg.icon;
 
   const handlePrintRecord = () => {
-    openPrintTab(buildTCRecordHTML(record, today));
+    openPrintTab(buildTCRecordHTML(record, today, store.settings?.logo_data_url));
     logActivity({ orgId, userName, module: 'testing', recordId: record.id, recordRef: record.ref, recordType: record.category, projectId: record.projectId, projectName: record.projectName, actionType: 'pdf_exported', description: `${userName} exported T&C certificate for ${record.ref}.` });
   };
 
@@ -713,6 +716,10 @@ export default function TestingCommissioning({ pendingOpen, onPendingOpenConsume
         <td style="color:${resultColor}">${r.result || r.notes || '—'}</td>
       </tr>`;
     }).join('');
+    const tcRegLogoUrl = store.settings?.logo_data_url;
+    const tcRegLogoHtml = tcRegLogoUrl
+      ? `<img src="${tcRegLogoUrl}" alt="Logo" style="height:32px;max-width:140px;object-fit:contain;display:block">`
+      : `<div class="tc-logo">VYSITE</div>`;
     const styles = `
       table{width:100%;border-collapse:collapse}
       th{background:#f1f5f9;color:#334155;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0}
@@ -724,7 +731,7 @@ export default function TestingCommissioning({ pendingOpen, onPendingOpenConsume
     `;
     const body = `
       <div class="tc-header">
-        <div class="tc-logo">VYSITE</div>
+        <div>${tcRegLogoHtml}</div>
         <div style="text-align:right;font-size:11px;color:#64748b">
           <div>Testing &amp; Commissioning Report</div>
           <div>${today}</div>

@@ -153,6 +153,7 @@ export default function CommercialOverview({
       variationExposure,
       agreedVariations,
       currentUserName: currentUserName || '',
+      logoUrl: orgSettings?.logo_data_url,
     });
   }
 
