@@ -1265,6 +1265,7 @@ interface TimelineEvent {
   reference: string;
   title: string;
   statusLabel?: string;
+  fromStatusLabel?: string;
   value?: number;
   isPositive?: boolean;
   createdBy?: string | null;
@@ -1278,18 +1279,20 @@ interface TimelineData {
 }
 
 const KIND_DOT: Record<string, string> = {
-  'va-raised':   '#d97706',
-  'va-agreed':   '#16a34a',
-  'cr-added':    '#ea6c00',
-  'cr-submitted':'#2563eb',
-  'cr-agreed':   '#16a34a',
+  'va-raised':          '#d97706',
+  'va-agreed':          '#16a34a',
+  'cr-added':           '#ea6c00',
+  'cr-submitted':       '#2563eb',
+  'cr-agreed':          '#16a34a',
+  'cr-status-changed':  '#7c3aed',
 };
 const KIND_LABEL: Record<string, string> = {
-  'va-raised':   'Variation Raised',
-  'va-agreed':   'Variation Agreed',
-  'cr-added':    'Record Added',
-  'cr-submitted':'Submitted',
-  'cr-agreed':   'Agreed',
+  'va-raised':          'Variation Raised',
+  'va-agreed':          'Variation Agreed',
+  'cr-added':           'Record Added',
+  'cr-submitted':       'Submitted',
+  'cr-agreed':          'Agreed',
+  'cr-status-changed':  'Status Changed',
 };
 
 function timelineBody(d: TimelineData): string {
@@ -1299,7 +1302,7 @@ function timelineBody(d: TimelineData): string {
   // Kind summary counts
   const kindCounts: Record<string, number> = {};
   for (const e of d.events) kindCounts[e.kind] = (kindCounts[e.kind] || 0) + 1;
-  const kindOrder = ['va-raised', 'va-agreed', 'cr-added', 'cr-submitted', 'cr-agreed'];
+  const kindOrder = ['va-raised', 'va-agreed', 'cr-added', 'cr-submitted', 'cr-status-changed', 'cr-agreed'];
   const summaryItems = kindOrder
     .filter(k => kindCounts[k])
     .map(k => `<div class="tl-summary-item">
@@ -1313,12 +1316,15 @@ function timelineBody(d: TimelineData): string {
     const val  = e.value != null
       ? `<span class="tl-val" style="color:${e.isPositive ? '#16a34a' : '#991b1b'};">${e.isPositive ? '+' : ''}${fv(e.isPositive ? e.value : -e.value)}</span>`
       : '';
+    const statusText = e.kind === 'cr-status-changed' && e.fromStatusLabel
+      ? `${esc(e.fromStatusLabel)} → ${esc(e.statusLabel ?? '')}`
+      : (e.statusLabel ? esc(e.statusLabel) : '');
     return `<div class="tl-entry">
       <div class="tl-left"><div class="tl-date">${esc(e.displayDate)}</div></div>
       <div class="tl-right" style="--dot-color:${dot}">
         <div class="tl-kind">${klbl} &bull; ${esc(e.source)}</div>
         <div class="tl-title"><span class="tl-ref">${esc(e.reference || '')}</span>${esc(e.title || '')}${val}</div>
-        ${e.statusLabel || e.createdBy ? `<div class="tl-sub">${e.statusLabel ? esc(e.statusLabel) : ''}${e.createdBy ? ' &bull; ' + esc(e.createdBy) : ''}</div>` : ''}
+        ${statusText || e.createdBy ? `<div class="tl-sub">${statusText}${e.createdBy ? ' &bull; ' + esc(e.createdBy) : ''}</div>` : ''}
       </div>
     </div>`;
   }).join('');

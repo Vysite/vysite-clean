@@ -12,7 +12,7 @@ import { useAppStore, usePermissions } from '../lib/StoreContext';
 import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 import FileUploadComponent from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
-import type { CommercialRecord, CommercialLineItem, CommercialRecordType, CommercialRecordStatus } from '../data/types';
+import type { CommercialRecord, CommercialLineItem, CommercialRecordType, CommercialRecordStatus, CommercialEvent } from '../data/types';
 import type { DBAttachment, DBCommercialRecordComment } from '../lib/store';
 
 import CommercialOverview from './commercial/CommercialOverview';
@@ -72,6 +72,20 @@ function dbToRecord(r: Record<string, unknown>, projectName?: string): Commercia
     createdAt:       r.created_at as string,
     updatedAt:       r.updated_at as string,
     extraData:       r.extra_data as Record<string, unknown> | null ?? null,
+  };
+}
+
+function dbToEvent(r: Record<string, unknown>): CommercialEvent {
+  return {
+    id:          r.id as string,
+    orgId:       r.org_id as string,
+    recordId:    r.record_id as string,
+    projectId:   r.project_id as string | null,
+    eventType:   r.event_type as CommercialEvent['eventType'],
+    fromStatus:  r.from_status as string | null,
+    toStatus:    r.to_status as string,
+    userName:    r.user_name as string | null,
+    occurredAt:  r.occurred_at as string,
   };
 }
 
@@ -931,6 +945,20 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
           actionType: 'record_created',
           description: `${store.currentUser?.name ?? 'Unknown'} created ${form.recordType.replace(/_/g, ' ')} ${form.reference ? form.reference + ' — ' : ''}${form.title}`,
         });
+        // Write lifecycle event
+        await supabase.from('vy_commercial_events').insert({
+          org_id: orgId, record_id: id, project_id: form.projectId || null,
+          event_type: 'record_created', from_status: null, to_status: form.status,
+          user_name: store.currentUser?.name ?? null, occurred_at: now,
+        });
+        if (form.dateSubmitted && form.status !== 'draft') {
+          await supabase.from('vy_commercial_events').insert({
+            org_id: orgId, record_id: id, project_id: form.projectId || null,
+            event_type: 'submitted', from_status: null, to_status: form.status,
+            user_name: store.currentUser?.name ?? null,
+            occurred_at: new Date(form.dateSubmitted).toISOString(),
+          });
+        }
         onSaved(saved);
       } else {
         const { data, error: err } = await supabase.from('vy_commercial_records').update(row).eq('id', record!.id).select('*').single();
@@ -978,6 +1006,22 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
           prevValue, newValue,
           metadata: fieldDiffs.length ? { diffs: fieldDiffs } : null,
         });
+        // Write lifecycle events for meaningful status/submission changes
+        if (record!.status !== form.status) {
+          await supabase.from('vy_commercial_events').insert({
+            org_id: orgId, record_id: record!.id, project_id: form.projectId || null,
+            event_type: 'status_changed', from_status: record!.status, to_status: form.status,
+            user_name: store.currentUser?.name ?? null, occurred_at: now,
+          });
+        }
+        if (form.dateSubmitted && !record!.dateSubmitted) {
+          await supabase.from('vy_commercial_events').insert({
+            org_id: orgId, record_id: record!.id, project_id: form.projectId || null,
+            event_type: 'submitted', from_status: record!.status, to_status: form.status,
+            user_name: store.currentUser?.name ?? null,
+            occurred_at: new Date(form.dateSubmitted).toISOString(),
+          });
+        }
         onSaved(saved);
       }
     } catch (e) {
@@ -1470,6 +1514,7 @@ export default function Commercial() {
   const [selectedRecord, setSelectedRecord] = useState<CommercialRecord | null>(null);
   const [isNewRecord, setIsNewRecord]       = useState(false);
   const [modalOpen, setModalOpen]           = useState(false);
+  const [commercialEvents, setCommercialEvents] = useState<CommercialEvent[]>([]);
 
   const projects = useMemo(() => store.projects, [store.projects]);
 
@@ -1499,7 +1544,14 @@ export default function Commercial() {
     setLoadingRecords(false);
   }, [orgId, projects]);
 
+  const loadEvents = useCallback(async () => {
+    if (!orgId) return;
+    const { data } = await supabase.from('vy_commercial_events').select('*').eq('org_id', orgId).order('occurred_at', { ascending: true });
+    if (data) setCommercialEvents((data as Record<string, unknown>[]).map(dbToEvent));
+  }, [orgId]);
+
   useEffect(() => { loadRecords(); }, [loadRecords]);
+  useEffect(() => { loadEvents(); }, [loadEvents]);
 
   function openNew() { setSelectedRecord(null); setIsNewRecord(true); setModalOpen(true); }
   function openRecord(r: CommercialRecord) { setSelectedRecord(r); setIsNewRecord(false); setModalOpen(true); }
@@ -1567,6 +1619,7 @@ export default function Commercial() {
       if (idx >= 0) { const next = [...prev]; next[idx] = r; return next; }
       return [r, ...prev];
     });
+    loadEvents();
     setModalOpen(false);
   }
 
@@ -1615,18 +1668,23 @@ export default function Commercial() {
                 const completedNum = bannerProject.committed ?? null;
                 const projectApps = (store.commercialApplications ?? []).filter(a => a.project_id === bannerProject.id);
                 const buildEventsForPDF = () => {
-                  const evts: {id:string;sortDate:string;displayDate:string;kind:string;source:string;reference:string;title:string;statusLabel?:string;value?:number;isPositive?:boolean;createdBy?:string|null}[] = [];
-                  const safeDate = (d?: string|null) => { if (!d) return ''; try { return new Date(d).toISOString().slice(0,10); } catch { return ''; } };
-                  const fmtEvtDate = (d?: string|null) => { if (!d) return '—'; try { return new Date(d).toLocaleDateString('en-GB'); } catch { return '—'; } };
+                  const evts: {id:string;sortDate:string;displayDate:string;kind:string;source:string;reference:string;title:string;statusLabel?:string;fromStatusLabel?:string;value?:number;isPositive?:boolean;createdBy?:string|null}[] = [];
+                  const fmtD = (d?: string|null) => { if (!d) return '—'; try { return new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }); } catch { return '—'; } };
+                  const fmtDT = (d?: string|null) => { if (!d) return '—'; try { return new Date(d).toLocaleString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }); } catch { return '—'; } };
                   for (const item of projectVAItems) {
-                    const rd = safeDate(item.date_raised || item.created_at);
-                    if (rd) evts.push({ id:`va-r-${item.id}`, sortDate:rd, displayDate:fmtEvtDate(item.date_raised||item.created_at), kind:'va-raised', source:'Variation Account', reference:item.reference, title:item.title, statusLabel:item.status, value:item.value, isPositive:item.is_positive, createdBy:item.created_by });
-                    if (item.date_agreed && (item.status==='agreed'||item.status==='paid')) { const ad = safeDate(item.date_agreed); if (ad) evts.push({ id:`va-a-${item.id}`, sortDate:ad, displayDate:fmtEvtDate(item.date_agreed), kind:'va-agreed', source:'Variation Account', reference:item.reference, title:item.title, statusLabel:item.status, value:item.value, isPositive:item.is_positive, createdBy:item.created_by }); }
+                    const rd = item.date_raised || item.created_at || '';
+                    if (rd) evts.push({ id:`va-r-${item.id}`, sortDate:rd, displayDate:fmtD(rd), kind:'va-raised', source:'Variation Account', reference:item.reference, title:item.title, statusLabel:item.status, value:item.value, isPositive:item.is_positive, createdBy:item.created_by });
+                    if (item.date_agreed && (item.status==='agreed'||item.status==='paid')) evts.push({ id:`va-a-${item.id}`, sortDate:item.date_agreed, displayDate:fmtD(item.date_agreed), kind:'va-agreed', source:'Variation Account', reference:item.reference, title:item.title, statusLabel:item.status, value:item.value, isPositive:item.is_positive, createdBy:item.created_by });
                   }
-                  for (const r of records.filter(r => r.projectId === bannerProject.id)) {
-                    const cd = safeDate(r.createdAt); if (cd) evts.push({ id:`cr-a-${r.id}`, sortDate:cd, displayDate:fmtEvtDate(r.createdAt), kind:'cr-added', source:'Commercial Register', reference:r.reference, title:r.title, statusLabel:r.status, createdBy:r.createdBy });
-                    if (r.dateSubmitted && r.status!=='draft') { const sd=safeDate(r.dateSubmitted); if (sd) evts.push({ id:`cr-s-${r.id}`, sortDate:sd, displayDate:fmtEvtDate(r.dateSubmitted), kind:'cr-submitted', source:'Commercial Register', reference:r.reference, title:r.title, statusLabel:r.status, createdBy:r.createdBy }); }
-                    if (r.dateAgreed && ['agreed','added_to_valuation','paid','complete'].includes(r.status)) { const ad=safeDate(r.dateAgreed); if (ad) evts.push({ id:`cr-ag-${r.id}`, sortDate:ad, displayDate:fmtEvtDate(r.dateAgreed), kind:'cr-agreed', source:'Commercial Register', reference:r.reference, title:r.title, statusLabel:r.status, createdBy:r.createdBy }); }
+                  const recMap = Object.fromEntries(records.filter(r => r.projectId === bannerProject.id).map(r => [r.id, r]));
+                  for (const evt of commercialEvents.filter(e => e.projectId === bannerProject.id)) {
+                    const rec = recMap[evt.recordId]; if (!rec) continue;
+                    const ti = typeInfo(rec.recordType);
+                    const toSi = statusInfo(evt.toStatus as Parameters<typeof statusInfo>[0]);
+                    const fromSi = evt.fromStatus ? statusInfo(evt.fromStatus as Parameters<typeof statusInfo>[0]) : null;
+                    if (evt.eventType === 'record_created') evts.push({ id:`cr-a-${evt.id}`, sortDate:evt.occurredAt, displayDate:fmtD(evt.occurredAt), kind:'cr-added', source:'Commercial Register', reference:rec.reference||ti.prefix, title:`${rec.title} — ${ti.label}`, statusLabel:toSi.label, createdBy:evt.userName });
+                    else if (evt.eventType === 'submitted') evts.push({ id:`cr-s-${evt.id}`, sortDate:evt.occurredAt, displayDate:fmtD(evt.occurredAt), kind:'cr-submitted', source:'Commercial Register', reference:rec.reference, title:rec.title, createdBy:evt.userName });
+                    else if (evt.eventType === 'status_changed') evts.push({ id:`cr-sc-${evt.id}`, sortDate:evt.occurredAt, displayDate:fmtDT(evt.occurredAt), kind:'cr-status-changed', source:'Commercial Register', reference:rec.reference, title:rec.title, statusLabel:toSi.label, fromStatusLabel:fromSi?.label, createdBy:evt.userName });
                   }
                   return evts.sort((a,b) => b.sortDate.localeCompare(a.sortDate));
                 };
@@ -1760,6 +1818,7 @@ export default function Commercial() {
           project={bannerProject}
           records={records}
           variationItems={projectVAItems}
+          commercialEvents={commercialEvents}
           currentUserName={store.currentUser?.name ?? ''}
           logoUrl={store.settings?.logo_data_url}
         />

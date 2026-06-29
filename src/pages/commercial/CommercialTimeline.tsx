@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { Clock, GitBranch, FileText, TrendingUp, Printer } from 'lucide-react';
-import type { CommercialRecord } from '../../data/types';
+import type { CommercialRecord, CommercialEvent } from '../../data/types';
 import type { DBVariationAccountItem } from '../../lib/store';
 import type { Project } from './types';
-import { fmtCurrency, fmtDate, typeInfo, statusInfo } from './types';
+import { fmtCurrency, typeInfo, statusInfo } from './types';
 import { exportTimelinePDF } from './CommercialPDF';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -14,7 +14,7 @@ type EventKind =
   | 'va-agreed'
   | 'cr-added'
   | 'cr-submitted'
-  | 'cr-agreed';
+  | 'cr-status-changed';
 
 interface TimelineEvent {
   id: string;
@@ -26,6 +26,7 @@ interface TimelineEvent {
   title: string;
   statusLabel?: string;
   statusColor?: string;
+  fromStatusLabel?: string;
   value?: number;
   isPositive?: boolean;
   createdBy?: string | null;
@@ -34,41 +35,52 @@ interface TimelineEvent {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const KIND_META: Record<EventKind, { label: string; dotColor: string }> = {
-  'va-raised':    { label: 'Variation Raised',   dotColor: 'bg-amber-400'    },
-  'va-agreed':    { label: 'Variation Agreed',   dotColor: 'bg-emerald-400'  },
-  'cr-added':     { label: 'Record Added',       dotColor: 'bg-[#f97316]'    },
-  'cr-submitted': { label: 'Submitted',          dotColor: 'bg-sky-400'      },
-  'cr-agreed':    { label: 'Agreed',             dotColor: 'bg-emerald-400'  },
+  'va-raised':           { label: 'Variation Raised',  dotColor: 'bg-amber-400'   },
+  'va-agreed':           { label: 'Variation Agreed',  dotColor: 'bg-emerald-400' },
+  'cr-added':            { label: 'Record Added',      dotColor: 'bg-[#f97316]'   },
+  'cr-submitted':        { label: 'Submitted',         dotColor: 'bg-sky-400'     },
+  'cr-status-changed':   { label: 'Status Changed',    dotColor: 'bg-violet-400'  },
 };
 
 const KIND_LABEL_COLOR: Record<EventKind, string> = {
-  'va-raised':    'text-amber-400',
-  'va-agreed':    'text-emerald-400',
-  'cr-added':     'text-[#f97316]',
-  'cr-submitted': 'text-sky-400',
-  'cr-agreed':    'text-emerald-400',
+  'va-raised':           'text-amber-400',
+  'va-agreed':           'text-emerald-400',
+  'cr-added':            'text-[#f97316]',
+  'cr-submitted':        'text-sky-400',
+  'cr-status-changed':   'text-violet-400',
 };
 
-function safeDate(d: string | null | undefined): string {
-  return d ?? '';
+function fmtDisplayDate(d: string | null | undefined): string {
+  if (!d) return '—';
+  try {
+    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch { return '—'; }
+}
+
+function fmtDisplayDateTime(d: string | null | undefined): string {
+  if (!d) return '—';
+  try {
+    return new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch { return '—'; }
 }
 
 function buildEvents(
   projectId: string,
   vaItems: DBVariationAccountItem[],
   allRecords: CommercialRecord[],
+  crEvents: CommercialEvent[],
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
   // ── Variation Account events ──────────────────────────────────────────────
   for (const item of vaItems.filter(v => v.project_id === projectId)) {
-    const raisedDate = safeDate(item.date_raised || item.created_at);
+    const raisedDate = item.date_raised || item.created_at || '';
     if (raisedDate) {
       const si = statusInfo(item.status as Parameters<typeof statusInfo>[0]);
       events.push({
         id: `va-raised-${item.id}`,
         sortDate: raisedDate,
-        displayDate: fmtDate(raisedDate),
+        displayDate: fmtDisplayDate(raisedDate),
         kind: 'va-raised',
         source: 'Variation Account',
         reference: item.reference,
@@ -84,8 +96,8 @@ function buildEvents(
     if (item.date_agreed && (item.status === 'agreed' || item.status === 'paid')) {
       events.push({
         id: `va-agreed-${item.id}`,
-        sortDate: safeDate(item.date_agreed),
-        displayDate: fmtDate(item.date_agreed),
+        sortDate: item.date_agreed,
+        displayDate: fmtDisplayDate(item.date_agreed),
         kind: 'va-agreed',
         source: 'Variation Account',
         reference: item.reference,
@@ -97,55 +109,58 @@ function buildEvents(
     }
   }
 
-  // ── Commercial Register events ────────────────────────────────────────────
-  const projectRecords = allRecords.filter(r => r.projectId === projectId);
-  for (const rec of projectRecords) {
+  // ── Commercial Register events (from event log) ───────────────────────────
+  const recordMap = Object.fromEntries(allRecords.map(r => [r.id, r]));
+
+  for (const evt of crEvents.filter(e => e.projectId === projectId)) {
+    const rec = recordMap[evt.recordId];
+    if (!rec) continue;
     const ti = typeInfo(rec.recordType);
-    const si = statusInfo(rec.status);
-    const addedDate = safeDate(rec.createdAt);
-    if (addedDate) {
+    const toSi = statusInfo(evt.toStatus as Parameters<typeof statusInfo>[0]);
+
+    if (evt.eventType === 'record_created') {
       events.push({
-        id: `cr-added-${rec.id}`,
-        sortDate: addedDate,
-        displayDate: fmtDate(addedDate),
+        id: `cr-added-${evt.id}`,
+        sortDate: evt.occurredAt,
+        displayDate: fmtDisplayDate(evt.occurredAt),
         kind: 'cr-added',
         source: 'Commercial Register',
         reference: rec.reference || ti.prefix,
         title: `${rec.title} — ${ti.label}`,
-        statusLabel: si.label,
-        statusColor: si.color,
-        createdBy: rec.createdBy,
+        statusLabel: toSi.label,
+        statusColor: toSi.color,
+        createdBy: evt.userName,
       });
-    }
-
-    if (rec.dateSubmitted) {
+    } else if (evt.eventType === 'submitted') {
       events.push({
-        id: `cr-submitted-${rec.id}`,
-        sortDate: safeDate(rec.dateSubmitted),
-        displayDate: fmtDate(rec.dateSubmitted),
+        id: `cr-submitted-${evt.id}`,
+        sortDate: evt.occurredAt,
+        displayDate: fmtDisplayDate(evt.occurredAt),
         kind: 'cr-submitted',
         source: 'Commercial Register',
         reference: rec.reference,
         title: rec.title,
-        createdBy: rec.createdBy,
+        createdBy: evt.userName,
       });
-    }
-
-    if (rec.dateAgreed && (rec.status === 'agreed' || rec.status === 'added_to_valuation' || rec.status === 'paid' || rec.status === 'complete')) {
+    } else if (evt.eventType === 'status_changed') {
+      const fromSi = evt.fromStatus ? statusInfo(evt.fromStatus as Parameters<typeof statusInfo>[0]) : null;
       events.push({
-        id: `cr-agreed-${rec.id}`,
-        sortDate: safeDate(rec.dateAgreed),
-        displayDate: fmtDate(rec.dateAgreed),
-        kind: 'cr-agreed',
+        id: `cr-status-${evt.id}`,
+        sortDate: evt.occurredAt,
+        displayDate: fmtDisplayDateTime(evt.occurredAt),
+        kind: 'cr-status-changed',
         source: 'Commercial Register',
         reference: rec.reference,
         title: rec.title,
-        createdBy: rec.createdBy,
+        statusLabel: toSi.label,
+        statusColor: toSi.color,
+        fromStatusLabel: fromSi?.label,
+        createdBy: evt.userName,
       });
     }
   }
 
-  // Sort newest first; events with empty sortDate go last
+  // Sort newest first
   return events.sort((a, b) => {
     if (!a.sortDate && !b.sortDate) return 0;
     if (!a.sortDate) return 1;
@@ -179,7 +194,7 @@ function TimelineRow({ event, isLast }: { event: TimelineEvent; isLast: boolean 
   return (
     <div className="flex gap-0">
       {/* Left: date column */}
-      <div className="w-28 shrink-0 pt-0.5 pr-4 text-right">
+      <div className="w-36 shrink-0 pt-0.5 pr-4 text-right">
         <span className="text-[11px] text-slate-500 tabular-nums leading-4">{event.displayDate || '—'}</span>
       </div>
 
@@ -202,11 +217,17 @@ function TimelineRow({ event, isLast }: { event: TimelineEvent; isLast: boolean 
         <p className="text-xs text-slate-300 leading-4 mb-1">{event.title}</p>
 
         <div className="flex flex-wrap items-center gap-2">
-          {event.statusLabel && (
+          {event.kind === 'cr-status-changed' && event.fromStatusLabel ? (
+            <span className="text-[10px] text-slate-500">
+              {event.fromStatusLabel}
+              <span className="text-slate-600 mx-1">→</span>
+              <span className={event.statusColor ?? 'text-slate-300'}>{event.statusLabel}</span>
+            </span>
+          ) : event.statusLabel ? (
             <span className={`text-[10px] font-medium ${event.statusColor ?? 'text-slate-400'}`}>
               {event.statusLabel}
             </span>
-          )}
+          ) : null}
           {event.value !== undefined && (
             <span className={`text-[10px] tabular-nums font-semibold ${
               event.isPositive !== false ? 'text-emerald-400' : 'text-red-400'
@@ -229,6 +250,7 @@ interface CommercialTimelineProps {
   project: Project | null;
   records: CommercialRecord[];
   variationItems: DBVariationAccountItem[];
+  commercialEvents: CommercialEvent[];
   currentUserName?: string;
   logoUrl?: string;
 }
@@ -237,13 +259,14 @@ export default function CommercialTimeline({
   project,
   records,
   variationItems,
+  commercialEvents,
   currentUserName,
   logoUrl,
 }: CommercialTimelineProps) {
   const events = useMemo(() => {
     if (!project) return [];
-    return buildEvents(project.id, variationItems ?? [], records ?? []);
-  }, [project, variationItems, records]);
+    return buildEvents(project.id, variationItems ?? [], records ?? [], commercialEvents ?? []);
+  }, [project, variationItems, records, commercialEvents]);
 
   if (!project) {
     return (
@@ -282,10 +305,11 @@ export default function CommercialTimeline({
       {events.length > 0 && (
         <div className="flex flex-wrap gap-3 mb-5 pb-4 border-b border-[#1e2d4a]">
           {[
-            { dot: 'bg-[#f97316]',    label: 'Register Record' },
-            { dot: 'bg-sky-400',      label: 'Submitted'       },
-            { dot: 'bg-amber-400',    label: 'VA Raised'       },
-            { dot: 'bg-emerald-400',  label: 'Agreed'          },
+            { dot: 'bg-[#f97316]',   label: 'Record Added'    },
+            { dot: 'bg-sky-400',     label: 'Submitted'       },
+            { dot: 'bg-violet-400',  label: 'Status Changed'  },
+            { dot: 'bg-amber-400',   label: 'VA Raised'       },
+            { dot: 'bg-emerald-400', label: 'Agreed'          },
           ].map(({ dot, label }) => (
             <span key={label} className="flex items-center gap-1.5 text-[10px] text-slate-500">
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />

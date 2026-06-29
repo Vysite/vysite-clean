@@ -267,6 +267,18 @@ export interface CommercialRecord {
   extraData?: Record<string, unknown> | null;
 }
 
+export interface CommercialEvent {
+  id: string;
+  orgId: string;
+  recordId: string;
+  projectId: string | null;
+  eventType: 'record_created' | 'submitted' | 'status_changed';
+  fromStatus: string | null;
+  toStatus: string;
+  userName: string | null;
+  occurredAt: string;
+}
+
 export interface CommercialLineItem {
   id: string;
   orgId: string;
