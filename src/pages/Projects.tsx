@@ -2252,7 +2252,16 @@ export default function Projects({ onNavigate, pendingProjectId, onPendingProjec
             onClose={() => setShowEdit(false)}
             onSave={p => {
               store.updateProject(p);
-              logActivity({ orgId, userName, module: 'projects', recordId: p.id, recordRef: p.name, actionType: 'record_updated', description: `${userName} edited project ${p.name}.` });
+              const prev = liveSelected;
+              const changes: string[] = [];
+              if (prev.name !== p.name)             changes.push(`name: "${prev.name}" → "${p.name}"`);
+              if (prev.status !== p.status)         changes.push(`status: ${prev.status} → ${p.status}`);
+              if (prev.value !== p.value)           changes.push(`value: ${prev.value || '—'} → ${p.value || '—'}`);
+              if (prev.client !== p.client)         changes.push(`client: "${prev.client}" → "${p.client}"`);
+              if (prev.startDate !== p.startDate)   changes.push(`start: ${prev.startDate || '—'} → ${p.startDate || '—'}`);
+              if (prev.completionDate !== p.completionDate) changes.push(`completion: ${prev.completionDate || '—'} → ${p.completionDate || '—'}`);
+              const changeDetail = changes.length ? ` Changes: ${changes.join(', ')}.` : '';
+              logActivity({ orgId, userName, module: 'projects', recordId: p.id, recordRef: p.name, actionType: changes.some(c => c.startsWith('status')) ? 'status_changed' : 'record_updated', description: `${userName} edited project ${p.name}.${changeDetail}`, prevValue: changes.some(c => c.startsWith('status')) ? prev.status : undefined, newValue: changes.some(c => c.startsWith('status')) ? p.status : undefined });
               setShowEdit(false);
             }}
           />

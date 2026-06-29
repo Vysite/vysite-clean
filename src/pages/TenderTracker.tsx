@@ -24,6 +24,7 @@ import type { UploadedFile } from '../components/FileUpload';
 import { Paperclip, Eye, Download, Sparkles } from 'lucide-react';
 import AITenderAssistant from '../components/AITenderAssistant';
 import AIContractReview from '../components/AIContractReview';
+import { logActivity } from '../lib/activityLog';
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 
@@ -3292,7 +3293,12 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
           tender={tender}
           onClose={() => setShowEditTender(false)}
           onSave={updated => { onUpdate(updated); setShowEditTender(false); }}
-          onDelete={async (id) => { await store.removeTender(id); setShowEditTender(false); onBack(); }}
+          onDelete={async (id) => {
+            await logActivity({ orgId: store.currentOrgId ?? '', userName: store.currentUser?.name ?? '', module: 'tenders', recordId: id, recordRef: tender.ref ?? tender.name, recordType: 'Tender', actionType: 'record_deleted', description: `${store.currentUser?.name ?? 'Unknown'} deleted tender ${tender.ref ?? tender.name} — ${tender.name}.` });
+            await store.removeTender(id);
+            setShowEditTender(false);
+            onBack();
+          }}
           canDelete={isAdmin}
         />
       )}
@@ -3560,6 +3566,8 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
   const canDeleteTender = isAdmin;
   const canViewPricingList = perms['commercial.view_pricing'] || perms['commercial.view_values'];
   const canExportPipeline = perms['commercial.export_reports'] || isAdmin;
+  const orgId = store.currentOrgId ?? '';
+  const userName = store.currentUser?.name ?? '';
 
   useEffect(() => {
     if (pendingOpen?.linkedType === 'tender' && pendingOpen.linkedId) {
@@ -3569,8 +3577,19 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
   }, [pendingOpen, store.tenders, onPendingOpenConsumed]);
 
   const updateTender = (updated: Tender) => {
+    const prev = store.tenders.find(t => t.id === updated.id);
     store.updateTender(updated);
     setSelectedTender(updated);
+    const changes: string[] = [];
+    if (prev) {
+      if (prev.status !== updated.status)     changes.push(`status: ${prev.status} → ${updated.status}`);
+      if (prev.priority !== updated.priority) changes.push(`priority: ${prev.priority} → ${updated.priority}`);
+      if (prev.name !== updated.name)         changes.push(`name: "${prev.name}" → "${updated.name}"`);
+      if (prev.estimatedValue !== updated.estimatedValue) changes.push(`value: ${prev.estimatedValue || '—'} → ${updated.estimatedValue || '—'}`);
+    }
+    const changeDetail = changes.length ? ` Changes: ${changes.join(', ')}.` : '';
+    const isStatusChange = changes.some(c => c.startsWith('status'));
+    logActivity({ orgId, userName, module: 'tenders', recordId: updated.id, recordRef: updated.ref ?? updated.name, recordType: 'Tender', actionType: isStatusChange ? 'status_changed' : 'record_updated', description: `${userName} edited tender ${updated.ref ?? updated.name} — ${updated.name}.${changeDetail}`, prevValue: isStatusChange ? prev?.status : undefined, newValue: isStatusChange ? updated.status : undefined });
   };
 
   const [convertError, setConvertError] = useState<string | null>(null);
@@ -3813,14 +3832,19 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
       </div>
 
       {showCreate && (
-        <CreateTenderModal onClose={() => setShowCreate(false)} onSave={t => store.addTender(t)} />
+        <CreateTenderModal onClose={() => setShowCreate(false)} onSave={t => {
+          store.addTender(t);
+          logActivity({ orgId, userName, module: 'tenders', recordId: t.id, recordRef: t.ref ?? t.name, recordType: 'Tender', actionType: 'record_created', description: `${userName} created tender ${t.ref ?? t.name} — ${t.name}.` });
+        }} />
       )}
       {deleteConfirm && (
         <ConfirmDeleteModal
           title="Delete Tender"
           description="This tender and all its data will be permanently deleted."
-          onConfirm={() => {
+          onConfirm={async () => {
             const id = deleteConfirm;
+            const target = store.tenders.find(t => t.id === id);
+            await logActivity({ orgId, userName, module: 'tenders', recordId: id, recordRef: target?.ref ?? target?.name ?? null, recordType: 'Tender', actionType: 'record_deleted', description: `${userName} deleted tender ${target?.ref ?? target?.name ?? id} — ${target?.name ?? ''}.` });
             store.removeTender(id);
             setDeleteConfirm(null);
             setSelectedTender(prev => (prev?.id === id ? null : prev));

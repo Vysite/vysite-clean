@@ -221,6 +221,27 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const orgId = store.currentOrgId ?? '';
   const userName = store.currentUser?.name ?? '';
 
+  // Returns the best human-readable reference for a form (e.g. "RFI-012", "QA Inspection")
+  const formRef = (data: ExtendedSiteForm): string => {
+    const ref = (data as Record<string, unknown>).rfiRef
+      ?? (data as Record<string, unknown>).tqRef
+      ?? (data as Record<string, unknown>).noticeRef
+      ?? (data as Record<string, unknown>).variationRef
+      ?? (data as Record<string, unknown>).wcRef
+      ?? (data as Record<string, unknown>).inspectionRef;
+    if (ref) return String(ref);
+    return data.type;
+  };
+
+  // Builds a rich description that includes type, ref, title/subject and project
+  const formDesc = (verb: string, data: ExtendedSiteForm, project: string): string => {
+    const ref = formRef(data);
+    const titleField = (data as Record<string, unknown>).title ?? (data as Record<string, unknown>).subject;
+    const refPart = ref !== data.type ? ` ${ref}` : '';
+    const titlePart = titleField ? ` "${titleField}"` : '';
+    return `${userName} ${verb} ${data.type}${refPart}${titlePart} on project ${project}.`;
+  };
+
   // ── Save handler ──
   const handleSave = (data: ExtendedSiteForm, files: UploadedFile[]) => {
     const extra = { ...data } as Record<string, unknown>;
@@ -241,16 +262,17 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
       form_comments: [],
       extra_data: { ...extra, attachments: files },
     };
+    const ref = formRef(data);
     if (isEdit) {
       store.updateSiteForm(dbForm);
       if (prevStatus && prevStatus !== data.status) {
-        logActivity({ orgId, userName, module: 'site-forms', recordId: dbForm.id, recordRef: data.type, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'status_changed', description: `${userName} changed ${data.type} status from ${prevStatus} to ${data.status} on project ${dbForm.project_name}.`, prevValue: prevStatus, newValue: data.status ?? null });
+        logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'status_changed', description: `${userName} changed ${data.type} ${ref !== data.type ? ref + ' ' : ''}status from ${prevStatus} to ${data.status} on project ${dbForm.project_name}.`, prevValue: prevStatus, newValue: data.status ?? null });
       } else {
-        logActivity({ orgId, userName, module: 'site-forms', recordId: dbForm.id, recordRef: data.type, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'record_updated', description: `${userName} edited ${data.type} on project ${dbForm.project_name}.` });
+        logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'record_updated', description: formDesc('edited', data, dbForm.project_name) });
       }
     } else {
       store.addSiteForm(dbForm);
-      logActivity({ orgId, userName, module: 'site-forms', recordId: dbForm.id, recordRef: data.type, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'record_created', description: `${userName} created ${data.type} on project ${dbForm.project_name}.` });
+      logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'record_created', description: formDesc('created', data, dbForm.project_name) });
     }
     setShowBuilder(false);
     setEditingForm(null);
@@ -260,7 +282,11 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const confirmDelete = async () => {
     if (deletingId) {
       const target = forms.find(f => f.id === deletingId);
-      await logActivity({ orgId, userName, module: 'site-forms', recordId: deletingId, recordRef: target?.type ?? null, recordType: target?.type ?? null, projectId: target ? (store.projects.find(p => p.name === target.projectName)?.id ?? null) : null, projectName: target?.projectName ?? null, actionType: 'record_deleted', description: `${userName} deleted ${target?.type ?? 'form'} on project ${target?.projectName ?? ''}.` });
+      const targetRef = target ? formRef(target) : null;
+      const titleField = target ? ((target as unknown as Record<string, unknown>).title ?? (target as unknown as Record<string, unknown>).subject) : null;
+      const titlePart = titleField ? ` "${titleField}"` : '';
+      const refPart = targetRef && targetRef !== target?.type ? ` ${targetRef}` : '';
+      await logActivity({ orgId, userName, module: 'site_forms', recordId: deletingId, recordRef: targetRef, recordType: target?.type ?? null, projectId: target ? (store.projects.find(p => p.name === target.projectName)?.id ?? null) : null, projectName: target?.projectName ?? null, actionType: 'record_deleted', description: `${userName} deleted ${target?.type ?? 'form'}${refPart}${titlePart} on project ${target?.projectName ?? ''}.` });
       await store.removeSiteForm(deletingId);
       setShowDeleteConfirm(false);
       setDeletingId(null);
@@ -297,7 +323,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     }).join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Site Forms — VYSITE</title><style>${FORM_PDF_CSS}</style></head><body>${pages}<script>window.onload=function(){window.print();};<\/script></body></html>`;
     openPrintTab(html);
-    logActivity({ orgId, userName, module: 'site-forms', actionType: 'pdf_exported', description: `${userName} exported ${selectedForms.length} site form${selectedForms.length !== 1 ? 's' : ''} to PDF.`, metadata: { count: selectedForms.length, refs: selectedForms.map(f => f.type) } });
+    logActivity({ orgId, userName, module: 'site_forms', actionType: 'pdf_exported', description: `${userName} exported ${selectedForms.length} site form${selectedForms.length !== 1 ? 's' : ''} to PDF.`, metadata: { count: selectedForms.length, refs: selectedForms.map(f => f.type) } });
   };
 
   return (

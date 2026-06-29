@@ -9,6 +9,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
 import FileUploadComponent, { type UploadedFile } from '../components/FileUpload';
 import type { DBMaintenanceJob, MaintenanceStatus, MaintenancePriority, MaintenanceMaterial, MaintenanceComment } from '../lib/store';
+import { logActivity } from '../lib/activityLog';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -894,6 +895,8 @@ export default function MaintenanceServicing() {
   const canComment = perms['maintenance.comment'] || isAdmin;
   const canUpload  = perms['maintenance.upload']  || isAdmin;
   const canComplete = perms['maintenance.complete'] || isAdmin;
+  const orgId = store.currentOrgId ?? '';
+  const userName = store.currentUser?.name ?? '';
 
   const jobs = store.maintenanceJobs;
 
@@ -1206,7 +1209,10 @@ export default function MaintenanceServicing() {
     {showCreate && (
       <CreateJobModal
         onClose={() => setShowCreate(false)}
-        onSave={j => store.addMaintenanceJob(j)}
+        onSave={j => {
+          store.addMaintenanceJob(j);
+          logActivity({ orgId, userName, module: 'maintenance', recordId: j.id, recordRef: j.job_number ?? j.id, recordType: 'Maintenance Job', actionType: 'record_created', description: `${userName} created maintenance job ${j.job_number ?? j.id} — ${j.description ?? j.client_name}.` });
+        }}
         engineers={engineers}
       />
     )}
@@ -1216,10 +1222,20 @@ export default function MaintenanceServicing() {
         job={selectedJob}
         onClose={() => setSelectedJob(null)}
         onUpdate={updated => {
+          const prev = selectedJob;
           store.updateMaintenanceJob(updated);
           setSelectedJob(updated);
+          const changes: string[] = [];
+          if (prev.status !== updated.status)     changes.push(`status: ${prev.status} → ${updated.status}`);
+          if (prev.priority !== updated.priority) changes.push(`priority: ${prev.priority} → ${updated.priority}`);
+          if (prev.assigned_engineer !== updated.assigned_engineer) changes.push(`engineer: ${prev.assigned_engineer || '—'} → ${updated.assigned_engineer || '—'}`);
+          const changeDetail = changes.length ? ` Changes: ${changes.join(', ')}.` : '';
+          const isStatusChange = changes.some(c => c.startsWith('status'));
+          logActivity({ orgId, userName, module: 'maintenance', recordId: updated.id, recordRef: updated.job_number ?? updated.id, recordType: 'Maintenance Job', actionType: isStatusChange ? 'status_changed' : 'record_updated', description: `${userName} updated maintenance job ${updated.job_number ?? updated.id} — ${updated.description ?? updated.client_name}.${changeDetail}`, prevValue: isStatusChange ? prev.status : undefined, newValue: isStatusChange ? updated.status : undefined });
         }}
         onDelete={id => {
+          const target = store.maintenanceJobs.find(j => j.id === id);
+          logActivity({ orgId, userName, module: 'maintenance', recordId: id, recordRef: target?.job_number ?? id, recordType: 'Maintenance Job', actionType: 'record_deleted', description: `${userName} deleted maintenance job ${target?.job_number ?? id} — ${target?.description ?? target?.client_name ?? ''}.` });
           store.removeMaintenanceJob(id);
           setSelectedJob(null);
         }}
@@ -1239,6 +1255,8 @@ export default function MaintenanceServicing() {
         title="Delete Maintenance Job"
         description="This job and all its data will be permanently deleted."
         onConfirm={() => {
+          const target = store.maintenanceJobs.find(j => j.id === deleteConfirm);
+          logActivity({ orgId, userName, module: 'maintenance', recordId: deleteConfirm, recordRef: target?.job_number ?? deleteConfirm, recordType: 'Maintenance Job', actionType: 'record_deleted', description: `${userName} deleted maintenance job ${target?.job_number ?? deleteConfirm} — ${target?.description ?? target?.client_name ?? ''}.` });
           store.removeMaintenanceJob(deleteConfirm);
           setDeleteConfirm(null);
           if (selectedJob?.id === deleteConfirm) setSelectedJob(null);

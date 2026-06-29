@@ -100,6 +100,10 @@ const MODULE_COLORS: Record<string, string> = {
   tenders:     'bg-blue-900/40 text-blue-400',
   snagging:    'bg-amber-900/40 text-amber-400',
   actions:     'bg-emerald-900/40 text-emerald-400',
+  site_forms:  'bg-violet-900/40 text-violet-400',
+  testing:     'bg-cyan-900/40 text-cyan-400',
+  maintenance: 'bg-rose-900/40 text-rose-400',
+  programmes:  'bg-indigo-900/40 text-indigo-400',
 };
 
 const ACTION_TYPE_OPTIONS = [
