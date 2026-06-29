@@ -6,6 +6,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
 import FileUploadComponent, { type UploadedFile } from '../components/FileUpload';
 import type { DBTCRecord } from '../lib/store';
+import { logActivity } from '../lib/activityLog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -288,6 +289,8 @@ function buildTCRecordHTML(record: TCRecord, today: string): string {
 
 function RecordDetail({ record, onClose, onUpdate, canEdit = true, canExport = true }: RecordDetailProps) {
   const store = useAppStore();
+  const orgId = store.currentOrgId ?? '';
+  const userName = store.currentUser?.name ?? '';
   const [tab, setTab] = useState<'details' | 'comments' | 'files'>('details');
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ title: record.title, area: record.area, engineer: record.engineer, date: record.date, status: record.status, result: record.result || '', notes: record.notes });
@@ -302,6 +305,7 @@ function RecordDetail({ record, onClose, onUpdate, canEdit = true, canExport = t
 
   const handlePrintRecord = () => {
     openPrintTab(buildTCRecordHTML(record, today));
+    logActivity({ orgId, userName, module: 'testing', recordId: record.id, recordRef: record.ref, recordType: record.category, projectId: record.projectId, projectName: record.projectName, actionType: 'pdf_exported', description: `${userName} exported T&C certificate for ${record.ref}.` });
   };
 
   const saveEdit = () => {
@@ -613,6 +617,8 @@ interface TCProps {
 
 export default function TestingCommissioning({ pendingOpen, onPendingOpenConsumed, pendingFilter, onPendingFilterConsumed }: TCProps) {
   const store = useAppStore();
+  const orgId = store.currentOrgId ?? '';
+  const userName = store.currentUser?.name ?? '';
   const visibleTCRecords = store.visibleProjectIds
     ? store.tcRecords.filter(r => store.visibleProjectIds!.includes(r.project_id))
     : store.tcRecords;
@@ -722,6 +728,7 @@ export default function TestingCommissioning({ pendingOpen, onPendingOpenConsume
       <div class="tc-footer">VY Construction Ltd · ${today}</div>
     `;
     openPrintTab(buildPrintDocument('T&C Report — VYSITE', styles, body));
+    logActivity({ orgId, userName, module: 'testing', actionType: 'pdf_exported', description: `${userName} exported ${exportRecords.length} T&C record${exportRecords.length !== 1 ? 's' : ''} to PDF.`, metadata: { count: exportRecords.length, refs: exportRecords.map(r => r.ref) } });
   };
 
   return (
@@ -932,11 +939,20 @@ export default function TestingCommissioning({ pendingOpen, onPendingOpenConsume
 
       {showCreate && (
         <CreateRecordModal onClose={() => setShowCreate(false)}
-          onSave={r => store.addTCRecord(tcToDB(r))} />
+          onSave={r => {
+            store.addTCRecord(tcToDB(r));
+            logActivity({ orgId, userName, module: 'testing', recordId: r.id, recordRef: r.ref, recordType: r.category, projectId: r.projectId, projectName: r.projectName, actionType: 'record_created', description: `${userName} created ${r.category} record ${r.ref} on project ${r.projectName}.` });
+          }} />
       )}
       {selectedRecord && (
         <RecordDetail record={selectedRecord} onClose={() => setSelectedRecord(null)}
           onUpdate={updated => {
+            const prev = records.find(r => r.id === updated.id);
+            if (prev && prev.status !== updated.status) {
+              logActivity({ orgId, userName, module: 'testing', recordId: updated.id, recordRef: updated.ref, recordType: updated.category, projectId: updated.projectId, projectName: updated.projectName, actionType: 'status_changed', description: `${userName} changed ${updated.ref} status from ${prev.status} to ${updated.status}.`, prevValue: prev.status, newValue: updated.status });
+            } else if (prev) {
+              logActivity({ orgId, userName, module: 'testing', recordId: updated.id, recordRef: updated.ref, recordType: updated.category, projectId: updated.projectId, projectName: updated.projectName, actionType: 'record_updated', description: `${userName} edited T&C record ${updated.ref} on project ${updated.projectName}.` });
+            }
             store.updateTCRecord(tcToDB(updated));
             setSelectedRecord(updated);
           }}
@@ -948,7 +964,15 @@ export default function TestingCommissioning({ pendingOpen, onPendingOpenConsume
         <ConfirmDeleteModal
           title="Delete T&C Record"
           description="This testing & commissioning record will be permanently deleted."
-          onConfirm={() => { store.removeTCRecord(deleteConfirm); setDeleteConfirm(null); if (selectedRecord?.id === deleteConfirm) setSelectedRecord(null); }}
+          onConfirm={async () => {
+            const target = records.find(r => r.id === deleteConfirm);
+            if (target) {
+              await logActivity({ orgId, userName, module: 'testing', recordId: target.id, recordRef: target.ref, recordType: target.category, projectId: target.projectId, projectName: target.projectName, actionType: 'record_deleted', description: `${userName} deleted T&C record ${target.ref} on project ${target.projectName}.` });
+            }
+            store.removeTCRecord(deleteConfirm);
+            setDeleteConfirm(null);
+            if (selectedRecord?.id === deleteConfirm) setSelectedRecord(null);
+          }}
           onCancel={() => setDeleteConfirm(null)}
         />
       )}

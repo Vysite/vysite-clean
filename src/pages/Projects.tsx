@@ -13,6 +13,7 @@ import type { DBProjectDocument, DBProgramme, DBProgrammeTask, ProgrammeTaskStat
 import FileUpload from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
 import type { PendingOpen } from '../App';
+import { logActivity } from '../lib/activityLog';
 
 // Normalise any project value input into £X,XXX format for consistent display
 function formatProjectValue(raw: string): string {
@@ -2208,6 +2209,8 @@ interface ProjectsProps {
 export default function Projects({ onNavigate, pendingProjectId, onPendingProjectConsumed }: ProjectsProps) {
   const store = useAppStore();
   const perms = usePermissions();
+  const orgId = store.currentOrgId ?? '';
+  const userName = store.currentUser?.name ?? '';
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -2247,14 +2250,24 @@ export default function Projects({ onNavigate, pendingProjectId, onPendingProjec
           <EditProjectModal
             project={liveSelected}
             onClose={() => setShowEdit(false)}
-            onSave={p => { store.updateProject(p); setShowEdit(false); }}
+            onSave={p => {
+              store.updateProject(p);
+              logActivity({ orgId, userName, module: 'projects', recordId: p.id, recordRef: p.name, actionType: 'record_updated', description: `${userName} edited project ${p.name}.` });
+              setShowEdit(false);
+            }}
           />
         )}
         {deleteConfirm && (
           <ConfirmDeleteModal
             title="Delete Project"
             description="This project will be permanently deleted. Associated snags, actions, and forms will remain but will no longer be linked to this project."
-            onConfirm={() => { store.removeProject(deleteConfirm); setDeleteConfirm(null); setSelectedProject(null); }}
+            onConfirm={async () => {
+              const target = store.projects.find(p => p.id === deleteConfirm);
+              await logActivity({ orgId, userName, module: 'projects', recordId: deleteConfirm, recordRef: target?.name ?? null, actionType: 'record_deleted', description: `${userName} deleted project ${target?.name ?? deleteConfirm}.` });
+              store.removeProject(deleteConfirm);
+              setDeleteConfirm(null);
+              setSelectedProject(null);
+            }}
             onCancel={() => setDeleteConfirm(null)}
           />
         )}
@@ -2413,14 +2426,25 @@ export default function Projects({ onNavigate, pendingProjectId, onPendingProjec
       {showCreate && (
         <CreateProjectModal
           onClose={() => setShowCreate(false)}
-          onSave={(project) => store.addProject(project)}
+          onSave={async (project) => {
+            const err = await store.addProject(project);
+            if (!err) {
+              logActivity({ orgId, userName, module: 'projects', recordId: project.id, recordRef: project.name, actionType: 'record_created', description: `${userName} created project ${project.name}.` });
+            }
+            return err;
+          }}
         />
       )}
       {deleteConfirm && (
         <ConfirmDeleteModal
           title="Delete Project"
           description="This project will be permanently deleted. Associated snags, actions, and forms will remain but will no longer be linked."
-          onConfirm={() => { store.removeProject(deleteConfirm); setDeleteConfirm(null); }}
+          onConfirm={async () => {
+            const target = store.projects.find(p => p.id === deleteConfirm);
+            await logActivity({ orgId, userName, module: 'projects', recordId: deleteConfirm, recordRef: target?.name ?? null, actionType: 'record_deleted', description: `${userName} deleted project ${target?.name ?? deleteConfirm}.` });
+            store.removeProject(deleteConfirm);
+            setDeleteConfirm(null);
+          }}
           onCancel={() => setDeleteConfirm(null)}
         />
       )}
