@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, FileText, FolderKanban, ClipboardList,
-  AlertOctagon, Zap, FlaskConical, BarChart2, Users,
+  AlertOctagon, Zap, BookOpen, BarChart2, Users,
   Settings, MessageSquare, Wrench, ChevronLeft,
   ChevronRight, X, TrendingUp,
 } from 'lucide-react';
@@ -39,7 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'site-forms',    label: 'Site Forms',          icon: <ClipboardList size={18} />,   moduleKey: 'site-forms' },
   { page: 'snagging',      label: 'Snagging',            icon: <AlertOctagon size={18} />,    moduleKey: 'snagging' },
   { page: 'actions',       label: 'Actions',             icon: <Zap size={18} />,             moduleKey: 'actions' },
-  { page: 'testing',       label: 'Testing',             icon: <FlaskConical size={18} />,    moduleKey: 'testing' },
+  { page: 'testing',       label: 'O&M Manual',          icon: <BookOpen size={18} />,        moduleKey: 'testing' },
   { page: 'reports',       label: 'Reports',             icon: <BarChart2 size={18} />,       moduleKey: 'reports' },
   { page: 'users',         label: 'Users',               icon: <Users size={18} /> },
   { page: 'beta-feedback', label: 'Feedback',            icon: <MessageSquare size={18} /> },

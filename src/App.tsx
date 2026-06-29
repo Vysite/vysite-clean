@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Lock, FlaskConical, Ban, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Lock, BookOpen, Ban, AlertTriangle, CheckCircle, FlaskConical } from 'lucide-react';
 import Sidebar, { type Page } from './components/Sidebar';
 import Header from './components/Header';
 import EnvBanner from './components/EnvBanner';
@@ -14,6 +14,7 @@ import Users from './pages/Users';
 import BetaFeedback from './pages/BetaFeedback';
 import Settings from './pages/Settings';
 import TestingCommissioning from './pages/TestingCommissioning';
+import OAndMManual from './pages/OAndMManual';
 import MaintenanceServicing from './pages/MaintenanceServicing';
 import Commercial from './pages/Commercial';
 import Login from './pages/Login';
@@ -87,8 +88,8 @@ function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pending
         : <AccessRestricted label="Actions Tracker" />;
     case 'testing':
       return (perms['modules.testing'] && isModuleEnabled('testing'))
-        ? <TestingCommissioning pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} pendingFilter={pendingFilter} onPendingFilterConsumed={() => setPendingFilter(null)} />
-        : <AccessRestricted label="Testing & Commissioning" />;
+        ? <OAndMManual />
+        : <AccessRestricted label="O&M Manual" />;
     case 'reports':
       return (perms['modules.reports'] && isModuleEnabled('reports'))
         ? <Reports />
