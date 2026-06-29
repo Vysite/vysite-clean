@@ -39,14 +39,26 @@ export interface ActivityLogParams {
 }
 
 export async function logActivity(params: ActivityLogParams): Promise<void> {
-  if (!params.orgId) return;
-  try {
-    // Always use the current auth session UUID — never accept a caller-supplied
-    // user ID, which may be a non-UUID platform user ID ("pu-xxx").
-    const { data: { session } } = await supabase.auth.getSession();
-    const authUserId = session?.user?.id ?? null;
+  console.log('[ActivityLog] called:', params.actionType, '| orgId:', params.orgId || '(empty)', '| module:', params.module);
 
-    const { error } = await supabase.from('vy_activity_log').insert({
+  if (!params.orgId) {
+    console.warn('[ActivityLog] EARLY EXIT — orgId is empty/null. No insert will occur.');
+    return;
+  }
+
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.error('[ActivityLog] getSession() error:', sessionError.message);
+    }
+    const authUserId = session?.user?.id ?? null;
+    console.log('[ActivityLog] authUserId:', authUserId ?? '(null — no active session)');
+
+    if (!authUserId) {
+      console.warn('[ActivityLog] WARNING — no auth session. Insert may fail RLS if policies require auth.uid().');
+    }
+
+    const payload = {
       org_id:       params.orgId,
       user_id:      authUserId,
       user_name:    params.userName,
@@ -62,12 +74,17 @@ export async function logActivity(params: ActivityLogParams): Promise<void> {
       new_value:    params.newValue ?? null,
       reason:       params.reason ?? null,
       metadata:     params.metadata ?? null,
-    });
+    };
+    console.log('[ActivityLog] inserting payload:', payload);
+
+    const { error } = await supabase.from('vy_activity_log').insert(payload);
 
     if (error) {
-      console.error('[ActivityLog] Insert failed:', error.message, '| code:', error.code);
+      console.error('[ActivityLog] INSERT FAILED:', error.message, '| code:', error.code, '| details:', error.details, '| hint:', error.hint);
+    } else {
+      console.log('[ActivityLog] INSERT OK:', params.actionType, params.description);
     }
   } catch (err) {
-    console.error('[ActivityLog] Unexpected error:', err);
+    console.error('[ActivityLog] Unexpected exception:', err);
   }
 }

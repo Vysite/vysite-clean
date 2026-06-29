@@ -223,6 +223,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
 
   // ── Save handler ──
   const handleSave = (data: ExtendedSiteForm, files: UploadedFile[]) => {
+    console.log('[SiteForms] handleSave called | isEdit:', !!editingForm, '| orgId:', orgId || '(empty)', '| user:', userName || '(empty)');
     const extra = { ...data } as Record<string, unknown>;
     ['id', 'type', 'projectId', 'projectName', 'date', 'completedBy', 'description', 'comments', 'status', 'submittedDate', 'notes'].forEach(k => delete extra[k]);
     const isEdit = !!editingForm;
