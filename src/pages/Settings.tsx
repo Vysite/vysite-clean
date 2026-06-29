@@ -654,7 +654,7 @@ export default function Settings() {
     await store.updateSettings(updated);
     const sectionLabel = activeSection === 'notifications' ? 'Notification Preferences' : 'Operational Settings';
     logActivity({
-      orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+      orgId: store.currentOrgId ?? '',
       userName: store.currentUser?.name ?? '',
       module: 'settings',
       actionType: 'settings_changed',

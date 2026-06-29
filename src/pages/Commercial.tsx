@@ -907,7 +907,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
         }
         const saved = dbToRecord(data as Record<string, unknown>, projectName);
         logActivity({
-          orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+          orgId,
           userName: store.currentUser?.name ?? '',
           module: 'commercial', recordId: id,
           recordRef: form.reference.trim() || form.title.trim(),
@@ -929,7 +929,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
         const saved = dbToRecord(data as Record<string, unknown>, projectName);
         if (prevStatus !== form.status) {
           logActivity({
-            orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+            orgId,
             userName: store.currentUser?.name ?? '',
             module: 'commercial', recordId: record!.id,
             recordRef: form.reference.trim() || form.title.trim(),
@@ -940,7 +940,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
           });
         } else {
           logActivity({
-            orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+            orgId,
             userName: store.currentUser?.name ?? '',
             module: 'commercial', recordId: record!.id,
             recordRef: form.reference.trim() || form.title.trim(),
@@ -961,10 +961,9 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
   async function handleDelete() {
     if (!record) return;
     setDeleting(true);
-    await supabase.from('vy_commercial_line_items').delete().eq('record_id', record.id);
-    await supabase.from('vy_commercial_records').delete().eq('id', record.id);
-    logActivity({
-      orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+    // Log BEFORE deletion so the entry is permanent even if deletion fails.
+    await logActivity({
+      orgId,
       userName: store.currentUser?.name ?? '',
       module: 'commercial', recordId: record.id,
       recordRef: record.reference || record.title,
@@ -972,6 +971,8 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
       actionType: 'record_deleted',
       description: `${store.currentUser?.name ?? 'Unknown'} deleted ${record.recordType.replace(/_/g, ' ')} ${record.reference ? record.reference + ' — ' : ''}${record.title}`,
     });
+    await supabase.from('vy_commercial_line_items').delete().eq('record_id', record.id);
+    await supabase.from('vy_commercial_records').delete().eq('id', record.id);
     onDeleted(record.id);
     setDeleting(false);
   }
@@ -1005,7 +1006,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
     );
     openPrintTab(html);
     logActivity({
-      orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+      orgId,
       userName: store.currentUser?.name ?? '',
       module: 'commercial', recordId: record.id,
       recordRef: form.reference || form.title,
@@ -1175,7 +1176,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
                 : async (c) => {
                     await store.addCommercialRecordComment(c);
                     logActivity({
-                      orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+                      orgId,
                       userName: store.currentUser?.name ?? '',
                       module: 'commercial', recordId: record!.id,
                       recordRef: form.reference || form.title,
@@ -1272,7 +1273,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
                           };
                           await store.addAttachment(att);
                           logActivity({
-                            orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+                            orgId,
                             userName: store.currentUser?.name ?? '',
                             module: 'commercial', recordId: record!.id,
                             recordRef: form.reference || form.title,
@@ -1514,7 +1515,7 @@ export default function Commercial() {
       `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(name)} — Commercial Records</title><style>${CLIENT_COPY_CSS}</style><script>window.onload=function(){window.print();};<\/script></head><body>${pages}</body></html>`
     );
     logActivity({
-      orgId, userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+      orgId,
       userName: store.currentUser?.name ?? '',
       module: 'commercial',
       actionType: 'pdf_exported',

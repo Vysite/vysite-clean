@@ -23,7 +23,6 @@ export type ActivityActionType =
 
 export interface ActivityLogParams {
   orgId: string;
-  userId?: string | null;
   userName: string;
   module: string;
   recordId?: string | null;
@@ -40,10 +39,16 @@ export interface ActivityLogParams {
 }
 
 export async function logActivity(params: ActivityLogParams): Promise<void> {
+  if (!params.orgId) return;
   try {
-    await supabase.from('vy_activity_log').insert({
+    // Always use the current auth session UUID — never accept a caller-supplied
+    // user ID, which may be a non-UUID platform user ID ("pu-xxx").
+    const { data: { session } } = await supabase.auth.getSession();
+    const authUserId = session?.user?.id ?? null;
+
+    const { error } = await supabase.from('vy_activity_log').insert({
       org_id:       params.orgId,
-      user_id:      params.userId ?? null,
+      user_id:      authUserId,
       user_name:    params.userName,
       module:       params.module,
       record_id:    params.recordId ?? null,
@@ -58,7 +63,11 @@ export async function logActivity(params: ActivityLogParams): Promise<void> {
       reason:       params.reason ?? null,
       metadata:     params.metadata ?? null,
     });
+
+    if (error) {
+      console.error('[ActivityLog] Insert failed:', error.message, '| code:', error.code);
+    }
   } catch (err) {
-    console.error('[ActivityLog] Failed to write activity log entry:', err);
+    console.error('[ActivityLog] Unexpected error:', err);
   }
 }

@@ -975,7 +975,7 @@ export default function Users() {
       const roleChanged = prev?.role !== u.role;
       if (permChanged || roleChanged) {
         logActivity({
-          orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+          orgId: store.currentOrgId ?? '',
           userName: store.currentUser?.name ?? '',
           module: 'users', recordRef: u.name,
           actionType: 'permission_changed',
@@ -985,7 +985,7 @@ export default function Users() {
         });
       } else {
         logActivity({
-          orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+          orgId: store.currentOrgId ?? '',
           userName: store.currentUser?.name ?? '',
           module: 'users', recordRef: u.name,
           actionType: 'user_updated',
@@ -995,7 +995,7 @@ export default function Users() {
     } else {
       await store.addPlatformUser(u);
       logActivity({
-        orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+        orgId: store.currentOrgId ?? '',
         userName: store.currentUser?.name ?? '',
         module: 'users', recordRef: u.name,
         actionType: 'user_created',
@@ -1021,7 +1021,7 @@ export default function Users() {
     );
     if (res.ok) {
       logActivity({
-        orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+        orgId: store.currentOrgId ?? '',
         userName: store.currentUser?.name ?? '',
         module: 'users', recordRef: deleteTarget.name,
         actionType: 'user_removed',
@@ -1313,7 +1313,7 @@ export default function Users() {
           onInviteSuccess={async (u) => {
             await store.addPlatformUser(u);
             logActivity({
-              orgId: store.currentOrgId ?? '', userId: store.currentUser?.auth_user_id ?? store.currentUser?.id,
+              orgId: store.currentOrgId ?? '',
               userName: store.currentUser?.name ?? '',
               module: 'users', recordRef: u.name,
               actionType: 'user_invited',
