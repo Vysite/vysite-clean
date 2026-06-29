@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Lock, BookOpen, Ban, AlertTriangle, CheckCircle, FlaskConical } from 'lucide-react';
+import { Lock, Ban, AlertTriangle, CheckCircle, FlaskConical } from 'lucide-react';
 import Sidebar, { type Page } from './components/Sidebar';
 import Header from './components/Header';
 import EnvBanner from './components/EnvBanner';
@@ -10,7 +10,6 @@ import SiteForms from './pages/SiteForms';
 import Snagging from './pages/Snagging';
 import Actions from './pages/Actions';
 import Reports from './pages/Reports';
-import Users from './pages/Users';
 import BetaFeedback from './pages/BetaFeedback';
 import Settings from './pages/Settings';
 import TestingCommissioning from './pages/TestingCommissioning';
@@ -94,10 +93,6 @@ function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pending
       return (perms['modules.reports'] && isModuleEnabled('reports'))
         ? <Reports />
         : <AccessRestricted label="Reports" />;
-    case 'users':
-      return (perms['admin.edit_users'] || perms['admin.invite_users'])
-        ? <Users />
-        : <AccessRestricted label="Users" />;
     case 'beta-feedback':
       return <BetaFeedback />;
     case 'settings':

@@ -13,6 +13,7 @@ import { useOrgSettings } from '../lib/OrgSettingsContext';
 import type { DBSettings } from '../lib/store';
 import { logActivity } from '../lib/activityLog';
 import ActivityRegister from './ActivityRegister';
+import UsersModule from './Users';
 
 type ToggleKey =
   | 'snag_email' | 'action_email' | 'daily_digest' | 'overdue_alert'
@@ -663,12 +664,14 @@ export default function Settings() {
     });
   };
 
+  const canManageUsers = perms['admin.edit_users'] || perms['admin.invite_users'];
+
   const renderContent = () => {
     switch (activeSection) {
       case 'notifications': return <NotificationSettings settings={store.settings} onSave={handleSave} />;
       case 'operational':   return <OperationalSettings settings={store.settings} onSave={handleSave} />;
       case 'billing':       return <BillingSection />;
-      case 'users':         return <ComingSoon title="User Management" icon={Users} />;
+      case 'users':         return canManageUsers ? <UsersModule /> : <ComingSoon title="User Management" icon={Users} />;
       case 'security':      return <ChangePasswordSection />;
       case 'activity':      return canViewActivity ? <ActivityRegister /> : <ComingSoon title="Activity Register" icon={Activity} />;
       case 'integrations':  return <ComingSoon title="Integrations" icon={Globe} />;
@@ -716,16 +719,16 @@ export default function Settings() {
         {/* Content panel */}
         <div className={`lg:col-span-2 ${activeSection ? 'block' : 'hidden lg:block'}`}>
           {activeSection ? (
-            <div className={`bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden ${activeSection === 'activity' ? '' : 'p-5 lg:p-6'}`}>
+            <div className={`bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden ${(activeSection === 'activity' || activeSection === 'users') ? '' : 'p-5 lg:p-6'}`}>
               {/* Mobile back button */}
-              {activeSection !== 'activity' && (
+              {activeSection !== 'activity' && activeSection !== 'users' && (
                 <button
                   onClick={() => setActiveSection(null)}
                   className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors mb-5 lg:hidden">
                   <ArrowLeft size={13} />{activeLabel}
                 </button>
               )}
-              {activeSection === 'activity' && (
+              {(activeSection === 'activity' || activeSection === 'users') && (
                 <button
                   onClick={() => setActiveSection(null)}
                   className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors px-4 pt-4 lg:hidden">

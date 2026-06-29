@@ -246,7 +246,6 @@ const pageTitles: Record<Page, string> = {
   actions: 'Actions Tracker',
   testing: 'Testing & Commissioning',
   reports: 'Reports',
-  users: 'Users',
   'beta-feedback': 'BETA Feedback',
   settings: 'Settings',
   'super-admin': 'Super Admin',

@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, FileText, FolderKanban, ClipboardList,
-  AlertOctagon, Zap, BookOpen, BarChart2, Users,
+  AlertOctagon, Zap, BookOpen, BarChart2,
   Settings, MessageSquare, Wrench, ChevronLeft,
   ChevronRight, X, TrendingUp,
 } from 'lucide-react';
@@ -16,7 +16,6 @@ export type Page =
   | 'actions'
   | 'testing'
   | 'reports'
-  | 'users'
   | 'beta-feedback'
   | 'settings'
   | 'super-admin'
@@ -41,7 +40,6 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'actions',       label: 'Actions',             icon: <Zap size={18} />,             moduleKey: 'actions' },
   { page: 'testing',       label: 'O&M Manual',          icon: <BookOpen size={18} />,        moduleKey: 'testing' },
   { page: 'reports',       label: 'Reports',             icon: <BarChart2 size={18} />,       moduleKey: 'reports' },
-  { page: 'users',         label: 'Users',               icon: <Users size={18} /> },
   { page: 'beta-feedback', label: 'Feedback',            icon: <MessageSquare size={18} /> },
   { page: 'settings',      label: 'Settings',            icon: <Settings size={18} /> },
 ];
