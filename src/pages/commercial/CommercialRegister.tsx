@@ -192,7 +192,7 @@ export default function CommercialRegister({
       {/* Register table */}
       <div className="bg-[#111827] border border-[#1e2d4a] rounded-xl overflow-hidden">
         {/* Column headers */}
-        <div className="grid grid-cols-[32px_130px_1fr_160px_160px_160px_100px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+        <div className="grid grid-cols-[32px_130px_1fr_160px_160px_160px_90px_100px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -206,7 +206,8 @@ export default function CommercialRegister({
           <span>Project</span>
           <span>Client</span>
           <span>Status</span>
-          <span>Date Raised</span>
+          <span>Raised</span>
+          <span>Status Changed</span>
         </div>
 
         {loading ? (
@@ -233,7 +234,7 @@ export default function CommercialRegister({
           filteredRecords.map((r, i) => (
             <div
               key={r.id}
-              className={`grid grid-cols-[32px_130px_1fr_160px_160px_160px_100px] gap-3 px-4 py-3 transition-colors hover:bg-[#1a2236] ${
+              className={`grid grid-cols-[32px_130px_1fr_160px_160px_160px_90px_100px] gap-3 px-4 py-3 transition-colors hover:bg-[#1a2236] ${
                 i < filteredRecords.length - 1 ? 'border-b border-[#1e2d4a]/50' : ''
               } ${selectedIds.has(r.id) ? 'bg-[#1a2236]/60' : ''}`}
             >
@@ -259,6 +260,11 @@ export default function CommercialRegister({
               <button className="text-left" onClick={() => onOpenRecord(r)}><StatusBadge status={r.status} /></button>
               <button className="text-left text-xs text-slate-500" onClick={() => onOpenRecord(r)}>
                 {r.dateRaised ? new Date(r.dateRaised).toLocaleDateString('en-GB') : '—'}
+              </button>
+              <button className="text-left text-xs" onClick={() => onOpenRecord(r)}>
+                {r.statusChangedAt
+                  ? <span className="text-slate-300">{new Date(r.statusChangedAt).toLocaleDateString('en-GB')}</span>
+                  : <span className="text-slate-600">—</span>}
               </button>
             </div>
           ))

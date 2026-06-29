@@ -258,6 +258,7 @@ export interface CommercialRecord {
   dateRaised: string | null;
   dateSubmitted: string | null;
   dateAgreed: string | null;
+  statusChangedAt: string | null;
   notes: string;
   createdBy: string | null;
   createdAt: string;

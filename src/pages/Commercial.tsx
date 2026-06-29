@@ -54,23 +54,24 @@ function recordTotals(lines: CommercialLineItem[]) {
 
 function dbToRecord(r: Record<string, unknown>, projectName?: string): CommercialRecord {
   return {
-    id:            r.id as string,
-    orgId:         r.org_id as string,
-    projectId:     r.project_id as string | null,
+    id:              r.id as string,
+    orgId:           r.org_id as string,
+    projectId:       r.project_id as string | null,
     projectName,
-    recordType:    r.record_type as CommercialRecordType,
-    reference:     r.reference as string,
-    title:         r.title as string,
-    client:        r.client as string,
-    status:        r.status as CommercialRecordStatus,
-    dateRaised:    r.date_raised as string | null,
-    dateSubmitted: r.date_submitted as string | null,
-    dateAgreed:    r.date_agreed as string | null,
-    notes:         r.notes as string,
-    createdBy:     r.created_by as string | null,
-    createdAt:     r.created_at as string,
-    updatedAt:     r.updated_at as string,
-    extraData:     r.extra_data as Record<string, unknown> | null ?? null,
+    recordType:      r.record_type as CommercialRecordType,
+    reference:       r.reference as string,
+    title:           r.title as string,
+    client:          r.client as string,
+    status:          r.status as CommercialRecordStatus,
+    dateRaised:      r.date_raised as string | null,
+    dateSubmitted:   r.date_submitted as string | null,
+    dateAgreed:      r.date_agreed as string | null,
+    statusChangedAt: r.status_changed_at as string | null,
+    notes:           r.notes as string,
+    createdBy:       r.created_by as string | null,
+    createdAt:       r.created_at as string,
+    updatedAt:       r.updated_at as string,
+    extraData:       r.extra_data as Record<string, unknown> | null ?? null,
   };
 }
 
@@ -236,6 +237,7 @@ export function buildClientCopyPageContent(p: ClientCopyParams): string {
     ['Date Raised', fmtD(record.dateRaised)],
     ['Date Submitted', fmtD(record.dateSubmitted)],
     ['Date Agreed', fmtD(record.dateAgreed)],
+    ['Status Changed', fmtD(record.statusChangedAt)],
     ['Document Ref', docRef],
     ['Project', record.projectName || '\u2014'],
   ].map(([label, value]) =>
@@ -882,6 +884,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
         if (form.potentialCost.trim()) extra.potential_cost = form.potentialCost.trim();
       }
       const now = new Date().toISOString();
+      const statusChanged = !record || record.status !== form.status;
       const row = {
         org_id: orgId, project_id: form.projectId || null,
         record_type: form.recordType, reference: form.reference.trim(),
@@ -891,6 +894,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
         notes: form.notes.trim(), created_by: null,
         extra_data: extra,
         updated_at: now,
+        ...(statusChanged ? { status_changed_at: now } : {}),
       };
       const projectName = projects.find(p => p.id === form.projectId)?.name;
 
@@ -1136,6 +1140,14 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
                 <label className={labelCls}>Date Agreed / Closed</label>
                 <input type="date" className={inputCls} value={form.dateAgreed} onChange={e => setForm(f => ({ ...f, dateAgreed: e.target.value }))} disabled={!canEdit} />
               </div>
+              {!isNew && record?.statusChangedAt && (
+                <div>
+                  <label className={labelCls}>Status Changed</label>
+                  <div className={`${inputCls} opacity-60 cursor-default`}>
+                    {new Date(record.statusChangedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </div>
+                </div>
+              )}
               <div className="md:col-span-2">
                 <label className={labelCls}>Notes</label>
                 <textarea className={`${inputCls} resize-none`} rows={4} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Internal notes, background, instructions..." disabled={!canEdit} />
