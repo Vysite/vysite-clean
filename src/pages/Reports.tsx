@@ -152,7 +152,7 @@ function BulkProjectStatus({ filterProject, today, projects }: { filterProject: 
       </p>
       <table>
         <thead>
-          <tr><th>Project</th><th>Client</th><th>Status</th><th>Progress</th><th>Contract Value</th><th>PM</th></tr>
+          <tr><th>Project</th><th>Client</th><th>Status</th><th>Progress</th><th>PM</th></tr>
         </thead>
         <tbody>
           {filtered.map(p => (
@@ -161,11 +161,10 @@ function BulkProjectStatus({ filterProject, today, projects }: { filterProject: 
               <td>{p.client}</td>
               <td>{p.status}</td>
               <td>{p.progress}%</td>
-              <td>{p.value}</td>
               <td>{p.projectManager}</td>
             </tr>
           ))}
-          {filtered.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: '#94a3b8', padding: '16px' }}>No projects found</td></tr>}
+          {filtered.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8', padding: '16px' }}>No projects found</td></tr>}
         </tbody>
       </table>
     </>
@@ -467,9 +466,9 @@ function buildReportHTML(
 
   if (mode.kind === 'bulk' && mode.reportId === 'project-status') {
     const filtered = mode.filterProject === 'All' ? projects : projects.filter(p => p.name === mode.filterProject);
-    const rows = filtered.map(p => `<tr><td style="font-weight:600">${p.name}</td><td>${p.client}</td><td>${p.status}</td><td>${p.progress}%</td><td>${p.value}</td><td>${p.projectManager}</td></tr>`).join('');
+    const rows = filtered.map(p => `<tr><td style="font-weight:600">${p.name}</td><td>${p.client}</td><td>${p.status}</td><td>${p.progress}%</td><td>${p.projectManager}</td></tr>`).join('');
     content = `<p style="font-size:12px;color:#475569;margin-bottom:16px">Project status overview — ${filtered.length} project${filtered.length !== 1 ? 's' : ''} as at ${today}.</p>
-      <table><thead><tr><th>Project</th><th>Client</th><th>Status</th><th>Progress</th><th>Contract Value</th><th>PM</th></tr></thead><tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">No projects found</td></tr>'}</tbody></table>`;
+      <table><thead><tr><th>Project</th><th>Client</th><th>Status</th><th>Progress</th><th>PM</th></tr></thead><tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">No projects found</td></tr>'}</tbody></table>`;
 
   } else if (mode.kind === 'bulk' && mode.reportId === 'snag-summary') {
     const filtered = mode.filterProject === 'All' ? snags : snags.filter(s => s.projectName === mode.filterProject);
