@@ -92,10 +92,10 @@ const PERM_GROUPS: PermGroup[] = [
   {
     label: 'Commercial',
     keys: [
-      { key: 'commercial.view_pricing',                  label: 'View pricing' },
+      { key: 'commercial.view_pricing',                  label: 'View financial values (Projects, Tenders & Commercial)' },
       { key: 'commercial.edit_pricing',                  label: 'Edit pricing' },
       { key: 'commercial.view_rates',                    label: 'View rates' },
-      { key: 'commercial.view_values',                   label: 'View tender values' },
+      { key: 'commercial.view_values',                   label: 'View financial totals (Projects, Tenders & Commercial)' },
       { key: 'commercial.view_reports',                  label: 'View commercial reports' },
       { key: 'commercial.export_reports',                label: 'Export commercial reports' },
       { key: 'commercial.edit_project_finance_progress', label: 'Edit project finance/progress bar' },

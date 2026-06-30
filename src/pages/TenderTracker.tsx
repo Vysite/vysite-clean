@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Plus, Search, ChevronDown, Clock, TrendingUp, FileText, MessageSquare, Users, HelpCircle, FolderOpen, Trophy, X, CheckCircle, AlertTriangle, Send, CreditCard as Edit2, Save, StickyNote, AtSign, Trash2, Calculator, ChevronUp, BookOpen } from 'lucide-react';
+import { ArrowLeft, Plus, Search, ChevronDown, Clock, TrendingUp, FileText, MessageSquare, Users, HelpCircle, FolderOpen, Trophy, X, CheckCircle, AlertTriangle, Send, CreditCard as Edit2, Save, StickyNote, AtSign, Trash2, Calculator, ChevronUp, BookOpen, Lock } from 'lucide-react';
 import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import type {
@@ -2268,11 +2268,11 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold text-white">Estimate Schedule</h3>
-          <p className="text-xs text-slate-500 mt-0.5">{items.length} line item{items.length !== 1 ? 's' : ''} · Total sale: {fmtC(totals.sale)}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{items.length} line item{items.length !== 1 ? 's' : ''}{canViewPricing ? ` · Total sale: ${fmtC(totals.sale)}` : ''}</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Export dropdown */}
-          <div className="relative">
+          {/* Export dropdown — gated on financial visibility */}
+          {canViewPricing && <div className="relative">
             <button
               onClick={() => setShowExportMenu(v => !v)}
               className="flex items-center gap-1.5 px-3 py-2 bg-[#1a2236] border border-[#1e2d4a] text-slate-300 rounded-lg text-xs font-semibold hover:border-[#f97316] hover:text-[#f97316] transition-colors"
@@ -2301,7 +2301,7 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
                 </button>
               </div>
             )}
-          </div>
+          </div>}
           <button onClick={addLine} className="flex items-center gap-1.5 px-3 py-2 bg-[#f97316] text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors">
             <Plus size={13} />Add Line
           </button>
@@ -2310,7 +2310,13 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
 
       {/* Table */}
       <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden">
-        {items.length === 0 ? (
+        {!canViewPricing ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Lock size={28} className="text-slate-600 mb-3" />
+            <p className="text-sm font-semibold text-slate-400">Financial data restricted</p>
+            <p className="text-xs text-slate-600 mt-1">You don't have permission to view pricing and estimate values.</p>
+          </div>
+        ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Calculator size={32} className="text-slate-600 mb-3" />
             <p className="text-sm font-semibold text-slate-400">No estimate items yet</p>
@@ -2424,9 +2430,7 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
           </div>
         )}
       </div>
-
-      {/* Summary */}
-      {items.length > 0 && (
+      {canViewPricing && items.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { label: 'Total Cost', value: fmtC(totals.cost), color: 'text-slate-300', sub: 'Internal build cost' },
@@ -2759,7 +2763,7 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
                   { label: 'Tender Reference', value: tender.ref },
                   { label: 'Received Date', value: new Date(tender.receivedDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) },
                   { label: 'Return Date', value: new Date(tender.returnDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) },
-                  { label: 'Estimated Value', value: formatValue(tender.estimatedValue) },
+                  ...(canViewPricing ? [{ label: 'Estimated Value', value: formatValue(tender.estimatedValue) }] : []),
                   { label: 'Tender Owner', value: tender.owner },
                   { label: 'Status', value: tender.status },
                   { label: 'Priority', value: tender.priority },

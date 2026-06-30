@@ -993,6 +993,7 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
   const isAdmin = store.currentUser?.role === 'Admin';
   const canEdit = perms['projects.edit'] || isAdmin;
   const canDelete = perms['projects.delete'] || isAdmin;
+  const canViewFinancials = perms['commercial.view_pricing'] || perms['commercial.view_values'] || isAdmin;
   const canUploadDocs = perms['docs.upload'];
   const canDeleteDocs = perms['docs.delete'] || isAdmin;
 
@@ -1409,11 +1410,11 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
               style={{ width: `${localProgress}%` }}
             />
           </div>
-          {contractNum > 0 ? (
+          {contractNum > 0 && canViewFinancials ? (
             <p className="text-xs text-slate-600 mt-1.5">Calculated from commercial values — update in the Commercial module.</p>
-          ) : (
+          ) : contractNum === 0 && canViewFinancials ? (
             <p className="text-xs text-slate-600 mt-1.5">Set Contract &amp; Completed values in the Commercial module to drive progress.</p>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -2238,6 +2239,7 @@ export default function Projects({ onNavigate, pendingProjectId, onPendingProjec
   const isAdmin = store.currentUser?.role === 'Admin';
   const canCreate = perms['projects.create'] || isAdmin;
   const canDeleteProject = perms['projects.delete'] || isAdmin;
+  const canViewFinancials = perms['commercial.view_pricing'] || perms['commercial.view_values'] || isAdmin;
 
   const visibleProjects = store.visibleProjectIds
     ? store.projects.filter(p => store.visibleProjectIds!.includes(p.id))
@@ -2395,8 +2397,8 @@ export default function Projects({ onNavigate, pendingProjectId, onPendingProjec
                 </div>
                 <ProgressBar progress={project.progress} status={project.status} />
               </div>
-              {/* Financial row — only shown when value is set */}
-              {project.value && (() => {
+              {/* Financial row — only shown when value is set and user can view financials */}
+              {canViewFinancials && project.value && (() => {
                 const contractVal = parseValue(project.value);
                 const committed = project.committed ?? null;
                 const remaining = committed != null ? contractVal - committed : null;
