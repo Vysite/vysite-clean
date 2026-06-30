@@ -2026,6 +2026,9 @@ interface EstimatingTabProps {
 
 function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   const store = useAppStore();
+  const perms = usePermissions();
+  const isAdmin = store.currentUser?.role === 'Admin';
+  const canViewPricing = perms['tender.view_financials'] || isAdmin;
   const [items, setItems] = useState<EstimateItem[]>(() => tender.estimateItems ?? []);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBuf, setEditBuf] = useState<EstimateItem | null>(null);
@@ -2474,7 +2477,7 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
   const canCreateRFI = perms['tender.rfi.create'];
   const canEditRFI = perms['tender.rfi.edit'];
   const canDeleteRFI = perms['tender.rfi.delete'];
-  const canViewPricing = perms['commercial.view_pricing'] || perms['commercial.view_values'];
+  const canViewPricing = perms['tender.view_financials'] || isAdmin;
   const canExport = perms['ai.export'] || perms['commercial.export_reports'];
 
   // Always-current tender ref so callbacks never close over a stale prop snapshot
@@ -3604,7 +3607,7 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
   const isAdmin = store.currentUser?.role === 'Admin';
   const canCreateTender = isAdmin || perms['tender.reclassify'];
   const canDeleteTender = isAdmin;
-  const canViewPricingList = perms['commercial.view_pricing'] || perms['commercial.view_values'];
+  const canViewPricingList = perms['tender.view_financials'] || isAdmin;
   const canExportPipeline = perms['commercial.export_reports'] || isAdmin;
   const orgId = store.currentOrgId ?? '';
   const userName = store.currentUser?.name ?? '';

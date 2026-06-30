@@ -993,7 +993,7 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
   const isAdmin = store.currentUser?.role === 'Admin';
   const canEdit = perms['projects.edit'] || isAdmin;
   const canDelete = perms['projects.delete'] || isAdmin;
-  const canViewFinancials = perms['commercial.view_pricing'] || perms['commercial.view_values'] || isAdmin;
+  const canViewFinancials = perms['projects.view_financials'] || isAdmin;
   const canUploadDocs = perms['docs.upload'];
   const canDeleteDocs = perms['docs.delete'] || isAdmin;
 
@@ -2239,7 +2239,7 @@ export default function Projects({ onNavigate, pendingProjectId, onPendingProjec
   const isAdmin = store.currentUser?.role === 'Admin';
   const canCreate = perms['projects.create'] || isAdmin;
   const canDeleteProject = perms['projects.delete'] || isAdmin;
-  const canViewFinancials = perms['commercial.view_pricing'] || perms['commercial.view_values'] || isAdmin;
+  const canViewFinancials = perms['projects.view_financials'] || isAdmin;
 
   const visibleProjects = store.visibleProjectIds
     ? store.projects.filter(p => store.visibleProjectIds!.includes(p.id))

@@ -32,6 +32,7 @@ export type PermissionKey =
   | 'projects.edit'
   | 'projects.archive'
   | 'projects.delete'
+  | 'projects.view_financials'
   // Tender Tracker
   | 'tender.view'
   | 'tender.rfi.create'
@@ -43,6 +44,7 @@ export type PermissionKey =
   | 'tender.risks.edit'
   | 'tender.reclassify'
   | 'tender.reconcile'
+  | 'tender.view_financials'
   // Commercial
   | 'commercial.view_pricing'
   | 'commercial.edit_pricing'
@@ -151,6 +153,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'tender.view': true, 'tender.rfi.create': true, 'tender.rfi.edit': true, 'tender.rfi.delete': true,
     'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
     'tender.risks.edit': true, 'tender.reclassify': true, 'tender.reconcile': true,
+    'projects.view_financials': true, 'tender.view_financials': true,
     'commercial.view_pricing': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
     'commercial.view_values': true, 'commercial.view_reports': true, 'commercial.export_reports': true,
     'commercial.edit_project_finance_progress': true,
@@ -175,6 +178,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'tender.view': true, 'tender.rfi.create': true, 'tender.rfi.edit': true,
     'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
     'tender.risks.edit': true, 'tender.reclassify': true, 'tender.reconcile': true,
+    'projects.view_financials': true, 'tender.view_financials': true,
     'commercial.view_pricing': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
     'commercial.view_values': true, 'commercial.view_reports': true, 'commercial.export_reports': true,
     'commercial.edit_project_finance_progress': true,
@@ -194,6 +198,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
   },
   'Project Manager': {
     'projects.view_assigned': true, 'projects.edit': true,
+    'projects.view_financials': true,
     'tender.view': true, 'tender.rfi.create': true, 'tender.rfi.edit': true,
     'tender.assumptions.edit': true, 'tender.scope_notes.edit': true, 'tender.risks.edit': true,
     'docs.view': true, 'docs.upload': true, 'docs.download': true,
@@ -241,6 +246,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'tender.view': true, 'tender.rfi.create': true, 'tender.rfi.edit': true,
     'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
     'tender.risks.edit': true, 'tender.reclassify': true, 'tender.reconcile': true,
+    'projects.view_financials': true, 'tender.view_financials': true,
     'commercial.view_pricing': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
     'commercial.view_values': true, 'commercial.view_reports': true, 'commercial.export_reports': true,
     'ai.upload_docs': true, 'ai.run_review': true, 'ai.approve_findings': true, 'ai.reconcile': true,
@@ -294,6 +300,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'tender.view': true, 'tender.rfi.create': true, 'tender.rfi.edit': true,
     'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
     'tender.risks.edit': true,
+    'projects.view_financials': true, 'tender.view_financials': true,
     'commercial.view_pricing': true, 'commercial.view_values': true,
     'docs.view': true, 'docs.upload': true, 'docs.download': true,
     'modules.projects': true, 'modules.snagging': true, 'modules.site_forms': true, 'modules.testing': true,
@@ -343,9 +350,10 @@ export function resolvePermissions(user: DBPlatformUser): Record<PermissionKey, 
   const all = {} as Record<PermissionKey, boolean>;
   const allKeys: PermissionKey[] = [
     'projects.view_all','projects.view_assigned','projects.create','projects.edit','projects.archive','projects.delete',
+    'projects.view_financials',
     'tender.view','tender.rfi.create','tender.rfi.edit','tender.rfi.delete',
     'tender.assumptions.edit','tender.exclusions.edit','tender.scope_notes.edit','tender.risks.edit',
-    'tender.reclassify','tender.reconcile',
+    'tender.reclassify','tender.reconcile','tender.view_financials',
     'commercial.view_pricing','commercial.edit_pricing','commercial.view_rates','commercial.view_values',
     'commercial.view_reports','commercial.export_reports','commercial.edit_project_finance_progress',
     'ai.upload_docs','ai.run_review','ai.approve_findings','ai.reconcile','ai.import','ai.export',
