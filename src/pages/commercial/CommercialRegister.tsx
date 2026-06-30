@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   Search, Filter, Plus, TrendingUp, FileText, Printer,
-  ChevronRight, CheckCircle2, Clock, AlertCircle, CircleDot, Banknote,
+  CheckCircle2, Clock, AlertCircle, CircleDot, Banknote,
 } from 'lucide-react';
 import { RECORD_TYPES, STATUSES, typeInfo, statusInfo } from './types';
 import type { CommercialRecord, CommercialRecordType, CommercialRecordStatus } from './types';
@@ -20,7 +20,38 @@ interface CommercialRegisterProps {
   settings?: { company_name?: string; logo_data_url?: string } | null;
   onNewRecord: () => void;
   onOpenRecord: (r: CommercialRecord) => void;
+  onUpdateStatus: (r: CommercialRecord, newStatus: CommercialRecordStatus) => void;
   onExportFull: (records: CommercialRecord[]) => void;
+}
+
+// ─── Inline status dropdown ───────────────────────────────────────────────────
+
+function InlineStatus({ status, canEdit, onChange }: {
+  status: CommercialRecordStatus;
+  canEdit: boolean;
+  onChange: (s: CommercialRecordStatus) => void;
+}) {
+  const s = statusInfo(status);
+  if (!canEdit) {
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${s.color}`}>
+        {ICON_MAP[status]}{s.label}
+      </span>
+    );
+  }
+  return (
+    <select
+      value={status}
+      onChange={e => onChange(e.target.value as CommercialRecordStatus)}
+      onClick={e => e.stopPropagation()}
+      className={`appearance-none cursor-pointer inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border focus:outline-none ${s.color}`}
+      style={{ backgroundImage: 'none' }}
+    >
+      {STATUSES.map(opt => (
+        <option key={opt.value} value={opt.value} className="bg-[#1a2236] text-slate-200">{opt.label}</option>
+      ))}
+    </select>
+  );
 }
 
 function fmtCurrency(n: number): string {
@@ -57,8 +88,8 @@ function StatusBadge({ status }: { status: CommercialRecordStatus }) {
 }
 
 export default function CommercialRegister({
-  records, loading, canCreate, currentProject,
-  currentUserName, onNewRecord, onOpenRecord, onExportFull, settings,
+  records, loading, canCreate, canEdit, currentProject,
+  currentUserName, onNewRecord, onOpenRecord, onUpdateStatus, onExportFull, settings,
 }: CommercialRegisterProps) {
   const [searchQuery, setSearchQuery]   = useState('');
   const [filterType, setFilterType]     = useState<CommercialRecordType | ''>('');
@@ -192,7 +223,7 @@ export default function CommercialRegister({
       {/* Register table */}
       <div className="bg-[#111827] border border-[#1e2d4a] rounded-xl overflow-hidden">
         {/* Column headers */}
-        <div className="grid grid-cols-[32px_130px_1fr_160px_160px_160px_90px_100px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+        <div className="grid grid-cols-[32px_130px_1fr_160px_160px_180px_90px_100px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -234,7 +265,7 @@ export default function CommercialRegister({
           filteredRecords.map((r, i) => (
             <div
               key={r.id}
-              className={`grid grid-cols-[32px_130px_1fr_160px_160px_160px_90px_100px] gap-3 px-4 py-3 transition-colors hover:bg-[#1a2236] ${
+              className={`grid grid-cols-[32px_130px_1fr_160px_160px_180px_90px_100px] gap-3 px-4 py-3 transition-colors hover:bg-[#1a2236] ${
                 i < filteredRecords.length - 1 ? 'border-b border-[#1e2d4a]/50' : ''
               } ${selectedIds.has(r.id) ? 'bg-[#1a2236]/60' : ''}`}
             >
@@ -257,7 +288,9 @@ export default function CommercialRegister({
               </button>
               <button className="text-left text-sm text-slate-400 truncate" onClick={() => onOpenRecord(r)}>{r.projectName || '—'}</button>
               <button className="text-left text-sm text-slate-400 truncate" onClick={() => onOpenRecord(r)}>{r.client || '—'}</button>
-              <button className="text-left" onClick={() => onOpenRecord(r)}><StatusBadge status={r.status} /></button>
+              <div className="flex items-center" onClick={e => e.stopPropagation()}>
+                <InlineStatus status={r.status} canEdit={canEdit} onChange={s => onUpdateStatus(r, s)} />
+              </div>
               <button className="text-left text-xs text-slate-500" onClick={() => onOpenRecord(r)}>
                 {r.dateRaised ? new Date(r.dateRaised).toLocaleDateString('en-GB') : '—'}
               </button>

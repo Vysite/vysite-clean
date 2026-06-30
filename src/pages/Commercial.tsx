@@ -1556,6 +1556,37 @@ export default function Commercial() {
   function openNew() { setSelectedRecord(null); setIsNewRecord(true); setModalOpen(true); }
   function openRecord(r: CommercialRecord) { setSelectedRecord(r); setIsNewRecord(false); setModalOpen(true); }
 
+  async function handleQuickStatus(r: CommercialRecord, newStatus: CommercialRecordStatus) {
+    if (r.status === newStatus) return;
+    const now = new Date().toISOString();
+    const { data, error: err } = await supabase
+      .from('vy_commercial_records')
+      .update({ status: newStatus, status_changed_at: now, updated_at: now })
+      .eq('id', r.id)
+      .select('*')
+      .single();
+    if (err) return;
+    const projectName = projects.find(p => p.id === r.projectId)?.name;
+    const saved = dbToRecord(data as Record<string, unknown>, projectName);
+    setRecords(prev => prev.map(x => x.id === saved.id ? saved : x));
+    // Write lifecycle event
+    await supabase.from('vy_commercial_events').insert({
+      org_id: orgId, record_id: r.id, project_id: r.projectId || null,
+      event_type: 'status_changed', from_status: r.status, to_status: newStatus,
+      user_name: store.currentUser?.name ?? null, occurred_at: now,
+    });
+    logActivity({
+      orgId,
+      userName: store.currentUser?.name ?? '',
+      module: 'commercial', recordId: r.id,
+      recordRef: r.reference || r.title,
+      recordType: r.recordType, projectId: r.projectId || null, projectName: r.projectName ?? null,
+      actionType: 'status_changed',
+      description: `${store.currentUser?.name ?? 'Unknown'} changed ${r.reference || r.title} status from "${r.status}" to "${newStatus}".`,
+      prevValue: r.status, newValue: newStatus,
+    });
+  }
+
   async function handleExportFull(selectedRecords: CommercialRecord[]) {
     if (!selectedRecords.length) return;
     const ids = selectedRecords.map(r => r.id);
@@ -1779,6 +1810,7 @@ export default function Commercial() {
           currentUserName={store.currentUser?.name ?? ''}
           onNewRecord={openNew}
           onOpenRecord={openRecord}
+          onUpdateStatus={handleQuickStatus}
           onExportFull={handleExportFull}
           settings={store.settings}
         />
