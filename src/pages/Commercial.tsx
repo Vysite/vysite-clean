@@ -1585,6 +1585,7 @@ export default function Commercial() {
       description: `${store.currentUser?.name ?? 'Unknown'} changed ${r.reference || r.title} status from "${r.status}" to "${newStatus}".`,
       prevValue: r.status, newValue: newStatus,
     });
+    loadEvents();
   }
 
   async function handleExportFull(selectedRecords: CommercialRecord[]) {
