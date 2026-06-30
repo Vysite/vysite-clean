@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Plus, X, Save, Trash2, ChevronRight, AlertCircle, Printer } from 'lucide-react';
+import { Plus, X, Save, Trash2, AlertCircle, Printer, Copy, Eye, CreditCard as Edit2 } from 'lucide-react';
 import type { Project } from './types';
-import { fmtCurrency, fmtDate, parseRawValue } from './types';
+import { fmtCurrency, fmtDate } from './types';
 import type { DBCommercialApplication } from '../../lib/store';
 import { useAppStore } from '../../lib/StoreContext';
 import { exportApplicationsPDF } from './CommercialPDF';
+import { RowActionsMenu } from '../../components/RowActionsMenu';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,30 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── Inline status dropdown ───────────────────────────────────────────────────
+
+function InlineStatus({ status, canEdit, onChange }: {
+  status: string;
+  canEdit: boolean;
+  onChange: (s: string) => void;
+}) {
+  const m = statusMeta(status);
+  if (!canEdit) return <StatusBadge status={status} />;
+  return (
+    <select
+      value={status}
+      onChange={e => onChange(e.target.value)}
+      onClick={e => e.stopPropagation()}
+      className={`appearance-none cursor-pointer inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border focus:outline-none ${m.color}`}
+      style={{ backgroundImage: 'none' }}
+    >
+      {STATUSES.map(s => (
+        <option key={s.value} value={s.value} className="bg-[#1a2236] text-slate-200">{s.label}</option>
+      ))}
+    </select>
+  );
+}
+
 // ─── Drawer (create / edit) ───────────────────────────────────────────────────
 
 interface DrawerForm {
@@ -109,6 +134,7 @@ function appToForm(a: DBCommercialApplication): DrawerForm {
 
 interface DrawerProps {
   item: DBCommercialApplication | null;
+  templateData?: DBCommercialApplication | null;
   projectId: string;
   orgId: string;
   canDelete: boolean;
@@ -120,13 +146,13 @@ interface DrawerProps {
 }
 
 function ApplicationDrawer({
-  item, projectId, orgId, canDelete, nextAppNumber, createdBy,
+  item, templateData, projectId, orgId, canDelete, nextAppNumber, createdBy,
   onClose, onSaved, onDeleted,
 }: DrawerProps) {
   const store = useAppStore();
   const isNew = !item;
   const [form, setForm] = useState<DrawerForm>(() =>
-    item ? appToForm(item) : { ...BLANK_FORM, appNumber: String(nextAppNumber) }
+    item ? appToForm(item) : templateData ? appToForm(templateData) : { ...BLANK_FORM, appNumber: String(nextAppNumber) }
   );
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -307,17 +333,21 @@ function ApplicationDrawer({
 
 // ─── Table row ────────────────────────────────────────────────────────────────
 
-function AppRow({ app, canEdit, onClick }: {
+function AppRow({ app, canEdit, canCreate, canDelete, onClick, onQuickStatus, onCreateSimilar, onDelete }: {
   app: DBCommercialApplication;
   canEdit: boolean;
+  canCreate: boolean;
+  canDelete: boolean;
   onClick: () => void;
+  onQuickStatus: (s: string) => void;
+  onCreateSimilar: () => void;
+  onDelete: () => void;
 }) {
   const outstanding = app.certified_value - app.paid_value;
   return (
-    <button
+    <div
       onClick={canEdit ? onClick : undefined}
-      disabled={!canEdit}
-      className="w-full grid grid-cols-[2.5rem_1fr_6rem_6rem_6rem_6rem_6rem_5rem_1.5rem] gap-2 items-center px-4 py-3 hover:bg-[#0d1628] transition-colors border-b border-[#1a2236] last:border-0 text-left group disabled:cursor-default"
+      className={`w-full grid grid-cols-[2.5rem_1fr_6rem_6rem_6rem_6rem_6rem_6rem_auto] gap-2 items-center px-4 py-3 hover:bg-[#0d1628] transition-colors border-b border-[#1a2236] last:border-0 text-left group ${canEdit ? 'cursor-pointer' : 'cursor-default'}`}
     >
       <span className="text-xs font-mono font-semibold text-slate-300 tabular-nums">
         {String(app.app_number).padStart(2, '0')}
@@ -333,11 +363,17 @@ function AppRow({ app, canEdit, onClick }: {
         {fmtCurrency(outstanding)}
       </span>
       <span className="text-xs tabular-nums text-slate-500 text-right">{fmtCurrency(app.retention)}</span>
-      <span className="flex justify-end"><StatusBadge status={app.status} /></span>
-      {canEdit && (
-        <ChevronRight size={14} className="text-slate-600 group-hover:text-slate-400 transition-colors justify-self-end" />
-      )}
-    </button>
+      <span className="flex justify-end" onClick={e => e.stopPropagation()}>
+        <InlineStatus status={app.status} canEdit={canEdit} onChange={onQuickStatus} />
+      </span>
+      <div className="flex items-center justify-end" onClick={e => e.stopPropagation()}>
+        <RowActionsMenu actions={[
+          { label: 'View / Edit', icon: canEdit ? Edit2 : Eye, onClick },
+          ...(canCreate ? [{ label: 'Create Similar', icon: Copy, onClick: onCreateSimilar }] : []),
+          ...(canDelete ? [{ label: 'Delete', icon: Trash2, onClick: onDelete, danger: true, dividerBefore: true }] : []),
+        ]} />
+      </div>
+    </div>
   );
 }
 
@@ -372,6 +408,8 @@ export default function CommercialApplications({
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState<DBCommercialApplication | null>(null);
+  const [similarTemplate, setSimilarTemplate] = useState<DBCommercialApplication | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const nextAppNumber = useMemo(
     () => items.length > 0 ? Math.max(...items.map(a => a.app_number)) + 1 : 1,
@@ -389,19 +427,36 @@ export default function CommercialApplications({
 
   function openNew() {
     setSelected(null);
+    setSimilarTemplate(null);
     setDrawerOpen(true);
   }
   function openItem(a: DBCommercialApplication) {
     setSelected(a);
+    setSimilarTemplate(null);
     setDrawerOpen(true);
+  }
+  function handleCreateSimilar(source: DBCommercialApplication) {
+    setSelected(null);
+    setSimilarTemplate({ ...source, id: generateId(), app_number: nextAppNumber, app_date: new Date().toISOString().slice(0, 10), payment_due: null, payment_recd: null, status: 'draft', notes: '' });
+    setDrawerOpen(true);
+  }
+  async function handleQuickStatus(app: DBCommercialApplication, newStatus: string) {
+    if (app.status === newStatus) return;
+    await store.updateCommercialApplication({ ...app, status: newStatus, updated_at: new Date().toISOString() });
+  }
+  async function handleDelete(id: string) {
+    await store.removeCommercialApplication(id);
+    setDeleteConfirm(null);
   }
   function handleSaved() {
     setDrawerOpen(false);
     setSelected(null);
+    setSimilarTemplate(null);
   }
   function handleDeleted() {
     setDrawerOpen(false);
     setSelected(null);
+    setSimilarTemplate(null);
   }
 
   if (!project) {
@@ -477,7 +532,7 @@ export default function CommercialApplications({
       ) : (
         <div className="bg-[#0a1120] border border-[#1e2d4a] rounded-xl overflow-hidden">
           {/* Table header */}
-          <div className="grid grid-cols-[2.5rem_1fr_6rem_6rem_6rem_6rem_6rem_5rem_1.5rem] gap-2 px-4 py-2.5 bg-[#0d1628] border-b border-[#1e2d4a]">
+          <div className="grid grid-cols-[2.5rem_1fr_6rem_6rem_6rem_6rem_6rem_6rem_auto] gap-2 px-4 py-2.5 bg-[#0d1628] border-b border-[#1e2d4a]">
             {['No.', 'Period', 'Applied', 'Certified', 'Paid', 'Outstanding', 'Retention', 'Status', ''].map((h, i) => (
               <span key={i} className={`text-[10px] font-semibold text-slate-500 uppercase tracking-wider ${i >= 2 && i <= 6 ? 'text-right' : ''}`}>
                 {h}
@@ -490,12 +545,17 @@ export default function CommercialApplications({
               key={app.id}
               app={app}
               canEdit={canEdit}
+              canCreate={canCreate}
+              canDelete={canDelete}
               onClick={() => openItem(app)}
+              onQuickStatus={s => handleQuickStatus(app, s)}
+              onCreateSimilar={() => handleCreateSimilar(app)}
+              onDelete={() => handleDelete(app.id)}
             />
           ))}
           {/* Totals footer */}
           {items.length > 1 && (
-            <div className="grid grid-cols-[2.5rem_1fr_6rem_6rem_6rem_6rem_6rem_5rem_1.5rem] gap-2 items-center px-4 py-3 bg-[#0d1628] border-t border-[#1e2d4a]">
+            <div className="grid grid-cols-[2.5rem_1fr_6rem_6rem_6rem_6rem_6rem_6rem_auto] gap-2 items-center px-4 py-3 bg-[#0d1628] border-t border-[#1e2d4a]">
               <span />
               <span className="text-[11px] font-semibold text-slate-400">Totals</span>
               <span className="text-xs tabular-nums font-semibold text-white text-right">{fmtCurrency(appliedToDate)}</span>
@@ -516,12 +576,13 @@ export default function CommercialApplications({
       {drawerOpen && (
         <ApplicationDrawer
           item={selected}
+          templateData={similarTemplate}
           projectId={project.id}
           orgId={orgId}
           canDelete={canDelete}
           nextAppNumber={nextAppNumber}
           createdBy={store.currentUser?.name ?? null}
-          onClose={() => { setDrawerOpen(false); setSelected(null); }}
+          onClose={() => { setDrawerOpen(false); setSelected(null); setSimilarTemplate(null); }}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
         />

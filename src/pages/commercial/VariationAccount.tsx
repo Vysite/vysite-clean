@@ -1,10 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import {
-  Plus, X, Save, Trash2,
-  Paperclip, Eye, Download, FileText, AlertCircle,
-  TrendingUp, TrendingDown, Info, Printer,
-  MessageSquare, HardHat, ChevronDown, Calculator,
-} from 'lucide-react';
+import { Plus, X, Save, Trash2, Paperclip, Eye, Download, FileText, AlertCircle, TrendingUp, TrendingDown, Info, Printer, MessageSquare, HardHat, ChevronDown, Calculator, Copy, CreditCard as Edit2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAppStore } from '../../lib/StoreContext';
 import FileUploadComponent from '../../components/FileUpload';
@@ -13,6 +8,7 @@ import type { DBVariationAccountItem, DBAttachment, DBVABuildUpLine, DBVAComment
 import type { Project } from '../../data/types';
 import { fmtCurrency, fmtDate, parseRawValue } from './types';
 import { exportVariationAccountPDF, exportVAInternalPDF, exportVAClientPDF } from './CommercialPDF';
+import { RowActionsMenu } from '../../components/RowActionsMenu';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -563,6 +559,30 @@ function CommentsSection({
   );
 }
 
+// ─── Inline status dropdown for VA ───────────────────────────────────────────
+
+function VAInlineStatus({ status, canEdit, onChange }: {
+  status: string;
+  canEdit: boolean;
+  onChange: (s: VAStatus) => void;
+}) {
+  const s = statusInfo(status);
+  if (!canEdit) return <StatusBadge status={status} />;
+  return (
+    <select
+      value={status}
+      onChange={e => onChange(e.target.value as VAStatus)}
+      onClick={e => e.stopPropagation()}
+      className={`appearance-none cursor-pointer inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border focus:outline-none ${s.color}`}
+      style={{ backgroundImage: 'none' }}
+    >
+      {VA_STATUSES.map(opt => (
+        <option key={opt.value} value={opt.value} className="bg-[#1a2236] text-slate-200">{opt.label}</option>
+      ))}
+    </select>
+  );
+}
+
 // ─── Variation drawer ─────────────────────────────────────────────────────────
 
 type DrawerMode = 'create' | 'edit';
@@ -571,6 +591,7 @@ type DrawerTab = 'details' | 'build-up' | 'comments' | 'attachments';
 interface VariationDrawerProps {
   mode: DrawerMode;
   item: DBVariationAccountItem | null;
+  templateData?: DBVariationAccountItem | null;
   orgId: string;
   projectId: string;
   nextRef: string;
@@ -582,7 +603,7 @@ interface VariationDrawerProps {
 }
 
 function VariationDrawer({
-  mode, item, orgId, projectId, nextRef, canEdit, canDelete,
+  mode, item, templateData, orgId, projectId, nextRef, canEdit, canDelete,
   onClose, onSaved, onDeleted,
 }: VariationDrawerProps) {
   const store = useAppStore();
@@ -610,12 +631,12 @@ function VariationDrawer({
 
   const [form, setForm] = useState({
     reference:   item?.reference   ?? nextRef,
-    title:       item?.title       ?? '',
-    description: item?.description ?? '',
-    reason:      item?.reason      ?? '',
-    value:       item?.value       != null ? String(item.value) : '',
-    isPositive:  item?.is_positive ?? true,
-    status:      (item?.status     ?? 'draft') as VAStatus,
+    title:       templateData ? templateData.title : (item?.title ?? ''),
+    description: templateData ? templateData.description : (item?.description ?? ''),
+    reason:      templateData ? templateData.reason : (item?.reason ?? ''),
+    value:       (templateData?.value ?? item?.value) != null ? String(templateData?.value ?? item?.value) : '',
+    isPositive:  templateData?.is_positive ?? item?.is_positive ?? true,
+    status:      ((item?.status ?? 'draft')) as VAStatus,
     dateRaised:  item?.date_raised ?? new Date().toISOString().slice(0, 10),
     dateAgreed:  item?.date_agreed ?? '',
     notes:       item?.notes       ?? '',
@@ -1105,6 +1126,7 @@ export default function VariationAccount({
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<DBVariationAccountItem | null>(null);
+  const [similarTemplate, setSimilarTemplate] = useState<DBVariationAccountItem | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [showMetricsInfo, setShowMetricsInfo] = useState(false);
 
@@ -1121,22 +1143,37 @@ export default function VariationAccount({
 
   function openNew() {
     setSelectedItem(null);
+    setSimilarTemplate(null);
     setDrawerOpen(true);
   }
 
   function openItem(item: DBVariationAccountItem) {
     setSelectedItem(item);
+    setSimilarTemplate(null);
     setDrawerOpen(true);
+  }
+
+  function handleCreateSimilar(source: DBVariationAccountItem) {
+    setSelectedItem(null);
+    setSimilarTemplate(source);
+    setDrawerOpen(true);
+  }
+
+  async function handleQuickStatus(item: DBVariationAccountItem, newStatus: VAStatus) {
+    if (item.status === newStatus) return;
+    await store.updateVariationAccountItem({ ...item, status: newStatus, updated_at: new Date().toISOString() });
   }
 
   function handleSaved(_v: DBVariationAccountItem) {
     setDrawerOpen(false);
     setSelectedItem(null);
+    setSimilarTemplate(null);
   }
 
   function handleDeleted(_id: string) {
     setDrawerOpen(false);
     setSelectedItem(null);
+    setSimilarTemplate(null);
   }
 
   if (!project) {
@@ -1270,8 +1307,9 @@ export default function VariationAccount({
                   <th className="px-4 py-2.5 text-left text-slate-500 font-semibold">Title</th>
                   <th className="px-4 py-2.5 text-left text-slate-500 font-semibold w-32 hidden sm:table-cell">Reason</th>
                   <th className="px-4 py-2.5 text-right text-slate-500 font-semibold w-32">Value</th>
-                  <th className="px-4 py-2.5 text-left text-slate-500 font-semibold w-32">Status</th>
+                  <th className="px-4 py-2.5 text-left text-slate-500 font-semibold w-36">Status</th>
                   <th className="px-4 py-2.5 text-left text-slate-500 font-semibold w-28 hidden md:table-cell">Date Raised</th>
+                  <th className="px-4 py-2.5 w-8"></th>
                 </tr>
               </thead>
               <tbody>
@@ -1305,8 +1343,17 @@ export default function VariationAccount({
                           {fmtCurrency(Math.abs(item.value))}
                         </span>
                       </td>
-                      <td className="px-4 py-3"><StatusBadge status={item.status} /></td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <VAInlineStatus status={item.status} canEdit={canEdit} onChange={s => handleQuickStatus(item, s)} />
+                      </td>
                       <td className="px-4 py-3 text-slate-500 hidden md:table-cell">{fmtDate(item.date_raised)}</td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <RowActionsMenu actions={[
+                          { label: 'View / Edit', icon: canEdit ? Edit2 : Eye, onClick: () => openItem(item) },
+                          ...(canCreate ? [{ label: 'Create Similar', icon: Copy, onClick: () => handleCreateSimilar(item) }] : []),
+                          ...(canDelete ? [{ label: 'Delete', icon: Trash2, onClick: () => store.removeVariationAccountItem(item.id), danger: true, dividerBefore: true }] : []),
+                        ]} />
+                      </td>
                     </tr>
                   );
                 })}
@@ -1321,12 +1368,13 @@ export default function VariationAccount({
         <VariationDrawer
           mode={selectedItem ? 'edit' : 'create'}
           item={selectedItem}
+          templateData={similarTemplate}
           orgId={orgId}
           projectId={project.id}
           nextRef={nextRef}
           canEdit={selectedItem ? canEdit : canCreate}
           canDelete={canDelete}
-          onClose={() => { setDrawerOpen(false); setSelectedItem(null); }}
+          onClose={() => { setDrawerOpen(false); setSelectedItem(null); setSimilarTemplate(null); }}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
         />

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Plus, Search, ChevronDown, Clock, TrendingUp, FileText, MessageSquare, Users, HelpCircle, FolderOpen, Trophy, X, CheckCircle, AlertTriangle, Send, CreditCard as Edit2, Save, StickyNote, AtSign, Trash2, Calculator, ChevronUp, BookOpen, Lock } from 'lucide-react';
+import { ArrowLeft, Plus, Search, ChevronDown, Clock, TrendingUp, FileText, MessageSquare, Users, HelpCircle, FolderOpen, Trophy, X, CheckCircle, AlertTriangle, Send, CreditCard as Edit2, Save, StickyNote, AtSign, Trash2, Calculator, ChevronUp, BookOpen, Lock, Copy } from 'lucide-react';
 import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { RowActionsMenu } from '../components/RowActionsMenu';
 import type {
   Tender,
   TenderStatus,
@@ -774,7 +775,7 @@ interface TenderRFIRegisterProps {
   onDeleteRFI: (rfi: TenderRFI) => void;
 }
 
-function TenderRFIRegister({ rfis, attachments, canCreate, canEdit, canDelete, onAddRFI, onEditRFI, onOpenRFI, onDeleteRFI }: TenderRFIRegisterProps) {
+function TenderRFIRegister({ rfis, attachments, canCreate, canEdit, canDelete, onAddRFI, onEditRFI, onOpenRFI, onUpdateStatus, onDeleteRFI }: TenderRFIRegisterProps) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'All' | 'Open' | 'Overdue' | RFIStatus>('All');
   const today = new Date().toISOString().slice(0, 10);
@@ -872,8 +873,8 @@ function TenderRFIRegister({ rfis, attachments, canCreate, canEdit, canDelete, o
       {/* Register grid */}
       <div className="bg-[#0d1628] rounded-xl border border-[#1e2d4a] overflow-hidden flex flex-col">
         {/* Column headers — sticky */}
-        <div className="hidden md:grid grid-cols-[70px_40px_1fr_110px_100px_110px_120px_32px_32px] gap-2 px-3 py-2 border-b border-[#1e2d4a] bg-[#111827] shrink-0">
-          {['Ref', 'Age', 'Subject / Question', 'Directed To', 'Raised', 'Response Due', 'Status', '', ''].map(h => (
+        <div className="hidden md:grid grid-cols-[70px_40px_1fr_110px_100px_110px_140px_32px] gap-2 px-3 py-2 border-b border-[#1e2d4a] bg-[#111827] shrink-0">
+          {['Ref', 'Age', 'Subject / Question', 'Directed To', 'Raised', 'Response Due', 'Status', ''].map(h => (
             <span key={h} className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">{h}</span>
           ))}
         </div>
@@ -902,7 +903,7 @@ function TenderRFIRegister({ rfis, attachments, canCreate, canEdit, canDelete, o
                 {/* Main row */}
                 <div
                   onClick={() => onOpenRFI(rfi)}
-                  className="grid grid-cols-1 md:grid-cols-[70px_40px_1fr_110px_100px_110px_120px_32px_32px] gap-2 px-3 py-3 cursor-pointer group hover:bg-[#111827] transition-colors items-center">
+                  className="grid grid-cols-1 md:grid-cols-[70px_40px_1fr_110px_100px_110px_140px_32px] gap-2 px-3 py-3 cursor-pointer group hover:bg-[#111827] transition-colors items-center">
 
                   {/* Ref */}
                   <span className="text-[11px] font-mono font-bold text-slate-500">{rfi.ref}</span>
@@ -952,28 +953,33 @@ function TenderRFIRegister({ rfis, attachments, canCreate, canEdit, canDelete, o
                     )}
                   </div>
 
-                  {/* Status */}
-                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${rfiColors[rfi.status]}`}>
-                    {rfi.status}
-                  </span>
-
-                  {/* Edit */}
-                  {canEdit && (
-                    <button type="button"
-                      onClick={e => { e.stopPropagation(); onEditRFI(rfi); }}
-                      className="p-1 rounded text-slate-600 hover:text-[#f97316] transition-colors opacity-0 group-hover:opacity-100 shrink-0">
-                      <Edit2 size={12} />
-                    </button>
+                  {/* Status — inline dropdown when editable */}
+                  {canEdit ? (
+                    <select
+                      value={rfi.status}
+                      onChange={e => { e.stopPropagation(); onUpdateStatus(rfi.id, e.target.value as RFIStatus); }}
+                      onClick={e => e.stopPropagation()}
+                      className={`appearance-none cursor-pointer inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap focus:outline-none ${rfiColors[rfi.status]}`}
+                      style={{ backgroundImage: 'none' }}
+                    >
+                      {(['Draft', 'Issued', 'Awaiting Response', 'Closed'] as RFIStatus[]).map(s => (
+                        <option key={s} value={s} className="bg-[#1a2236] text-slate-200 font-normal">{s}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${rfiColors[rfi.status]}`}>
+                      {rfi.status}
+                    </span>
                   )}
 
-                  {/* Delete */}
-                  {canDelete && (
-                    <button type="button"
-                      onClick={e => { e.stopPropagation(); onDeleteRFI(rfi); }}
-                      className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/30 transition-colors opacity-0 group-hover:opacity-100 shrink-0">
-                      <Trash2 size={12} />
-                    </button>
-                  )}
+                  {/* Actions */}
+                  <div onClick={e => e.stopPropagation()}>
+                    <RowActionsMenu actions={[
+                      { label: 'View', icon: HelpCircle, onClick: () => onOpenRFI(rfi) },
+                      ...(canEdit ? [{ label: 'Edit', icon: Edit2, onClick: () => onEditRFI(rfi) }] : []),
+                      ...(canDelete ? [{ label: 'Delete', icon: Trash2, onClick: () => onDeleteRFI(rfi), danger: true, dividerBefore: true }] : []),
+                    ]} />
+                  </div>
                 </div>
 
               </div>

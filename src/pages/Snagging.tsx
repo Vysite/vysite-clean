@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Plus, X, MessageSquare, Search, CheckCircle, AlertTriangle, Clock, AlertCircle, FileText, Printer, Trash2, Eye, Download, File, Image, Paperclip, CreditCard as Edit2, TrendingUp, ClipboardList, Camera } from 'lucide-react';
+import { Plus, X, MessageSquare, Search, CheckCircle, AlertTriangle, Clock, AlertCircle, FileText, Printer, Trash2, Eye, Download, File, Image, Paperclip, CreditCard as Edit2, TrendingUp, ClipboardList, Camera, Copy } from 'lucide-react';
 import { openPrintTab } from '../lib/printTab';
 import { buildSnaggingReportPageHTML, SNAGGING_PDF_CSS, renderSnaggingReportPDF } from '../forms/SnaggingPDF';
 import type { SnagItemForPDF, AttachmentForPDF } from '../forms/SnaggingPDF';
@@ -11,6 +11,7 @@ import FileUploadComponent from '../components/FileUpload';
 import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 import MentionTextarea, { renderWithMentions } from '../components/MentionTextarea';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { RowActionsMenu } from '../components/RowActionsMenu';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,41 @@ const statusStyle: Record<ExtendedStatus, string> = {
   'Awaiting Review': 'bg-amber-900/50 text-amber-400',
   'Closed':          'bg-emerald-900/50 text-emerald-400',
 };
+
+const REPORT_STATUSES = ['Draft', 'In Progress', 'Submitted', 'Approved', 'Closed'] as const;
+
+const reportStatusStyle: Record<string, string> = {
+  Draft:       'bg-slate-700/50 text-slate-400',
+  'In Progress':'bg-blue-900/50 text-blue-400',
+  Submitted:   'bg-amber-900/50 text-amber-400',
+  Approved:    'bg-teal-900/50 text-teal-400',
+  Closed:      'bg-emerald-900/50 text-emerald-400',
+};
+
+interface ReportStatusDropdownProps {
+  status: string;
+  canEdit: boolean;
+  onChange: (s: string) => void;
+}
+function ReportStatusDropdown({ status, canEdit, onChange }: ReportStatusDropdownProps) {
+  const cls = reportStatusStyle[status] ?? 'bg-slate-700/50 text-slate-400';
+  if (!canEdit) {
+    return <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${cls}`}>{status}</span>;
+  }
+  return (
+    <select
+      value={status}
+      onClick={e => e.stopPropagation()}
+      onChange={e => { e.stopPropagation(); onChange(e.target.value); }}
+      className={`text-[9px] font-bold px-2 py-0.5 rounded-full cursor-pointer outline-none appearance-none ${cls} hover:opacity-80 transition-opacity`}
+      style={{ backgroundImage: 'none' }}
+    >
+      {REPORT_STATUSES.map(s => (
+        <option key={s} value={s} className="bg-[#1a2236] text-slate-200 text-xs font-normal">{s}</option>
+      ))}
+    </select>
+  );
+}
 
 function PriorityBadge({ p }: { p: SnagPriority }) {
   return <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${priorityStyle[p]?.badge ?? 'bg-slate-700 text-slate-400'}`}>{p}</span>;
@@ -1045,6 +1081,7 @@ export default function Snagging({ pendingOpen, onPendingOpenConsumed, pendingFi
   const [deleteReportId, setDeleteReportId] = useState<string | null>(null);
   const [selectMode, setSelectMode]         = useState(false);
   const [selectedIds, setSelectedIds]       = useState<Set<string>>(new Set());
+  const [similarReportTemplate, setSimilarReportTemplate] = useState<DBSnaggingReport | null>(null);
 
   const reports = store.snaggingReports ?? [];
 
@@ -1152,6 +1189,21 @@ export default function Snagging({ pendingOpen, onPendingOpenConsumed, pendingFi
       await store.addSnaggingReport(rec);
     }
     setEditingReport(null);
+    setSimilarReportTemplate(null);
+  };
+
+  const handleQuickReportStatus = async (report: DBSnaggingReport, newStatus: string) => {
+    if (report.status === newStatus) return;
+    const updated = { ...report, status: newStatus };
+    await store.updateSnaggingReport(updated);
+    if (viewingReport?.id === report.id) setViewingReport(updated);
+    logActivity({ orgId, userName, module: 'snagging', recordId: report.id, recordRef: report.id, recordType: 'Snagging Report', projectId: report.project_id, projectName: report.project_name, actionType: 'status_changed', description: `${userName} changed snagging report "${report.title}" status from "${report.status}" to "${newStatus}".`, prevValue: report.status, newValue: newStatus });
+  };
+
+  const handleCreateSimilarReport = (source: DBSnaggingReport) => {
+    setSimilarReportTemplate(source);
+    setEditingReport(null);
+    setShowNewReport(true);
   };
 
   // live-sync viewing report
@@ -1276,20 +1328,24 @@ export default function Snagging({ pendingOpen, onPendingOpenConsumed, pendingFi
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${report.status === 'Closed' ? 'bg-emerald-900/50 text-emerald-400' : report.status === 'Approved' ? 'bg-teal-900/50 text-teal-400' : 'bg-slate-700/50 text-slate-400'}`}>{report.status}</span>
+                        <ReportStatusDropdown
+                          status={report.status}
+                          canEdit={canEdit}
+                          onChange={s => handleQuickReportStatus(report, s)}
+                        />
                         {hasOverdue && <span className="text-[9px] font-bold text-rose-400 bg-rose-900/30 px-1.5 py-0.5 rounded-full">Overdue</span>}
                       </div>
                       <h3 className="text-sm font-bold text-white leading-snug group-hover:text-white truncate">{report.title}</h3>
                       <p className="text-xs text-slate-500 mt-0.5 truncate">{report.project_name}</p>
                     </div>
                     {!selectMode && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={e => e.stopPropagation()}>
-                        {canEdit && (
-                          <button onClick={() => { setEditingReport(report); setShowNewReport(true); }} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-[#0d1628]"><Edit2 size={12} /></button>
-                        )}
-                        {canDelete && (
-                          <button onClick={() => setDeleteReportId(report.id)} className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20"><Trash2 size={12} /></button>
-                        )}
+                      <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                        <RowActionsMenu actions={[
+                          { label: 'View', icon: Eye, onClick: () => setViewingReport(report) },
+                          ...(canEdit ? [{ label: 'Edit', icon: Edit2, onClick: () => { setEditingReport(report); setShowNewReport(true); } }] : []),
+                          { label: 'Create Similar', icon: Copy, onClick: () => handleCreateSimilarReport(report) },
+                          ...(canDelete ? [{ label: 'Delete', icon: Trash2, onClick: () => setDeleteReportId(report.id), danger: true, dividerBefore: true }] : []),
+                        ]} />
                       </div>
                     )}
                   </div>
@@ -1326,8 +1382,8 @@ export default function Snagging({ pendingOpen, onPendingOpenConsumed, pendingFi
       {/* Modals */}
       {(showNewReport || editingReport) && (
         <ReportModal
-          initial={editingReport}
-          onClose={() => { setShowNewReport(false); setEditingReport(null); }}
+          initial={editingReport ?? similarReportTemplate}
+          onClose={() => { setShowNewReport(false); setEditingReport(null); setSimilarReportTemplate(null); }}
           onSave={handleSaveReport}
         />
       )}

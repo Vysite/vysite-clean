@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, X, Search, ChevronDown, Clock, CheckCircle, Mail, Download, FileText, CreditCard as Edit2, MessageSquare, Paperclip, Trash2, Eye, File, Image } from 'lucide-react';
+import { Plus, X, Search, ChevronDown, Clock, CheckCircle, Mail, Download, FileText, CreditCard as Edit2, MessageSquare, Paperclip, Trash2, Eye, File, Image, Copy } from 'lucide-react';
 import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 import { type Action, type ActionStatus, type ActionComment } from '../data/types';
 import FileUploadComponent from '../components/FileUpload';
@@ -9,6 +9,7 @@ import type { DBAttachment } from '../lib/store';
 import MentionTextarea, { renderWithMentions } from '../components/MentionTextarea';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
+import { RowActionsMenu } from '../components/RowActionsMenu';
 
 const statusColors: Record<ActionStatus, string> = {
   'Not Started': 'bg-[#1e2d4a] text-slate-300',
@@ -28,6 +29,33 @@ function StatusBadge({ status }: { status: ActionStatus }) {
     <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${statusColors[status]}`}>
       {status}
     </span>
+  );
+}
+
+const ACTION_STATUSES: ActionStatus[] = ['Not Started', 'In Progress', 'Waiting', 'Complete'];
+
+interface InlineStatusProps {
+  status: ActionStatus;
+  canEdit: boolean;
+  onChange: (s: ActionStatus) => void;
+}
+function InlineStatus({ status, canEdit, onChange }: InlineStatusProps) {
+  const cls = statusColors[status] ?? 'bg-[#1e2d4a] text-slate-300';
+  if (!canEdit) {
+    return <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${cls}`}>{status}</span>;
+  }
+  return (
+    <select
+      value={status}
+      onClick={e => e.stopPropagation()}
+      onChange={e => { e.stopPropagation(); onChange(e.target.value as ActionStatus); }}
+      className={`text-[10px] font-semibold px-2.5 py-1 rounded-full cursor-pointer outline-none appearance-none ${cls} hover:opacity-80 transition-opacity`}
+      style={{ backgroundImage: 'none' }}
+    >
+      {ACTION_STATUSES.map(s => (
+        <option key={s} value={s} className="bg-[#1a2236] text-slate-200 text-xs font-normal">{s}</option>
+      ))}
+    </select>
   );
 }
 
@@ -457,17 +485,18 @@ function ActionDetail({ action, onClose, onUpdate, canEdit = true, canDelete: _c
 interface CreateActionModalProps {
   onClose: () => void;
   onSave: (action: Omit<Action, 'id'>, files: UploadedFile[]) => void;
+  initialData?: Action | null;
 }
 
-function CreateActionModal({ onClose, onSave }: CreateActionModalProps) {
+function CreateActionModal({ onClose, onSave, initialData }: CreateActionModalProps) {
   const store = useAppStore();
   const [form, setForm] = useState({
-    project: '',
-    title: '',
-    description: '',
-    owner: '',
-    dueDate: '',
-    priority: 'Medium' as 'High' | 'Medium' | 'Low',
+    project: initialData?.projectName ?? '',
+    title: initialData?.title ?? '',
+    description: initialData?.description ?? '',
+    owner: initialData?.owner ?? '',
+    dueDate: initialData?.dueDate ?? '',
+    priority: (initialData?.priority ?? 'Medium') as 'High' | 'Medium' | 'Low',
   });
   const [pendingFiles, setPendingFiles] = useState<UploadedFile[]>([]);
   const [showUpload, setShowUpload] = useState(false);
@@ -744,6 +773,7 @@ export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFil
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [similarTemplate, setSimilarTemplate] = useState<Action | null>(null);
   const perms = usePermissions();
   const isAdmin = store.currentUser?.role === 'Admin';
   const canCreate = perms['actions.create'] || isAdmin;
@@ -822,6 +852,27 @@ export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFil
     }
     logActivity({ orgId, userName, module: 'actions', recordId: newAction.id, recordRef: newAction.id.toUpperCase(), recordType: 'Action', projectId: newAction.projectId, projectName: newAction.projectName, actionType: 'record_created', description: `${userName} created action "${newAction.title}" on project ${newAction.projectName}.` });
   }
+
+  const handleQuickStatus = async (action: Action, newStatus: ActionStatus) => {
+    if (action.status === newStatus) return;
+    const updated = { ...action, status: newStatus };
+    await store.updateAction(updated);
+    if (selectedAction?.id === action.id) setSelectedAction(updated);
+    logActivity({ orgId, userName, module: 'actions', recordId: action.id, recordRef: action.id.toUpperCase(), recordType: 'Action', projectId: action.projectId, projectName: action.projectName, actionType: 'status_changed', description: `${userName} changed action "${action.title}" status from "${action.status}" to "${newStatus}".`, prevValue: action.status, newValue: newStatus });
+  };
+
+  const handleCreateSimilar = (source: Action) => {
+    setSimilarTemplate({
+      ...source,
+      id: '',
+      status: 'Not Started',
+      createdBy: userName,
+      createdDate: new Date().toISOString().split('T')[0],
+      comments: [],
+      overdue: false,
+    });
+    setShowCreate(true);
+  };
 
   return (
     <div className="p-4 lg:p-6">
@@ -921,18 +972,26 @@ export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFil
                         className="w-4 h-4 rounded border-slate-600 bg-[#0d1628] accent-orange-500 cursor-pointer" />
                     </div>
                   )}
-                  <div className="flex items-start justify-between gap-3 flex-1 min-w-0">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="text-[10px] font-mono text-slate-600">#{action.id.toUpperCase()}</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${action.priority === 'High' ? 'bg-red-900/50 text-red-400' : action.priority === 'Medium' ? 'bg-amber-900/50 text-amber-400' : 'bg-[#1e2d4a] text-slate-500'}`}>{action.priority}</span>
-                        {action.overdue && <span className="text-[9px] font-bold text-red-400 bg-red-900/50 px-1.5 py-0.5 rounded-full border border-red-800">OVERDUE</span>}
+                    <div className="flex items-start justify-between gap-3 flex-1 min-w-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-[10px] font-mono text-slate-600">#{action.id.toUpperCase()}</span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${action.priority === 'High' ? 'bg-red-900/50 text-red-400' : action.priority === 'Medium' ? 'bg-amber-900/50 text-amber-400' : 'bg-[#1e2d4a] text-slate-500'}`}>{action.priority}</span>
+                          {action.overdue && <span className="text-[9px] font-bold text-red-400 bg-red-900/50 px-1.5 py-0.5 rounded-full border border-red-800">OVERDUE</span>}
+                        </div>
+                        <h3 className="font-semibold text-slate-200 text-sm leading-snug">{action.title}</h3>
+                        <p className="text-xs text-slate-500 mt-0.5 truncate">{action.projectName}</p>
                       </div>
-                      <h3 className="font-semibold text-slate-200 text-sm leading-snug">{action.title}</h3>
-                      <p className="text-xs text-slate-500 mt-0.5 truncate">{action.projectName}</p>
+                      <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                        <InlineStatus status={action.status} canEdit={canEdit} onChange={s => handleQuickStatus(action, s)} />
+                        <RowActionsMenu actions={[
+                          { label: 'View', icon: Eye, onClick: () => setSelectedAction(action) },
+                          ...(canEdit ? [{ label: 'Edit', icon: Edit2, onClick: () => setSelectedAction(action) }] : []),
+                          { label: 'Create Similar', icon: Copy, onClick: () => handleCreateSimilar(action) },
+                          ...(canDelete ? [{ label: 'Delete', icon: Trash2, onClick: () => setDeleteConfirm(action.id), danger: true, dividerBefore: true }] : []),
+                        ]} />
+                      </div>
                     </div>
-                    <StatusBadge status={action.status} />
-                  </div>
                 </div>
                 <div className={`flex items-center gap-3 mt-3 pt-3 border-t border-[#1e2d4a] ${selectMode ? 'pl-7' : ''}`}>
                   <span className="text-xs text-slate-500">Owner: <span className="font-medium text-slate-300">{action.owner}</span></span>
@@ -949,22 +1008,6 @@ export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFil
                       <span className="flex items-center gap-0.5 text-[10px] text-slate-500 bg-[#0d1628] border border-[#1e2d4a] px-1.5 py-0.5 rounded-full">
                         <Paperclip size={9} />{attCount}
                       </span>
-                    )}
-                    <button
-                      onClick={e => { e.stopPropagation(); setSelectedAction(action); }}
-                      className="p-1 rounded text-slate-600 hover:text-[#f97316] hover:bg-[#f97316]/10 transition-colors"
-                      title="Edit action"
-                    >
-                      <Edit2 size={13} />
-                    </button>
-                    {isAdmin && (
-                      <button
-                        onClick={e => { e.stopPropagation(); setDeleteConfirm(action.id); }}
-                        className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/30 transition-colors"
-                        title="Delete action"
-                      >
-                        <Trash2 size={13} />
-                      </button>
                     )}
                   </div>
                 </div>
@@ -1004,7 +1047,11 @@ export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFil
         />
       )}
       {showCreate && (
-        <CreateActionModal onClose={() => setShowCreate(false)} onSave={handleCreateAction} />
+        <CreateActionModal
+          onClose={() => { setShowCreate(false); setSimilarTemplate(null); }}
+          onSave={handleCreateAction}
+          initialData={similarTemplate}
+        />
       )}
       {showPdfModal && (
         <SendPdfModal selectedActions={selectedActions} onClose={() => setShowPdfModal(false)} />
