@@ -331,6 +331,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const [filterStatus, setFilterStatus]           = useState('All');
   const [showBuilder, setShowBuilder]             = useState(false);
   const [editingForm, setEditingForm]             = useState<ExtendedSiteForm | null>(null);
+  const [similarTemplate, setSimilarTemplate]     = useState<ExtendedSiteForm | null>(null);
   const [viewingForm, setViewingForm]             = useState<ExtendedSiteForm | null>(null);
   const [builderType, setBuilderType]             = useState<ExtendedFormType>('QA Inspection');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -440,8 +441,9 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     const extra = { ...data } as Record<string, unknown>;
     ['id', 'type', 'projectId', 'projectName', 'date', 'completedBy', 'description', 'comments', 'status', 'submittedDate', 'notes'].forEach(k => delete extra[k]);
     const isEdit = !!editingForm;
+    const isSimilar = !!similarTemplate;
     const dbForm: DBSiteForm = {
-      id: editingForm?.id ?? data.id ?? `f${Date.now()}`,
+      id: isEdit ? editingForm!.id : (data.id ?? `f${Date.now()}`),
       type: data.type,
       project_id: store.projects.find(p => p.name === data.projectName)?.id ?? '',
       project_name: data.projectName ?? '',
@@ -467,10 +469,15 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
       logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType, description: `${baseDesc}${changePart}`, prevValue, newValue, metadata: fieldDiffs.length ? { diffs: fieldDiffs } : null });
     } else {
       store.addSiteForm(dbForm);
-      logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'record_created', description: formDesc('created', data, dbForm.project_name) });
+      const sourceRef = isSimilar ? formRef(similarTemplate!) : null;
+      const desc = isSimilar
+        ? `${userName} created a similar ${data.type}${sourceRef && sourceRef !== data.type ? ` (copied from ${sourceRef})` : ''} on project ${dbForm.project_name}.`
+        : formDesc('created', data, dbForm.project_name);
+      logActivity({ orgId, userName, module: 'site_forms', recordId: dbForm.id, recordRef: ref, recordType: data.type, projectId: dbForm.project_id, projectName: dbForm.project_name, actionType: 'record_created', description: desc });
     }
     setShowBuilder(false);
     setEditingForm(null);
+    setSimilarTemplate(null);
   };
 
   // ── Quick status change ──
@@ -529,21 +536,12 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
       completedBy: userName,
     };
 
-    logActivity({
-      orgId, userName,
-      module: 'site_forms',
-      recordId: newId,
-      recordRef: formRef(source),
-      recordType: source.type,
-      projectId: store.projects.find(p => p.name === source.projectName)?.id ?? null,
-      projectName: source.projectName ?? null,
-      actionType: 'record_created',
-      description: `${userName} created a similar ${source.type} (copied from ${formRef(source)}) on project ${source.projectName ?? ''}.`,
-    });
-
-    // Open the new form in edit mode immediately
+    // Open the new form as a fresh create (not edit) — editingForm must stay null
+    // so handleSave calls addSiteForm (INSERT) not updateSiteForm (UPDATE).
+    // similarTemplate holds the pre-fill data passed to FormBuilder.
     setBuilderType(source.type as ExtendedFormType);
-    setEditingForm(newForm);
+    setEditingForm(null);
+    setSimilarTemplate(newForm);
     setViewingForm(null);
     setShowBuilder(true);
   };
@@ -901,8 +899,8 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
         <FormBuilder
           type={builderType}
           onSave={handleSave}
-          onClose={() => { setShowBuilder(false); setEditingForm(null); }}
-          initialData={editingForm}
+          onClose={() => { setShowBuilder(false); setEditingForm(null); setSimilarTemplate(null); }}
+          initialData={editingForm ?? similarTemplate}
         />
       )}
       {viewingForm && (
