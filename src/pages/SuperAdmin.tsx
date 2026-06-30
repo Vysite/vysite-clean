@@ -66,7 +66,7 @@ const MODULES = [
   { key: 'site-forms',  label: 'Site Forms' },
   { key: 'snagging',    label: 'Snagging' },
   { key: 'actions',     label: 'Actions Tracker' },
-  { key: 'testing',     label: 'Testing & Commissioning' },
+  { key: 'testing',     label: 'O&M Manual' },
   { key: 'reports',     label: 'Reports' },
 ];
 

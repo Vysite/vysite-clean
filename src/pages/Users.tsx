@@ -129,7 +129,7 @@ const PERM_GROUPS: PermGroup[] = [
       { key: 'modules.snagging',    label: 'Access Snagging' },
       { key: 'modules.actions',     label: 'Access Actions Tracker' },
       { key: 'modules.site_forms',  label: 'Access Site Forms' },
-      { key: 'modules.testing',     label: 'Access Testing & Commissioning' },
+      { key: 'modules.testing',     label: 'Access O&M Manual' },
       { key: 'modules.reports',     label: 'Access Reports' },
       { key: 'modules.comments',    label: 'Access Comments / Activity' },
       { key: 'modules.commercial',  label: 'Access Commercial' },
