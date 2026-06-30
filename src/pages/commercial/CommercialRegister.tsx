@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   Search, Filter, Plus, TrendingUp, FileText, Printer,
-  CheckCircle2, Clock, AlertCircle, CircleDot, Banknote,
+  ChevronRight, CheckCircle2, Clock, AlertCircle, CircleDot, Banknote,
 } from 'lucide-react';
 import { RECORD_TYPES, STATUSES, typeInfo, statusInfo } from './types';
 import type { CommercialRecord, CommercialRecordType, CommercialRecordStatus } from './types';
