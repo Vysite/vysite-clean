@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   FileText, Search, Calendar, Wrench, Zap, PoundSterling, CheckSquare,
-  HardHat, Users, CreditCard as Edit2, Trash2, ChevronDown, X,
+  HardHat, Users, Pencil, Trash2, ChevronDown, X,
   Plus, Clock, CheckCircle, AlertCircle, TrendingUp, Download,
+  Eye, Copy, MoreVertical,
 } from 'lucide-react';
 import { openPrintTab } from '../lib/printTab';
 import { buildFormPageHTML, FORM_PDF_CSS } from '../forms/PDFRenderer';
@@ -10,7 +11,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
 import type { DBSiteForm } from '../lib/store';
 import type { UploadedFile } from '../components/FileUpload';
-import { type ExtendedFormType, type ExtendedSiteForm, TYPE_MAP } from '../forms/types';
+import { type ExtendedFormType, type ExtendedFormStatus, type ExtendedSiteForm, TYPE_MAP } from '../forms/types';
 import { FormBuilder } from '../forms/FormBuilder';
 import { ViewModal } from '../forms/ViewModal';
 import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
@@ -22,6 +23,13 @@ interface SiteFormsProps {
   pendingFilter?: import('../App').PendingFilter | null;
   onPendingFilterConsumed?: () => void;
 }
+
+// ─── Status options per form type group ──────────────────────────────────────
+const ALL_STATUSES: ExtendedFormStatus[] = [
+  'Draft', 'Submitted', 'Approved', 'Issued',
+  'Open', 'Acknowledged', 'Actioned', 'Resolved', 'Closed',
+  'Action Required', 'Awaiting Response', 'Escalated',
+];
 
 // ─── Category definitions ─────────────────────────────────────────────────────
 const FORM_CATEGORIES = [
@@ -135,9 +143,129 @@ function CategoryDrawer({ cat, onSelect, canCreate }: CategoryDrawerProps) {
   );
 }
 
+// ─── Inline status dropdown ───────────────────────────────────────────────────
+interface StatusDropdownProps {
+  form: ExtendedSiteForm;
+  onStatusChange: (form: ExtendedSiteForm, newStatus: ExtendedFormStatus) => void;
+  canEdit: boolean;
+}
+function StatusDropdown({ form, onStatusChange, canEdit }: StatusDropdownProps) {
+  const statusColor =
+    form.status === 'Action Required' ? 'text-red-400 bg-red-900/20 border-red-800/40' :
+    form.status === 'Approved'         ? 'text-emerald-400 bg-emerald-900/20 border-emerald-800/40' :
+    form.status === 'Submitted'        ? 'text-blue-400 bg-blue-900/20 border-blue-800/40' :
+    form.status === 'Issued'           ? 'text-sky-400 bg-sky-900/20 border-sky-800/40' :
+    form.status === 'Draft'            ? 'text-amber-400 bg-amber-900/20 border-amber-800/40' :
+    form.status === 'Open'             ? 'text-yellow-400 bg-yellow-900/20 border-yellow-800/40' :
+    form.status === 'Acknowledged'     ? 'text-cyan-400 bg-cyan-900/20 border-cyan-800/40' :
+    form.status === 'Actioned'         ? 'text-violet-400 bg-violet-900/20 border-violet-800/40' :
+    form.status === 'Resolved'         ? 'text-emerald-400 bg-emerald-900/20 border-emerald-800/40' :
+    form.status === 'Closed'           ? 'text-slate-400 bg-slate-700/30 border-slate-600/40' :
+    'text-slate-400 bg-slate-700/30 border-slate-600/40';
+
+  if (!canEdit) {
+    return (
+      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 border ${statusColor}`}>
+        {form.status}
+      </span>
+    );
+  }
+
+  return (
+    <select
+      value={form.status}
+      onClick={e => e.stopPropagation()}
+      onChange={e => {
+        e.stopPropagation();
+        onStatusChange(form, e.target.value as ExtendedFormStatus);
+      }}
+      className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 border cursor-pointer outline-none appearance-none ${statusColor} hover:opacity-80 transition-opacity`}
+      style={{ backgroundImage: 'none' }}
+    >
+      {ALL_STATUSES.map(s => (
+        <option key={s} value={s} className="bg-[#1a2236] text-slate-200 text-xs font-normal">{s}</option>
+      ))}
+    </select>
+  );
+}
+
+// ─── Row actions menu ─────────────────────────────────────────────────────────
+interface RowActionsProps {
+  form: ExtendedSiteForm;
+  canEdit: boolean;
+  canDelete: boolean;
+  canExport: boolean;
+  onView: () => void;
+  onEdit: () => void;
+  onCreateSimilar: () => void;
+  onExportPDF: () => void;
+  onDelete: () => void;
+}
+function RowActions({ form, canEdit, canDelete, canExport, onView, onEdit, onCreateSimilar, onExportPDF, onDelete }: RowActionsProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Always show view; show others conditionally
+  const items = [
+    { label: 'View', icon: Eye, action: onView, always: true },
+    { label: 'Edit', icon: Pencil, action: onEdit, always: false, show: canEdit },
+    { label: 'Create Similar', icon: Copy, action: onCreateSimilar, always: false, show: true },
+    { label: 'Export PDF', icon: Download, action: onExportPDF, always: false, show: canExport },
+    { label: 'Delete', icon: Trash2, action: onDelete, always: false, show: canDelete, danger: true },
+  ];
+
+  const visible = items.filter(i => i.always || i.show);
+
+  return (
+    <div ref={ref} className="relative" onClick={e => e.stopPropagation()}>
+      <button
+        onClick={() => setOpen(p => !p)}
+        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-[#0d1628] transition-colors"
+        title="Actions"
+      >
+        <MoreVertical size={14} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 bg-[#1a2236] border border-[#1e2d4a] rounded-xl shadow-xl shadow-black/40 py-1 min-w-[160px]">
+          {visible.map((item, idx) => {
+            const Icon = item.icon;
+            const isDanger = (item as { danger?: boolean }).danger;
+            const isLast = idx === visible.length - 1;
+            const showDivider = isDanger && idx > 0;
+            return (
+              <div key={item.label}>
+                {showDivider && <div className="my-1 border-t border-[#1e2d4a]" />}
+                <button
+                  onClick={() => { setOpen(false); item.action(); }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium transition-colors ${
+                    isDanger
+                      ? 'text-red-400 hover:bg-red-900/20 hover:text-red-300'
+                      : 'text-slate-300 hover:bg-[#0d1628] hover:text-white'
+                  } ${!isLast && !showDivider ? '' : ''}`}
+                >
+                  <Icon size={13} className="shrink-0" />
+                  {item.label}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Audit field specs ────────────────────────────────────────────────────────
 
-// Standard fields common to all form types
 const SITE_FORM_COMMON_FIELDS: FieldSpec[] = [
   { label: 'Status',       key: 'status' },
   { label: 'Date',         key: 'date' },
@@ -146,9 +274,7 @@ const SITE_FORM_COMMON_FIELDS: FieldSpec[] = [
   { label: 'Notes',        key: 'notes',         isNarrative: true },
 ];
 
-// Type-specific meaningful fields (keyed on ExtendedSiteForm field names)
 const SITE_FORM_TYPE_FIELDS: FieldSpec[] = [
-  // RFI / TQ / Notices — commercially critical narrative fields
   { label: 'Subject',          key: 'subject',          isNarrative: true },
   { label: 'Question',         key: 'question',         isNarrative: true },
   { label: 'Response',         key: 'response',         isNarrative: true },
@@ -156,29 +282,23 @@ const SITE_FORM_TYPE_FIELDS: FieldSpec[] = [
   { label: 'Impact',           key: 'impact',           isNarrative: true },
   { label: 'Programme Impact', key: 'programmeImpact',  isNarrative: true },
   { label: 'Commercial Impact',key: 'commercialImpact', isNarrative: true },
-  // Variation
   { label: 'Cost Impact',        key: 'costImpact',       isNarrative: true },
   { label: 'Variation Status',   key: 'variationStatus' },
   { label: 'Instruction Source', key: 'instructionSource', isNarrative: true },
-  // H&S / Audit
   { label: 'Risk Level',        key: 'riskLevel' },
   { label: 'Findings',          key: 'findings',         isNarrative: true },
   { label: 'Actions Required',  key: 'actionsRequired',  isNarrative: true },
-  // Pressure Test / commissioning
   { label: 'System / Service',  key: 'systemService' },
   { label: 'Test Pressure',     key: 'testPressure' },
   { label: 'Test Medium',       key: 'testMedium' },
   { label: 'Test Result',       key: 'testResult' },
   { label: 'Witnessed By',      key: 'witnessedBy' },
   { label: 'Observations',      key: 'observations',     isNarrative: true },
-  // Flushing
   { label: 'Flush Result',      key: 'flushResult' },
   { label: 'Turbidity',         key: 'turbidity' },
   { label: 'Chlorine Residual', key: 'chlorineResidual' },
-  // Electrical
   { label: 'Dead Test Result',  key: 'deadTestResult' },
   { label: 'Continuity Result', key: 'continuityResult' },
-  // General
   { label: 'Area / Location',   key: 'areaLocation' },
   { label: 'Comments',          key: 'comments',         isNarrative: true },
   { label: 'Priority',          key: 'priority' },
@@ -186,6 +306,12 @@ const SITE_FORM_TYPE_FIELDS: FieldSpec[] = [
 ];
 
 const ALL_SITE_FORM_FIELDS = [...SITE_FORM_COMMON_FIELDS, ...SITE_FORM_TYPE_FIELDS];
+
+// Fields that should NOT be copied when creating a similar form
+const SKIP_COPY_FIELDS = new Set([
+  'id', 'rfiRef', 'tqRef', 'noticeRef', 'variationRef', 'wcRef', 'inspectionRef',
+  'comments', 'form_comments', 'submittedDate', 'completedBy', 'date',
+]);
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function SiteForms(_props: SiteFormsProps = {}) {
@@ -301,7 +427,6 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     return data.type;
   };
 
-  // Builds a rich description that includes type, ref, title/subject and project
   const formDesc = (verb: string, data: ExtendedSiteForm, project: string): string => {
     const ref = formRef(data);
     const titleField = (data as Record<string, unknown>).title ?? (data as Record<string, unknown>).subject;
@@ -348,6 +473,81 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     setEditingForm(null);
   };
 
+  // ── Quick status change ──
+  const handleQuickStatusChange = async (form: ExtendedSiteForm, newStatus: ExtendedFormStatus) => {
+    if (form.status === newStatus) return;
+    const projectId = store.projects.find(p => p.name === form.projectName)?.id ?? '';
+    const extra = { ...(form as unknown as Record<string, unknown>) };
+    ['id', 'type', 'projectId', 'projectName', 'date', 'completedBy', 'description', 'comments', 'status', 'submittedDate', 'notes'].forEach(k => delete extra[k]);
+    const dbForm: DBSiteForm = {
+      id: form.id,
+      type: form.type,
+      project_id: projectId,
+      project_name: form.projectName ?? '',
+      date: (form.date as string) ?? '',
+      completed_by: form.completedBy ?? '',
+      description: form.description ?? '',
+      comments: form.comments ?? '',
+      status: newStatus,
+      notes: form.notes ?? '',
+      form_comments: [],
+      extra_data: extra,
+    };
+    await store.updateSiteForm(dbForm);
+    const ref = formRef(form);
+    logActivity({
+      orgId, userName,
+      module: 'site_forms',
+      recordId: form.id,
+      recordRef: ref,
+      recordType: form.type,
+      projectId,
+      projectName: form.projectName ?? null,
+      actionType: 'status_changed',
+      description: `${userName} changed status of ${form.type}${ref !== form.type ? ` ${ref}` : ''} from "${form.status}" to "${newStatus}" on project ${form.projectName ?? ''}.`,
+      prevValue: form.status,
+      newValue: newStatus,
+    });
+  };
+
+  // ── Create Similar ──
+  const handleCreateSimilar = (source: ExtendedSiteForm) => {
+    if (!isFormAccessible(source)) return;
+    const newId = `f${Date.now()}`;
+    const now = new Date().toISOString().split('T')[0];
+
+    // Copy all fields except those that must be fresh on the new form
+    const copied = Object.fromEntries(
+      Object.entries(source as unknown as Record<string, unknown>).filter(([k]) => !SKIP_COPY_FIELDS.has(k))
+    ) as unknown as ExtendedSiteForm;
+
+    const newForm: ExtendedSiteForm = {
+      ...copied,
+      id: newId,
+      status: 'Draft' as ExtendedFormStatus,
+      date: now,
+      completedBy: userName,
+    };
+
+    logActivity({
+      orgId, userName,
+      module: 'site_forms',
+      recordId: newId,
+      recordRef: formRef(source),
+      recordType: source.type,
+      projectId: store.projects.find(p => p.name === source.projectName)?.id ?? null,
+      projectName: source.projectName ?? null,
+      actionType: 'record_created',
+      description: `${userName} created a similar ${source.type} (copied from ${formRef(source)}) on project ${source.projectName ?? ''}.`,
+    });
+
+    // Open the new form in edit mode immediately
+    setBuilderType(source.type as ExtendedFormType);
+    setEditingForm(newForm);
+    setViewingForm(null);
+    setShowBuilder(true);
+  };
+
   const handleDelete = (id: string) => { setDeletingId(id); setShowDeleteConfirm(true); };
   const confirmDelete = async () => {
     if (deletingId) {
@@ -375,6 +575,13 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     setEditingForm(form);
     setViewingForm(null);
     setShowBuilder(true);
+  };
+
+  const handleSingleExportPDF = (form: ExtendedSiteForm) => {
+    const orgSettings = { company_name: store.settings?.company_name ?? '', logo_data_url: store.settings?.logo_data_url ?? '' };
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Site Forms — VYSITE</title><style>${FORM_PDF_CSS}</style></head><body>${buildFormPageHTML(form, orgSettings)}<script>window.onload=function(){window.print();};<\/script></body></html>`;
+    openPrintTab(html);
+    logActivity({ orgId, userName, module: 'site_forms', recordId: form.id, recordRef: formRef(form), recordType: form.type, projectId: store.projects.find(p => p.name === form.projectName)?.id ?? null, projectName: form.projectName ?? null, actionType: 'pdf_exported', description: `${userName} exported ${form.type} to PDF on project ${form.projectName ?? ''}.` });
   };
 
   const toggleSelectMode = () => { setSelectMode(p => !p); setSelectedIds(new Set()); };
@@ -462,7 +669,6 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
                     : 'bg-[#1a2236] border border-[#1e2d4a] hover:border-slate-600/60 hover:bg-[#1e2840]'
                 }`}
               >
-                {/* Icon row */}
                 <div className="flex items-center justify-between mb-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all ${cat.iconBg} ${isOpen ? 'ring-1 ring-white/10' : ''}`}>
                     <Icon size={15} className={cat.iconText} />
@@ -472,15 +678,12 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
                     className={`shrink-0 transition-all duration-150 ${isOpen ? 'rotate-180 text-[#f97316]' : 'text-slate-700 group-hover:text-slate-500'}`}
                   />
                 </div>
-                {/* Category name */}
                 <div className={`text-xs font-bold leading-snug mb-0.5 transition-colors ${isOpen ? 'text-white' : 'text-slate-200 group-hover:text-white'}`}>
                   {cat.label}
                 </div>
-                {/* Form type count */}
                 <div className="text-[10px] text-slate-600 mb-3">
                   {cat.templates.length} form type{cat.templates.length !== 1 ? 's' : ''}
                 </div>
-                {/* Stats — always shown, zero-safe */}
                 <div className="mt-auto pt-2.5 border-t border-[#1e2d4a] grid grid-cols-2 gap-x-2 gap-y-1">
                   <div>
                     <div className="text-[9px] text-slate-600 uppercase tracking-wide font-semibold">Draft</div>
@@ -491,7 +694,6 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
                     <div className={`text-xs font-bold mt-0.5 ${counts.submitted > 0 ? 'text-emerald-400' : 'text-slate-700'}`}>{counts.submitted}</div>
                   </div>
                 </div>
-                {/* Active indicator */}
                 {isOpen && (
                   <div className="mt-2.5 flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#f97316] animate-pulse shrink-0" />
@@ -613,18 +815,6 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
           <div className="space-y-2">
             {filtered.map(f => {
               const te = TYPE_MAP[f.type] ?? { bg: 'bg-slate-700', text: 'text-slate-300', label: f.type, border: 'border-l-slate-600' };
-              const statusColor =
-                f.status === 'Action Required' ? 'text-red-400 bg-red-900/20' :
-                f.status === 'Approved'         ? 'text-emerald-400 bg-emerald-900/20' :
-                f.status === 'Submitted'         ? 'text-blue-400 bg-blue-900/20' :
-                f.status === 'Issued'            ? 'text-sky-400 bg-sky-900/20' :
-                f.status === 'Draft'             ? 'text-amber-400 bg-amber-900/20' :
-                f.status === 'Open'              ? 'text-yellow-400 bg-yellow-900/20' :
-                f.status === 'Acknowledged'      ? 'text-cyan-400 bg-cyan-900/20' :
-                f.status === 'Actioned'          ? 'text-violet-400 bg-violet-900/20' :
-                f.status === 'Resolved'          ? 'text-emerald-400 bg-emerald-900/20' :
-                f.status === 'Closed'            ? 'text-slate-400 bg-slate-700/30' :
-                'text-slate-400 bg-slate-700/30';
               const catId  = typeToCatId[f.type];
               const catDef = FORM_CATEGORIES.find(c => c.id === catId);
               return (
@@ -644,45 +834,60 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
                       </div>
                     )}
                     <div className="flex items-start justify-between gap-4 flex-1 min-w-0">
-                    {/* Left: main content */}
-                    <div className="flex-1 min-w-0">
-                      {/* Row 1: type badge + status badge */}
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ${te.bg} ${te.text}`}>{te.label}</span>
-                        {catDef && (
-                          <span className="text-[9px] text-slate-600 shrink-0">{catDef.label}</span>
-                        )}
-                        {f.status && (
-                          <span className={`ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ${statusColor}`}>{f.status}</span>
+                      {/* Left: main content */}
+                      <div className="flex-1 min-w-0">
+                        {/* Row 1: type badge + category + status */}
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ${te.bg} ${te.text}`}>{te.label}</span>
+                          {catDef && (
+                            <span className="text-[9px] text-slate-600 shrink-0">{catDef.label}</span>
+                          )}
+                          <div className="ml-auto" onClick={e => e.stopPropagation()}>
+                            <StatusDropdown
+                              form={f}
+                              onStatusChange={handleQuickStatusChange}
+                              canEdit={canEdit}
+                            />
+                          </div>
+                        </div>
+                        {/* Row 2: title */}
+                        <p className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate leading-snug">{f.title || te.label}</p>
+                        {/* Row 3: meta */}
+                        <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
+                          {f.projectName && (
+                            <span className="text-xs text-slate-400 truncate max-w-[180px]">{f.projectName}</span>
+                          )}
+                          {f.date && (
+                            <span className="text-xs text-slate-600">{fmtDate(f.date as string)}</span>
+                          )}
+                          {f.completedBy && (
+                            <span className="text-xs text-slate-600">{f.completedBy}</span>
+                          )}
+                        </div>
+                        {/* Row 4: description snippet */}
+                        {(f.description || f.ramsScopeOfWorks) && (
+                          <p className="text-[11px] text-slate-600 mt-1.5 line-clamp-1 leading-snug">
+                            {String(f.description || f.ramsScopeOfWorks || '')}
+                          </p>
                         )}
                       </div>
-                      {/* Row 2: title */}
-                      <p className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate leading-snug">{f.title || te.label}</p>
-                      {/* Row 3: meta */}
-                      <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
-                        {f.projectName && (
-                          <span className="text-xs text-slate-400 truncate max-w-[180px]">{f.projectName}</span>
-                        )}
-                        {f.date && (
-                          <span className="text-xs text-slate-600">{fmtDate(f.date as string)}</span>
-                        )}
-                        {f.completedBy && (
-                          <span className="text-xs text-slate-600">{f.completedBy}</span>
-                        )}
-                      </div>
-                      {/* Row 4: description snippet */}
-                      {(f.description || f.ramsScopeOfWorks) && (
-                        <p className="text-[11px] text-slate-600 mt-1.5 line-clamp-1 leading-snug">
-                          {String(f.description || f.ramsScopeOfWorks || '')}
-                        </p>
+                      {/* Right: row actions menu */}
+                      {!selectMode && (
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5">
+                          <RowActions
+                            form={f}
+                            canEdit={canEdit}
+                            canDelete={canDelete}
+                            canExport={canExport}
+                            onView={() => isFormAccessible(f) && setViewingForm(f)}
+                            onEdit={() => openEdit(f)}
+                            onCreateSimilar={() => handleCreateSimilar(f)}
+                            onExportPDF={() => handleSingleExportPDF(f)}
+                            onDelete={() => handleDelete(f.id)}
+                          />
+                        </div>
                       )}
                     </div>
-                    {/* Right: actions */}
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5">
-                      {canEdit   && <button onClick={e => { e.stopPropagation(); openEdit(f); }} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-[#0d1628] transition-colors"><Edit2 size={13} /></button>}
-                      {canDelete && <button onClick={e => { e.stopPropagation(); handleDelete(f.id); }} className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"><Trash2 size={13} /></button>}
-                    </div>
-                  </div>
                   </div>
                 </div>
               );
@@ -691,7 +896,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
         )}
       </div>
 
-      {/* ── Modals (unchanged) ── */}
+      {/* ── Modals ── */}
       {showBuilder && (
         <FormBuilder
           type={builderType}
