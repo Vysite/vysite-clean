@@ -30,6 +30,9 @@ export interface FormBuilderProps {
 
 export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderProps) {
   const store = useAppStore();
+  const visibleProjects = store.visibleProjectIds === null
+    ? store.projects
+    : store.projects.filter(p => store.visibleProjectIds!.includes(p.id));
   const init = initialData as Record<string, unknown> | null | undefined;
   const sv = (key: string, def = '') => (init && init[key] != null ? String(init[key]) : def);
 
@@ -576,7 +579,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
       id: initialData?.id ?? `f${Date.now()}`,
       type,
       title: form.title,
-      projectId: store.projects.find(p => p.name === form.project)?.id || '',
+      projectId: visibleProjects.find(p => p.name === form.project)?.id || '',
       projectName: form.project,
       date: form.date,
       completedBy: form.completedBy,
@@ -1141,7 +1144,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                 <div className="relative">
                   <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                     <option value="">Select project...</option>
-                    {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                    {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                 </div>
@@ -1197,7 +1200,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                 <div className="relative">
                   <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                     <option value="">Select project...</option>
-                    {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                    {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                 </div>
@@ -1259,7 +1262,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -1333,7 +1336,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -1376,7 +1379,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                     <div className="relative">
                       <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                         <option value="">Select project...</option>
-                        {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                       </select>
                       <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     </div>
@@ -1585,7 +1588,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                     <div className="relative">
                       <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                         <option value="">Select project...</option>
-                        {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                       </select>
                       <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     </div>
@@ -1807,7 +1810,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                     <div className="relative">
                       <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                         <option value="">Select project...</option>
-                        {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                       </select>
                       <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     </div>
@@ -2010,7 +2013,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2088,7 +2091,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2156,7 +2159,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2211,7 +2214,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2290,7 +2293,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2369,7 +2372,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2509,7 +2512,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2571,7 +2574,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2649,7 +2652,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2731,7 +2734,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2803,7 +2806,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2866,7 +2869,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -2919,7 +2922,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                     <div className="relative">
                       <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                         <option value="">Select project...</option>
-                        {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                       </select>
                       <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     </div>
@@ -3182,7 +3185,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                     <div className="relative">
                       <select value={form.project} onChange={set('project')} className={selCls}>
                         <option value="">Select project...</option>
-                        {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                       </select>
                       <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     </div>
@@ -3456,7 +3459,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                     <div className="relative">
                       <select value={form.project} onChange={set('project')} className={selCls}>
                         <option value="">Select project...</option>
-                        {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                       </select>
                       <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     </div>
@@ -3733,7 +3736,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                     <div className="relative">
                       <select value={form.project} onChange={set('project')} className={selCls}>
                         <option value="">Select project...</option>
-                        {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                       </select>
                       <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     </div>
@@ -4139,7 +4142,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                     <div className="relative">
                       <select value={form.project} onChange={set('project')} className={selCls}>
                         <option value="">Select project...</option>
-                        {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                       </select>
                       <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                     </div>
@@ -4418,7 +4421,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                   <div className="relative">
                     <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                       <option value="">Select project...</option>
-                      {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
@@ -4482,7 +4485,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                 <div className="relative">
                   <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
                     <option value="">Select project...</option>
-                    {store.projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                    {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                 </div>

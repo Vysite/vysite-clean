@@ -212,7 +212,14 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const [selectMode, setSelectMode]               = useState(false);
   const [selectedIds, setSelectedIds]             = useState<Set<string>>(new Set());
 
-  const forms = (store.siteForms ?? []) as unknown as ExtendedSiteForm[];
+  const forms = useMemo(() => {
+    const all = (store.siteForms ?? []) as unknown as ExtendedSiteForm[];
+    if (store.visibleProjectIds === null) return all;
+    return all.filter(f => {
+      const pid = store.projects.find(p => p.name === f.projectName)?.id ?? f.projectId;
+      return pid ? store.visibleProjectIds!.includes(pid) : false;
+    });
+  }, [store.siteForms, store.visibleProjectIds, store.projects]);
 
   // ── Derived stats ──
   const weekStart = startOfWeek();
@@ -245,7 +252,12 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   }, [forms, catTypeSets]);
 
   // ── Filter options ──
-  const projectOptions = useMemo(() => store.projects.map(p => p.name).sort(), [store.projects]);
+  const projectOptions = useMemo(() => {
+    const visibleProjects = store.visibleProjectIds === null
+      ? store.projects
+      : store.projects.filter(p => store.visibleProjectIds!.includes(p.id));
+    return visibleProjects.map(p => p.name).sort();
+  }, [store.projects, store.visibleProjectIds]);
   const typeOptions    = useMemo(() => Array.from(new Set(forms.map(f => f.type ?? '').filter(Boolean))).sort(), [forms]);
   const statusOptions  = useMemo(() => Array.from(new Set(forms.map(f => f.status ?? '').filter(Boolean))).sort(), [forms]);
 
@@ -273,7 +285,11 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const orgId = store.currentOrgId ?? '';
   const userName = store.currentUser?.name ?? '';
 
-  // Returns the best human-readable reference for a form (e.g. "RFI-012", "QA Inspection")
+  const isFormAccessible = (f: ExtendedSiteForm): boolean => {
+    if (store.visibleProjectIds === null) return true;
+    const pid = store.projects.find(p => p.name === f.projectName)?.id ?? f.projectId;
+    return pid ? store.visibleProjectIds.includes(pid) : false;
+  };
   const formRef = (data: ExtendedSiteForm): string => {
     const ref = (data as Record<string, unknown>).rfiRef
       ?? (data as Record<string, unknown>).tqRef
@@ -354,6 +370,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     setOpenCategory(null);
   };
   const openEdit = (form: ExtendedSiteForm) => {
+    if (!isFormAccessible(form)) return;
     setBuilderType(form.type as ExtendedFormType);
     setEditingForm(form);
     setViewingForm(null);
@@ -613,7 +630,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
               return (
                 <div
                   key={f.id}
-                  onClick={() => selectMode ? toggleId(f.id) : setViewingForm(f)}
+                  onClick={() => selectMode ? toggleId(f.id) : (isFormAccessible(f) && setViewingForm(f))}
                   className={`bg-[#1a2236] border ${
                     selectMode && selectedIds.has(f.id) ? 'border-orange-500/60' :
                     f.status === 'Action Required' ? 'border-red-900/40' : 'border-[#1e2d4a]'
