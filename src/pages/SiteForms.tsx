@@ -37,7 +37,9 @@ const FORM_CATEGORIES = [
     id: 'general', label: 'General', icon: Calendar, iconBg: 'bg-orange-900/50', iconText: 'text-orange-400',
     accentBorder: 'border-orange-700/40', accentHover: 'hover:border-orange-600/60',
     templates: [
-      { type: 'Daily Site Report', title: 'Daily Site Report', description: 'Full operational DSR — attendance, progress, delays, H&S, materials, sign-off' },
+      { type: 'Daily Site Report',    title: 'Daily Site Report',    description: 'Full operational DSR — attendance, progress, delays, H&S, materials, sign-off' },
+      { type: 'Site Hold Up',         title: 'Site Hold Up',         description: 'Record a site disruption, hold up or prevention of works — facts only, not a contractual notice' },
+      { type: 'Site Change Request',  title: 'Site Change Request',  description: 'Record a requested change, additional works or scope change identified on site — not a Variation' },
     ],
   },
   {
@@ -306,7 +308,7 @@ const ALL_SITE_FORM_FIELDS = [...SITE_FORM_COMMON_FIELDS, ...SITE_FORM_TYPE_FIEL
 
 // Fields that should NOT be copied when creating a similar form
 const SKIP_COPY_FIELDS = new Set([
-  'id', 'rfiRef', 'tqRef', 'noticeRef', 'variationRef', 'wcRef', 'inspectionRef',
+  'id', 'rfiRef', 'tqRef', 'noticeRef', 'variationRef', 'wcRef', 'inspectionRef', 'shuRef', 'scrRef',
   'comments', 'form_comments', 'submittedDate', 'completedBy', 'date',
 ]);
 
@@ -420,7 +422,9 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
       ?? (data as Record<string, unknown>).noticeRef
       ?? (data as Record<string, unknown>).variationRef
       ?? (data as Record<string, unknown>).wcRef
-      ?? (data as Record<string, unknown>).inspectionRef;
+      ?? (data as Record<string, unknown>).inspectionRef
+      ?? (data as Record<string, unknown>).shuRef
+      ?? (data as Record<string, unknown>).scrRef;
     if (ref) return String(ref);
     return data.type;
   };

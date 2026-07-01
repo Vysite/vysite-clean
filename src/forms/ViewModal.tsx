@@ -139,6 +139,8 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
   const isMVHR = form.type === 'MVHR Commissioning Record';
   const isTWR  = form.type === 'Temperature Water Readings';
   const isQA   = form.type === 'QA Inspection';
+  const isSHU  = form.type === 'Site Hold Up';
+  const isSCR  = form.type === 'Site Change Request';
 
   // Parse JSON arrays for view
   let ramsHazards: HazardRecord[] = [];
@@ -275,6 +277,26 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
             <Field2Col items={[['Issued By', s('raisedBy')], ['Issued To', s('instructionSource')]]} />
             <ViewField label="Instruction" value={s('description')} />
             {s('notes') && <ViewField label="Notes" value={s('notes')} />}
+          </>}
+
+          {/* ── Site Hold Up ── */}
+          {isSHU && <>
+            <Field2Col items={[['Reference', s('shuRef')], ['Location / Area', s('areaLocation')]]} />
+            <ViewField label="Description of Hold Up" value={s('description')} />
+            {s('cause') && <ViewField label="Cause of Hold Up" value={s('cause')} />}
+            {s('impact') && <ViewField label="Impact on Progress" value={s('impact')} />}
+            {s('shuImmediateActions') && <ViewField label="Immediate Actions Taken" value={s('shuImmediateActions')} />}
+            {s('comments') && <ViewField label="Additional Comments" value={s('comments')} />}
+          </>}
+
+          {/* ── Site Change Request ── */}
+          {isSCR && <>
+            <Field2Col items={[['Reference', s('scrRef')], ['Location / Area', s('areaLocation')]]} />
+            <ViewField label="Description of Requested Change" value={s('description')} />
+            {s('scrReason') && <ViewField label="Reason for Change" value={s('scrReason')} />}
+            {s('scrProgrammeImpact') && <ViewField label="Potential Programme Impact" value={s('scrProgrammeImpact')} />}
+            {s('scrCommercialImpact') && <ViewField label="Potential Commercial Impact" value={s('scrCommercialImpact')} />}
+            {s('comments') && <ViewField label="Additional Comments" value={s('comments')} />}
           </>}
 
           {/* ── Pressure Test ── */}
@@ -1029,7 +1051,7 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
           </>}
 
           {/* Generic comments/notes fallback */}
-          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isTWR && !isQA && !isPCC && (form.comments || form.notes) && (
+          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isTWR && !isQA && !isPCC && !isSHU && !isSCR && (form.comments || form.notes) && (
             <ViewField label="Comments / Notes" value={String(form.comments || form.notes || '')} />
           )}
 

@@ -12,7 +12,9 @@ export type ExtendedFormType =
   | 'HIU Commissioning Record'
   | 'MVHR Commissioning Record'
   | 'Temperature Water Readings'
-  | 'Practical Completion Certificate';
+  | 'Practical Completion Certificate'
+  | 'Site Hold Up'
+  | 'Site Change Request';
 
 export type ExtendedFormStatus =
   | FormStatus
@@ -432,6 +434,14 @@ export interface ExtendedSiteForm extends Omit<SiteForm, 'type' | 'status'> {
   pccAcceptedByCompany?: string;
   pccAcceptanceDate?: string;
   pccSignature?: string;
+  // Site Hold Up
+  shuRef?: string;
+  shuImmediateActions?: string;
+  // Site Change Request
+  scrRef?: string;
+  scrReason?: string;
+  scrProgrammeImpact?: string;
+  scrCommercialImpact?: string;
 }
 
 export const TYPE_MAP: Record<string, { bg: string; text: string; label: string; border: string }> = {
@@ -461,6 +471,8 @@ export const TYPE_MAP: Record<string, { bg: string; text: string; label: string;
   'MVHR Commissioning Record':      { bg: 'bg-sky-900/60',    text: 'text-sky-300',    label: 'MVHR Commissioning', border: 'border-l-sky-500' },
   'Temperature Water Readings':     { bg: 'bg-blue-900/60',   text: 'text-blue-300',   label: 'Temp Water',         border: 'border-l-blue-500' },
   'Practical Completion Certificate': { bg: 'bg-emerald-900/60', text: 'text-emerald-300', label: 'PC Certificate', border: 'border-l-emerald-500' },
+  'Site Hold Up':                     { bg: 'bg-amber-900/60',   text: 'text-amber-400',   label: 'Site Hold Up',       border: 'border-l-amber-600' },
+  'Site Change Request':              { bg: 'bg-sky-900/60',     text: 'text-sky-400',     label: 'Change Request',     border: 'border-l-sky-600' },
 };
 
 export const inputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600';

@@ -431,6 +431,14 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     pccAcceptedByCompany:   sv('pccAcceptedByCompany'),
     pccAcceptanceDate:   sv('pccAcceptanceDate', new Date().toISOString().split('T')[0]),
     pccSignature:        sv('pccSignature'),
+    // Site Hold Up
+    shuRef:              sv('shuRef', `SHU-${String(Math.floor(Math.random() * 900) + 100)}`),
+    shuImmediateActions: sv('shuImmediateActions'),
+    // Site Change Request
+    scrRef:              sv('scrRef', `SCR-${String(Math.floor(Math.random() * 900) + 100)}`),
+    scrReason:           sv('scrReason'),
+    scrProgrammeImpact:  sv('scrProgrammeImpact'),
+    scrCommercialImpact: sv('scrCommercialImpact'),
   }));
 
   // Site Walk checklist state — stored separately due to nested structure
@@ -1061,6 +1069,28 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
         pccSignature:        form.pccSignature,
       });
     }
+    if (type === 'Site Hold Up') {
+      Object.assign(base, {
+        shuRef:              form.shuRef,
+        areaLocation:        form.areaLocation,
+        description:         form.description,
+        cause:               form.cause,
+        impact:              form.impact,
+        shuImmediateActions: form.shuImmediateActions,
+        comments:            form.comments,
+      });
+    }
+    if (type === 'Site Change Request') {
+      Object.assign(base, {
+        scrRef:              form.scrRef,
+        areaLocation:        form.areaLocation,
+        description:         form.description,
+        scrReason:           form.scrReason,
+        scrProgrammeImpact:  form.scrProgrammeImpact,
+        scrCommercialImpact: form.scrCommercialImpact,
+        comments:            form.comments,
+      });
+    }
     onSave(base, uploadedFiles);
     onClose();
   };
@@ -1091,6 +1121,8 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
   const isMVHR = type === 'MVHR Commissioning Record';
   const isTWR = type === 'Temperature Water Readings';
   const isPCC = type === 'Practical Completion Certificate';
+  const isSHU = type === 'Site Hold Up';
+  const isSCR = type === 'Site Change Request';
 
   const accentColor = isRAMS
     ? 'bg-orange-600 hover:bg-orange-700'
@@ -1138,10 +1170,16 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     ? 'bg-blue-600 hover:bg-blue-700'
     : isPCC
     ? 'bg-emerald-600 hover:bg-emerald-700'
+    : isSHU
+    ? 'bg-amber-600 hover:bg-amber-700'
+    : isSCR
+    ? 'bg-sky-600 hover:bg-sky-700'
     : 'bg-[#f97316] hover:bg-orange-600';
 
   const rfiStatuses = ['Draft', 'Issued', 'Awaiting Response', 'Closed'];
   const holdUpStatuses = ['Open', 'Resolved', 'Escalated'];
+  const shuStatuses = ['Draft', 'Open', 'Resolved', 'Closed'];
+  const scrStatuses = ['Draft', 'Submitted', 'Under Review', 'Approved', 'Rejected'];
   const hsStatuses = ['Draft', 'Submitted', 'Approved', 'Action Required'];
 
   return (
@@ -1299,6 +1337,150 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
               <div>
                 <label className={labelCls}>Notes</label>
                 <textarea value={form.notes} onChange={set('notes')} rows={2} className={`${inputCls} resize-none`} placeholder="Any additional notes..." />
+              </div>
+            </>
+          )}
+
+          {/* ── Site Hold Up Fields ── */}
+          {isSHU && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Reference Number</label>
+                  <input value={form.shuRef} onChange={set('shuRef')} className={inputCls} placeholder="e.g. SHU-001" />
+                </div>
+                <div>
+                  <label className={labelCls}>Date *</label>
+                  <input type="date" value={form.date} onChange={set('date')} className={inputCls} />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Project *</label>
+                <div className="relative">
+                  <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
+                    <option value="">Select project...</option>
+                    {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Location / Area</label>
+                <input value={form.areaLocation} onChange={set('areaLocation')} className={inputCls} placeholder="e.g. Level 2 – Corridor B" />
+              </div>
+              <div>
+                <label className={labelCls}>Title *</label>
+                <input value={form.title} onChange={set('title')} className={inputCls} placeholder="Brief title of the hold up..." />
+              </div>
+              <div>
+                <label className={labelCls}>Description of Hold Up *</label>
+                <textarea value={form.description} onChange={set('description')} rows={4} className={`${inputCls} resize-none`}
+                  placeholder="Describe the hold up or disruption in detail..." />
+              </div>
+              <div>
+                <label className={labelCls}>Cause of Hold Up</label>
+                <textarea value={form.cause} onChange={set('cause')} rows={3} className={`${inputCls} resize-none`}
+                  placeholder="What caused the hold up?" />
+              </div>
+              <div>
+                <label className={labelCls}>Impact on Progress</label>
+                <textarea value={form.impact} onChange={set('impact')} rows={3} className={`${inputCls} resize-none`}
+                  placeholder="Describe the impact on the programme and works..." />
+              </div>
+              <div>
+                <label className={labelCls}>Immediate Actions Taken</label>
+                <textarea value={form.shuImmediateActions} onChange={set('shuImmediateActions')} rows={3} className={`${inputCls} resize-none`}
+                  placeholder="What was done immediately to address the hold up?" />
+              </div>
+              <div>
+                <label className={labelCls}>Additional Comments</label>
+                <textarea value={form.comments} onChange={set('comments')} rows={2} className={`${inputCls} resize-none`}
+                  placeholder="Any additional information..." />
+              </div>
+              <div>
+                <label className={labelCls}>Photos / Attachments</label>
+                <FileUploadComponent files={uploadedFiles} onChange={setUploadedFiles} accept="image/*,.pdf,.doc,.docx" label="Upload photos or supporting documents" />
+              </div>
+              <div>
+                <label className={labelCls}>Status</label>
+                <div className="relative">
+                  <select value={form.status} onChange={set('status')} className={`${inputCls} appearance-none pr-8`}>
+                    {shuStatuses.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── Site Change Request Fields ── */}
+          {isSCR && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Reference Number</label>
+                  <input value={form.scrRef} onChange={set('scrRef')} className={inputCls} placeholder="e.g. SCR-001" />
+                </div>
+                <div>
+                  <label className={labelCls}>Date *</label>
+                  <input type="date" value={form.date} onChange={set('date')} className={inputCls} />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Project *</label>
+                <div className="relative">
+                  <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
+                    <option value="">Select project...</option>
+                    {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Location / Area</label>
+                <input value={form.areaLocation} onChange={set('areaLocation')} className={inputCls} placeholder="e.g. Level 3 – Plant Room" />
+              </div>
+              <div>
+                <label className={labelCls}>Title *</label>
+                <input value={form.title} onChange={set('title')} className={inputCls} placeholder="Brief title of the requested change..." />
+              </div>
+              <div>
+                <label className={labelCls}>Description of Requested Change *</label>
+                <textarea value={form.description} onChange={set('description')} rows={4} className={`${inputCls} resize-none`}
+                  placeholder="Describe the change or additional works requested..." />
+              </div>
+              <div>
+                <label className={labelCls}>Reason for Change</label>
+                <textarea value={form.scrReason} onChange={set('scrReason')} rows={3} className={`${inputCls} resize-none`}
+                  placeholder="Why is this change required?" />
+              </div>
+              <div>
+                <label className={labelCls}>Potential Programme Impact</label>
+                <textarea value={form.scrProgrammeImpact} onChange={set('scrProgrammeImpact')} rows={2} className={`${inputCls} resize-none`}
+                  placeholder="Any anticipated impact on the programme..." />
+              </div>
+              <div>
+                <label className={labelCls}>Potential Commercial Impact</label>
+                <textarea value={form.scrCommercialImpact} onChange={set('scrCommercialImpact')} rows={2} className={`${inputCls} resize-none`}
+                  placeholder="Any anticipated commercial implications — for information only, not a variation..." />
+              </div>
+              <div>
+                <label className={labelCls}>Additional Comments</label>
+                <textarea value={form.comments} onChange={set('comments')} rows={2} className={`${inputCls} resize-none`}
+                  placeholder="Any additional information..." />
+              </div>
+              <div>
+                <label className={labelCls}>Photos / Attachments</label>
+                <FileUploadComponent files={uploadedFiles} onChange={setUploadedFiles} accept="image/*,.pdf,.doc,.docx" label="Upload photos or supporting documents" />
+              </div>
+              <div>
+                <label className={labelCls}>Status</label>
+                <div className="relative">
+                  <select value={form.status} onChange={set('status')} className={`${inputCls} appearance-none pr-8`}>
+                    {scrStatuses.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                </div>
               </div>
             </>
           )}

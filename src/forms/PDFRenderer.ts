@@ -1316,6 +1316,38 @@ function buildGenericBody(f: Record<string, unknown>): string {
   `;
 }
 
+// ─── Site Hold Up ─────────────────────────────────────────────────────────────
+
+function buildSiteHoldUpBody(f: Record<string, unknown>): string {
+  return `
+    ${sectionHtml('Record Details', dataGrid([
+      ['Reference', safeStr(f.shuRef)],
+      ['Location / Area', safeStr(f.areaLocation)],
+    ]))}
+    ${section('Description of Hold Up', safeStr(f.description))}
+    ${section('Cause of Hold Up', safeStr(f.cause))}
+    ${section('Impact on Progress', safeStr(f.impact))}
+    ${section('Immediate Actions Taken', safeStr(f.shuImmediateActions))}
+    ${section('Additional Comments', safeStr(f.comments))}
+  `;
+}
+
+// ─── Site Change Request ───────────────────────────────────────────────────────
+
+function buildSiteChangeRequestBody(f: Record<string, unknown>): string {
+  return `
+    ${sectionHtml('Record Details', dataGrid([
+      ['Reference', safeStr(f.scrRef)],
+      ['Location / Area', safeStr(f.areaLocation)],
+    ]))}
+    ${section('Description of Requested Change', safeStr(f.description))}
+    ${section('Reason for Change', safeStr(f.scrReason))}
+    ${section('Potential Programme Impact', safeStr(f.scrProgrammeImpact))}
+    ${section('Potential Commercial Impact', safeStr(f.scrCommercialImpact))}
+    ${section('Additional Comments', safeStr(f.comments))}
+  `;
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 function buildTWRBody(f: Record<string, unknown>): string {
@@ -1724,6 +1756,8 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
       'MVHR Commissioning Record': 'MVHR Commissioning Record',
       'Temperature Water Readings': 'Temperature Water Readings — Survey Record',
       'Practical Completion Certificate': 'Practical Completion Certificate',
+      'Site Hold Up': 'Site Hold Up Record',
+      'Site Change Request': 'Site Change Request',
     };
     return map[form.type] ?? form.type;
   })();
@@ -1794,6 +1828,8 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
     case 'Hold Up Notice': case 'Delay Notice':
     case 'Variation': case 'Early Warning Notice':
     case 'Site Instruction':               formBody = buildCommercialBody(f); break;
+    case 'Site Hold Up':                   formBody = buildSiteHoldUpBody(f); break;
+    case 'Site Change Request':            formBody = buildSiteChangeRequestBody(f); break;
     default:                               formBody = buildGenericBody(f); break;
   }
 
@@ -1802,7 +1838,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
     ? sectionHtml('Evidence & Attachments', evidenceHtml(attachments))
     : '';
 
-  const docRef = safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.id) || `VY-${Date.now()}`;
+  const docRef = safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.shuRef) || safeStr(f.scrRef) || safeStr(f.id) || `VY-${Date.now()}`;
   const legalFooter = reportFooter({
     formType: form.type,
     docRef,
