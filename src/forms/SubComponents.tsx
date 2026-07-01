@@ -847,3 +847,116 @@ export function TWRReadingRows({ rows, onChange }: { rows: TWRReadingRecord[]; o
     </div>
   );
 }
+
+// ─── Practical Completion Certificate — Assets ────────────────────────────────
+
+export interface PCCAssetRecord {
+  item: string;
+  manufacturer: string;
+  model: string;
+  serialNumber: string;
+  assetNumber: string;
+  quantity: string;
+}
+
+export const DEFAULT_PCC_ASSET: PCCAssetRecord = {
+  item: '', manufacturer: '', model: '', serialNumber: '', assetNumber: '', quantity: '',
+};
+
+export function PCCAssetRows({ rows, onChange }: { rows: PCCAssetRecord[]; onChange: (rows: PCCAssetRecord[]) => void }) {
+  const update = (i: number, field: keyof PCCAssetRecord, val: string) =>
+    onChange(rows.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+  const add = () => onChange([...rows, { ...DEFAULT_PCC_ASSET }]);
+  const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
+  return (
+    <div className="space-y-3">
+      {rows.map((r, i) => (
+        <div key={i} className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-3.5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400">Asset / Equipment {i + 1}</span>
+            <button type="button" onClick={() => remove(i)} className="text-slate-700 hover:text-red-400 transition-colors"><X size={13} /></button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Item / Description</label>
+              <input value={r.item} onChange={e => update(i, 'item', e.target.value)} className={inputCls} placeholder="e.g. Operating Light" />
+            </div>
+            <div>
+              <label className={labelCls}>Manufacturer</label>
+              <input value={r.manufacturer} onChange={e => update(i, 'manufacturer', e.target.value)} className={inputCls} placeholder="Manufacturer name" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label className={labelCls}>Model</label>
+              <input value={r.model} onChange={e => update(i, 'model', e.target.value)} className={inputCls} placeholder="Model" />
+            </div>
+            <div>
+              <label className={labelCls}>Serial Number</label>
+              <input value={r.serialNumber} onChange={e => update(i, 'serialNumber', e.target.value)} className={inputCls} placeholder="Serial no." />
+            </div>
+            <div>
+              <label className={labelCls}>Asset Number</label>
+              <input value={r.assetNumber} onChange={e => update(i, 'assetNumber', e.target.value)} className={inputCls} placeholder="Asset no." />
+            </div>
+            <div>
+              <label className={labelCls}>Quantity</label>
+              <input value={r.quantity} onChange={e => update(i, 'quantity', e.target.value)} className={inputCls} placeholder="1" />
+            </div>
+          </div>
+        </div>
+      ))}
+      <button type="button" onClick={add}
+        className="w-full py-2.5 border border-dashed border-emerald-900/50 rounded-xl text-xs text-emerald-900 hover:text-emerald-400 hover:border-emerald-700/60 transition-colors font-semibold">
+        + Add Asset / Equipment
+      </button>
+    </div>
+  );
+}
+
+// ─── Practical Completion Certificate — Checklist ─────────────────────────────
+
+export interface PCCChecklistItem {
+  description: string;
+  result: 'Pass' | 'Fail' | 'N/A';
+}
+
+export const DEFAULT_PCC_CHECKLIST_ITEM: PCCChecklistItem = { description: '', result: 'Pass' };
+
+export function PCCChecklistRows({ rows, onChange }: { rows: PCCChecklistItem[]; onChange: (rows: PCCChecklistItem[]) => void }) {
+  const update = <K extends keyof PCCChecklistItem>(i: number, field: K, val: PCCChecklistItem[K]) =>
+    onChange(rows.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+  const add = () => onChange([...rows, { ...DEFAULT_PCC_CHECKLIST_ITEM }]);
+  const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
+  return (
+    <div className="space-y-2">
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-3 bg-[#0d1628] border border-[#1e2d4a] rounded-xl px-3 py-2.5">
+          <input
+            value={r.description}
+            onChange={e => update(i, 'description', e.target.value)}
+            className="flex-1 bg-transparent text-xs text-slate-200 outline-none placeholder:text-slate-600"
+            placeholder="e.g. Installed Correctly"
+          />
+          <div className="flex gap-1.5 shrink-0">
+            {(['Pass', 'Fail', 'N/A'] as const).map(res => (
+              <button key={res} type="button" onClick={() => update(i, 'result', res)}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${r.result === res
+                  ? res === 'Pass' ? 'bg-emerald-600 border-emerald-600 text-white'
+                    : res === 'Fail' ? 'bg-red-600 border-red-600 text-white'
+                    : 'bg-slate-600 border-slate-600 text-white'
+                  : 'bg-transparent border-[#1e2d4a] text-slate-600 hover:border-slate-500 hover:text-slate-400'}`}>
+                {res}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => remove(i)} className="text-slate-700 hover:text-red-400 transition-colors shrink-0"><X size={12} /></button>
+        </div>
+      ))}
+      <button type="button" onClick={add}
+        className="w-full py-2.5 border border-dashed border-emerald-900/50 rounded-xl text-xs text-emerald-900 hover:text-emerald-400 hover:border-emerald-700/60 transition-colors font-semibold">
+        + Add Checklist Item
+      </button>
+    </div>
+  );
+}

@@ -1,12 +1,12 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import {
-  FileText, Search, Calendar, Wrench, Zap, PoundSterling, CheckSquare,
+  FileText, Search, Calendar, Wrench, Zap, CheckSquare, Award,
   HardHat, Users, Pencil, Trash2, ChevronDown, X,
   Plus, Clock, CheckCircle, AlertCircle, TrendingUp, Download,
   Eye, Copy, MoreVertical,
 } from 'lucide-react';
 import { openPrintTab } from '../lib/printTab';
-import { buildFormPageHTML, FORM_PDF_CSS } from '../forms/PDFRenderer';
+import { buildFormPageHTML, FORM_PDF_CSS, renderFormPDF } from '../forms/PDFRenderer';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
 import type { DBSiteForm } from '../lib/store';
@@ -84,21 +84,18 @@ const FORM_CATEGORIES = [
     ],
   },
   {
-    id: 'commercial', label: 'Commercial', icon: PoundSterling, iconBg: 'bg-blue-900/50', iconText: 'text-blue-400',
-    accentBorder: 'border-blue-700/40', accentHover: 'hover:border-blue-600/60',
-    templates: [
-      { type: 'Variation',            title: 'Variation Notice',     description: 'Formal variation notice for additional works or scope changes' },
-      { type: 'Early Warning Notice', title: 'Early Warning Notice', description: 'Formally notify of a risk to cost, programme or quality' },
-      { type: 'Delay Notice',         title: 'Delay Notice',         description: 'Formally record a delay event and its programme impact' },
-      { type: 'Hold Up Notice',       title: 'Hold Up Notice',       description: 'Notify of works being held up and the operational impact' },
-    ],
-  },
-  {
     id: 'subcontractor', label: 'Sub-Contractor', icon: Users, iconBg: 'bg-slate-700/70', iconText: 'text-slate-300',
     accentBorder: 'border-slate-600/40', accentHover: 'hover:border-slate-500/60',
     templates: [
       { type: 'Site Instruction', title: 'Site Instruction',      description: 'Formal site instruction to a sub-contractor or trade' },
       { type: 'Hold Up Notice',   title: 'Sub-Contractor Notice', description: 'Formal notice regarding site compliance or performance' },
+    ],
+  },
+  {
+    id: 'certificates', label: 'Certificates', icon: Award, iconBg: 'bg-emerald-900/50', iconText: 'text-emerald-400',
+    accentBorder: 'border-emerald-700/40', accentHover: 'hover:border-emerald-600/60',
+    templates: [
+      { type: 'Practical Completion Certificate', title: 'Practical Completion Certificate', description: 'Formally certify the practical completion and handover of works, a phase, area, system or equipment' },
     ],
   },
 ] as const;
@@ -577,8 +574,12 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
 
   const handleSingleExportPDF = (form: ExtendedSiteForm) => {
     const orgSettings = { company_name: store.settings?.company_name ?? '', logo_data_url: store.settings?.logo_data_url ?? '' };
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Site Forms — VYSITE</title><style>${FORM_PDF_CSS}</style></head><body>${buildFormPageHTML(form, orgSettings)}<script>window.onload=function(){window.print();};<\/script></body></html>`;
-    openPrintTab(html);
+    if (form.type === 'Practical Completion Certificate') {
+      renderFormPDF(form, orgSettings);
+    } else {
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Site Forms — VYSITE</title><style>${FORM_PDF_CSS}</style></head><body>${buildFormPageHTML(form, orgSettings)}<script>window.onload=function(){window.print();};<\/script></body></html>`;
+      openPrintTab(html);
+    }
     logActivity({ orgId, userName, module: 'site_forms', recordId: form.id, recordRef: formRef(form), recordType: form.type, projectId: store.projects.find(p => p.name === form.projectName)?.id ?? null, projectName: form.projectName ?? null, actionType: 'pdf_exported', description: `${userName} exported ${form.type} to PDF on project ${form.projectName ?? ''}.` });
   };
 

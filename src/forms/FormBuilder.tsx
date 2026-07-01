@@ -15,6 +15,8 @@ import {
   type PlantAssetRecord, PlantAssetRows,
   type PlantDefectRecord, PlantDefectRows,
   type TWRReadingRecord, TWRReadingRows,
+  type PCCAssetRecord, PCCAssetRows,
+  type PCCChecklistItem, PCCChecklistRows,
 } from './SubComponents';
 
 // counter lives in module scope — resets on full page reload, which is fine
@@ -414,6 +416,18 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     twrLocation:                 sv('twrLocation'),
     twrArea:                     sv('twrArea'),
     twrWitnessedBy:              sv('twrWitnessedBy'),
+    // Practical Completion Certificate
+    pccRef:              sv('pccRef', `PC-${String(Math.floor(Math.random() * 9000) + 1000)}`),
+    pccContract:         sv('pccContract'),
+    pccClient:           sv('pccClient'),
+    pccLocationArea:     sv('pccLocationArea'),
+    pccDescriptionOfWorks: sv('pccDescriptionOfWorks'),
+    pccOutstandingItems: sv('pccOutstandingItems'),
+    pccHandedOverBy:     sv('pccHandedOverBy'),
+    pccAcceptedBy:       sv('pccAcceptedBy'),
+    pccAcceptedByCompany:sv('pccAcceptedByCompany'),
+    pccAcceptanceDate:   sv('pccAcceptanceDate', new Date().toISOString().split('T')[0]),
+    pccSignature:        sv('pccSignature'),
   }));
 
   // Site Walk checklist state — stored separately due to nested structure
@@ -569,6 +583,16 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
   const [twrReadings, setTwrReadings] = useState<TWRReadingRecord[]>(() => {
     if (!init?.twrReadings) return [];
     try { return JSON.parse(init.twrReadings as string) as TWRReadingRecord[]; } catch { return []; }
+  });
+
+  // Practical Completion Certificate — dynamic state
+  const [pccAssets, setPccAssets] = useState<PCCAssetRecord[]>(() => {
+    if (!init?.pccAssets) return [];
+    try { return JSON.parse(init.pccAssets as string) as PCCAssetRecord[]; } catch { return []; }
+  });
+  const [pccChecklist, setPccChecklist] = useState<PCCChecklistItem[]>(() => {
+    if (!init?.pccChecklist) return [];
+    try { return JSON.parse(init.pccChecklist as string) as PCCChecklistItem[]; } catch { return []; }
   });
 
   const set = (key: string) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -1014,6 +1038,23 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
         engineer:       form.completedBy,
       });
     }
+    if (type === 'Practical Completion Certificate') {
+      Object.assign(base, {
+        pccRef:              form.pccRef,
+        pccContract:         form.pccContract,
+        pccClient:           form.pccClient,
+        pccLocationArea:     form.pccLocationArea,
+        pccDescriptionOfWorks: form.pccDescriptionOfWorks,
+        pccAssets:           JSON.stringify(pccAssets),
+        pccChecklist:        JSON.stringify(pccChecklist),
+        pccOutstandingItems: form.pccOutstandingItems,
+        pccHandedOverBy:     form.pccHandedOverBy,
+        pccAcceptedBy:       form.pccAcceptedBy,
+        pccAcceptedByCompany:form.pccAcceptedByCompany,
+        pccAcceptanceDate:   form.pccAcceptanceDate,
+        pccSignature:        form.pccSignature,
+      });
+    }
     onSave(base, uploadedFiles);
     onClose();
   };
@@ -1043,6 +1084,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
   const isHIU = type === 'HIU Commissioning Record';
   const isMVHR = type === 'MVHR Commissioning Record';
   const isTWR = type === 'Temperature Water Readings';
+  const isPCC = type === 'Practical Completion Certificate';
 
   const accentColor = isRAMS
     ? 'bg-orange-600 hover:bg-orange-700'
@@ -1088,6 +1130,8 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     ? 'bg-sky-600 hover:bg-sky-700'
     : isTWR
     ? 'bg-blue-600 hover:bg-blue-700'
+    : isPCC
+    ? 'bg-emerald-600 hover:bg-emerald-700'
     : 'bg-[#f97316] hover:bg-orange-600';
 
   const rfiStatuses = ['Draft', 'Issued', 'Awaiting Response', 'Closed'];
@@ -4474,11 +4518,127 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
             </>
           )}
 
+          {/* ── Practical Completion Certificate ── */}
+          {isPCC && (
+            <>
+              {/* Project information */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Project *</label>
+                  <div className="relative">
+                    <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
+                      <option value="">Select project...</option>
+                      {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelCls}>Certificate Reference</label>
+                  <input value={form.pccRef} onChange={set('pccRef')} className={inputCls} placeholder="PC-0001" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Contract</label>
+                  <input value={form.pccContract} onChange={set('pccContract')} className={inputCls} placeholder="Contract name / reference" />
+                </div>
+                <div>
+                  <label className={labelCls}>Client</label>
+                  <input value={form.pccClient} onChange={set('pccClient')} className={inputCls} placeholder="Client name" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Title *</label>
+                  <input value={form.title} onChange={set('title')} className={inputCls} placeholder="e.g. Theatre 1 Operating Light Replacement" />
+                </div>
+                <div>
+                  <label className={labelCls}>Location / Area</label>
+                  <input value={form.pccLocationArea} onChange={set('pccLocationArea')} className={inputCls} placeholder="e.g. Theatre 1, Level 2" />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Date *</label>
+                <input type="date" value={form.date} onChange={set('date')} className={inputCls} />
+              </div>
+
+              {/* Description of Works */}
+              <div>
+                <label className={labelCls}>Description of Works *</label>
+                <p className="text-[10px] text-slate-600 mb-1.5">Fully describe what has been completed and handed over. Be specific — include scope, systems, and any key activities such as commissioning, testing, and demonstration.</p>
+                <textarea value={form.pccDescriptionOfWorks} onChange={set('pccDescriptionOfWorks')} rows={6}
+                  className={`${inputCls} resize-none`}
+                  placeholder="e.g. Theatre 1 operating light replacement complete including removal of the existing operating light, installation of the new operating light, commissioning, testing and demonstration to the Client." />
+              </div>
+
+              {/* Assets / Equipment */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className={labelCls}>Assets / Equipment (Optional)</label>
+                  <span className="text-[10px] text-slate-600">{pccAssets.length} item{pccAssets.length !== 1 ? 's' : ''}</span>
+                </div>
+                <p className="text-[10px] text-slate-600 mb-2">Record individual assets or equipment included in this handover. Leave empty if not applicable.</p>
+                <PCCAssetRows rows={pccAssets} onChange={setPccAssets} />
+              </div>
+
+              {/* Completion Checklist */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className={labelCls}>Completion Checklist</label>
+                  <span className="text-[10px] text-slate-600">{pccChecklist.length} item{pccChecklist.length !== 1 ? 's' : ''}</span>
+                </div>
+                <p className="text-[10px] text-slate-600 mb-2">Build your own completion checklist. Add as many items as required for this handover.</p>
+                <PCCChecklistRows rows={pccChecklist} onChange={setPccChecklist} />
+              </div>
+
+              {/* Outstanding Items */}
+              <div>
+                <label className={labelCls}>Outstanding Items / Observations</label>
+                <textarea value={form.pccOutstandingItems} onChange={set('pccOutstandingItems')} rows={3}
+                  className={`${inputCls} resize-none`} placeholder="Record any items remaining before or after handover..." />
+              </div>
+
+              {/* Acceptance */}
+              <div className="pt-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-[#1e2d4a] pb-1.5 mb-3">Acceptance</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Handed Over By</label>
+                    <input value={form.pccHandedOverBy} onChange={set('pccHandedOverBy')} className={inputCls} placeholder="Name / role" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Accepted By</label>
+                    <input value={form.pccAcceptedBy} onChange={set('pccAcceptedBy')} className={inputCls} placeholder="Client representative name" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className={labelCls}>Company</label>
+                    <input value={form.pccAcceptedByCompany} onChange={set('pccAcceptedByCompany')} className={inputCls} placeholder="Client company" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Date of Acceptance</label>
+                    <input type="date" value={form.pccAcceptanceDate} onChange={set('pccAcceptanceDate')} className={inputCls} />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Attachments</label>
+                <FileUploadComponent files={uploadedFiles} onChange={setUploadedFiles} label="Upload supporting documentation" />
+              </div>
+            </>
+          )}
+
           {/* Common fields fallback */}
           {!isRFI && !isHoldUp && !isDelay && !isVariation && !isEWN && !isSI && !isTQ && !isHS
             && !isPressureTest && !isFlushingRecord && !isValveChecklist && !isAHUCommissioning
             && !isDeadTesting && !isContinuityTest && !isToolboxTalk && !isSiteWalkAudit
-            && !isECR && !isDaily && !isRAMS && !isAIR && !isPCR && !isHIU && !isMVHR && !isTWR && (
+            && !isECR && !isDaily && !isRAMS && !isAIR && !isPCR && !isHIU && !isMVHR && !isTWR && !isPCC && (
             <>
               <div>
                 <label className={labelCls}>Project</label>
@@ -4518,7 +4678,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
             className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-slate-500 transition-colors">
             Cancel
           </button>
-          <button type="button" onClick={() => handleAction('Submitted')}
+          <button type="button" onClick={() => handleAction(isPCC ? 'Issued' : 'Submitted')}
             className={`px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${accentColor}`}>
             {isRFI ? 'Submit RFI'
               : isHoldUp ? 'Issue Hold Up Notice'
@@ -4544,6 +4704,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
               : isHIU ? 'Submit HIU Commissioning Record'
               : isMVHR ? 'Submit MVHR Commissioning Record'
               : isTWR ? 'Submit Temperature Water Readings'
+              : isPCC ? 'Issue Certificate'
               : 'Submit Form'}
           </button>
         </div>

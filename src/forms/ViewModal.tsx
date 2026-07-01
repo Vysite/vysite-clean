@@ -186,6 +186,14 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
   let twrReadings: TWRReading[] = [];
   if (isTWR && form.twrReadings) { try { twrReadings = JSON.parse(form.twrReadings as string); } catch { /* */ } }
 
+  interface PCCAsset { item: string; manufacturer: string; model: string; serialNumber: string; assetNumber: string; quantity: string; }
+  interface PCCChecklistItem { description: string; result: string; }
+  const isPCC = form.type === 'Practical Completion Certificate';
+  let pccAssets: PCCAsset[] = [];
+  if (isPCC && form.pccAssets) { try { pccAssets = JSON.parse(form.pccAssets as string); } catch { /* */ } }
+  let pccChecklist: PCCChecklistItem[] = [];
+  if (isPCC && form.pccChecklist) { try { pccChecklist = JSON.parse(form.pccChecklist as string); } catch { /* */ } }
+
   const attachments = f.attachments;
 
   return (
@@ -933,8 +941,92 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
             )}
           </>}
 
+          {/* ── Practical Completion Certificate ── */}
+          {isPCC && <>
+            <Section label="Certificate Information">
+              <Field2Col items={[
+                ['Certificate Ref', s('pccRef')],
+                ['Contract', s('pccContract')],
+                ['Client', s('pccClient')],
+                ['Location / Area', s('pccLocationArea')],
+                ['Project', form.projectName ?? undefined],
+                ['Date', fmtDate(s('date'))],
+              ]} />
+            </Section>
+
+            {s('pccDescriptionOfWorks') && (
+              <Section label="Description of Works">
+                <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-3.5">
+                  <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{s('pccDescriptionOfWorks')}</p>
+                </div>
+              </Section>
+            )}
+
+            {pccAssets.length > 0 && (
+              <Section label={`Assets / Equipment (${pccAssets.length} item${pccAssets.length !== 1 ? 's' : ''})`}>
+                <div className="space-y-2">
+                  {pccAssets.map((a, i) => (
+                    <div key={i} className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-white">{a.item || '—'}</span>
+                        {a.quantity && <span className="text-[10px] font-bold text-slate-400 bg-[#1a2236] px-2 py-0.5 rounded-full">Qty: {a.quantity}</span>}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {a.manufacturer && <div><p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Manufacturer</p><p className="text-xs text-slate-400">{a.manufacturer}</p></div>}
+                        {a.model && <div><p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Model</p><p className="text-xs text-slate-400">{a.model}</p></div>}
+                        {a.serialNumber && <div><p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Serial No.</p><p className="text-xs text-slate-400 font-mono">{a.serialNumber}</p></div>}
+                        {a.assetNumber && <div><p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Asset No.</p><p className="text-xs text-slate-400 font-mono">{a.assetNumber}</p></div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            )}
+
+            {pccChecklist.length > 0 && (
+              <Section label={`Completion Checklist (${pccChecklist.length} item${pccChecklist.length !== 1 ? 's' : ''})`}>
+                <div className="space-y-1.5">
+                  {pccChecklist.map((c, i) => {
+                    const badgeCls = c.result === 'Pass' ? 'bg-emerald-900/60 text-emerald-300'
+                      : c.result === 'Fail' ? 'bg-red-900/60 text-red-300'
+                      : 'bg-slate-700 text-slate-400';
+                    return (
+                      <div key={i} className="flex items-center justify-between py-2 border-b border-[#1e2d4a]/50 last:border-0">
+                        <span className="text-xs text-slate-300">{c.description}</span>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ml-3 ${badgeCls}`}>{c.result}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Section>
+            )}
+
+            {s('pccOutstandingItems') && (
+              <Section label="Outstanding Items / Observations">
+                <div className="bg-amber-900/20 border border-amber-700/30 rounded-xl p-3.5">
+                  <p className="text-sm text-amber-200 leading-relaxed whitespace-pre-wrap">{s('pccOutstandingItems')}</p>
+                </div>
+              </Section>
+            )}
+
+            <Section label="Certificate Statement">
+              <div className="bg-emerald-900/20 border border-emerald-700/30 rounded-xl p-3.5">
+                <p className="text-xs text-emerald-200 leading-relaxed italic">The described works have been installed, tested and commissioned where applicable and, in our opinion, are practically complete subject only to any outstanding items recorded within this certificate and the normal defects liability period.</p>
+              </div>
+            </Section>
+
+            <Section label="Acceptance">
+              <Field2Col items={[
+                ['Handed Over By', s('pccHandedOverBy')],
+                ['Accepted By', s('pccAcceptedBy')],
+                ['Company', s('pccAcceptedByCompany')],
+                ['Date of Acceptance', fmtDate(s('pccAcceptanceDate'))],
+              ]} />
+            </Section>
+          </>}
+
           {/* Generic comments/notes fallback */}
-          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isTWR && !isQA && (form.comments || form.notes) && (
+          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isTWR && !isQA && !isPCC && (form.comments || form.notes) && (
             <ViewField label="Comments / Notes" value={String(form.comments || form.notes || '')} />
           )}
 
