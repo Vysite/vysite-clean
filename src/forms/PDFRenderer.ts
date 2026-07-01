@@ -1591,6 +1591,10 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
     @page { margin:0; size:A4; }
     @media print { .page { padding:14mm 16mm 14mm 16mm; max-width:100%; } }
     .badge { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .evidence-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
+    .evidence-item { border:1px solid #e2e8f0; border-radius:5px; overflow:hidden; page-break-inside:avoid; }
+    .evidence-img { width:100%; height:110px; object-fit:cover; display:block; background:#f8fafc; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .evidence-caption { padding:3px 6px; font-size:7.5px; color:#64748b; background:#f8fafc; border-top:1px solid #e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   `;
 
   return `<!DOCTYPE html>
