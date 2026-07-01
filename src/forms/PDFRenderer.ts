@@ -1460,8 +1460,8 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
   const title = safeStr(f.title) || 'Practical Completion';
 
   const logoHtml = orgLogo
-    ? `<img style="height:44px;max-width:160px;object-fit:contain;display:block;margin-bottom:6px" src="${orgLogo}" alt="${esc(orgName)}">`
-    : `<div style="font-size:22px;font-weight:900;color:#f97316;letter-spacing:2px">${esc(orgName)}</div>`;
+    ? `<img style="height:40px;max-width:150px;object-fit:contain;display:block" src="${orgLogo}" alt="${esc(orgName)}">`
+    : `<div style="font-size:20px;font-weight:900;color:#f97316;letter-spacing:2px">${esc(orgName)}</div>`;
 
   const assets: PCCAsset[] = (() => {
     try { return JSON.parse(safeStr(f.pccAssets)) as PCCAsset[]; } catch { return []; }
@@ -1470,181 +1470,213 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
     try { return JSON.parse(safeStr(f.pccChecklist)) as PCCCheckItem[]; } catch { return []; }
   })();
 
+  const allPass = checklist.length > 0 && checklist.every(c => c.result === 'Pass');
+  const anyFail = checklist.some(c => c.result === 'Fail');
+
   const assetsTable = assets.length ? `
     <table style="width:100%;border-collapse:collapse;font-size:10px;margin-top:6px">
       <thead>
         <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
-          <th style="padding:7px 10px;text-align:left;font-size:8px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Item</th>
-          <th style="padding:7px 10px;text-align:left;font-size:8px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Manufacturer</th>
-          <th style="padding:7px 10px;text-align:left;font-size:8px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Model</th>
-          <th style="padding:7px 10px;text-align:left;font-size:8px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Serial Number</th>
-          <th style="padding:7px 10px;text-align:left;font-size:8px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Asset No.</th>
-          <th style="padding:7px 10px;text-align:center;font-size:8px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Qty</th>
+          <th style="padding:6px 10px;text-align:left;font-size:7.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Item</th>
+          <th style="padding:6px 10px;text-align:left;font-size:7.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Manufacturer</th>
+          <th style="padding:6px 10px;text-align:left;font-size:7.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Model</th>
+          <th style="padding:6px 10px;text-align:left;font-size:7.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Serial Number</th>
+          <th style="padding:6px 10px;text-align:left;font-size:7.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Asset Number</th>
+          <th style="padding:6px 10px;text-align:center;font-size:7.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Qty</th>
         </tr>
       </thead>
       <tbody>
-        ${assets.map((a, i) => `<tr style="${i % 2 === 0 ? '' : 'background:#f8fafc'}">
-          <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:600">${esc(a.item)}</td>
-          <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;color:#334155">${esc(a.manufacturer)}</td>
-          <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;color:#334155">${esc(a.model)}</td>
-          <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;color:#334155;font-family:monospace">${esc(a.serialNumber)}</td>
-          <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;color:#334155;font-family:monospace">${esc(a.assetNumber)}</td>
-          <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;color:#0f172a;text-align:center;font-weight:600">${esc(a.quantity)}</td>
+        ${assets.map((a, i) => `<tr style="${i % 2 !== 0 ? 'background:#f8fafc' : ''}">
+          <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:600">${esc(a.item)}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;color:#334155">${esc(a.manufacturer)}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;color:#334155">${esc(a.model)}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;color:#334155;font-family:monospace;font-size:9.5px">${esc(a.serialNumber)}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;color:#334155;font-family:monospace;font-size:9.5px">${esc(a.assetNumber)}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;color:#0f172a;text-align:center;font-weight:700">${esc(a.quantity)}</td>
         </tr>`).join('')}
       </tbody>
-    </table>` : '<p style="font-size:11px;color:#94a3b8;font-style:italic">No assets or equipment recorded.</p>';
+    </table>` : '<p style="font-size:10px;color:#94a3b8;font-style:italic;padding:8px 0">No assets or equipment recorded.</p>';
 
   const checklistHtml = checklist.length ? `
-    <table style="width:100%;border-collapse:collapse;font-size:10px;margin-top:6px">
+    <table style="width:100%;border-collapse:collapse;font-size:10.5px">
       <tbody>
         ${checklist.map((c, i) => {
-          const badgeStyle = c.result === 'Pass'
-            ? 'background:#d1fae5;color:#065f46'
-            : c.result === 'Fail'
-            ? 'background:#fee2e2;color:#991b1b'
-            : 'background:#f1f5f9;color:#64748b';
-          return `<tr style="${i % 2 === 0 ? '' : 'background:#f8fafc'}">
-            <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b">${esc(c.description)}</td>
-            <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;text-align:right">
-              <span style="padding:2px 10px;border-radius:20px;font-size:9px;font-weight:700;${badgeStyle}">${esc(c.result)}</span>
+          const isPassed = c.result === 'Pass';
+          const isFailed = c.result === 'Fail';
+          const badgeStyle = isPassed
+            ? 'background:#dcfce7;color:#166534;border:1px solid #bbf7d0'
+            : isFailed
+            ? 'background:#fee2e2;color:#991b1b;border:1px solid #fecaca'
+            : 'background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0';
+          const rowBg = isPassed ? (i % 2 !== 0 ? 'background:#f0fdf4' : '') : (i % 2 !== 0 ? 'background:#f8fafc' : '');
+          return `<tr style="${rowBg}">
+            <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;line-height:1.45">${esc(c.description)}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap">
+              <span style="display:inline-block;padding:2px 12px;border-radius:20px;font-size:9px;font-weight:700;${badgeStyle}">${esc(c.result || 'N/A')}</span>
             </td>
           </tr>`;
         }).join('')}
       </tbody>
-    </table>` : '<p style="font-size:11px;color:#94a3b8;font-style:italic">No checklist items recorded.</p>';
+    </table>` : '<p style="font-size:10px;color:#94a3b8;font-style:italic;padding:8px 0">No checklist items recorded.</p>';
 
-  const sectionStyle = 'margin-top:22px;page-break-inside:avoid';
-  const sectionHeadStyle = 'font-size:8px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.12em;padding-bottom:6px;border-bottom:1.5px solid #e2e8f0;margin-bottom:12px';
-  const metaCellStyle = 'background:white;border:1px solid #e2e8f0;border-radius:5px;padding:9px 13px';
-  const metaLabelStyle = 'font-size:7.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px';
-  const metaValueStyle = 'font-size:12px;font-weight:600;color:#0f172a';
+  const labelSt = 'font-size:7px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px';
+  const valueSt = 'font-size:11.5px;font-weight:700;color:#0f172a';
+  const subSt   = 'font-size:9.5px;color:#64748b;margin-top:1px';
+  const cellSt  = 'background:#fff;border:1px solid #e9eef4;border-radius:5px;padding:9px 13px';
+
+  const secHd = 'font-size:7.5px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.13em;padding-bottom:7px;border-bottom:1.5px solid #e9eef4;margin-bottom:12px';
+  const sec   = 'margin-top:20px;page-break-inside:avoid';
 
   const certCSS = `
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #1e293b; background: white; font-size: 11px; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page { max-width: 860px; margin: 0 auto; padding: 36px 40px; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif; color:#1e293b; background:white; font-size:11px; line-height:1.5; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .page { max-width:840px; margin:0 auto; padding:32px 38px 40px; }
+    @media print { @page { margin:12mm 14mm 14mm 14mm; } }
   `;
 
   const attachments = (f.attachments ?? f['extra_data.attachments']) as unknown[];
-  const evidenceHtml2 = attachments && Array.isArray(attachments) && attachments.length
-    ? `<div style="${sectionStyle}"><div style="${sectionHeadStyle}">Evidence & Attachments</div>${evidenceHtml(attachments)}</div>`
+  const evidenceSection = attachments && Array.isArray(attachments) && attachments.length
+    ? `<div style="${sec}"><div style="${secHd}">Evidence &amp; Attachments</div>${evidenceHtml(attachments)}</div>`
     : '';
 
-  const hovName = esc(safeStr(f.pccHandedOverBy));
-  const hovTitle = esc(safeStr(f.pccHandedOverByTitle));
-  const accName = esc(safeStr(f.pccAcceptedBy));
-  const accTitle = esc(safeStr(f.pccAcceptedByTitle));
+  const hovName    = esc(safeStr(f.pccHandedOverBy));
+  const hovJobTitle = esc(safeStr(f.pccHandedOverByTitle));
+  const accName    = esc(safeStr(f.pccAcceptedBy));
+  const accJobTitle = esc(safeStr(f.pccAcceptedByTitle));
   const accCompany = esc(safeStr(f.pccAcceptedByCompany));
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Practical Completion Certificate — ${esc(title)}</title><style>${certCSS}</style></head><body>
-  <div class="page">
+  const statusBanner = anyFail
+    ? `<div style="display:inline-flex;align-items:center;gap:8px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:6px;padding:7px 16px">
+        <span style="width:8px;height:8px;background:#f97316;border-radius:50%;flex-shrink:0"></span>
+        <span style="font-size:9.5px;font-weight:800;color:#c2410c;text-transform:uppercase;letter-spacing:.1em">Outstanding Items — Review Required</span>
+       </div>`
+    : `<div style="display:inline-flex;align-items:center;gap:8px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:6px;padding:7px 16px">
+        <span style="width:8px;height:8px;background:#16a34a;border-radius:50%;flex-shrink:0"></span>
+        <span style="font-size:9.5px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.1em">Works Practically Complete</span>
+       </div>`;
 
-    <!-- Certificate Header -->
-    <div style="border-bottom:4px solid #f97316;padding-bottom:18px;margin-bottom:22px;display:flex;align-items:flex-start;justify-content:space-between">
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Practical Completion Certificate — ${esc(title)}</title>
+  <style>${certCSS}</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Header ──────────────────────────────────────────────── -->
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:16px;margin-bottom:0;border-bottom:3px solid #f97316">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${logoHtml}
+      <div style="font-size:8px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.14em;margin-top:4px">Practical Completion Certificate</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#9ca3af;margin-bottom:4px">Certificate Reference</div>
+      <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:5px;padding:6px 14px;display:inline-block">
+        <span style="font-size:18px;font-family:'Courier New',monospace;color:#0f172a;font-weight:900;letter-spacing:1.5px">${esc(safeStr(f.pccRef))}</span>
+      </div>
+      <div style="font-size:8.5px;color:#9ca3af;margin-top:5px">Issued ${today}</div>
+    </div>
+  </div>
+
+  <!-- ── Document Identity ────────────────────────────────────── -->
+  <div style="padding:18px 0 14px;border-bottom:1px solid #e9eef4">
+    <div style="font-size:23px;font-weight:900;color:#0f172a;line-height:1.15;margin-bottom:5px">${esc(title)}</div>
+    ${safeStr(f.projectName) ? `<div style="font-size:12px;color:#64748b;font-weight:500;margin-bottom:10px">${esc(safeStr(f.projectName))}</div>` : '<div style="margin-bottom:10px"></div>'}
+    ${statusBanner}
+  </div>
+
+  <!-- ── Project Info Grid ─────────────────────────────────────── -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:14px;margin-bottom:4px">
+    ${safeStr(f.pccContract) ? `<div style="${cellSt}"><div style="${labelSt}">Contract</div><div style="${valueSt}">${esc(safeStr(f.pccContract))}</div></div>` : ''}
+    ${safeStr(f.pccClient) ? `<div style="${cellSt}"><div style="${labelSt}">Client</div><div style="${valueSt}">${esc(safeStr(f.pccClient))}</div></div>` : ''}
+    ${safeStr(f.pccLocationArea) ? `<div style="${cellSt}"><div style="${labelSt}">Location / Area</div><div style="${valueSt}">${esc(safeStr(f.pccLocationArea))}</div></div>` : ''}
+    <div style="${cellSt}"><div style="${labelSt}">Certificate Date</div><div style="${valueSt}">${certDate}</div></div>
+    ${safeStr(f.projectName) ? `<div style="${cellSt}"><div style="${labelSt}">Project</div><div style="${valueSt}">${esc(safeStr(f.projectName))}</div></div>` : ''}
+  </div>
+
+  <!-- ── Description of Works ─────────────────────────────────── -->
+  <div style="${sec}">
+    <div style="${secHd}">Description of Works</div>
+    <div style="font-size:11.5px;color:#1e293b;line-height:1.85;background:#f8fafc;border:1px solid #e9eef4;border-left:3px solid #cbd5e1;border-radius:0 5px 5px 0;padding:13px 16px;white-space:pre-wrap">${esc(safeStr(f.pccDescriptionOfWorks)) || '<em style="color:#94a3b8">No description provided.</em>'}</div>
+  </div>
+
+  <!-- ── Assets / Equipment ───────────────────────────────────── -->
+  <div style="${sec}">
+    <div style="${secHd}">Assets / Equipment — ${assets.length} Item${assets.length !== 1 ? 's' : ''}</div>
+    ${assetsTable}
+  </div>
+
+  <!-- ── Completion Checklist ──────────────────────────────────── -->
+  <div style="${sec}">
+    <div style="${secHd}">Completion Checklist — ${checklist.length} Item${checklist.length !== 1 ? 's' : ''}${allPass ? ' &nbsp;&#10003; All Pass' : ''}</div>
+    ${checklistHtml}
+  </div>
+
+  ${safeStr(f.pccOutstandingItems) ? `
+  <!-- ── Outstanding Items ─────────────────────────────────────── -->
+  <div style="${sec}">
+    <div style="${secHd}">Outstanding Items / Observations</div>
+    <div style="font-size:11px;color:#334155;line-height:1.75;background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f97316;border-radius:0 5px 5px 0;padding:13px 16px;white-space:pre-wrap">${esc(safeStr(f.pccOutstandingItems))}</div>
+  </div>` : ''}
+
+  <!-- ── Certificate Statement ─────────────────────────────────── -->
+  <div style="margin-top:22px;border-left:4px solid #f97316;background:#fffbf7;border-radius:0 6px 6px 0;padding:15px 18px;page-break-inside:avoid">
+    <div style="font-size:7.5px;font-weight:800;color:#c2410c;text-transform:uppercase;letter-spacing:.14em;margin-bottom:9px">Certificate Statement</div>
+    <p style="font-size:11.5px;color:#1e293b;line-height:1.85;font-style:italic">We certify that the works described above have been installed, tested and commissioned where applicable and, in our opinion, are practically complete, subject only to any outstanding items recorded within this certificate and the provisions of the applicable defects liability period.</p>
+  </div>
+
+  <!-- ── Acceptance ───────────────────────────────────────────── -->
+  <div style="${sec}">
+    <div style="${secHd}">Acceptance</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px">
+      <div style="${cellSt}">
+        <div style="${labelSt}">Handed Over By</div>
+        <div style="${valueSt}">${hovName || '—'}</div>
+        ${hovJobTitle ? `<div style="${subSt}">${hovJobTitle}</div>` : ''}
+      </div>
+      <div style="${cellSt}">
+        <div style="${labelSt}">Accepted By</div>
+        <div style="${valueSt}">${accName || '—'}</div>
+        ${accJobTitle ? `<div style="${subSt}">${accJobTitle}</div>` : ''}
+      </div>
+      <div style="${cellSt}"><div style="${labelSt}">Company</div><div style="${valueSt}">${accCompany || '—'}</div></div>
+      <div style="${cellSt}"><div style="${labelSt}">Date of Acceptance</div><div style="${valueSt}">${safeStr(f.pccAcceptanceDate) ? fmtDate(safeStr(f.pccAcceptanceDate)) : '—'}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px">
       <div>
-        ${logoHtml}
-        <div style="font-size:9.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.12em;margin-top:8px">Practical Completion Certificate</div>
-        <div style="font-size:9px;color:#94a3b8;margin-top:2px">Issued ${today}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8;margin-bottom:5px">Certificate Reference</div>
-        <div style="background:#f8fafc;border:2px solid #e2e8f0;border-radius:6px;padding:8px 16px;display:inline-block">
-          <div style="font-size:20px;font-family:monospace;color:#0f172a;font-weight:900;letter-spacing:1px">${esc(safeStr(f.pccRef))}</div>
+        <div style="font-size:7.5px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Signature — Handing Over</div>
+        <div style="height:44px;border-bottom:1.5px solid #cbd5e1"></div>
+        <div style="margin-top:6px">
+          <div style="font-size:10px;font-weight:700;color:#0f172a">${hovName}</div>
+          ${hovJobTitle ? `<div style="font-size:9px;color:#64748b">${hovJobTitle}</div>` : ''}
         </div>
       </div>
-    </div>
-
-    <!-- Document Title -->
-    <div style="margin-bottom:22px">
-      <div style="font-size:9px;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:.14em;margin-bottom:6px">Practical Completion Certificate</div>
-      <div style="font-size:26px;font-weight:900;color:#0f172a;line-height:1.15;margin-bottom:6px">${esc(title)}</div>
-      ${safeStr(f.projectName) ? `<div style="font-size:13px;color:#64748b;font-weight:500">${esc(safeStr(f.projectName))}</div>` : ''}
-    </div>
-
-    <!-- Project Info Grid -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:22px">
-      ${safeStr(f.pccContract) ? `<div style="${metaCellStyle}"><div style="${metaLabelStyle}">Contract</div><div style="${metaValueStyle}">${esc(safeStr(f.pccContract))}</div></div>` : ''}
-      ${safeStr(f.pccClient) ? `<div style="${metaCellStyle}"><div style="${metaLabelStyle}">Client</div><div style="${metaValueStyle}">${esc(safeStr(f.pccClient))}</div></div>` : ''}
-      ${safeStr(f.pccLocationArea) ? `<div style="${metaCellStyle}"><div style="${metaLabelStyle}">Location / Area</div><div style="${metaValueStyle}">${esc(safeStr(f.pccLocationArea))}</div></div>` : ''}
-      <div style="${metaCellStyle}"><div style="${metaLabelStyle}">Date</div><div style="${metaValueStyle}">${certDate}</div></div>
-      ${safeStr(f.projectName) ? `<div style="${metaCellStyle}"><div style="${metaLabelStyle}">Project</div><div style="${metaValueStyle}">${esc(safeStr(f.projectName))}</div></div>` : ''}
-    </div>
-
-    <!-- Description of Works -->
-    <div style="${sectionStyle}">
-      <div style="${sectionHeadStyle}">Description of Works</div>
-      <div style="font-size:12px;color:#334155;line-height:1.8;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;white-space:pre-wrap">${esc(safeStr(f.pccDescriptionOfWorks)) || '<em style="color:#94a3b8">No description provided.</em>'}</div>
-    </div>
-
-    <!-- Assets / Equipment -->
-    <div style="${sectionStyle}">
-      <div style="${sectionHeadStyle}">Assets / Equipment (${assets.length} item${assets.length !== 1 ? 's' : ''})</div>
-      ${assetsTable}
-    </div>
-
-    <!-- Completion Checklist -->
-    <div style="${sectionStyle}">
-      <div style="${sectionHeadStyle}">Completion Checklist (${checklist.length} item${checklist.length !== 1 ? 's' : ''})</div>
-      ${checklistHtml}
-    </div>
-
-    ${safeStr(f.pccOutstandingItems) ? `
-    <!-- Outstanding Items -->
-    <div style="${sectionStyle}">
-      <div style="${sectionHeadStyle}">Outstanding Items / Observations</div>
-      <div style="font-size:11px;color:#334155;line-height:1.75;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;white-space:pre-wrap">${esc(safeStr(f.pccOutstandingItems))}</div>
-    </div>` : ''}
-
-    <!-- Certificate Statement -->
-    <div style="margin-top:24px;border-left:5px solid #f97316;background:#fffbf7;border-radius:0 8px 8px 0;padding:18px 20px;page-break-inside:avoid">
-      <div style="font-size:8px;font-weight:800;color:#c2410c;text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px">Certificate Statement</div>
-      <p style="font-size:12px;color:#1e293b;line-height:1.8;font-style:italic">We certify that the works described above have been installed, tested and commissioned where applicable and, in our opinion, are practically complete, subject only to any outstanding items recorded within this certificate and the provisions of the applicable defects liability period.</p>
-    </div>
-
-    <!-- Acceptance -->
-    <div style="${sectionStyle}">
-      <div style="${sectionHeadStyle}">Acceptance</div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
-        <div style="${metaCellStyle}">
-          <div style="${metaLabelStyle}">Handed Over By</div>
-          <div style="${metaValueStyle}">${hovName || '—'}</div>
-          ${hovTitle ? `<div style="font-size:10px;color:#64748b;margin-top:2px">${hovTitle}</div>` : ''}
-        </div>
-        <div style="${metaCellStyle}">
-          <div style="${metaLabelStyle}">Accepted By</div>
-          <div style="${metaValueStyle}">${accName || '—'}</div>
-          ${accTitle ? `<div style="font-size:10px;color:#64748b;margin-top:2px">${accTitle}</div>` : ''}
-        </div>
-        <div style="${metaCellStyle}"><div style="${metaLabelStyle}">Company</div><div style="${metaValueStyle}">${accCompany || '—'}</div></div>
-        <div style="${metaCellStyle}"><div style="${metaLabelStyle}">Date of Acceptance</div><div style="${metaValueStyle}">${safeStr(f.pccAcceptanceDate) ? fmtDate(safeStr(f.pccAcceptanceDate)) : '—'}</div></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:8px">
-        <div>
-          <div style="font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Signature (Handing Over)</div>
-          <div style="height:48px;border-bottom:2px solid #cbd5e1;margin-bottom:6px"></div>
-          <div style="font-size:10px;color:#0f172a;font-weight:600">${hovName}</div>
-          ${hovTitle ? `<div style="font-size:9px;color:#64748b">${hovTitle}</div>` : ''}
-        </div>
-        <div>
-          <div style="font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Signature (Acceptance)</div>
-          <div style="height:48px;border-bottom:2px solid #cbd5e1;margin-bottom:6px"></div>
-          <div style="font-size:10px;color:#0f172a;font-weight:600">${accName}</div>
-          ${accTitle ? `<div style="font-size:9px;color:#64748b">${accTitle}</div>` : ''}
+      <div>
+        <div style="font-size:7.5px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Signature — Acceptance</div>
+        <div style="height:44px;border-bottom:1.5px solid #cbd5e1"></div>
+        <div style="margin-top:6px">
+          <div style="font-size:10px;font-weight:700;color:#0f172a">${accName}</div>
+          ${accJobTitle ? `<div style="font-size:9px;color:#64748b">${accJobTitle}</div>` : ''}
           ${accCompany ? `<div style="font-size:9px;color:#64748b">${accCompany}</div>` : ''}
         </div>
       </div>
     </div>
-
-    ${evidenceHtml2}
-
-    <!-- Footer -->
-    <div style="margin-top:32px;border-top:2px solid #e2e8f0;padding-top:12px;display:flex;align-items:center;justify-content:space-between">
-      <div style="font-size:8px;color:#94a3b8">${esc(orgName)} &middot; Practical Completion Certificate &middot; ${esc(safeStr(f.pccRef))}</div>
-      <div style="font-size:8px;color:#94a3b8">Generated ${today}</div>
-    </div>
   </div>
-  <script>window.onload=function(){window.print();};<\/script>
-  </body></html>`;
+
+  ${evidenceSection}
+
+  <!-- ── Footer ───────────────────────────────────────────────── -->
+  <div style="margin-top:28px;padding-top:10px;border-top:1.5px solid #e9eef4;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-size:7.5px;color:#9ca3af">${esc(orgName)} &nbsp;&middot;&nbsp; Practical Completion Certificate &nbsp;&middot;&nbsp; ${esc(safeStr(f.pccRef))}</div>
+    <div style="font-size:7.5px;color:#9ca3af">Generated ${today}</div>
+  </div>
+
+</div>
+<script>window.onload=function(){window.print();};<\/script>
+</body>
+</html>`;
 
   return html;
 }
