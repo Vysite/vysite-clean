@@ -423,9 +423,11 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     pccLocationArea:     sv('pccLocationArea'),
     pccDescriptionOfWorks: sv('pccDescriptionOfWorks'),
     pccOutstandingItems: sv('pccOutstandingItems'),
-    pccHandedOverBy:     sv('pccHandedOverBy'),
-    pccAcceptedBy:       sv('pccAcceptedBy'),
-    pccAcceptedByCompany:sv('pccAcceptedByCompany'),
+    pccHandedOverBy:      sv('pccHandedOverBy'),
+    pccHandedOverByTitle: sv('pccHandedOverByTitle'),
+    pccAcceptedBy:        sv('pccAcceptedBy'),
+    pccAcceptedByTitle:   sv('pccAcceptedByTitle'),
+    pccAcceptedByCompany: sv('pccAcceptedByCompany'),
     pccAcceptanceDate:   sv('pccAcceptanceDate', new Date().toISOString().split('T')[0]),
     pccSignature:        sv('pccSignature'),
   }));
@@ -1048,9 +1050,11 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
         pccAssets:           JSON.stringify(pccAssets),
         pccChecklist:        JSON.stringify(pccChecklist),
         pccOutstandingItems: form.pccOutstandingItems,
-        pccHandedOverBy:     form.pccHandedOverBy,
-        pccAcceptedBy:       form.pccAcceptedBy,
-        pccAcceptedByCompany:form.pccAcceptedByCompany,
+        pccHandedOverBy:      form.pccHandedOverBy,
+        pccHandedOverByTitle: form.pccHandedOverByTitle,
+        pccAcceptedBy:        form.pccAcceptedBy,
+        pccAcceptedByTitle:   form.pccAcceptedByTitle,
+        pccAcceptedByCompany: form.pccAcceptedByCompany,
         pccAcceptanceDate:   form.pccAcceptanceDate,
         pccSignature:        form.pccSignature,
       });
@@ -4570,7 +4574,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
               <div>
                 <label className={labelCls}>Description of Works *</label>
                 <p className="text-[10px] text-slate-600 mb-1.5">Fully describe what has been completed and handed over. Be specific — include scope, systems, and any key activities such as commissioning, testing, and demonstration.</p>
-                <textarea value={form.pccDescriptionOfWorks} onChange={set('pccDescriptionOfWorks')} rows={6}
+                <textarea value={form.pccDescriptionOfWorks} onChange={set('pccDescriptionOfWorks')} rows={9}
                   className={`${inputCls} resize-none`}
                   placeholder="e.g. Theatre 1 operating light replacement complete including removal of the existing operating light, installation of the new operating light, commissioning, testing and demonstration to the Client." />
               </div>
@@ -4598,7 +4602,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
               {/* Outstanding Items */}
               <div>
                 <label className={labelCls}>Outstanding Items / Observations</label>
-                <textarea value={form.pccOutstandingItems} onChange={set('pccOutstandingItems')} rows={3}
+                <textarea value={form.pccOutstandingItems} onChange={set('pccOutstandingItems')} rows={6}
                   className={`${inputCls} resize-none`} placeholder="Record any items remaining before or after handover..." />
               </div>
 
@@ -4608,11 +4612,19 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className={labelCls}>Handed Over By</label>
-                    <input value={form.pccHandedOverBy} onChange={set('pccHandedOverBy')} className={inputCls} placeholder="Name / role" />
+                    <input value={form.pccHandedOverBy} onChange={set('pccHandedOverBy')} className={inputCls} placeholder="Full name" />
                   </div>
                   <div>
                     <label className={labelCls}>Accepted By</label>
                     <input value={form.pccAcceptedBy} onChange={set('pccAcceptedBy')} className={inputCls} placeholder="Client representative name" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Position / Job Title</label>
+                    <input value={form.pccHandedOverByTitle} onChange={set('pccHandedOverByTitle')} className={inputCls} placeholder="e.g. Contracts Manager" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Position / Job Title</label>
+                    <input value={form.pccAcceptedByTitle} onChange={set('pccAcceptedByTitle')} className={inputCls} placeholder="e.g. Project Manager" />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">

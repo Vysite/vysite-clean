@@ -426,7 +426,9 @@ export interface ExtendedSiteForm extends Omit<SiteForm, 'type' | 'status'> {
   pccChecklist?: string;         // JSON: PCCChecklistItem[]
   pccOutstandingItems?: string;
   pccHandedOverBy?: string;
+  pccHandedOverByTitle?: string;
   pccAcceptedBy?: string;
+  pccAcceptedByTitle?: string;
   pccAcceptedByCompany?: string;
   pccAcceptanceDate?: string;
   pccSignature?: string;
