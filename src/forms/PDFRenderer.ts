@@ -1515,16 +1515,16 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
         ${checklist.map((c, i) => {
           const isPassed = c.result === 'Pass';
           const isFailed = c.result === 'Fail';
-          const badge = isPassed
-            ? 'background:#dcfce7;color:#166534;border:1px solid #bbf7d0'
+          const badgeCss = isPassed
+            ? 'background:#16a34a;color:#fff;border:1px solid #15803d'
             : isFailed
-            ? 'background:#fee2e2;color:#991b1b;border:1px solid #fecaca'
-            : 'background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0';
+            ? 'background:#dc2626;color:#fff;border:1px solid #b91c1c'
+            : 'background:#e2e8f0;color:#475569;border:1px solid #cbd5e1';
           const rowBg = i % 2 !== 0 ? (isPassed ? 'background:#f7fef9' : 'background:#f8fafc') : '';
           return `<tr style="${rowBg}">
             <td style="padding:7px 9px;border-bottom:1px solid #f1f5f9;color:#1e293b">${esc(c.description)}</td>
             <td style="padding:7px 9px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap">
-              <span style="display:inline-block;padding:2px 11px;border-radius:20px;font-size:8.5px;font-weight:700;letter-spacing:.01em;${badge}">${esc(c.result || 'N/A')}</span>
+              <span class="badge" style="display:inline-block;padding:2px 11px;border-radius:20px;font-size:8.5px;font-weight:700;letter-spacing:.01em;${badgeCss}">${esc(c.result || 'N/A')}</span>
             </td>
           </tr>`;
         }).join('')}
@@ -1579,7 +1579,9 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
     * { box-sizing:border-box; margin:0; padding:0; }
     body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif; color:#1e293b; background:white; font-size:11px; line-height:1.5; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .page { max-width:840px; margin:0 auto; padding:30px 36px 36px; }
-    @media print { @page { margin:10mm 14mm 14mm 14mm; size:A4; } }
+    @page { margin:0; size:A4; }
+    @media print { .page { padding:14mm 16mm 14mm 16mm; max-width:100%; } }
+    .badge { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   `;
 
   return `<!DOCTYPE html>
