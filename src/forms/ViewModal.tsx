@@ -1021,6 +1021,7 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
                 ['Accepted By', s('pccAcceptedBy')],
                 ['Position / Job Title', s('pccHandedOverByTitle')],
                 ['Position / Job Title', s('pccAcceptedByTitle')],
+                ['Company', s('pccHandedOverByCompany')],
                 ['Company', s('pccAcceptedByCompany')],
                 ['Date of Acceptance', fmtDate(s('pccAcceptanceDate'))],
               ]} />

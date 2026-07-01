@@ -423,11 +423,12 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     pccLocationArea:     sv('pccLocationArea'),
     pccDescriptionOfWorks: sv('pccDescriptionOfWorks'),
     pccOutstandingItems: sv('pccOutstandingItems'),
-    pccHandedOverBy:      sv('pccHandedOverBy'),
-    pccHandedOverByTitle: sv('pccHandedOverByTitle'),
-    pccAcceptedBy:        sv('pccAcceptedBy'),
-    pccAcceptedByTitle:   sv('pccAcceptedByTitle'),
-    pccAcceptedByCompany: sv('pccAcceptedByCompany'),
+    pccHandedOverBy:        sv('pccHandedOverBy'),
+    pccHandedOverByTitle:   sv('pccHandedOverByTitle'),
+    pccHandedOverByCompany: sv('pccHandedOverByCompany'),
+    pccAcceptedBy:          sv('pccAcceptedBy'),
+    pccAcceptedByTitle:     sv('pccAcceptedByTitle'),
+    pccAcceptedByCompany:   sv('pccAcceptedByCompany'),
     pccAcceptanceDate:   sv('pccAcceptanceDate', new Date().toISOString().split('T')[0]),
     pccSignature:        sv('pccSignature'),
   }));
@@ -1050,11 +1051,12 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
         pccAssets:           JSON.stringify(pccAssets),
         pccChecklist:        JSON.stringify(pccChecklist),
         pccOutstandingItems: form.pccOutstandingItems,
-        pccHandedOverBy:      form.pccHandedOverBy,
-        pccHandedOverByTitle: form.pccHandedOverByTitle,
-        pccAcceptedBy:        form.pccAcceptedBy,
-        pccAcceptedByTitle:   form.pccAcceptedByTitle,
-        pccAcceptedByCompany: form.pccAcceptedByCompany,
+        pccHandedOverBy:        form.pccHandedOverBy,
+        pccHandedOverByTitle:   form.pccHandedOverByTitle,
+        pccHandedOverByCompany: form.pccHandedOverByCompany,
+        pccAcceptedBy:          form.pccAcceptedBy,
+        pccAcceptedByTitle:     form.pccAcceptedByTitle,
+        pccAcceptedByCompany:   form.pccAcceptedByCompany,
         pccAcceptanceDate:   form.pccAcceptanceDate,
         pccSignature:        form.pccSignature,
       });
@@ -4609,32 +4611,42 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
               {/* Acceptance */}
               <div className="pt-1">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-[#1e2d4a] pb-1.5 mb-3">Acceptance</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelCls}>Handed Over By</label>
-                    <input value={form.pccHandedOverBy} onChange={set('pccHandedOverBy')} className={inputCls} placeholder="Full name" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0">
+                  {/* ── Handed Over By column ── */}
+                  <div className="space-y-3">
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Handed Over By</p>
+                    <div>
+                      <label className={labelCls}>Name</label>
+                      <input value={form.pccHandedOverBy} onChange={set('pccHandedOverBy')} className={inputCls} placeholder="Full name" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Position / Job Title</label>
+                      <input value={form.pccHandedOverByTitle} onChange={set('pccHandedOverByTitle')} className={inputCls} placeholder="e.g. Contracts Manager" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Company</label>
+                      <input value={form.pccHandedOverByCompany} onChange={set('pccHandedOverByCompany')} className={inputCls} placeholder="Issuing company" />
+                    </div>
                   </div>
-                  <div>
-                    <label className={labelCls}>Accepted By</label>
-                    <input value={form.pccAcceptedBy} onChange={set('pccAcceptedBy')} className={inputCls} placeholder="Client representative name" />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Position / Job Title</label>
-                    <input value={form.pccHandedOverByTitle} onChange={set('pccHandedOverByTitle')} className={inputCls} placeholder="e.g. Contracts Manager" />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Position / Job Title</label>
-                    <input value={form.pccAcceptedByTitle} onChange={set('pccAcceptedByTitle')} className={inputCls} placeholder="e.g. Project Manager" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <label className={labelCls}>Company</label>
-                    <input value={form.pccAcceptedByCompany} onChange={set('pccAcceptedByCompany')} className={inputCls} placeholder="Client company" />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Date of Acceptance</label>
-                    <input type="date" value={form.pccAcceptanceDate} onChange={set('pccAcceptanceDate')} className={inputCls} />
+                  {/* ── Accepted By column ── */}
+                  <div className="space-y-3">
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Accepted By</p>
+                    <div>
+                      <label className={labelCls}>Name</label>
+                      <input value={form.pccAcceptedBy} onChange={set('pccAcceptedBy')} className={inputCls} placeholder="Client representative name" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Position / Job Title</label>
+                      <input value={form.pccAcceptedByTitle} onChange={set('pccAcceptedByTitle')} className={inputCls} placeholder="e.g. Project Manager" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Company</label>
+                      <input value={form.pccAcceptedByCompany} onChange={set('pccAcceptedByCompany')} className={inputCls} placeholder="Client company" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Date of Acceptance</label>
+                      <input type="date" value={form.pccAcceptanceDate} onChange={set('pccAcceptanceDate')} className={inputCls} />
+                    </div>
                   </div>
                 </div>
               </div>

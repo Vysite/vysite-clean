@@ -1552,6 +1552,7 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
   /* ── Acceptance parties ── */
   const hovName     = esc(safeStr(f.pccHandedOverBy));
   const hovPosition = esc(safeStr(f.pccHandedOverByTitle));
+  const hovCompany  = esc(safeStr(f.pccHandedOverByCompany)) || esc(orgName);
   const accName     = esc(safeStr(f.pccAcceptedBy));
   const accPosition = esc(safeStr(f.pccAcceptedByTitle));
   const accCompany  = esc(safeStr(f.pccAcceptedByCompany));
@@ -1658,10 +1659,10 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
   </div>
 
   <!-- ══ ACCEPTANCE ══════════════════════════════════════════════ -->
-  <div style="${sec}">
+  <div style="${sec};page-break-before:always;padding-top:28px">
     <div style="${sh}">Acceptance &amp; Sign-Off</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      ${partyBlock('Handed Over By', hovName, hovPosition, esc(orgName), certDate)}
+      ${partyBlock('Handed Over By', hovName, hovPosition, hovCompany, certDate)}
       ${partyBlock('Accepted By', accName, accPosition, accCompany, accDate || certDate)}
     </div>
   </div>
