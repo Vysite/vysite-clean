@@ -1011,7 +1011,7 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
 
             <Section label="Certificate Statement">
               <div className="border-l-4 border-orange-500 bg-orange-950/20 rounded-r-xl p-3.5">
-                <p className="text-xs text-slate-300 leading-relaxed italic">We certify that the works described above have been installed, tested and commissioned where applicable and, in our opinion, are practically complete, subject only to any outstanding items recorded within this certificate and the provisions of the applicable defects liability period.</p>
+                <p className="text-xs text-slate-300 leading-relaxed italic">We certify that the works described within this certificate have been completed, installed, tested and commissioned where applicable and are hereby certified as Practically Complete, subject only to any outstanding items recorded within this certificate and the provisions of the applicable Defects Liability Period.</p>
               </div>
             </Section>
 

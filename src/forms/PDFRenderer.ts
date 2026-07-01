@@ -1540,7 +1540,7 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
        </span>`
     : `<span style="display:inline-flex;align-items:center;gap:6px;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:5px 12px">
         <span style="width:7px;height:7px;background:#16a34a;border-radius:50%;flex-shrink:0;display:inline-block"></span>
-        <span style="font-size:9px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.03em">Works Practically Complete</span>
+        <span style="font-size:9px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.03em">Practical Completion Certified</span>
        </span>`;
 
   /* ── Evidence ── */
@@ -1652,7 +1652,7 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
   <!-- ══ CERTIFICATE STATEMENT ════════════════════════════════════ -->
   <div style="margin-top:18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:14px 16px;page-break-inside:avoid">
     <div style="font-size:7px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Certificate Statement</div>
-    <p style="font-size:11px;color:#334155;line-height:1.85;font-style:italic">We certify that the works described above have been installed, tested and commissioned where applicable and, in our opinion, are practically complete, subject only to any outstanding items recorded within this certificate and the provisions of the applicable defects liability period.</p>
+    <p style="font-size:11px;color:#334155;line-height:1.85;font-style:italic">We certify that the works described within this certificate have been completed, installed, tested and commissioned where applicable and are hereby certified as Practically Complete, subject only to any outstanding items recorded within this certificate and the provisions of the applicable Defects Liability Period.</p>
   </div>
 
   <!-- ══ ACCEPTANCE ══════════════════════════════════════════════ -->
