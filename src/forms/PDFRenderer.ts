@@ -126,11 +126,11 @@ const CSS = `
   .legal-branding { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0; }
   .legal-branding-left { font-size: 8px; color: #94a3b8; }
   .legal-branding-right { font-size: 8px; color: #94a3b8; text-align: right; }
-  /* Images */
-  .evidence-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 8px; }
-  .evidence-item { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; page-break-inside: avoid; }
-  .evidence-img { width: 100%; max-height: 280px; object-fit: contain; background: #f8fafc; display: block; }
-  .evidence-caption { padding: 6px 10px; font-size: 9px; color: #64748b; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+  /* Images — thumbnail grid */
+  .evidence-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+  .evidence-item { border: 1px solid #e2e8f0; border-radius: 5px; overflow: hidden; page-break-inside: avoid; }
+  .evidence-img { width: 100%; height: 110px; object-fit: cover; display: block; background: #f8fafc; }
+  .evidence-caption { padding: 3px 6px; font-size: 7.5px; color: #64748b; background: #f8fafc; border-top: 1px solid #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* Sign-off table */
   .signoff-table { width: 100%; border-collapse: collapse; font-size: 10px; }
   .signoff-table th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-size: 9px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; }
@@ -370,18 +370,26 @@ function evidenceHtml(attachments: unknown): string {
       ${images.map(img => {
         const src = img.dataUrl || img.url || '';
         return `<div class="evidence-item">
-          ${src ? `<img class="evidence-img" src="${src}" alt="${esc(img.name ?? 'Photo')}" />` : '<div class="evidence-img" style="min-height:120px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px">Image unavailable</div>'}
-          <div class="evidence-caption">${esc(img.name ?? 'Photo')}</div>
+          ${src
+            ? `<img class="evidence-img" src="${src}" alt="${esc(img.name ?? 'Photo')}" />`
+            : `<div class="evidence-img" style="display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:9px">Unavailable</div>`}
+          <div class="evidence-caption" title="${esc(img.name ?? 'Photo')}">${esc(img.name ?? 'Photo')}</div>
         </div>`;
       }).join('')}
     </div>`;
   }
 
   if (docs.length) {
-    html += `<table class="data-table" style="margin-top:12px">
-      <tr><th>File</th><th>Type</th></tr>
-      ${docs.map(d => `<tr><td>${esc(d.name ?? 'File')}</td><td>${esc(d.type ?? '')}</td></tr>`).join('')}
-    </table>`;
+    html += `<div style="margin-top:${images.length ? '14px' : '0'}">
+      ${docs.map(d => {
+        const name = esc(d.name ?? 'File');
+        const ext = (d.name ?? '').split('.').pop()?.toUpperCase().slice(0, 4) || 'DOC';
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid #e2e8f0;border-radius:4px;margin-bottom:5px;background:#f8fafc">
+          <div style="width:28px;height:28px;background:#e2e8f0;border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:800;color:#475569;letter-spacing:.02em">${ext}</div>
+          <span style="font-size:10px;color:#1e293b;font-weight:500">${name}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
   }
 
   return html;

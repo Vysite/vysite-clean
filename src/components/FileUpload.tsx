@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { Upload, X, FileText, Paperclip, Eye, Download } from 'lucide-react';
+import { Upload, FileText, Paperclip, Eye, Download, Trash2, X } from 'lucide-react';
 
 export interface UploadedFile {
   id: string;
@@ -85,52 +85,81 @@ export default function FileUpload({ files, onChange, accept = '*', label = 'Upl
         />
       </div>
 
-      {files.length > 0 && (
-        <div className="space-y-1.5">
-          {files.map(file => {
-            const isImage = file.type.startsWith('image/');
-            const isPDF = file.type === 'application/pdf';
-            return (
-              <div key={file.id} className="flex items-center gap-2.5 bg-[#0d1628] rounded-lg px-3 py-2 border border-[#1e2d4a] group cursor-pointer"
-                onClick={e => { e.stopPropagation(); if (file.dataUrl) setPreview(file); }}>
-                <div className="w-7 h-7 rounded bg-[#111827] border border-[#1e2d4a] flex items-center justify-center shrink-0 overflow-hidden">
-                  {isImage && file.dataUrl ? (
-                    <img src={file.dataUrl} alt={file.name} className="w-full h-full object-cover" />
-                  ) : isPDF ? (
-                    <FileText size={13} className="text-red-400" />
-                  ) : (
-                    <Paperclip size={13} className="text-slate-500" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-slate-300 truncate">{file.name}</p>
-                  <p className="text-[10px] text-slate-600">{formatSize(file.size)}</p>
-                </div>
-                <div className="flex items-center gap-0.5 shrink-0">
-                  {file.dataUrl && (
+      {files.length > 0 && (() => {
+        const images = files.filter(f => f.type.startsWith('image/'));
+        const docs   = files.filter(f => !f.type.startsWith('image/'));
+        return (
+          <div className="space-y-3">
+            {/* Image thumbnails */}
+            {images.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {images.map(file => (
+                  <div key={file.id} className="relative group aspect-square rounded-lg overflow-hidden border border-[#1e2d4a] bg-[#0d1628]">
+                    {file.dataUrl && (
+                      <img
+                        src={file.dataUrl}
+                        alt={file.name}
+                        className="w-full h-full object-cover cursor-pointer"
+                        onClick={() => setPreview(file)}
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors pointer-events-none" />
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); removeFile(file.id); }}
+                      className="absolute top-1 right-1 p-1 rounded bg-black/70 text-white hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                      title="Remove"
+                    >
+                      <Trash2 size={11} />
+                    </button>
                     <button
                       type="button"
                       onClick={e => { e.stopPropagation(); setPreview(file); }}
-                      className="p-1 rounded text-slate-600 hover:text-[#f97316] transition-colors opacity-0 group-hover:opacity-100"
+                      className="absolute bottom-1 right-1 p-1 rounded bg-black/70 text-white hover:bg-[#f97316] transition-colors opacity-0 group-hover:opacity-100"
                       title="Preview"
                     >
-                      <Eye size={13} />
+                      <Eye size={11} />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={e => { e.stopPropagation(); removeFile(file.id); }}
-                    className="p-1 rounded text-slate-600 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
-                    title="Remove"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
+                    <p className="absolute bottom-0 left-0 right-0 px-1.5 py-1 text-[9px] text-white bg-black/60 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                      {file.name}
+                    </p>
+                  </div>
+                ))}
               </div>
-            );
-          })}
-        </div>
-      )}
+            )}
+
+            {/* Document list */}
+            {docs.length > 0 && (
+              <div className="space-y-1.5">
+                {docs.map(file => {
+                  const isPDF = file.type === 'application/pdf';
+                  return (
+                    <div key={file.id} className="flex items-center gap-2.5 bg-[#0d1628] rounded-lg px-3 py-2 border border-[#1e2d4a] group">
+                      <div className="w-7 h-7 rounded bg-[#111827] border border-[#1e2d4a] flex items-center justify-center shrink-0">
+                        {isPDF
+                          ? <FileText size={13} className="text-red-400" />
+                          : <Paperclip size={13} className="text-slate-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-slate-300 truncate">{file.name}</p>
+                        <p className="text-[10px] text-slate-600">{formatSize(file.size)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); removeFile(file.id); }}
+                        className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-950/30 transition-colors shrink-0"
+                        title="Remove"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {files.length === 0 && (
         <p className="text-[10px] text-slate-700 flex items-center gap-1">
