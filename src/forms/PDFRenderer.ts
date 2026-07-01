@@ -1520,7 +1520,7 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
             : isFailed
             ? 'background:#dc2626;color:#fff;border:1px solid #b91c1c'
             : 'background:#e2e8f0;color:#475569;border:1px solid #cbd5e1';
-          const rowBg = i % 2 !== 0 ? (isPassed ? 'background:#f7fef9' : 'background:#f8fafc') : '';
+          const rowBg = isPassed ? 'background:#f0fdf4' : isFailed ? 'background:#fef2f2' : (i % 2 !== 0 ? 'background:#f8fafc' : '');
           return `<tr style="${rowBg}">
             <td style="padding:7px 9px;border-bottom:1px solid #f1f5f9;color:#1e293b">${esc(c.description)}</td>
             <td style="padding:7px 9px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap">
