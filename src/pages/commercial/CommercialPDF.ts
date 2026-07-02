@@ -1713,8 +1713,9 @@ html, body {
 
 /* ── Footer ── */
 .doc-footer { margin-top: 48px; padding-top: 12px; border-top: 0.5px solid #e2e8f0; display: flex; justify-content: space-between; align-items: baseline; }
-.doc-footer-l { font-size: 7pt; color: #94a3b8; }
-.doc-footer-r { font-size: 7pt; color: #94a3b8; text-align: right; }
+.doc-footer-l { font-size: 7pt; color: #94a3b8; flex: 1; }
+.doc-footer-c { font-size: 6.5pt; color: #cbd5e1; letter-spacing: 0.07em; text-align: center; flex: 1; }
+.doc-footer-r { font-size: 7pt; color: #94a3b8; text-align: right; flex: 1; }
 `;
 
 function statusBadgeHtml(status: string): string {
@@ -1800,6 +1801,7 @@ function vaDocFooter(today: string, variant: string, generatedBy?: string): stri
   const byLine = generatedBy ? `${esc(generatedBy)} &bull; ` : '';
   return `<div class="doc-footer">
     <div class="doc-footer-l">${conf}</div>
+    <div class="doc-footer-c">Powered by VYSITE</div>
     <div class="doc-footer-r">${byLine}${today}</div>
   </div>`;
 }
