@@ -1589,9 +1589,10 @@ interface VABuildUpData {
 
 const VA_BUILD_UP_CSS = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
-/* Zero @page margins eliminate all browser print chrome (URL, date, page number).
-   This matches COMM_PDF_CSS and every other VYSITE PDF. */
-@page { margin: 0; size: A4; }
+/* Zero bottom margin eliminates browser URL / date / page-number chrome.
+   Top and side margins are 40px / 52px so every printed page — including
+   page 2 and beyond — starts with the same breathing room as page 1. */
+@page { margin: 40px 52px 0; size: A4; }
 @media print {
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-break { page-break-inside: avoid; break-inside: avoid; }
@@ -1606,8 +1607,10 @@ html, body {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
-/* Page padding — applies on page 1; section margin-top handles breathing room on overflow pages */
-.page { padding: 40px 52px 44px; }
+/* Print: @page margin handles all spacing, so .page needs no padding.
+   Screen: restore padding so the blob tab preview looks correct. */
+.page { padding: 0 0 44px; }
+@media screen { .page { padding: 40px 52px 44px; } }
 
 /* ── Executive header ── */
 .exec-head {
