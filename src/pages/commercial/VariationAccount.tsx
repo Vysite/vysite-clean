@@ -760,6 +760,8 @@ function VariationDrawer({
       comments,
       attachments: attsWithData,
       buildUpTotal,
+      logoUrl: store.settings?.logo_data_url,
+      currentUserName: store.currentUser?.name,
     });
   }
 
@@ -774,6 +776,8 @@ function VariationDrawer({
       lines: buildUpLines,
       attachments: attsWithData,
       buildUpTotal,
+      logoUrl: store.settings?.logo_data_url,
+      currentUserName: store.currentUser?.name,
     });
   }
 

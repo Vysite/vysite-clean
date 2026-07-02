@@ -1583,55 +1583,114 @@ interface VABuildUpData {
   buildUpTotal: number;
   comments?: DBVAComment[];
   attachments?: DBAttachment[];
+  logoUrl?: string;
+  currentUserName?: string;
 }
 
 const VA_BUILD_UP_CSS = `
-@page { margin: 0; size: A4; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #fff; color: #0f172a; }
-.page { padding: 40px 52px 36px; }
-.exec-head { display:flex; align-items:flex-end; justify-content:space-between; border-bottom:1.5px solid #0f172a; padding-bottom:14px; margin-bottom:24px; }
-.exec-brand { font-size:10pt; font-weight:900; letter-spacing:0.18em; color:#ea6c00; text-transform:uppercase; }
-.exec-brand-sub { font-size:7pt; color:#94a3b8; letter-spacing:0.08em; text-transform:uppercase; margin-top:2px; }
-.exec-doc-type { font-size:6.5pt; font-weight:800; letter-spacing:0.18em; text-transform:uppercase; color:#94a3b8; text-align:right; }
-.exec-doc-title { font-size:10pt; font-weight:700; color:#0f172a; text-align:right; margin-top:2px; }
-.var-header { border-bottom:0.5px solid #e2e8f0; padding-bottom:18px; margin-bottom:20px; }
-.var-ref { font-size:9pt; font-weight:800; letter-spacing:0.08em; color:#ea6c00; text-transform:uppercase; margin-bottom:4px; }
-.var-title { font-size:18pt; font-weight:700; color:#0f172a; line-height:1.2; letter-spacing:-0.02em; margin-bottom:10px; }
-.var-meta-row { display:flex; flex-wrap:wrap; gap:0 28px; margin-top:10px; }
-.var-meta-item { font-size:8pt; color:#64748b; line-height:1.8; }
-.var-meta-label { font-size:6.5pt; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#94a3b8; }
-.status-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:7.5pt; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; }
-.desc-block { margin-bottom:20px; }
-.section-label { font-size:6.5pt; font-weight:800; letter-spacing:0.18em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; border-bottom:0.5px solid #e2e8f0; padding-bottom:6px; }
-.build-table { width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:16px; }
-.build-table thead th { font-size:6pt; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#94a3b8; border-bottom:1.5px solid #0f172a; padding:0 8px 8px 0; text-align:left; }
-.build-table thead th.num { text-align:right; }
-.build-table tbody td { padding:9px 8px 8px 0; border-bottom:0.5px solid #f1f5f9; vertical-align:top; }
-.build-table tbody td.num { text-align:right; font-variant-numeric:tabular-nums; }
-.build-table tfoot td { padding:10px 8px 0 0; border-top:1.5px solid #0f172a; font-weight:700; font-variant-numeric:tabular-nums; }
-.build-table tfoot td.num { text-align:right; }
-.bt-ref { font-size:7.5pt; color:#94a3b8; }
-.bt-desc { font-size:9pt; font-weight:600; color:#0f172a; }
-.bt-type { display:inline-block; padding:1px 6px; border-radius:3px; background:#f1f5f9; color:#64748b; font-size:7pt; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }
-.bt-total { font-size:11pt; font-weight:700; color:#ea6c00; }
-.grand-band { border-left:3px solid #ea6c00; background:#fff7ed; padding:12px 18px; margin-bottom:20px; }
-.grand-label { font-size:6.5pt; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#b45309; margin-bottom:4px; }
-.grand-value { font-size:20pt; font-weight:700; color:#ea6c00; font-variant-numeric:tabular-nums; }
-.comments-block { margin-top:16px; }
-.comment-entry { padding:10px 0; border-bottom:0.5px solid #f1f5f9; }
-.comment-author { font-size:7.5pt; font-weight:700; color:#0f172a; }
-.comment-ts { font-size:7pt; color:#94a3b8; margin-left:8px; }
-.comment-body { font-size:8.5pt; color:#334155; margin-top:3px; line-height:1.5; }
-.att-list { margin-top:10px; }
-.att-item { font-size:8pt; color:#64748b; padding:4px 0; border-bottom:0.5px solid #f8fafc; }
-.evidence-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:10px; }
-.evidence-img-card { border:0.5px solid #e2e8f0; border-radius:6px; overflow:hidden; }
-.evidence-img { width:100%; max-height:220px; object-fit:contain; background:#f8fafc; display:block; }
-.evidence-img-caption { padding:5px 8px; font-size:7.5pt; color:#64748b; background:#f8fafc; border-top:0.5px solid #e2e8f0; }
-.doc-footer { margin-top:32px; padding-top:10px; border-top:0.5px solid #e2e8f0; display:flex; justify-content:space-between; }
-.doc-footer-l { font-size:7pt; color:#94a3b8; }
-.doc-footer-r { font-size:7pt; color:#94a3b8; text-align:right; }
+@page { margin: 0; size: A4; }
+@media print {
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-break { page-break-inside: avoid; break-inside: avoid; }
+  .page-break-before { page-break-before: always; break-before: always; }
+}
+html, body {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9pt;
+  color: #0f172a;
+  background: #fff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.page { padding: 40px 52px 48px; }
+
+/* ── Executive header ── */
+.exec-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  padding-bottom: 14px; border-bottom: 1.5px solid #0f172a; margin-bottom: 28px;
+}
+.exec-brand { font-size: 10pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; line-height: 1; }
+.exec-brand-sub { font-size: 6.5pt; color: #94a3b8; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
+.exec-head-right { text-align: right; }
+.exec-doc-type { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8; margin-bottom: 3px; }
+.exec-doc-title { font-size: 11pt; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
+
+/* ── Variation header band ── */
+.var-header { padding-bottom: 20px; border-bottom: 0.5px solid #e2e8f0; margin-bottom: 24px; }
+.var-ref { font-size: 8.5pt; font-weight: 800; letter-spacing: 0.12em; color: #ea6c00; text-transform: uppercase; margin-bottom: 6px; }
+.var-title { font-size: 18pt; font-weight: 700; color: #0f172a; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 12px; }
+.var-meta-row { display: flex; flex-wrap: wrap; gap: 6px 28px; margin-top: 12px; }
+.var-meta-item { font-size: 8.5pt; color: #64748b; line-height: 1.6; }
+.var-meta-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; display: block; margin-bottom: 1px; }
+.status-badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ── Section labels ── */
+.section-label {
+  font-size: 6.5pt; font-weight: 800; letter-spacing: 0.18em;
+  text-transform: uppercase; color: #94a3b8; margin-bottom: 10px;
+  border-bottom: 0.5px solid #e2e8f0; padding-bottom: 6px; margin-top: 24px;
+}
+.section-label:first-child { margin-top: 0; }
+
+/* ── Description / rich text blocks ── */
+.desc-block { margin-bottom: 24px; }
+.desc-text {
+  font-size: 9pt; color: #334155; line-height: 1.7;
+  white-space: pre-wrap; word-break: break-word;
+}
+.desc-text p { margin: 0 0 10px; }
+.desc-text p:last-child { margin-bottom: 0; }
+.desc-text ul { margin: 6px 0 10px 20px; padding: 0; list-style: disc; }
+.desc-text ol { margin: 6px 0 10px 20px; padding: 0; list-style: decimal; }
+.desc-text li { margin-bottom: 4px; }
+
+/* ── Cost build-up table ── */
+.build-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 20px; }
+.build-table thead th {
+  font-size: 6pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  color: #94a3b8; border-bottom: 1.5px solid #0f172a; padding: 0 8px 8px 0; text-align: left;
+}
+.build-table thead th.num { text-align: right; }
+.build-table tbody td { padding: 9px 8px 9px 0; border-bottom: 0.5px solid #f1f5f9; vertical-align: top; }
+.build-table tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.build-table tfoot td { padding: 12px 8px 0 0; border-top: 1.5px solid #0f172a; font-weight: 700; font-variant-numeric: tabular-nums; }
+.build-table tfoot td.num { text-align: right; }
+.bt-ref { font-size: 7.5pt; color: #94a3b8; }
+.bt-desc { font-size: 9pt; font-weight: 600; color: #0f172a; }
+.bt-type { display: inline-block; padding: 1px 6px; border-radius: 3px; background: #f1f5f9; color: #64748b; font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.bt-total { font-size: 11pt; font-weight: 700; color: #ea6c00; }
+
+/* ── Summary figure bands ── */
+.grand-band { border-left: 3px solid #ea6c00; background: #fff7ed; padding: 14px 20px; margin-bottom: 24px; }
+.grand-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #b45309; margin-bottom: 5px; }
+.grand-value { font-size: 22pt; font-weight: 700; color: #ea6c00; font-variant-numeric: tabular-nums; }
+.value-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: 0.5px solid #e2e8f0; border-bottom: 0.5px solid #e2e8f0; padding: 14px 0; margin-bottom: 24px; }
+.value-summary-item { padding-right: 24px; }
+.value-summary-item + .value-summary-item { border-left: 0.5px solid #e2e8f0; padding-left: 24px; padding-right: 0; }
+.value-summary-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 5px; }
+.value-summary-value { font-size: 16pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+.value-summary-value.accent { color: #ea6c00; }
+
+/* ── Comments ── */
+.comments-block { margin-top: 24px; }
+.comment-entry { padding: 12px 0; border-bottom: 0.5px solid #f1f5f9; }
+.comment-author { font-size: 8pt; font-weight: 700; color: #0f172a; }
+.comment-ts { font-size: 7pt; color: #94a3b8; margin-left: 8px; }
+.comment-body { font-size: 8.5pt; color: #334155; margin-top: 5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+
+/* ── Evidence ── */
+.att-list { margin-top: 12px; }
+.att-item { font-size: 8pt; color: #64748b; padding: 4px 0; border-bottom: 0.5px solid #f8fafc; }
+.evidence-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 12px; }
+.evidence-img-card { border: 0.5px solid #e2e8f0; border-radius: 6px; overflow: hidden; page-break-inside: avoid; break-inside: avoid; }
+.evidence-img { width: 100%; max-height: 220px; object-fit: contain; background: #f8fafc; display: block; }
+.evidence-img-caption { padding: 6px 10px; font-size: 7.5pt; color: #64748b; background: #f8fafc; border-top: 0.5px solid #e2e8f0; }
+
+/* ── Footer ── */
+.doc-footer { margin-top: 40px; padding-top: 12px; border-top: 0.5px solid #e2e8f0; display: flex; justify-content: space-between; }
+.doc-footer-l { font-size: 7pt; color: #94a3b8; }
+.doc-footer-r { font-size: 7pt; color: #94a3b8; text-align: right; }
 `;
 
 function statusBadgeHtml(status: string): string {
@@ -1699,25 +1758,64 @@ function buildUpTableHtml(lines: DBVABuildUpLine[], total: number, showCost: boo
   </table>`;
 }
 
-function vaDocHeader(docType: string, variant: string): string {
+function vaDocHeader(docType: string, variant: string, logoUrl?: string): string {
+  const brandHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
+    : `<div class="exec-brand">VYSITE</div><div class="exec-brand-sub">Construction Operating System</div>`;
   return `<div class="exec-head">
-    <div>
-      <div class="exec-brand">VYSITE</div>
-      <div class="exec-brand-sub">Construction Operating System</div>
-    </div>
-    <div>
+    <div>${brandHtml}</div>
+    <div class="exec-head-right">
       <div class="exec-doc-type">${esc(docType)}</div>
       <div class="exec-doc-title">${esc(variant)}</div>
     </div>
   </div>`;
 }
 
-function vaDocFooter(today: string, variant: string): string {
+function vaDocFooter(today: string, variant: string, generatedBy?: string): string {
   const conf = variant === 'Internal' ? 'Confidential — Internal Use Only' : 'Commercial Document — Client Copy';
+  const byLine = generatedBy ? `${esc(generatedBy)} &bull; ` : '';
   return `<div class="doc-footer">
     <div class="doc-footer-l">${conf}</div>
-    <div class="doc-footer-r">VYSITE &bull; ${today}</div>
+    <div class="doc-footer-r">${byLine}${today}</div>
   </div>`;
+}
+
+// Converts plain text with newlines/bullets/numbered lists into semantic HTML
+// preserving exactly what the user typed.
+function fmtText(raw: string): string {
+  if (!raw) return '';
+  const lines = raw.split('\n');
+  const out: string[] = [];
+  let inUl = false;
+  let inOl = false;
+
+  function closeList() {
+    if (inUl) { out.push('</ul>'); inUl = false; }
+    if (inOl) { out.push('</ol>'); inOl = false; }
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trimEnd();
+    const ulMatch = trimmed.match(/^(\s*)([-*•]\s+)(.*)/);
+    const olMatch = trimmed.match(/^(\s*)(\d+[.)]\s+)(.*)/);
+
+    if (ulMatch) {
+      if (!inUl) { closeList(); out.push('<ul>'); inUl = true; }
+      out.push(`<li>${esc(ulMatch[3])}</li>`);
+    } else if (olMatch) {
+      if (!inOl) { closeList(); out.push('<ol>'); inOl = true; }
+      out.push(`<li>${esc(olMatch[3])}</li>`);
+    } else {
+      closeList();
+      if (trimmed === '') {
+        out.push('<p>&nbsp;</p>');
+      } else {
+        out.push(`<p>${esc(trimmed)}</p>`);
+      }
+    }
+  }
+  closeList();
+  return `<div class="desc-text">${out.join('')}</div>`;
 }
 
 function vaAttachmentHtml(attachments: DBAttachment[]): string {
@@ -1766,7 +1864,7 @@ function vaInternalBody(d: VABuildUpData): string {
   const commentsHtml = (d.comments ?? []).length > 0
     ? `<div class="comments-block">
         <div class="section-label">Comments (${d.comments!.length})</div>
-        ${(d.comments ?? []).map(c => `<div class="comment-entry">
+        ${(d.comments ?? []).map(c => `<div class="comment-entry no-break">
           <span class="comment-author">${esc(c.author_name)}</span>
           <span class="comment-ts">${fmtD(c.created_at)}</span>
           <div class="comment-body">${esc(c.body)}</div>
@@ -1777,47 +1875,58 @@ function vaInternalBody(d: VABuildUpData): string {
   const attHtml = vaAttachmentHtml(d.attachments ?? []);
 
   return `<div class="page">
-    ${vaDocHeader('Variation Account', 'Internal Build-Up')}
+    ${vaDocHeader('Variation Account', 'Internal Build-Up', d.logoUrl)}
 
-    <div class="var-header">
+    <div class="var-header no-break">
       <div class="var-ref">${esc(item.reference || 'VAR')}</div>
       <div class="var-title">${esc(item.title || 'Untitled Variation')}</div>
-      <div style="margin-bottom:8px;">${statusBadgeHtml(item.status)}</div>
+      <div style="margin-bottom:10px;">${statusBadgeHtml(item.status)}</div>
       <div class="var-meta-row">
-        <div class="var-meta-item"><span class="var-meta-label">Date Raised&ensp;</span>${fmtD(item.date_raised)}</div>
-        ${item.date_agreed ? `<div class="var-meta-item"><span class="var-meta-label">Date Agreed&ensp;</span>${fmtD(item.date_agreed)}</div>` : ''}
-        <div class="var-meta-item"><span class="var-meta-label">Direction&ensp;</span>${item.is_positive ? 'Addition (+)' : 'Omission (-)'}</div>
-        <div class="var-meta-item"><span class="var-meta-label">Manual Value&ensp;</span>${fv(item.value)}</div>
-        ${item.created_by ? `<div class="var-meta-item"><span class="var-meta-label">Raised By&ensp;</span>${esc(item.created_by)}</div>` : ''}
+        <div class="var-meta-item"><span class="var-meta-label">Date Raised</span>${fmtD(item.date_raised)}</div>
+        ${item.date_agreed ? `<div class="var-meta-item"><span class="var-meta-label">Date Agreed</span>${fmtD(item.date_agreed)}</div>` : ''}
+        <div class="var-meta-item"><span class="var-meta-label">Direction</span>${item.is_positive ? 'Addition (+)' : 'Omission (-)'}</div>
+        <div class="var-meta-item"><span class="var-meta-label">Manual Value</span>${fv(item.value)}</div>
+        ${item.created_by ? `<div class="var-meta-item"><span class="var-meta-label">Raised By</span>${esc(item.created_by)}</div>` : ''}
       </div>
     </div>
 
-    ${item.description ? `<div class="desc-block"><div class="section-label">Description of Works</div><p style="font-size:9pt;color:#334155;line-height:1.6;">${esc(item.description)}</p></div>` : ''}
-    ${item.reason ? `<div class="desc-block"><div class="section-label">Reason / Cause</div><p style="font-size:9pt;color:#334155;line-height:1.6;">${esc(item.reason)}</p></div>` : ''}
-    ${item.notes ? `<div class="desc-block"><div class="section-label">Internal Notes</div><p style="font-size:9pt;color:#334155;line-height:1.6;">${esc(item.notes)}</p></div>` : ''}
+    ${item.description ? `<div class="desc-block">
+      <div class="section-label">Description of Works</div>
+      ${fmtText(item.description)}
+    </div>` : ''}
+
+    ${item.reason ? `<div class="desc-block">
+      <div class="section-label">Reason / Cause</div>
+      ${fmtText(item.reason)}
+    </div>` : ''}
+
+    ${item.notes ? `<div class="desc-block">
+      <div class="section-label">Internal Notes</div>
+      ${fmtText(item.notes)}
+    </div>` : ''}
 
     <div class="section-label">Cost Build-Up</div>
     ${buildUpTableHtml(d.lines, d.buildUpTotal, true)}
 
-    ${d.buildUpTotal > 0 ? `<div class="grand-band">
+    ${d.buildUpTotal > 0 ? `<div class="grand-band no-break">
       <div class="grand-label">Build-Up Total (Internal)</div>
       <div class="grand-value">${fv(d.buildUpTotal)}</div>
     </div>` : ''}
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:12px 0;margin-bottom:20px;">
-      <div>
-        <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Manual Variation Value</div>
-        <div style="font-size:14pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${signedStr}</div>
+    <div class="value-summary-grid no-break">
+      <div class="value-summary-item">
+        <div class="value-summary-label">Manual Variation Value</div>
+        <div class="value-summary-value">${signedStr}</div>
       </div>
-      ${d.buildUpTotal > 0 ? `<div>
-        <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Build-Up Total</div>
-        <div style="font-size:14pt;font-weight:700;color:#ea6c00;font-variant-numeric:tabular-nums;">${fv(d.buildUpTotal)}</div>
+      ${d.buildUpTotal > 0 ? `<div class="value-summary-item">
+        <div class="value-summary-label">Build-Up Total</div>
+        <div class="value-summary-value accent">${fv(d.buildUpTotal)}</div>
       </div>` : ''}
     </div>
 
     ${commentsHtml}
     ${attHtml}
-    ${vaDocFooter(today, 'Internal')}
+    ${vaDocFooter(today, 'Internal', d.currentUserName)}
   </div>`;
 }
 
@@ -1827,32 +1936,39 @@ function vaClientBody(d: VABuildUpData): string {
   const attHtml = vaAttachmentHtml(d.attachments ?? []);
 
   return `<div class="page">
-    ${vaDocHeader('Variation Account', 'Client Copy')}
+    ${vaDocHeader('Variation Account', 'Client Copy', d.logoUrl)}
 
-    <div class="var-header">
+    <div class="var-header no-break">
       <div class="var-ref">${esc(item.reference || 'VAR')}</div>
       <div class="var-title">${esc(item.title || 'Untitled Variation')}</div>
-      <div style="margin-bottom:8px;">${statusBadgeHtml(item.status)}</div>
+      <div style="margin-bottom:10px;">${statusBadgeHtml(item.status)}</div>
       <div class="var-meta-row">
-        <div class="var-meta-item"><span class="var-meta-label">Date Raised&ensp;</span>${fmtD(item.date_raised)}</div>
-        ${item.date_agreed ? `<div class="var-meta-item"><span class="var-meta-label">Date Agreed&ensp;</span>${fmtD(item.date_agreed)}</div>` : ''}
-        <div class="var-meta-item"><span class="var-meta-label">Direction&ensp;</span>${item.is_positive ? 'Addition (+)' : 'Omission (-)'}</div>
+        <div class="var-meta-item"><span class="var-meta-label">Date Raised</span>${fmtD(item.date_raised)}</div>
+        ${item.date_agreed ? `<div class="var-meta-item"><span class="var-meta-label">Date Agreed</span>${fmtD(item.date_agreed)}</div>` : ''}
+        <div class="var-meta-item"><span class="var-meta-label">Direction</span>${item.is_positive ? 'Addition (+)' : 'Omission (-)'}</div>
       </div>
     </div>
 
-    ${item.description ? `<div class="desc-block"><div class="section-label">Description of Works</div><p style="font-size:9pt;color:#334155;line-height:1.6;">${esc(item.description)}</p></div>` : ''}
-    ${item.reason ? `<div class="desc-block"><div class="section-label">Reason / Cause</div><p style="font-size:9pt;color:#334155;line-height:1.6;">${esc(item.reason)}</p></div>` : ''}
+    ${item.description ? `<div class="desc-block">
+      <div class="section-label">Description of Works</div>
+      ${fmtText(item.description)}
+    </div>` : ''}
+
+    ${item.reason ? `<div class="desc-block">
+      <div class="section-label">Reason / Cause</div>
+      ${fmtText(item.reason)}
+    </div>` : ''}
 
     <div class="section-label">Cost Build-Up</div>
     ${buildUpTableHtml(d.lines, d.buildUpTotal, false)}
 
-    ${d.buildUpTotal > 0 ? `<div class="grand-band">
+    ${d.buildUpTotal > 0 ? `<div class="grand-band no-break">
       <div class="grand-label">Variation Total</div>
       <div class="grand-value">${fv(d.buildUpTotal)}</div>
     </div>` : ''}
 
     ${attHtml}
-    ${vaDocFooter(today, 'Client')}
+    ${vaDocFooter(today, 'Client', d.currentUserName)}
   </div>`;
 }
 
