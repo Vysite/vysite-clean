@@ -770,7 +770,6 @@ function VariationDrawer({
       currentUserName: store.currentUser?.name,
     });
     if (tab) {
-      tab.document.open('text/html', 'replace');
       tab.document.write(html);
       tab.document.close();
     } else {
@@ -794,7 +793,6 @@ function VariationDrawer({
       currentUserName: store.currentUser?.name,
     });
     if (tab) {
-      tab.document.open('text/html', 'replace');
       tab.document.write(html);
       tab.document.close();
     } else {
