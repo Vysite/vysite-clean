@@ -752,10 +752,9 @@ function VariationDrawer({
   async function handleExportInternal() {
     if (!item) return;
     setShowPdfMenu(false);
-    // Open tab synchronously within the user gesture — BEFORE any await.
-    // Calling window.open() after await loses the user-gesture context in Chrome,
-    // which blocks the popup and leaves a stale mousedown listener active,
-    // causing all subsequent dropdowns to close immediately.
+    // Open the tab synchronously inside the user gesture — window.open() MUST come
+    // before any await or Chrome blocks it as an unsolicited popup, which also leaves
+    // a stale mousedown listener and freezes subsequent dropdowns.
     const tab = window.open('', '_blank');
     const attsWithData = await Promise.all(
       attachments.map(async a => a.data_url ? a : { ...a, data_url: await store.fetchAttachmentData(a.id) })
@@ -769,11 +768,16 @@ function VariationDrawer({
       logoUrl: store.settings?.logo_data_url,
       currentUserName: store.currentUser?.name,
     });
+    // Navigate the already-open tab to a blob URL — navigating an existing window
+    // reference never requires a user gesture, only window.open() does.
+    // @page { margin: 0 } in the PDF CSS hides the blob URL from the print footer.
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
     if (tab) {
-      tab.document.open('text/html', 'replace');
-      tab.document.write(html);
-      tab.document.close();
+      tab.location.href = url;
+      tab.addEventListener('afterprint', () => URL.revokeObjectURL(url), { once: true });
     } else {
+      URL.revokeObjectURL(url);
       openPrintTab(html);
     }
   }
@@ -793,11 +797,13 @@ function VariationDrawer({
       logoUrl: store.settings?.logo_data_url,
       currentUserName: store.currentUser?.name,
     });
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
     if (tab) {
-      tab.document.open('text/html', 'replace');
-      tab.document.write(html);
-      tab.document.close();
+      tab.location.href = url;
+      tab.addEventListener('afterprint', () => URL.revokeObjectURL(url), { once: true });
     } else {
+      URL.revokeObjectURL(url);
       openPrintTab(html);
     }
   }
