@@ -9,6 +9,7 @@ import { fmtCurrency, parseRawValue, typeInfo, statusInfo } from './types';
 import type { CommercialRecord, Project } from './types';
 import type { DBKeyDate } from '../../lib/store';
 import { exportPositionStatementPDF } from './CommercialPDF';
+import { useAppStore } from '../../lib/StoreContext';
 
 interface CommercialOverviewProps {
   project: Project | null;
@@ -18,7 +19,6 @@ interface CommercialOverviewProps {
   canEdit: boolean;
   canCreate: boolean;
   currentUserName: string;
-  orgSettings?: { company_name?: string; logo_data_url?: string } | null;
   // VA metrics — passed from parent so Overview reflects live Variation Account data
   vaExposure: number;
   vaAgreed: number;
@@ -80,6 +80,7 @@ export default function CommercialOverview({
   onProjectChange, onAddKeyDate, onUpdateKeyDate,
   onRemoveKeyDate, onUpdateProject, onNewRecord,
 }: CommercialOverviewProps) {
+  const store = useAppStore();
   const [contractEdit, setContractEdit] = useState('');
   const [completedEdit, setCompletedEdit] = useState('');
   const [saving, setSaving] = useState(false);
@@ -153,7 +154,7 @@ export default function CommercialOverview({
       variationExposure,
       agreedVariations,
       currentUserName: currentUserName || '',
-      logoUrl: orgSettings?.logo_data_url,
+      logoUrl: store.settings?.logo_data_url,
     });
   }
 
