@@ -1589,8 +1589,8 @@ interface VABuildUpData {
 
 const VA_BUILD_UP_CSS = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
-/* Consistent margins on every physical page — suppresses browser URL/date chrome */
-@page { margin: 40px 52px 44px; size: A4; }
+/* Suppress browser URL/date/title print chrome — @page margin: 0 removes their rendering space */
+@page { margin: 0; size: A4; }
 @media print {
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-break { page-break-inside: avoid; break-inside: avoid; }
@@ -1605,8 +1605,8 @@ html, body {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
-/* .page provides no padding — @page margins handle all page clearance */
-.page { padding: 0; }
+/* Page padding provides content margins; left/right apply on all pages, top/bottom on first/last */
+.page { padding: 40px 52px 44px; }
 
 /* ── Executive header ── */
 .exec-head {
