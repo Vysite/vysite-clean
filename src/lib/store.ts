@@ -415,7 +415,7 @@ export interface DBProjectDocument {
   type: string;
   size: number;
   category: string;
-  data_url: string;
+  data_url?: string;
   uploaded_by: string;
   created_at?: string;
 }
@@ -1258,11 +1258,13 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     async function load() {
       console.log('[VYSITE] store.load() started, orgId:', orgId);
       const ATT_COLS = 'id,linked_type,linked_id,project_id,project_name,name,type,size,category,uploaded_by,created_at';
+      // data_url excluded — fetched on-demand when a document is opened
+      const DOC_COLS = 'id,project_id,project_name,name,type,size,category,uploaded_by,created_at,org_id';
 
       // All queries are explicitly scoped to the resolved org — no global reads.
       const [projRes, docRes, attRes, actRes, snaRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, kdRes, puRes, notifRes, settingsRes, vaRes, appRes, vaLinesRes, vaCommentsRes, crCommentsRes] = await Promise.all([
         supabase.from('vy_projects').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
-        supabase.from('vy_project_documents').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_project_documents').select(DOC_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_actions').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_snags').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Plus, MapPin, User, Calendar, AlertTriangle, CheckSquare, ArrowLeft, X,
   Search, FolderOpen, FileText, Wrench, ClipboardList, Upload,
@@ -14,6 +14,7 @@ import FileUpload from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
 import type { PendingOpen } from '../App';
 import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
+import { supabase } from '../lib/supabase';
 
 // Normalise any project value input into £X,XXX format for consistent display
 function formatProjectValue(raw: string): string {
@@ -172,15 +173,36 @@ function ViewDocumentModal({ doc, onClose, onDelete, canDelete }: { doc: import(
   const isImage = doc.type.startsWith('image/');
   const isPDF = doc.type === 'application/pdf';
 
-  function openDoc() {
-    if (!doc.data_url) return;
+  const [dataUrl, setDataUrl] = useState<string | null>(doc.data_url ?? null);
+  const [fetching, setFetching] = useState(!doc.data_url);
+
+  useEffect(() => {
+    if (doc.data_url) return;
+    let cancelled = false;
+    setFetching(true);
+    supabase
+      .from('vy_project_documents')
+      .select('data_url')
+      .eq('id', doc.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) {
+          setDataUrl(data?.data_url ?? null);
+          setFetching(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [doc.id, doc.data_url]);
+
+  const openDoc = useCallback(() => {
+    if (!dataUrl) return;
     const link = document.createElement('a');
-    link.href = doc.data_url;
+    link.href = dataUrl;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     if (!isImage && !isPDF) link.download = doc.name;
     link.click();
-  }
+  }, [dataUrl, isImage, isPDF, doc.name]);
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -198,9 +220,9 @@ function ViewDocumentModal({ doc, onClose, onDelete, canDelete }: { doc: import(
             </div>
           </div>
           <div className="flex items-center gap-1 ml-3 shrink-0">
-            {doc.data_url && (
+            {dataUrl && (
               isImage || isPDF ? (
-                <a href={doc.data_url} download={doc.name} className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors" title="Download">
+                <a href={dataUrl} download={doc.name} className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors" title="Download">
                   <Download size={15} />
                 </a>
               ) : (
@@ -218,11 +240,16 @@ function ViewDocumentModal({ doc, onClose, onDelete, canDelete }: { doc: import(
           </div>
         </div>
         <div>
-          {isImage && doc.data_url ? (
-            <img src={doc.data_url} alt={doc.name} className="max-h-[70vh] w-auto mx-auto object-contain p-3" />
-          ) : isPDF && doc.data_url ? (
-            <iframe src={doc.data_url} className="w-full h-[65vh]" title={doc.name} />
-          ) : doc.data_url ? (
+          {fetching ? (
+            <div className="p-8 text-center">
+              <div className="w-8 h-8 border-2 border-[#f97316] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-slate-500 text-sm">Loading document…</p>
+            </div>
+          ) : isImage && dataUrl ? (
+            <img src={dataUrl} alt={doc.name} className="max-h-[70vh] w-auto mx-auto object-contain p-3" />
+          ) : isPDF && dataUrl ? (
+            <iframe src={dataUrl} className="w-full h-[65vh]" title={doc.name} />
+          ) : dataUrl ? (
             <div className="p-8 text-center">
               <File size={48} className="text-slate-600 mx-auto mb-3" />
               <p className="text-slate-500 text-sm mb-4">{doc.name}</p>
@@ -1914,10 +1941,10 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
                     <div key={doc.id} className="flex items-center gap-3 p-4 hover:bg-[#0d1628]/50 cursor-pointer" onClick={() => setViewingDoc(doc)}>
                       {/* Thumbnail / icon */}
                       <div className="w-10 h-10 rounded-lg bg-[#0d1628] border border-[#1e2d4a] flex items-center justify-center shrink-0 overflow-hidden">
-                        {isImage && doc.data_url ? (
-                          <img src={doc.data_url} alt={doc.name} className="w-full h-full object-cover" />
-                        ) : isPDF ? (
+                        {isPDF ? (
                           <FileText size={18} className="text-red-400" />
+                        ) : isImage ? (
+                          <FileText size={18} className="text-blue-400" />
                         ) : (
                           <File size={18} className="text-slate-500" />
                         )}
@@ -1932,15 +1959,13 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                        {doc.data_url && (
-                          <button
+                        <button
                             onClick={() => setViewingDoc(doc)}
                             className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a] rounded transition-colors"
                             title="Open"
                           >
                             <Eye size={14} />
                           </button>
-                        )}
                         {canDeleteDocs && (
                           <button
                             onClick={() => store.removeProjectDocument(doc.id)}
