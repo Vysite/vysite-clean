@@ -1589,10 +1589,9 @@ interface VABuildUpData {
 
 const VA_BUILD_UP_CSS = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
-/* Consistent 40px margins on every physical page.
-   URL is about:blank (written via document.write), so no blob URL appears in the footer.
-   Chrome does not render about:blank in print headers/footers. */
-@page { margin: 40px 52px 44px; size: A4; }
+/* Zero @page margins eliminate all browser print chrome (URL, date, page number).
+   This matches COMM_PDF_CSS and every other VYSITE PDF. */
+@page { margin: 0; size: A4; }
 @media print {
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-break { page-break-inside: avoid; break-inside: avoid; }
@@ -1607,8 +1606,8 @@ html, body {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
-/* @page margins provide all page clearance — .page needs no padding */
-.page { padding: 0; }
+/* Page padding — applies on page 1; section margin-top handles breathing room on overflow pages */
+.page { padding: 40px 52px 44px; }
 
 /* ── Executive header ── */
 .exec-head {
@@ -1639,7 +1638,7 @@ html, body {
   font-size: 6.5pt; font-weight: 800; letter-spacing: 0.18em;
   text-transform: uppercase; color: #94a3b8;
   border-bottom: 0.5px solid #e2e8f0; padding-bottom: 7px;
-  margin-top: 32px; margin-bottom: 14px;
+  margin-top: 40px; margin-bottom: 14px;
 }
 
 /* ── Description / rich text blocks ── */
