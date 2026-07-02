@@ -1,5 +1,22 @@
 import { supabase } from './supabase';
 
+// ─── Cached auth user ID ──────────────────────────────────────────────────────
+// Maintained by a single onAuthStateChange listener registered at module load.
+// logActivity() reads this directly — no per-insert getSession() round-trip.
+
+let _cachedUserId: string | null = null;
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  _cachedUserId = session?.user?.id ?? null;
+});
+
+// Seed the cache from the current session on first import (non-blocking).
+supabase.auth.getSession().then(({ data: { session } }) => {
+  if (_cachedUserId === null) _cachedUserId = session?.user?.id ?? null;
+});
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 export type ActivityActionType =
   // Records
   | 'record_created'
@@ -160,12 +177,9 @@ export function buildDiff(
 export async function logActivity(params: ActivityLogParams): Promise<void> {
   if (!params.orgId) return;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const authUserId = session?.user?.id ?? null;
-
     const { error } = await supabase.from('vy_activity_log').insert({
       org_id:       params.orgId,
-      user_id:      authUserId,
+      user_id:      _cachedUserId,
       user_name:    params.userName,
       module:       params.module,
       record_id:    params.recordId ?? null,

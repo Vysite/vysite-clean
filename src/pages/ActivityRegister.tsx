@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Activity, Search, Filter, RefreshCw, Download, Plus, CreditCard as Edit2, Trash2, MessageSquare, Paperclip, FileText, UserPlus, UserMinus, Settings, Shield, ChevronDown, Clock, CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAppStore } from '../lib/StoreContext';
@@ -327,7 +327,9 @@ export default function ActivityRegister() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [offset, setOffset] = useState(0);
+  // Use a ref for offset so fetchEntries does not need it in its useCallback deps,
+  // preventing unnecessary callback re-creation on every page load.
+  const offsetRef = useRef(0);
   const [selected, setSelected] = useState<ActivityLogEntry | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
@@ -359,7 +361,7 @@ export default function ActivityRegister() {
     if (!orgId) return;
     if (reset) setLoading(true); else setLoadingMore(true);
 
-    const currentOffset = reset ? 0 : offset;
+    const currentOffset = reset ? 0 : offsetRef.current;
 
     let query = supabase
       .from('vy_activity_log')
@@ -383,21 +385,20 @@ export default function ActivityRegister() {
 
     if (reset) {
       setEntries(rows);
-      setOffset(rows.length);
+      offsetRef.current = rows.length;
     } else {
       setEntries(prev => [...prev, ...rows]);
-      setOffset(prev => prev + rows.length);
+      offsetRef.current += rows.length;
     }
 
     setHasMore(rows.length === PAGE_SIZE);
     if (reset) setLoading(false); else setLoadingMore(false);
-  }, [orgId, filterModule, filterAction, filterProject, filterDateFrom, filterDateTo, filterRef, filterUser, offset]);
+  }, [orgId, filterModule, filterAction, filterProject, filterDateFrom, filterDateTo, filterRef, filterUser]);
 
-  // Re-fetch on filter change
+  // Re-fetch on filter change or org change
   useEffect(() => {
     fetchEntries(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, filterModule, filterAction, filterProject, filterDateFrom, filterDateTo, filterRef, filterUser]);
+  }, [fetchEntries]);
 
   function clearFilters() {
     setFilterUser(''); setFilterModule(''); setFilterAction('');
