@@ -1247,6 +1247,8 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       return;
     }
 
+    setLoading(true);
+
     let cancelled = false;
 
     const loadingTimeout = setTimeout(() => {
