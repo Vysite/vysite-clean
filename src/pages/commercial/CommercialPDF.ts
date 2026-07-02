@@ -1589,8 +1589,10 @@ interface VABuildUpData {
 
 const VA_BUILD_UP_CSS = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
-/* Suppress browser URL/date/title print chrome — @page margin: 0 removes their rendering space */
-@page { margin: 0; size: A4; }
+/* Consistent 40px margins on every physical page.
+   URL is about:blank (written via document.write), so no blob URL appears in the footer.
+   Chrome does not render about:blank in print headers/footers. */
+@page { margin: 40px 52px 44px; size: A4; }
 @media print {
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-break { page-break-inside: avoid; break-inside: avoid; }
@@ -1605,8 +1607,8 @@ html, body {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
-/* Page padding provides content margins; left/right apply on all pages, top/bottom on first/last */
-.page { padding: 40px 52px 44px; }
+/* @page margins provide all page clearance — .page needs no padding */
+.page { padding: 0; }
 
 /* ── Executive header ── */
 .exec-head {
@@ -2021,14 +2023,22 @@ export function exportVariationAccountPDF(data: VAData): void {
   openPrintTab(pageShell(`Variation Account — ${name}`, variationAccountBody(data)));
 }
 
-export function exportVAInternalPDF(data: VABuildUpData): void {
+export function buildVAInternalHTML(data: VABuildUpData): string {
   const ref = data.item.reference || 'VAR';
-  openPrintTab(vaBuildUpShell(`${ref} — Internal Build-Up`, vaInternalBody(data)));
+  return vaBuildUpShell(`${ref} — Internal Build-Up`, vaInternalBody(data));
+}
+
+export function buildVAClientHTML(data: VABuildUpData): string {
+  const ref = data.item.reference || 'VAR';
+  return vaBuildUpShell(`${ref} — Client Copy`, vaClientBody(data));
+}
+
+export function exportVAInternalPDF(data: VABuildUpData): void {
+  openPrintTab(buildVAInternalHTML(data));
 }
 
 export function exportVAClientPDF(data: VABuildUpData): void {
-  const ref = data.item.reference || 'VAR';
-  openPrintTab(vaBuildUpShell(`${ref} — Client Copy`, vaClientBody(data)));
+  openPrintTab(buildVAClientHTML(data));
 }
 
 export function exportApplicationsPDF(data: ApplicationsData): void {

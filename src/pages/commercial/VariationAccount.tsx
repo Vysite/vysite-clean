@@ -7,7 +7,8 @@ import type { UploadedFile } from '../../components/FileUpload';
 import type { DBVariationAccountItem, DBAttachment, DBVABuildUpLine, DBVAComment, DBNotification } from '../../lib/store';
 import type { Project } from '../../data/types';
 import { fmtCurrency, fmtDate, parseRawValue } from './types';
-import { exportVariationAccountPDF, exportVAInternalPDF, exportVAClientPDF } from './CommercialPDF';
+import { exportVariationAccountPDF, buildVAInternalHTML, buildVAClientHTML } from './CommercialPDF';
+import { openPrintTab } from '../../lib/printTab';
 import { RowActionsMenu } from '../../components/RowActionsMenu';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -751,10 +752,15 @@ function VariationDrawer({
   async function handleExportInternal() {
     if (!item) return;
     setShowPdfMenu(false);
+    // Open tab synchronously within the user gesture — BEFORE any await.
+    // Calling window.open() after await loses the user-gesture context in Chrome,
+    // which blocks the popup and leaves a stale mousedown listener active,
+    // causing all subsequent dropdowns to close immediately.
+    const tab = window.open('', '_blank');
     const attsWithData = await Promise.all(
       attachments.map(async a => a.data_url ? a : { ...a, data_url: await store.fetchAttachmentData(a.id) })
     );
-    exportVAInternalPDF({
+    const html = buildVAInternalHTML({
       item,
       lines: buildUpLines,
       comments,
@@ -763,15 +769,23 @@ function VariationDrawer({
       logoUrl: store.settings?.logo_data_url,
       currentUserName: store.currentUser?.name,
     });
+    if (tab) {
+      tab.document.open('text/html', 'replace');
+      tab.document.write(html);
+      tab.document.close();
+    } else {
+      openPrintTab(html);
+    }
   }
 
   async function handleExportClient() {
     if (!item) return;
     setShowPdfMenu(false);
+    const tab = window.open('', '_blank');
     const attsWithData = await Promise.all(
       attachments.map(async a => a.data_url ? a : { ...a, data_url: await store.fetchAttachmentData(a.id) })
     );
-    exportVAClientPDF({
+    const html = buildVAClientHTML({
       item,
       lines: buildUpLines,
       attachments: attsWithData,
@@ -779,6 +793,13 @@ function VariationDrawer({
       logoUrl: store.settings?.logo_data_url,
       currentUserName: store.currentUser?.name,
     });
+    if (tab) {
+      tab.document.open('text/html', 'replace');
+      tab.document.write(html);
+      tab.document.close();
+    } else {
+      openPrintTab(html);
+    }
   }
 
   const tabDefs: { key: DrawerTab; label: string; count?: number }[] = [
