@@ -750,59 +750,159 @@ function VariationDrawer({
   }
 
   async function handleExportInternal() {
-    if (!item) return;
+    if (!item) { console.warn('[VA-PDF] handleExportInternal: item is null, aborting'); return; }
+    console.log('[VA-PDF] handleExportInternal: triggered, item.id=', item.id);
     setShowPdfMenu(false);
-    // Open the tab synchronously inside the user gesture — window.open() MUST come
-    // before any await or Chrome blocks it as an unsolicited popup, which also leaves
-    // a stale mousedown listener and freezes subsequent dropdowns.
+
+    // window.open MUST be synchronous (before any await) to preserve the user gesture.
     const tab = window.open('', '_blank');
-    const attsWithData = await Promise.all(
-      attachments.map(async a => a.data_url ? a : { ...a, data_url: await store.fetchAttachmentData(a.id) })
-    );
-    const html = buildVAInternalHTML({
-      item,
-      lines: buildUpLines,
-      comments,
-      attachments: attsWithData,
-      buildUpTotal,
-      logoUrl: store.settings?.logo_data_url,
-      currentUserName: store.currentUser?.name,
-    });
-    // Navigate the already-open tab to a blob URL — navigating an existing window
-    // reference never requires a user gesture, only window.open() does.
-    // @page { margin: 0 } in the PDF CSS hides the blob URL from the print footer.
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
+    console.log('[VA-PDF] window.open result:', tab ? 'tab opened' : 'NULL — popup blocked');
+
+    let attsWithData: typeof attachments;
+    try {
+      attsWithData = await Promise.all(
+        attachments.map(async a => a.data_url ? a : { ...a, data_url: await store.fetchAttachmentData(a.id) })
+      );
+      console.log('[VA-PDF] attachments resolved, count=', attsWithData.length);
+    } catch (err) {
+      console.error('[VA-PDF] attachment fetch failed:', err);
+      if (tab) tab.close();
+      return;
+    }
+
+    let html: string;
+    try {
+      html = buildVAInternalHTML({
+        item, lines: buildUpLines, comments, attachments: attsWithData,
+        buildUpTotal, logoUrl: store.settings?.logo_data_url, currentUserName: store.currentUser?.name,
+      });
+      console.log('[VA-PDF] buildVAInternalHTML returned, length=', html.length, 'starts with:', html.slice(0, 60));
+    } catch (err) {
+      console.error('[VA-PDF] buildVAInternalHTML threw:', err);
+      if (tab) tab.close();
+      return;
+    }
+
+    let url: string;
+    try {
+      const blob = new Blob([html], { type: 'text/html' });
+      url = URL.createObjectURL(blob);
+      console.log('[VA-PDF] blob URL created:', url.slice(0, 60));
+    } catch (err) {
+      console.error('[VA-PDF] Blob/URL.createObjectURL failed:', err);
+      if (tab) tab.close();
+      return;
+    }
+
     if (tab) {
-      tab.location.href = url;
+      try {
+        tab.location.href = url;
+        console.log('[VA-PDF] tab.location.href assigned successfully');
+      } catch (err) {
+        console.error('[VA-PDF] tab.location.href assignment failed:', err);
+        // Fallback: inject a clickable link into the blank tab so the user can open it manually
+        try {
+          tab.document.write(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px">
+            <p>PDF ready — <a href="${url}" target="_blank" style="font-size:16px">click here to open</a></p>
+            <script>window.location.href="${url}";<\/script></body></html>`);
+          tab.document.close();
+        } catch { /* tab may be closed/blocked — silently ignore */ }
+      }
+      // Detect if the tab navigation silently failed (still on about:blank after 2s)
+      setTimeout(() => {
+        try {
+          if (tab.closed) return;
+          const href = tab.location?.href ?? '';
+          console.log('[VA-PDF] tab URL after 2s:', href);
+          if (href === 'about:blank' || href === '') {
+            console.warn('[VA-PDF] tab still on about:blank — injecting fallback link');
+            tab.document.write(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px">
+              <p>PDF ready — <a href="${url}" target="_blank" style="font-size:16px;font-weight:bold">click here to open the PDF</a></p></body></html>`);
+            tab.document.close();
+          }
+        } catch { /* cross-origin or closed tab — ignore */ }
+      }, 2000);
       tab.addEventListener('afterprint', () => URL.revokeObjectURL(url), { once: true });
     } else {
+      console.warn('[VA-PDF] tab was null, falling back to openPrintTab');
       URL.revokeObjectURL(url);
       openPrintTab(html);
     }
   }
 
   async function handleExportClient() {
-    if (!item) return;
+    if (!item) { console.warn('[VA-PDF] handleExportClient: item is null, aborting'); return; }
+    console.log('[VA-PDF] handleExportClient: triggered, item.id=', item.id);
     setShowPdfMenu(false);
+
     const tab = window.open('', '_blank');
-    const attsWithData = await Promise.all(
-      attachments.map(async a => a.data_url ? a : { ...a, data_url: await store.fetchAttachmentData(a.id) })
-    );
-    const html = buildVAClientHTML({
-      item,
-      lines: buildUpLines,
-      attachments: attsWithData,
-      buildUpTotal,
-      logoUrl: store.settings?.logo_data_url,
-      currentUserName: store.currentUser?.name,
-    });
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
+    console.log('[VA-PDF] window.open result:', tab ? 'tab opened' : 'NULL — popup blocked');
+
+    let attsWithData: typeof attachments;
+    try {
+      attsWithData = await Promise.all(
+        attachments.map(async a => a.data_url ? a : { ...a, data_url: await store.fetchAttachmentData(a.id) })
+      );
+      console.log('[VA-PDF] attachments resolved, count=', attsWithData.length);
+    } catch (err) {
+      console.error('[VA-PDF] attachment fetch failed:', err);
+      if (tab) tab.close();
+      return;
+    }
+
+    let html: string;
+    try {
+      html = buildVAClientHTML({
+        item, lines: buildUpLines, attachments: attsWithData,
+        buildUpTotal, logoUrl: store.settings?.logo_data_url, currentUserName: store.currentUser?.name,
+      });
+      console.log('[VA-PDF] buildVAClientHTML returned, length=', html.length, 'starts with:', html.slice(0, 60));
+    } catch (err) {
+      console.error('[VA-PDF] buildVAClientHTML threw:', err);
+      if (tab) tab.close();
+      return;
+    }
+
+    let url: string;
+    try {
+      const blob = new Blob([html], { type: 'text/html' });
+      url = URL.createObjectURL(blob);
+      console.log('[VA-PDF] blob URL created:', url.slice(0, 60));
+    } catch (err) {
+      console.error('[VA-PDF] Blob/URL.createObjectURL failed:', err);
+      if (tab) tab.close();
+      return;
+    }
+
     if (tab) {
-      tab.location.href = url;
+      try {
+        tab.location.href = url;
+        console.log('[VA-PDF] tab.location.href assigned successfully');
+      } catch (err) {
+        console.error('[VA-PDF] tab.location.href assignment failed:', err);
+        try {
+          tab.document.write(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px">
+            <p>PDF ready — <a href="${url}" target="_blank" style="font-size:16px">click here to open</a></p>
+            <script>window.location.href="${url}";<\/script></body></html>`);
+          tab.document.close();
+        } catch { /* silently ignore */ }
+      }
+      setTimeout(() => {
+        try {
+          if (tab.closed) return;
+          const href = tab.location?.href ?? '';
+          console.log('[VA-PDF] tab URL after 2s:', href);
+          if (href === 'about:blank' || href === '') {
+            console.warn('[VA-PDF] tab still on about:blank — injecting fallback link');
+            tab.document.write(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px">
+              <p>PDF ready — <a href="${url}" target="_blank" style="font-size:16px;font-weight:bold">click here to open the PDF</a></p></body></html>`);
+            tab.document.close();
+          }
+        } catch { /* cross-origin or closed tab — ignore */ }
+      }, 2000);
       tab.addEventListener('afterprint', () => URL.revokeObjectURL(url), { once: true });
     } else {
+      console.warn('[VA-PDF] tab was null, falling back to openPrintTab');
       URL.revokeObjectURL(url);
       openPrintTab(html);
     }
