@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { BookOpen, Plus, Trash2, CreditCard as Edit2, Check, X, ChevronDown, Building2, LayoutList, AlertCircle } from 'lucide-react';
+import { BookOpen, Plus, Trash2, CreditCard as Edit2, Check, X, ChevronDown, Building2, LayoutList, AlertCircle, Eye } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import type { DBOAndMManual } from './types';
 import {
   STATUS_LABELS, STATUS_COLOURS, DEFAULT_SECTION_TITLES, genId,
 } from './types';
 import OAndMSectionEditor from './OAndMSectionEditor';
+import OAndMPreview from './OAndMPreview';
 
 const STATUS_OPTIONS: DBOAndMManual['status'][] = ['draft', 'in_progress', 'finalised'];
 
@@ -22,6 +23,7 @@ export default function OAndMWorkspace() {
   const [confirmDeleteManualId, setConfirmDeleteManualId] = useState<string | null>(null);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showAddSections, setShowAddSections] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Filter projects to those visible to this user
   const projects = store.visibleProjectIds
@@ -335,6 +337,14 @@ export default function OAndMWorkspace() {
                 <h2 className="text-base font-black text-white truncate">{selectedManual.title}</h2>
                 <p className="text-xs text-slate-500 mt-0.5">{selectedProject?.name} · {selectedProject?.client}</p>
               </div>
+              {/* Preview button */}
+              <button
+                onClick={() => setShowPreview(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-700/50 hover:bg-slate-600/60 border border-slate-600/40 text-slate-300 hover:text-white text-xs font-semibold rounded-lg transition-colors shrink-0"
+              >
+                <Eye size={13} />
+                Preview Manual
+              </button>
               {/* Status picker */}
               <div className="relative shrink-0">
                 <button
@@ -424,6 +434,21 @@ export default function OAndMWorkspace() {
           />
         </main>
       </div>
+
+      {/* Preview overlay */}
+      {showPreview && selectedProject && (
+        <OAndMPreview
+          manual={selectedManual}
+          sections={manualSections}
+          items={manualItems}
+          project={selectedProject}
+          orgInfo={{
+            companyName: store.settings.company_name,
+            logoDataUrl: store.settings.logo_data_url || undefined,
+          }}
+          onClose={() => setShowPreview(false)}
+        />
+      )}
     </div>
   );
 }
