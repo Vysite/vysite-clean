@@ -363,7 +363,7 @@ export function buildClientCopyPageContent(p: ClientCopyParams): string {
     <div class="legal-footer">
       <div class="legal-footer-header"><span class="legal-footer-title">Legal &amp; Contractual Information</span><span class="legal-footer-ref">Ref: ${esc(docRef)}</span></div>
       ${noticeBar}
-      <div class="legal-branding"><div class="legal-branding-left">VYSITE &bull; Construction Operating System &bull; Generated ${today}</div><div class="legal-branding-right">&copy; VYSITE. All rights reserved. Confidential.</div></div>
+      <div class="legal-branding"><div class="legal-branding-left">${esc(orgName)} &bull; Construction Operating System &bull; Generated ${today}</div><div class="legal-branding-right">&copy; ${esc(orgName)}. All rights reserved. Confidential.</div></div>
     </div>
     </div>`;
 }

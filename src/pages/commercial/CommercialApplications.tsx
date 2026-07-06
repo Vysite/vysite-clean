@@ -477,7 +477,7 @@ export default function CommercialApplications({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => exportApplicationsPDF({ project, apps: items, forecastContractSum, currentUserName: currentUserName || '' })}
+            onClick={() => exportApplicationsPDF({ project, apps: items, forecastContractSum, currentUserName: currentUserName || '', logoUrl: store.settings?.logo_data_url })}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-slate-600 transition-colors"
             title="Export Applications PDF"
           >

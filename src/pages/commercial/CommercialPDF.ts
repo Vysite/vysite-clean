@@ -636,6 +636,7 @@ interface ApplicationsData {
   apps: DBCommercialApplication[];
   forecastContractSum: number;
   currentUserName: string;
+  logoUrl?: string;
 }
 
 // Dedicated CSS for the Applications PDF — injected into its own page shell
@@ -1041,11 +1042,14 @@ function applicationsBody(d: ApplicationsData): string {
   const firstPeriod = sortedApps.length > 0 ? (sortedApps[0].period || fmtD(sortedApps[0].app_date)) : '—';
   const lastPeriod  = sortedApps.length > 1 ? (sortedApps[sortedApps.length - 1].period || fmtD(sortedApps[sortedApps.length - 1].app_date)) : firstPeriod;
 
+  const coverBrandHtml = d.logoUrl
+    ? `<img src="${d.logoUrl}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
+    : `<div class="exec-brand">VYSITE</div><div class="exec-brand-sub">Construction Operating System</div>`;
+
   const cover = `<div class="exec-page">
   <div class="exec-head">
     <div>
-      <div class="exec-brand">VYSITE</div>
-      <div class="exec-brand-sub">Construction Operating System</div>
+      ${coverBrandHtml}
     </div>
     <div class="exec-head-right">
       <div class="exec-doc-type">Valuation &amp; Payment</div>
@@ -1128,9 +1132,12 @@ function applicationsBody(d: ApplicationsData): string {
 </div>`;
 
   // ── Body: page head ──
+  const pageHeadBrand = d.logoUrl
+    ? `<img src="${d.logoUrl}" alt="Logo" style="height:28px;max-width:120px;object-fit:contain;display:block;margin-bottom:3px">`
+    : `<div class="page-head-wordmark">VYSITE</div>`;
   const pageHead = `<div class="page-head">
   <div class="page-head-left">
-    <div class="page-head-wordmark">VYSITE</div>
+    ${pageHeadBrand}
     <div class="page-head-doc">Valuation Applications</div>
   </div>
   <div class="page-head-right">
