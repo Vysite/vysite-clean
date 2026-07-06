@@ -927,6 +927,29 @@ export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFil
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [similarTemplate, setSimilarTemplate] = useState<Action | null>(null);
+  // Pre-fetched attachment data_urls keyed by attachment id — populated in background
+  // so export handlers can call openPrintTab synchronously (Chrome blocks popups after await).
+  const [attDataCache, setAttDataCache] = useState<Record<string, string>>({});
+
+  const actionAttachments = useMemo(
+    () => store.attachments.filter(a => a.linked_type === 'action'),
+    [store.attachments],
+  );
+  const actionAttachmentIds = actionAttachments.map(a => a.id).join(',');
+
+  useEffect(() => {
+    if (!actionAttachments.length) { setAttDataCache({}); return; }
+    let cancelled = false;
+    Promise.all(
+      actionAttachments.map(async a => {
+        const url = a.data_url ?? await store.fetchAttachmentData(a.id);
+        return [a.id, url] as const;
+      })
+    ).then(entries => {
+      if (!cancelled) setAttDataCache(Object.fromEntries(entries));
+    });
+    return () => { cancelled = true; };
+  }, [actionAttachmentIds]); // eslint-disable-line react-hooks/exhaustive-deps
   const perms = usePermissions();
   const isAdmin = store.currentUser?.role === 'Admin';
   const canCreate = perms['actions.create'] || isAdmin;
@@ -1100,7 +1123,11 @@ export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFil
           <span className="text-sm font-semibold text-white">{selectedIds.size} selected</span>
           <button onClick={() => {
               const attMap: Record<string, DBAttachment[]> = {};
-              selectedActions.forEach(a => { attMap[a.id] = store.attachments.filter(att => att.linked_type === 'action' && att.linked_id === a.id); });
+              selectedActions.forEach(a => {
+                attMap[a.id] = store.attachments
+                  .filter(att => att.linked_type === 'action' && att.linked_id === a.id)
+                  .map(att => ({ ...att, data_url: attDataCache[att.id] ?? att.data_url ?? '' }));
+              });
               exportActionsPDF(selectedActions, attMap, store.settings?.logo_data_url);
             }} className="flex items-center gap-2 px-4 py-2 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">
             <Printer size={14} />Export PDF
@@ -1145,7 +1172,12 @@ export default function Actions({ pendingOpen, onPendingOpenConsumed, pendingFil
                           { label: 'View', icon: Eye, onClick: () => setSelectedAction(action) },
                           ...(canEdit ? [{ label: 'Edit', icon: Edit2, onClick: () => setSelectedAction(action) }] : []),
                           { label: 'Create Similar', icon: Copy, onClick: () => handleCreateSimilar(action) },
-                          ...(canExport ? [{ label: 'Export PDF', icon: Printer, onClick: () => exportSingleActionPDF(action, store.attachments.filter(att => att.linked_type === 'action' && att.linked_id === action.id), store.settings?.logo_data_url) }] : []),
+                          ...(canExport ? [{ label: 'Export PDF', icon: Printer, onClick: () => {
+                            const atts = store.attachments
+                              .filter(att => att.linked_type === 'action' && att.linked_id === action.id)
+                              .map(att => ({ ...att, data_url: attDataCache[att.id] ?? att.data_url ?? '' }));
+                            exportSingleActionPDF(action, atts, store.settings?.logo_data_url);
+                          } }] : []),
                           ...(canDelete ? [{ label: 'Delete', icon: Trash2, onClick: () => setDeleteConfirm(action.id), danger: true, dividerBefore: true }] : []),
                         ]} />
                       </div>
