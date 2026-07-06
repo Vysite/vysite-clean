@@ -809,9 +809,11 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
           <div className="text-center py-14 text-slate-600">
             <FileText size={28} className="mx-auto mb-3 opacity-20" />
             <p className="text-sm font-medium">
-              {forms.length === 0
-                ? 'No records yet. Select a category above to create your first form.'
-                : 'No forms match your filters.'}
+              {store.modulesLoading && forms.length === 0
+                ? 'Loading forms...'
+                : forms.length === 0
+                  ? 'No records yet. Select a category above to create your first form.'
+                  : 'No forms match your filters.'}
             </p>
           </div>
         ) : (

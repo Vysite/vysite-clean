@@ -1049,6 +1049,9 @@ export interface AppStore {
   platformUsers: DBPlatformUser[];
   notifications: DBNotification[];
   loading: boolean;
+  // True while Phase 2 background queries (module data) are still in flight.
+  // Check this in module pages to show a loading skeleton instead of "no records".
+  modulesLoading: boolean;
   currentUser: DBPlatformUser | null;
   currentOrgId: string | null;
   visibleProjectIds: string[] | null; // null = all (Admin)
@@ -1217,6 +1220,10 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [commercialApplications, setCommercialApplications] = useState<DBCommercialApplication[]>([]);
   const [settings, setSettings] = useState<DBSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  // True while Phase 2 background queries are in flight.
+  // Module pages whose data comes from Phase 2 should show a loading state
+  // when this is true rather than rendering "no records" against empty arrays.
+  const [modulesLoading, setModulesLoading] = useState(true);
 
   // Keep a stable ref to orgId so callbacks always read the latest value
   // without needing to be re-created (avoids cascading re-renders).
@@ -1248,12 +1255,12 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setCommercialApplications([]);
       // Keep platformUsers/settings as-is — they load below with org filter
       setLoading(false);
+      setModulesLoading(false);
       return;
     }
 
     setLoading(true);
-
-    let cancelled = false;
+    setModulesLoading(true);
 
     const loadingTimeout = setTimeout(() => {
       if (!cancelled) setLoading(false);
@@ -1339,6 +1346,8 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setProgrammeTasks((ptaskRes.data ?? []) as DBProgrammeTask[]);
       setVariationAccountItems((vaRes.data ?? []) as DBVariationAccountItem[]);
       setCommercialApplications((appRes.data ?? []) as DBCommercialApplication[]);
+      // Phase 2 complete — module pages can now render their full data.
+      setModulesLoading(false);
 
       // ── Phase 3: detail data loaded on-demand ────────────────────────────────
       // vy_va_build_up_lines, vy_va_comments, vy_commercial_record_comments are
@@ -1899,7 +1908,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     projects, projectDocuments, attachments,
     actions, snags, snaggingReports, siteForms, tenders, tcRecords, maintenanceJobs, programmes, programmeTasks, keyDates,
     platformUsers, notifications,
-    loading,
+    loading, modulesLoading,
     currentUser,
     currentOrgId: orgId,
     visibleProjectIds,
