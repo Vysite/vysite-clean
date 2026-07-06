@@ -442,37 +442,33 @@ class BuildContext {
   async addTCRecord(item: DBOAndMItem, rec: DBTCRecord | undefined) {
     if (!rec) { await this.addExceptionPage(item.title, 'T&C Record not found.'); return; }
 
-    const p = this.output.addPage([A4_W, A4_H]);
+    const firstPage = this.output.addPage([A4_W, A4_H]);
 
     // Top colour bar — sky blue for T&C
-    p.drawRectangle({ x: 0, y: A4_H - 5, width: A4_W, height: 5, color: C_SKY });
+    firstPage.drawRectangle({ x: 0, y: A4_H - 5, width: A4_W, height: 5, color: C_SKY });
 
-    // Header area
     const headerY = A4_H - M;
 
-    // Logo / org name
     if (this.logoImg) {
       const scale = Math.min(130 / this.logoImg.width, 34 / this.logoImg.height);
-      p.drawImage(this.logoImg, { x: M, y: headerY - 34, width: this.logoImg.width * scale, height: this.logoImg.height * scale });
+      firstPage.drawImage(this.logoImg, { x: M, y: headerY - 34, width: this.logoImg.width * scale, height: this.logoImg.height * scale });
     } else {
-      dt(p, this.bold, this.orgInfo.companyName, M, headerY - 14, 14, C_INK);
+      dt(firstPage, this.bold, this.orgInfo.companyName, M, headerY - 14, 14, C_INK);
     }
 
-    dt(p, this.regular, 'TESTING & COMMISSIONING RECORD', M, headerY - 44, 7.5, C_MUTED, { ls: 2 });
+    dt(firstPage, this.regular, 'TESTING & COMMISSIONING RECORD', M, headerY - 44, 7.5, C_MUTED, { ls: 2 });
 
-    // Document title — right side
     const titleRX = A4_W / 2 + 10;
     const titleW = A4_W - M - titleRX;
-    wrapText(p, this.bold, rec.title, titleRX, headerY - 14, titleW, 14, C_INK, 18, 'right');
-    dt(p, this.regular, `${rec.ref}${rec.date ? '  ·  ' + fmtDateShort(rec.date) : ''}`, titleRX, headerY - 38, 10, C_MUTED, { align: 'right', maxWidth: titleW });
+    wrapText(firstPage, this.bold, rec.title, titleRX, headerY - 14, titleW, 14, C_INK, 18, 'right');
+    dt(firstPage, this.regular, `${rec.ref}${rec.date ? '  ·  ' + fmtDateShort(rec.date) : ''}`, titleRX, headerY - 38, 10, C_MUTED, { align: 'right', maxWidth: titleW });
 
-    // Divider
-    p.drawLine({ start: { x: M, y: A4_H - M - 56 }, end: { x: A4_W - M, y: A4_H - M - 56 }, thickness: 2, color: C_SKY });
+    firstPage.drawLine({ start: { x: M, y: A4_H - M - 56 }, end: { x: A4_W - M, y: A4_H - M - 56 }, thickness: 2, color: C_SKY });
 
     // Meta panel
     const metaTop = A4_H - M - 68;
     const metaH = 54;
-    p.drawRectangle({ x: M, y: metaTop - metaH, width: A4_W - M * 2, height: metaH, color: C_PANELBG, borderColor: C_FAINT, borderWidth: 0.5 });
+    firstPage.drawRectangle({ x: M, y: metaTop - metaH, width: A4_W - M * 2, height: metaH, color: C_PANELBG, borderColor: C_FAINT, borderWidth: 0.5 });
 
     const mFields: [string, string][] = [
       ['Reference', rec.ref],
@@ -488,36 +484,39 @@ class BuildContext {
       const row = Math.floor(i / 3);
       const mx = M + 10 + col * mColW;
       const my = metaTop - 14 - row * 26;
-      dt(p, this.bold, label.toUpperCase(), mx, my, 6.5, C_MUTED, { ls: 0.7 });
-      dt(p, this.bold, val, mx, my - 12, 9.5, C_INK);
+      dt(firstPage, this.bold, label.toUpperCase(), mx, my, 6.5, C_MUTED, { ls: 0.7 });
+      dt(firstPage, this.bold, val, mx, my - 12, 9.5, C_INK);
     });
 
+    // Set up pager for overflowing content
+    const pager: Pager = { page: firstPage, y: metaTop - metaH - 18 };
+    const continuationTitle = rec.title;
+
     // Result block
-    let contentY = metaTop - metaH - 18;
     if (rec.result) {
+      overflow(pager, this, 54, C_SKY, continuationTitle);
       const isPass = /pass/i.test(rec.result);
       const isFail = /fail/i.test(rec.result);
       const bg = isPass ? rgb(0.941, 0.996, 0.957) : isFail ? rgb(0.996, 0.949, 0.949) : rgb(1, 0.988, 0.922);
       const border = isPass ? C_GREEN : isFail ? C_RED : C_AMBER;
       const textC = isPass ? C_GREEN : isFail ? C_RED : C_AMBER;
-      p.drawRectangle({ x: M, y: contentY - 30, width: A4_W - M * 2, height: 46, color: bg, borderColor: border, borderWidth: 1.5 });
-      dt(p, this.bold, 'TEST RESULT', M + 14, contentY - 6, 8, C_MUTED, { ls: 0.8 });
+      pager.page.drawRectangle({ x: M, y: pager.y - 30, width: A4_W - M * 2, height: 46, color: bg, borderColor: border, borderWidth: 1.5 });
+      dt(pager.page, this.bold, 'TEST RESULT', M + 14, pager.y - 6, 8, C_MUTED, { ls: 0.8 });
       const rw = this.bold.widthOfTextAtSize(rec.result.toUpperCase(), 16);
-      dt(p, this.bold, rec.result.toUpperCase(), A4_W - M - rw - 14, contentY - 14, 16, textC);
-      contentY -= 58;
+      dt(pager.page, this.bold, rec.result.toUpperCase(), A4_W - M - rw - 14, pager.y - 14, 16, textC);
+      pager.y -= 58;
     }
 
     // Notes
     if (rec.notes) {
-      dt(p, this.bold, 'NOTES & OBSERVATIONS', M, contentY, 7, C_MUTED, { ls: 1.2 });
-      p.drawLine({ start: { x: M, y: contentY - 8 }, end: { x: A4_W - M, y: contentY - 8 }, thickness: 0.5, color: C_FAINT });
-      contentY -= 22;
-      contentY = wrapText(p, this.regular, rec.notes, M + 4, contentY, A4_W - M * 2 - 8, 10, C_BODY, 15);
+      overflow(pager, this, 48, C_SKY, continuationTitle);
+      dt(pager.page, this.bold, 'NOTES & OBSERVATIONS', M, pager.y, 7, C_MUTED, { ls: 1.2 });
+      pager.page.drawLine({ start: { x: M, y: pager.y - 8 }, end: { x: A4_W - M, y: pager.y - 8 }, thickness: 0.5, color: C_FAINT });
+      pager.y -= 22;
+      wrapTextPaged(pager, this, rec.notes, M + 4, A4_W - M * 2 - 8, 10, C_BODY, 15, C_SKY, continuationTitle);
     }
 
-    // Bottom certificate bar
-    p.drawRectangle({ x: 0, y: M - 8, width: A4_W, height: 1, color: C_FAINT });
-    this.footer(p);
+    this.footer(pager.page);
   }
 
   // ── Site Form — full pdf-lib render ──────────────────────────────────────────
@@ -570,98 +569,118 @@ class BuildContext {
       dt(p, this.bold, val, sx, sy - 12, 9.5, C_INK);
     });
 
-    // Form body — delegate to per-type renderer
-    let bodyY = metaTop - stripH - 18;
-    bodyY = this.renderFormBody(p, form.type, f, form.description, form.notes, bodyY);
+    // Form body — delegate to per-type paged renderer
+    const pager: Pager = { page: p, y: metaTop - stripH - 18 };
+    this.renderFormBodyPaged(pager, form.type, f, form.description, form.notes);
 
-    this.footer(p);
+    this.footer(pager.page);
   }
 
-  // Form body router — renders the right fields for each form type
-  private renderFormBody(
-    p: PDFPage,
+  // Form body router — renders the right fields for each form type, across pages as needed
+  private renderFormBodyPaged(
+    pager: Pager,
     type: string,
     f: Record<string, unknown>,
     description: string,
     notes: string,
-    startY: number,
-  ): number {
-    let y = startY;
+  ): void {
     const safe = (v: unknown) => v ? String(v) : '';
+    const title = type;
 
-    const drawSection = (label: string, fields: [string, string][]): number => {
+    // Section heading + data grid
+    const drawSection = (label: string, fields: [string, string][]): void => {
       const visible = fields.filter(([, v]) => v);
-      if (!visible.length) return y;
-      dt(p, this.bold, label.toUpperCase(), M, y, 7, C_MUTED, { ls: 1.2 });
-      p.drawLine({ start: { x: M, y: y - 8 }, end: { x: A4_W - M, y: y - 8 }, thickness: 0.5, color: C_FAINT });
-      y -= 18;
-      y = dataGrid(p, this.bold, this.regular, visible, M, y, A4_W - M * 2, 3);
-      y -= 12;
-      return y;
+      if (!visible.length) return;
+      // Need at least heading + one row
+      overflow(pager, this, 60, C_ORANGE, title);
+      dt(pager.page, this.bold, label.toUpperCase(), M, pager.y, 7, C_MUTED, { ls: 1.2 });
+      pager.page.drawLine({ start: { x: M, y: pager.y - 8 }, end: { x: A4_W - M, y: pager.y - 8 }, thickness: 0.5, color: C_FAINT });
+      pager.y -= 18;
+      // Draw grid rows, checking for page break between rows
+      const cols = 3;
+      const colW = (A4_W - M * 2) / cols;
+      const rowCount = Math.ceil(visible.length / cols);
+      for (let row = 0; row < rowCount; row++) {
+        overflow(pager, this, 38, C_ORANGE, title);
+        for (let col = 0; col < cols; col++) {
+          const idx = row * cols + col;
+          if (idx >= visible.length) break;
+          const cx = M + col * colW;
+          const bg = row % 2 === 0 ? C_PANELBG : rgb(1, 1, 1);
+          pager.page.drawRectangle({ x: cx, y: pager.y - 26, width: colW - 4, height: 34, color: bg, borderColor: C_FAINT, borderWidth: 0.3 });
+          dt(pager.page, this.bold, visible[idx][0].toUpperCase(), cx + 6, pager.y - 4, 6.5, C_MUTED, { ls: 0.6 });
+          dt(pager.page, this.bold, visible[idx][1], cx + 6, pager.y - 16, 9.5, C_INK);
+        }
+        pager.y -= 32;
+      }
+      pager.y -= 12;
     };
 
-    const drawNotes = (label: string, value: string | undefined): number => {
-      if (!value) return y;
-      dt(p, this.bold, label.toUpperCase(), M, y, 7, C_MUTED, { ls: 1.2 });
-      p.drawLine({ start: { x: M, y: y - 8 }, end: { x: A4_W - M, y: y - 8 }, thickness: 0.5, color: C_FAINT });
-      y -= 20;
-      y = wrapText(p, this.regular, value, M + 4, y, A4_W - M * 2 - 8, 10, C_BODY, 14);
-      y -= 12;
-      return y;
+    // Notes / text block
+    const drawNotes = (label: string, value: string | undefined): void => {
+      if (!value) return;
+      overflow(pager, this, 48, C_ORANGE, title);
+      dt(pager.page, this.bold, label.toUpperCase(), M, pager.y, 7, C_MUTED, { ls: 1.2 });
+      pager.page.drawLine({ start: { x: M, y: pager.y - 8 }, end: { x: A4_W - M, y: pager.y - 8 }, thickness: 0.5, color: C_FAINT });
+      pager.y -= 20;
+      wrapTextPaged(pager, this, value, M + 4, A4_W - M * 2 - 8, 10, C_BODY, 14, C_ORANGE, title);
+      pager.y -= 12;
     };
 
-    const drawResult = (label: string, value: string | undefined): number => {
-      if (!value) return y;
+    // Pass/fail result block
+    const drawResult = (label: string, value: string | undefined): void => {
+      if (!value) return;
+      overflow(pager, this, 56, C_ORANGE, title);
       const isPass = /pass/i.test(value);
       const isFail = /fail/i.test(value);
       const bg = isPass ? rgb(0.941, 0.996, 0.957) : isFail ? rgb(0.996, 0.949, 0.949) : rgb(1, 0.988, 0.922);
       const border = isPass ? C_GREEN : isFail ? C_RED : C_AMBER;
       const textC = isPass ? C_GREEN : isFail ? C_RED : C_AMBER;
-      p.drawRectangle({ x: M, y: y - 30, width: A4_W - M * 2, height: 44, color: bg, borderColor: border, borderWidth: 1.5 });
-      dt(p, this.bold, label.toUpperCase(), M + 12, y - 8, 8, C_MUTED, { ls: 0.8 });
-      const vw = this.bold.widthOfTextAtSize(value.toUpperCase(), 14);
-      dt(p, this.bold, value.toUpperCase(), A4_W - M - vw - 12, y - 16, 14, textC);
-      y -= 52;
-      return y;
+      pager.page.drawRectangle({ x: M, y: pager.y - 30, width: A4_W - M * 2, height: 44, color: bg, borderColor: border, borderWidth: 1.5 });
+      dt(pager.page, this.bold, label.toUpperCase(), M + 12, pager.y - 8, 8, C_MUTED, { ls: 0.8 });
+      const vw = this.bold.widthOfTextAtSize(san(value.toUpperCase()), 14);
+      dt(pager.page, this.bold, value.toUpperCase(), A4_W - M - vw - 12, pager.y - 16, 14, textC);
+      pager.y -= 52;
     };
 
-    // Per-type bodies
+    // ── Per-type bodies ───────────────────────────────────────────────────────────
+
     if (type === 'Pressure Test') {
-      y = drawSection('Pressure Test Details', [
+      drawSection('Pressure Test Details', [
         ['Plot / Area', safe(f.plotArea)], ['System / Service', safe(f.systemService)],
         ['Test Medium', safe(f.testMedium)], ['Test Pressure', f.testPressure ? `${safe(f.testPressure)} ${safe(f.testPressureUnit)}` : ''],
         ['Start Time', safe(f.startTime)], ['End Time', safe(f.endTime)],
         ['Duration', safe(f.durationOnTest)], ['Engineer', safe(f.engineer)],
         ['Company', safe(f.company)], ['Witnessed By', safe(f.witnessedBy)],
       ]);
-      y = drawResult('Pressure Test Result', safe(f.testResult));
-      y = drawNotes('Pipework Description', safe(f.pipeworkDescription));
-      y = drawNotes('Observations', safe(f.observations));
+      drawResult('Pressure Test Result', safe(f.testResult));
+      drawNotes('Pipework Description', safe(f.pipeworkDescription));
+      drawNotes('Observations', safe(f.observations));
     } else if (type === 'Flushing Record') {
-      y = drawSection('Flushing Details', [
+      drawSection('Flushing Details', [
         ['Plot / Area', safe(f.plotArea)], ['System / Service', safe(f.systemService)],
         ['Flush Medium', safe(f.flushMedium)], ['Temperature', safe(f.flushTemperature)],
         ['Duration', safe(f.flushDuration)], ['Turbidity (NTU)', safe(f.turbidity)],
         ['Chlorine Residual', safe(f.chlorineResidual)],
         ['Engineer', safe(f.engineer)], ['Witnessed By', safe(f.flushWitnessedBy)],
       ]);
-      y = drawResult('Flush Result', safe(f.flushResult));
-      y = drawNotes('Observations', safe(f.observations));
+      drawResult('Flush Result', safe(f.flushResult));
+      drawNotes('Observations', safe(f.observations));
     } else if (type === 'Valve Checklist') {
-      y = drawSection('Valve Details', [
+      drawSection('Valve Details', [
         ['Plot / Area', safe(f.plotArea)], ['Valve Tag', safe(f.valveTag)],
         ['Type', safe(f.valveType)], ['Size', safe(f.valveSize)],
         ['Location', safe(f.valveLocation)], ['Engineer', safe(f.engineer)],
         ['Witnessed By', safe(f.witnessedBy)],
       ]);
-      y = drawSection('Inspection Results', [
+      drawSection('Inspection Results', [
         ['Operation Check', safe(f.operationCheck)], ['Seat Leakage', safe(f.seatLeakageCheck)],
         ['Gland Leakage', safe(f.glandLeakageCheck)], ['Position Indicator', safe(f.positionIndicator)],
         ['Actuator Check', safe(f.actuatorCheck)], ['Overall Condition', safe(f.overallCondition)],
       ]);
-      y = drawNotes('Observations', safe(f.observations));
+      drawNotes('Observations', safe(f.observations));
     } else if (type === 'AHU Commissioning') {
-      y = drawSection('AHU Details', [
+      drawSection('AHU Details', [
         ['AHU Tag', safe(f.ahuTag)], ['Location', safe(f.ahuLocation)],
         ['Supply Airflow', safe(f.supplyAirflow)], ['Return Airflow', safe(f.returnAirflow)],
         ['Supply Fan Amps', safe(f.supplyFanAmps)], ['Return Fan Amps', safe(f.returnFanAmps)],
@@ -669,129 +688,125 @@ class BuildContext {
         ['Coil Condition', safe(f.coilCondition)], ['Setpoint Temp', safe(f.setpointTemp)],
         ['Measured Temp', safe(f.measuredTemp)],
       ]);
-      y = drawResult('AHU Commissioning Result', safe(f.ahuResult));
-      y = drawNotes('Observations', safe(f.observations));
+      drawResult('AHU Commissioning Result', safe(f.ahuResult));
+      drawNotes('Observations', safe(f.observations));
     } else if (type === 'Dead Testing') {
-      y = drawSection('Dead Test Details', [
+      drawSection('Dead Test Details', [
         ['Circuit Ref', safe(f.circuitRef)], ['Plot / Area', safe(f.plotArea)],
         ['Test Instrument', safe(f.testInstrument)], ['Engineer', safe(f.engineer)],
         ['Witnessed By', safe(f.deadTestWitness)],
       ]);
-      y = drawSection('Test Measurements', [
-        ['L1 Insulation Resistance (MΩ)', safe(f.insulationPhaseL1)],
-        ['L2 Insulation Resistance (MΩ)', safe(f.insulationPhaseL2)],
-        ['L3 Insulation Resistance (MΩ)', safe(f.insulationPhaseL3)],
-        ['Neutral Insulation Resistance (MΩ)', safe(f.insulationNeutral)],
-        ['Continuity Ring (Ω)', safe(f.continuityRing)],
-        ['Earth Fault Loop (Ω)', safe(f.earthFault)],
+      drawSection('Test Measurements', [
+        ['L1 Insulation Resistance (MOhm)', safe(f.insulationPhaseL1)],
+        ['L2 Insulation Resistance (MOhm)', safe(f.insulationPhaseL2)],
+        ['L3 Insulation Resistance (MOhm)', safe(f.insulationPhaseL3)],
+        ['Neutral Insulation Resistance (MOhm)', safe(f.insulationNeutral)],
+        ['Continuity Ring (Ohm)', safe(f.continuityRing)],
+        ['Earth Fault Loop (Ohm)', safe(f.earthFault)],
         ['Polarity', safe(f.polarity)],
       ]);
-      y = drawResult('Dead Test Result', safe(f.deadTestResult));
-      y = drawNotes('Observations', safe(f.observations));
+      drawResult('Dead Test Result', safe(f.deadTestResult));
+      drawNotes('Observations', safe(f.observations));
     } else if (type === 'Continuity Test') {
-      y = drawSection('Continuity Test Details', [
+      drawSection('Continuity Test Details', [
         ['Conductor Ref', safe(f.conductorRef)], ['Circuit Ref', safe(f.circuitRef)],
         ['Conductor Type', safe(f.conductorType)], ['Length (m)', safe(f.conductorLength)],
         ['Test Instrument', safe(f.testInstrument)], ['Engineer', safe(f.engineer)],
         ['Witnessed By', safe(f.continuityWitness)],
       ]);
-      y = drawSection('Resistance Measurements', [
-        ['Measured Resistance (Ω)', safe(f.measuredResistance)],
-        ['Calculated Resistance (Ω)', safe(f.calculatedResistance)],
+      drawSection('Resistance Measurements', [
+        ['Measured Resistance (Ohm)', safe(f.measuredResistance)],
+        ['Calculated Resistance (Ohm)', safe(f.calculatedResistance)],
         ['Deviation (%)', safe(f.deviationPercent)],
       ]);
-      y = drawResult('Continuity Test Result', safe(f.continuityResult));
+      drawResult('Continuity Test Result', safe(f.continuityResult));
     } else if (type === 'Electrical Commissioning Report') {
-      y = drawSection('Commissioning Report Details', [
+      drawSection('Commissioning Report Details', [
         ['Shift', safe(f.ecrShift)], ['Lead Engineer', safe(f.ecrLeadEngineer)],
         ['Company', safe(f.ecrCompany)], ['System Being Commissioned', safe(f.ecrSystemBeingCommissioned)],
         ['Overall Status', safe(f.ecrOverallStatus)], ['Site Area', safe(f.ecrSiteArea)],
         ['% Progress', safe(f.ecrPercentProgress)],
       ]);
-      y = drawNotes('Areas Completed', safe(f.ecrAreasCompleted));
-      y = drawNotes('Areas In Progress', safe(f.ecrAreasInProgress));
-      y = drawNotes('Actual Works Completed', safe(f.ecrActualWorks));
-      y = drawNotes('Key Blockers', safe(f.ecrKeyBlockers));
-      y = drawNotes('Overall Comments', safe(f.ecrOverallComments));
+      drawNotes('Areas Completed', safe(f.ecrAreasCompleted));
+      drawNotes('Areas In Progress', safe(f.ecrAreasInProgress));
+      drawNotes('Actual Works Completed', safe(f.ecrActualWorks));
+      drawNotes('Key Blockers', safe(f.ecrKeyBlockers));
+      drawNotes('Overall Comments', safe(f.ecrOverallComments));
     } else if (type === 'Daily Site Report') {
-      y = drawSection('Site Report Details', [
+      drawSection('Site Report Details', [
         ['Site Manager', safe(f.dsrSiteManager)], ['Weather', safe(f.dsrWeather)],
         ['Temperature', safe(f.dsrTemperature)], ['Site Conditions', safe(f.dsrSiteConditions)],
         ['Operatives on Site', safe(f.dsrOperativesOnSite)],
         ['Start Time', safe(f.dsrStartTime)], ['Finish Time', safe(f.dsrFinishTime)],
         ['Total Hours', safe(f.dsrTotalHours)],
       ]);
-      y = drawNotes('Works Completed', safe(f.dsrWorksCompleted));
-      y = drawNotes('Issues Encountered', safe(f.dsrIssuesEncountered));
-      y = drawNotes('Overall Comments', safe(f.dsrOverallComments));
+      drawNotes('Works Completed', safe(f.dsrWorksCompleted));
+      drawNotes('Issues Encountered', safe(f.dsrIssuesEncountered));
+      drawNotes('Overall Comments', safe(f.dsrOverallComments));
     } else if (type === 'QA Inspection') {
-      y = drawSection('Inspection Details', [
+      drawSection('Inspection Details', [
         ['Inspector', safe(f.qaInspector)], ['Contractor', safe(f.qaContractor)],
         ['Area Inspected', safe(f.qaAreaInspected)], ['System / Service', safe(f.qaSystemService)],
         ['Drawing Ref', safe(f.qaDrawingRef)], ['Witnessed By', safe(f.qaWitnessedBy)],
       ]);
-      y = drawResult('Inspection Result', safe(f.qaResult));
-      y = drawNotes('Observations', safe(f.qaObservations));
-      y = drawNotes('Actions Required', safe(f.qaActionsRequired));
+      drawResult('Inspection Result', safe(f.qaResult));
+      drawNotes('Observations', safe(f.qaObservations));
+      drawNotes('Actions Required', safe(f.qaActionsRequired));
     } else if (type === 'H&S Inspection') {
-      y = drawSection('Inspection Details', [
+      drawSection('Inspection Details', [
         ['Inspector', safe(f.hsInspector)], ['Contractor', safe(f.hsContractor)],
         ['Area Inspected', safe(f.hsAreaInspected)],
       ]);
-      y = drawNotes('Observations', safe(f.hsObservations));
-      y = drawNotes('Actions Required', safe(f.hsActionsRequired));
+      drawNotes('Observations', safe(f.hsObservations));
+      drawNotes('Actions Required', safe(f.hsActionsRequired));
     } else if (type === 'Toolbox Talk') {
-      y = drawSection('Toolbox Talk Details', [
+      drawSection('Toolbox Talk Details', [
         ['Topic', safe(f.tbtTopic)], ['Duration', safe(f.tbtDuration)],
         ['Location', safe(f.tbtLocation)], ['Presented By', safe(f.tbtPresentedBy)],
         ['Company', safe(f.company)],
       ]);
-      y = drawNotes('Key Points Covered', safe(f.tbtKeyPoints));
-      y = drawNotes('Attendees', safe(f.tbtAttendees));
-      y = drawNotes('Action Items', safe(f.tbtActionItems));
+      drawNotes('Key Points Covered', safe(f.tbtKeyPoints));
+      drawNotes('Attendees', safe(f.tbtAttendees));
+      drawNotes('Action Items', safe(f.tbtActionItems));
     } else if (type === 'Temperature Water Readings') {
-      y = drawSection('Water Temperature Details', [
+      drawSection('Water Temperature Details', [
         ['System', safe(f.twrSystem)], ['Location', safe(f.twrLocation)],
         ['Flow Temperature (°C)', safe(f.twrFlowTemp)], ['Return Temperature (°C)', safe(f.twrReturnTemp)],
         ['Cold Water Temp (°C)', safe(f.twrColdTemp)], ['Hot Water Temp (°C)', safe(f.twrHotTemp)],
         ['Engineer', safe(f.engineer)], ['Witnessed By', safe(f.witnessedBy)],
       ]);
-      y = drawResult('Overall Result', safe(f.twrResult));
-      y = drawNotes('Observations', safe(f.twrObservations));
+      drawResult('Overall Result', safe(f.twrResult));
+      drawNotes('Observations', safe(f.twrObservations));
     } else if (type === 'Plantroom Commissioning Record') {
-      y = drawSection('Plantroom Details', [
+      drawSection('Plantroom Details', [
         ['Plant Room ID', safe(f.plantRoomId)], ['Location', safe(f.plantRoomLocation)],
         ['Lead Engineer', safe(f.plantLeadEngineer)], ['Company', safe(f.plantCompany)],
         ['Commissioning Date', fmtDateShort(safe(f.plantCommissioningDate))],
         ['Witnessed By', safe(f.plantWitnessedBy)],
       ]);
-      y = drawNotes('Systems Commissioned', safe(f.plantSystemsCommissioned));
-      y = drawNotes('Outstanding Items', safe(f.plantOutstandingItems));
-      y = drawNotes('Overall Comments', safe(f.plantOverallComments));
+      drawNotes('Systems Commissioned', safe(f.plantSystemsCommissioned));
+      drawNotes('Outstanding Items', safe(f.plantOutstandingItems));
+      drawNotes('Overall Comments', safe(f.plantOverallComments));
     } else {
-      // Generic fallback — render description + all non-empty extra_data fields
-      if (description) {
-        y = drawNotes('Description', description);
-      }
+      // Generic fallback — render description + non-empty short extra_data fields
+      if (description) drawNotes('Description', description);
       const pairs: [string, string][] = Object.entries(f)
         .filter(([, v]) => v && typeof v === 'string' && (v as string).length < 120)
         .slice(0, 18)
         .map(([k, v]) => [k.replace(/_/g, ' '), String(v)]);
-      if (pairs.length) {
-        y = drawSection('Form Data', pairs);
-      }
+      if (pairs.length) drawSection('Form Data', pairs);
     }
 
-    // Always include general notes/description if present and not already rendered
-    if (notes && !['Pressure Test', 'Flushing Record', 'Valve Checklist', 'AHU Commissioning',
+    // General notes for types that don't have type-specific note rendering
+    const handledTypes = ['Pressure Test', 'Flushing Record', 'Valve Checklist', 'AHU Commissioning',
       'Dead Testing', 'Continuity Test', 'Electrical Commissioning Report', 'Daily Site Report',
       'QA Inspection', 'H&S Inspection', 'Toolbox Talk', 'Temperature Water Readings',
-      'Plantroom Commissioning Record'].includes(type)) {
-      y = drawNotes('Notes', notes);
+      'Plantroom Commissioning Record'];
+    if (notes && !handledTypes.includes(type)) {
+      drawNotes('Notes', notes);
     }
-
-    return y;
   }
+
 
   // ── Exception page ────────────────────────────────────────────────────────────
 
@@ -851,7 +866,7 @@ const WIN_ANSI_REPLACEMENTS: [RegExp, string][] = [
   [/[ÒÓÔÕÖ]/g, 'O'],  [/[òóôõö]/g, 'o'],
   [/[ÙÚÛÜ]/g, 'U'],   [/[ùúûü]/g, 'u'],
   [/[ÝŸ]/g, 'Y'],     [/[ýÿ]/g, 'y'],
-  [/[ÑñNn]/g, 'N'],
+  [/[Ññ]/g, 'N'],
   [/Ç/g, 'C'],        [/ç/g, 'c'],
   [/Æ/g, 'AE'],       [/æ/g, 'ae'],
   [/Œ/g, 'OE'],       [/œ/g, 'oe'],
@@ -877,6 +892,64 @@ function san(text: string): string {
 }
 
 // ─── PDF-lib drawing primitives ───────────────────────────────────────────────
+
+// Pager: mutable cursor that creates new pages when content would overflow.
+interface Pager {
+  page: PDFPage;
+  y: number;
+}
+
+// Ensures pager has at least `need` vertical points remaining.
+// If not, appends a new continuation page and resets y.
+// Returns a (possibly new) page reference — callers must use pager.page after this call.
+function overflow(
+  pager: Pager,
+  ctx: BuildContext,
+  need: number,
+  accentColor: ReturnType<typeof rgb>,
+  continuationTitle: string,
+): void {
+  if (pager.y - need >= M + 30) return;
+  ctx.footer(pager.page);
+  const np = ctx.output.addPage([A4_W, A4_H]);
+  np.drawRectangle({ x: 0, y: A4_H - 3, width: A4_W, height: 3, color: accentColor });
+  dt(np, ctx.regular, san(continuationTitle) + ' — continued', M, A4_H - M - 10, 8, C_MUTED);
+  np.drawLine({ start: { x: M, y: A4_H - M - 18 }, end: { x: A4_W - M, y: A4_H - M - 18 }, thickness: 0.3, color: C_FAINT });
+  ctx.footer(np);
+  pager.page = np;
+  pager.y = A4_H - M - 32;
+}
+
+// Wraps text across pages using a Pager; returns final y.
+function wrapTextPaged(
+  pager: Pager,
+  ctx: BuildContext,
+  text: string,
+  x: number,
+  maxWidth: number,
+  size: number,
+  color: ReturnType<typeof rgb>,
+  lineH: number,
+  accentColor: ReturnType<typeof rgb>,
+  continuationTitle: string,
+): void {
+  if (!text) return;
+  const sanitized = san(text).replace(/[\r\n]+/g, ' ');
+  const words = sanitized.split(' ').filter(Boolean);
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    const test = cur ? `${cur} ${w}` : w;
+    if (ctx.regular.widthOfTextAtSize(test, size) > maxWidth && cur) { lines.push(cur); cur = w; }
+    else cur = test;
+  }
+  if (cur) lines.push(cur);
+  for (const line of lines) {
+    overflow(pager, ctx, lineH + 4, accentColor, continuationTitle);
+    pager.page.drawText(san(line), { x, y: pager.y, size, font: ctx.regular, color });
+    pager.y -= lineH;
+  }
+}
 
 type TextOpts = { ls?: number; align?: 'left' | 'right' | 'center'; maxWidth?: number };
 
@@ -930,40 +1003,6 @@ function wrapText(
     cy -= lineH;
   }
   return cy;
-}
-
-// Draws a data grid — N columns, each cell: label on top, value below
-function dataGrid(
-  p: PDFPage,
-  bold: PDFFont,
-  regular: PDFFont,
-  pairs: [string, string][],
-  x: number,
-  startY: number,
-  totalW: number,
-  cols: number,
-): number {
-  const visible = pairs.filter(([, v]) => v);
-  if (!visible.length) return startY;
-  const colW = totalW / cols;
-  let y = startY;
-  for (let i = 0; i < visible.length; i++) {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    if (col === 0 && row > 0) y -= 32;
-    const cx = x + col * colW;
-    const cy = y;
-    // Cell background (alternating rows)
-    if (row % 2 === 0) {
-      p.drawRectangle({ x: cx, y: cy - 26, width: colW - 4, height: 34, color: C_PANELBG, borderColor: C_FAINT, borderWidth: 0.3 });
-    } else {
-      p.drawRectangle({ x: cx, y: cy - 26, width: colW - 4, height: 34, borderColor: C_FAINT, borderWidth: 0.3 });
-    }
-    dt(p, bold, visible[i][0].toUpperCase(), cx + 6, cy - 4, 6.5, C_MUTED, { ls: 0.6 });
-    dt(p, bold, visible[i][1], cx + 6, cy - 16, 9.5, C_INK);
-  }
-  const rowCount = Math.ceil(visible.length / cols);
-  return y - (rowCount - 1) * 32 - 32;
 }
 
 // ─── Image embedding ──────────────────────────────────────────────────────────
