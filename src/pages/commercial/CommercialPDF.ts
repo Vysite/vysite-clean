@@ -1667,9 +1667,6 @@ html, body {
   border-right: 1px solid #e2e8f0;
 }
 .va-info-col:last-child { border-right: none; }
-.va-info-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
-.va-info-row:last-child { margin-bottom: 0; }
-.va-info-icon { color: #94a3b8; font-size: 11pt; flex-shrink: 0; margin-top: 1px; line-height: 1; }
 .va-info-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #94a3b8; margin-bottom: 2px; }
 .va-info-value { font-size: 9pt; font-weight: 600; color: #0f172a; line-height: 1.3; }
 .va-info-meta-row { margin-bottom: 10px; }
@@ -1704,7 +1701,6 @@ html, body {
   background: #f8fafc; padding: 9px 16px;
   border-bottom: 1px solid #e2e8f0;
 }
-.va-section-icon { color: #ea6c00; font-size: 11pt; font-weight: 900; line-height: 1; }
 .va-section-title { font-size: 8pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #0f172a; }
 .va-section-body { padding: 14px 16px; }
 
@@ -1756,13 +1752,11 @@ html, body {
   border-bottom: 1px solid #e2e8f0;
   font-size: 7pt; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #334155;
 }
-.va-bottom-icon { color: #ea6c00; }
 .va-bottom-body { padding: 10px 12px; }
 
 /* Attachments */
 .att-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 0.5px solid #f1f5f9; }
 .att-item:last-child { border-bottom: none; }
-.att-icon { color: #94a3b8; font-size: 10pt; flex-shrink: 0; margin-top: 1px; }
 .att-name { font-size: 8pt; font-weight: 600; color: #0f172a; word-break: break-all; }
 .att-name a { color: #0f172a; text-decoration: none; }
 .att-meta { font-size: 7pt; color: #94a3b8; margin-top: 2px; }
@@ -1915,12 +1909,9 @@ function vaAttachmentHtml(attachments: DBAttachment[]): string {
     const uploaded = a.created_at ? new Date(a.created_at).toLocaleDateString('en-GB') : '';
     const uploadedBy = (a as any).uploaded_by ? ` by ${esc((a as any).uploaded_by)}` : '';
     const dlLink = a.data_url
-      ? `<a class="att-dl" href="${a.data_url}" download="${esc(a.name)}">&#11015; Download</a>`
+      ? `<a class="att-dl" href="${a.data_url}" download="${esc(a.name)}">Download</a>`
       : '';
-    const isImage = a.type?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(a.name ?? '');
-    const icon = isImage ? '&#128247;' : '&#128196;';
     return `<div class="att-item">
-      <div class="att-icon">${icon}</div>
       <div style="flex:1;min-width:0;">
         <div class="att-name">${esc(a.name)}</div>
         <div class="att-meta">${a.category ? esc(a.category) + ' &middot; ' : ''}${sz}${uploaded ? ' &middot; Uploaded: ' + uploaded + uploadedBy : ''}</div>
@@ -2004,26 +1995,17 @@ function vaInfoBand(item: DBVariationAccountItem, project?: VABuildUpData['proje
   return `<div class="va-info-band">
   <!-- Col 1: project/client/contractor -->
   <div class="va-info-col">
-    <div class="va-info-row">
-      <div class="va-info-icon">&#127968;</div>
-      <div>
-        <div class="va-info-label">Project</div>
-        <div class="va-info-value">${esc(projName)}</div>
-      </div>
+    <div class="va-info-meta-row">
+      <div class="va-info-label">Project</div>
+      <div class="va-info-value">${esc(projName)}</div>
     </div>
-    <div class="va-info-row">
-      <div class="va-info-icon">&#128100;</div>
-      <div>
-        <div class="va-info-label">Client</div>
-        <div class="va-info-value">${esc(client)}</div>
-      </div>
+    <div class="va-info-meta-row">
+      <div class="va-info-label">Client</div>
+      <div class="va-info-value">${esc(client)}</div>
     </div>
-    <div class="va-info-row">
-      <div class="va-info-icon">&#128736;</div>
-      <div>
-        <div class="va-info-label">Project Manager</div>
-        <div class="va-info-value">${esc(manager)}</div>
-      </div>
+    <div class="va-info-meta-row">
+      <div class="va-info-label">Project Manager</div>
+      <div class="va-info-value">${esc(manager)}</div>
     </div>
   </div>
   <!-- Col 2: ref/date/status -->
@@ -2078,7 +2060,6 @@ function vaVariationDetails(item: DBVariationAccountItem): string {
 
   return `<div class="va-section no-break">
   <div class="va-section-head">
-    <div class="va-section-icon">&#9632;</div>
     <div class="va-section-title">Variation Details</div>
   </div>
   <div class="va-section-body">
@@ -2175,7 +2156,6 @@ function vaInternalBody(d: VABuildUpData): string {
 
   const buildUpSection = `<div class="va-section no-break">
   <div class="va-section-head">
-    <div class="va-section-icon">&#9632;</div>
     <div class="va-section-title">VOST Build-Up Summary (Internal)</div>
   </div>
   <div class="va-section-body">
@@ -2185,16 +2165,16 @@ function vaInternalBody(d: VABuildUpData): string {
 
   const attHtml = atts.length
     ? `<div class="va-bottom-box no-break">
-        <div class="va-bottom-head"><span class="va-bottom-icon">&#128206;</span> Attachments (${atts.length})</div>
+        <div class="va-bottom-head">Attachments (${atts.length})</div>
         <div class="va-bottom-body">${vaAttachmentHtml(atts)}</div>
       </div>`
     : `<div class="va-bottom-box">
-        <div class="va-bottom-head"><span class="va-bottom-icon">&#128206;</span> Attachments</div>
+        <div class="va-bottom-head">Attachments</div>
         <div class="va-bottom-body"><p style="font-size:8pt;color:#94a3b8;font-style:italic;">No attachments.</p></div>
       </div>`;
 
   const commHtml = `<div class="va-bottom-box no-break">
-    <div class="va-bottom-head"><span class="va-bottom-icon">&#128172;</span> Comments (${comms.length})</div>
+    <div class="va-bottom-head">Comments (${comms.length})</div>
     <div class="va-bottom-body">
       ${comms.length
         ? comms.map(c => `<div class="comment-item">
@@ -2206,7 +2186,7 @@ function vaInternalBody(d: VABuildUpData): string {
   </div>`;
 
   const approvalHtml = `<div class="va-bottom-box no-break">
-    <div class="va-bottom-head"><span class="va-bottom-icon">&#10003;</span> Approval</div>
+    <div class="va-bottom-head">Approval</div>
     <div class="va-bottom-body">
       <div class="approval-row">
         <div class="approval-label">Raised By</div>
@@ -2247,7 +2227,6 @@ function vaClientBody(d: VABuildUpData): string {
 
   const buildUpSection = `<div class="va-section no-break">
   <div class="va-section-head">
-    <div class="va-section-icon">&#9632;</div>
     <div class="va-section-title">Cost Build-Up</div>
   </div>
   <div class="va-section-body">
@@ -2257,16 +2236,16 @@ function vaClientBody(d: VABuildUpData): string {
 
   const attHtml = atts.length
     ? `<div class="va-bottom-box no-break">
-        <div class="va-bottom-head"><span class="va-bottom-icon">&#128206;</span> Attachments (${atts.length})</div>
+        <div class="va-bottom-head">Attachments (${atts.length})</div>
         <div class="va-bottom-body">${vaAttachmentHtml(atts)}</div>
       </div>`
     : `<div class="va-bottom-box">
-        <div class="va-bottom-head"><span class="va-bottom-icon">&#128206;</span> Attachments</div>
+        <div class="va-bottom-head">Attachments</div>
         <div class="va-bottom-body"><p style="font-size:8pt;color:#94a3b8;font-style:italic;">No attachments.</p></div>
       </div>`;
 
   const approvalHtml = `<div class="va-bottom-box no-break">
-    <div class="va-bottom-head"><span class="va-bottom-icon">&#10003;</span> Approval</div>
+    <div class="va-bottom-head">Approval</div>
     <div class="va-bottom-body">
       <div class="approval-row">
         <div class="approval-label">Raised By</div>
