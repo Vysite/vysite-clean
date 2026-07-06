@@ -820,6 +820,62 @@ class BuildContext {
   }
 }
 
+// ─── WinAnsi sanitizer ────────────────────────────────────────────────────────
+// pdf-lib standard fonts use WinAnsi encoding. Any char outside that set throws.
+// Rules: strip control chars, replace known Unicode symbols, transliterate
+// Latin Extended (≥ U+0100) to ASCII where possible, drop the rest.
+
+const WIN_ANSI_REPLACEMENTS: [RegExp, string][] = [
+  // Greek Omega (resistance symbol) — most critical for electrical docs
+  [/Ω/g, 'Ohm'],
+  [/MΩ/g, 'MOhm'],
+  // Degree + micro are actually in WinAnsi (0xB0, 0xB5) — no replacement needed
+  // Control characters: strip them (tabs/newlines are handled by wrapText)
+  [/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ''],
+  // Newlines and carriage returns: collapse to space in single-line context
+  // (wrapText splits on spaces so pre-normalised input is fine)
+  // C1 range (0x80-0x9F): these are not remapped by pdf-lib's WinAnsiEncoding
+  // Replace with their closest Windows-1252 visual equivalents
+  [/\u0080/g, '€'], // euro sign ← already in WinAnsi via 0x80 in Win-1252, but use literal
+  [/\u0085/g, '...'],
+  [/\u0091/g, "'"], [/\u0092/g, "'"],
+  [/\u0093/g, '"'], [/\u0094/g, '"'],
+  [/\u0095/g, '-'],   // bullet (C1 range)
+  [/\u0096/g, '-'],   // en dash (C1 range)
+  [/\u0097/g, '--'],  // em dash (C1 range)
+  [/\u0099/g, '(TM)'],
+  // Latin Extended-A/B and beyond: transliterate common ones
+  [/[ÀÁÂÃÄÅ]/g, 'A'], [/[àáâãäå]/g, 'a'],
+  [/[ÈÉÊË]/g, 'E'],   [/[èéêë]/g, 'e'],
+  [/[ÌÍÎÏ]/g, 'I'],   [/[ìíîï]/g, 'i'],
+  [/[ÒÓÔÕÖ]/g, 'O'],  [/[òóôõö]/g, 'o'],
+  [/[ÙÚÛÜ]/g, 'U'],   [/[ùúûü]/g, 'u'],
+  [/[ÝŸ]/g, 'Y'],     [/[ýÿ]/g, 'y'],
+  [/[ÑñNn]/g, 'N'],
+  [/Ç/g, 'C'],        [/ç/g, 'c'],
+  [/Æ/g, 'AE'],       [/æ/g, 'ae'],
+  [/Œ/g, 'OE'],       [/œ/g, 'oe'],
+  [/ß/g, 'ss'],
+  [/[ŁłĐđ]/g, '-'],
+  // Greek letters (common in engineering docs)
+  [/α/g, 'alpha'], [/β/g, 'beta'], [/γ/g, 'gamma'], [/δ/g, 'delta'],
+  [/μ/g, 'u'],     [/π/g, 'pi'],   [/σ/g, 'sigma'], [/φ/g, 'phi'],
+  [/Δ/g, 'Delta'], [/Σ/g, 'Sigma'], [/Π/g, 'Pi'],
+  // Any remaining char outside WinAnsi (codepoint ≥ 0x100 after above): drop
+];
+
+function san(text: string): string {
+  if (!text) return '';
+  let out = text;
+  for (const [re, replacement] of WIN_ANSI_REPLACEMENTS) {
+    out = out.replace(re, replacement);
+  }
+  // Final pass: drop any remaining non-WinAnsi character (codepoint > 0xFF)
+  // to prevent unexpected crashes on arbitrary user input
+  // eslint-disable-next-line no-control-regex
+  return out.replace(/[^\x20-\xFF]/g, '');
+}
+
 // ─── PDF-lib drawing primitives ───────────────────────────────────────────────
 
 type TextOpts = { ls?: number; align?: 'left' | 'right' | 'center'; maxWidth?: number };
@@ -834,11 +890,12 @@ function dt(
   color: ReturnType<typeof rgb>,
   opts: TextOpts = {},
 ) {
-  if (!text) return;
+  const s = san(text);
+  if (!s) return;
   let tx = x;
-  if (opts.align === 'right' && opts.maxWidth) tx = x + opts.maxWidth - font.widthOfTextAtSize(text, size);
-  else if (opts.align === 'center' && opts.maxWidth) tx = x + (opts.maxWidth - font.widthOfTextAtSize(text, size)) / 2;
-  p.drawText(text, { x: tx, y, size, font, color, characterSpacing: opts.ls ?? 0 });
+  if (opts.align === 'right' && opts.maxWidth) tx = x + opts.maxWidth - font.widthOfTextAtSize(s, size);
+  else if (opts.align === 'center' && opts.maxWidth) tx = x + (opts.maxWidth - font.widthOfTextAtSize(s, size)) / 2;
+  p.drawText(s, { x: tx, y, size, font, color, characterSpacing: opts.ls ?? 0 });
 }
 
 function wrapText(
@@ -854,7 +911,8 @@ function wrapText(
   align?: 'left' | 'right' | 'center',
 ): number {
   if (!text) return y;
-  const words = text.split(' ');
+  // Normalise newlines to spaces so they wrap instead of crashing
+  const words = san(text).replace(/[\r\n]+/g, ' ').split(' ');
   const lines: string[] = [];
   let cur = '';
   for (const w of words) {
