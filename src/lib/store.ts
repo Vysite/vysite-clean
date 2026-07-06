@@ -1262,6 +1262,8 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     setLoading(true);
     setModulesLoading(true);
 
+    let cancelled = false;
+
     const loadingTimeout = setTimeout(() => {
       if (!cancelled) setLoading(false);
     }, 15000);
