@@ -131,11 +131,12 @@ function GlobalSearch({ onNavigate }: { onNavigate: (page: Page) => void }) {
 
     // Project Documents
     for (const d of store.projectDocuments) {
-      if (match(d.name, d.type, d.project_name, d.category)) {
+      const displayName = (d.doc_title ?? '').trim() || d.name;
+      if (match(displayName, d.name, d.type, d.project_name, d.category)) {
         out.push({
           id: `doc-${d.id}`,
-          label: d.name,
-          sub: `${d.project_name} · ${d.type}`,
+          label: displayName,
+          sub: `${d.project_name} · ${d.category}`,
           badge: 'Document',
           badgeClass: 'bg-slate-700/60 text-slate-300',
           page: 'projects',

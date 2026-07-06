@@ -104,19 +104,37 @@ interface AddDocumentModalProps {
   onSave: (doc: import('../lib/store').DBProjectDocument) => void;
 }
 
+function cleanFileName(raw: string): string {
+  return raw.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ').trim();
+}
+
 function AddDocumentModal({ projectId, projectName, uploadedByDefault, onClose, onSave }: AddDocumentModalProps) {
   const [category, setCategory] = useState<DocCategory>('Drawing');
   const [uploadedBy, setUploadedBy] = useState(uploadedByDefault);
   const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [titles, setTitles] = useState<Record<string, string>>({});
+
+  function handleFilesChange(newFiles: UploadedFile[]) {
+    setFiles(newFiles);
+    setTitles(prev => {
+      const next: Record<string, string> = {};
+      for (const f of newFiles) {
+        next[f.id] = f.id in prev ? prev[f.id] : cleanFileName(f.name);
+      }
+      return next;
+    });
+  }
 
   function handleSave() {
     if (files.length === 0) return;
     files.forEach(f => {
+      const docTitle = (titles[f.id] ?? '').trim();
       onSave({
         id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         project_id: projectId,
         project_name: projectName,
         name: f.name,
+        doc_title: docTitle || cleanFileName(f.name),
         type: f.type,
         size: f.size,
         category,
@@ -153,8 +171,29 @@ function AddDocumentModal({ projectId, projectName, uploadedByDefault, onClose, 
           </div>
           <div>
             <label className={labelCls}>Files</label>
-            <FileUpload files={files} onChange={setFiles} label="Drop drawings, specs, photos or reports here" maxFiles={20} />
+            <FileUpload files={files} onChange={handleFilesChange} label="Drop drawings, specs, photos or reports here" maxFiles={20} />
           </div>
+          {files.length > 0 && (
+            <div className="space-y-2">
+              <label className={labelCls}>Document Title{files.length > 1 ? 's' : ''}</label>
+              <p className="text-xs text-slate-600 -mt-1">
+                Professional name shown throughout VYSITE and in the O&amp;M Manual. Defaults to the filename if left unchanged.
+              </p>
+              {files.map(f => (
+                <div key={f.id} className="flex items-center gap-2">
+                  {files.length > 1 && (
+                    <span className="text-[10px] text-slate-600 truncate max-w-[120px] shrink-0" title={f.name}>{f.name}</span>
+                  )}
+                  <input
+                    value={titles[f.id] ?? ''}
+                    onChange={e => setTitles(prev => ({ ...prev, [f.id]: e.target.value }))}
+                    placeholder={cleanFileName(f.name)}
+                    className={files.length > 1 ? 'flex-1 bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-[#f97316]' : inputCls}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex gap-3 p-5 border-t border-[#1e2d4a]">
           <button onClick={onClose} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors">Cancel</button>
@@ -168,6 +207,10 @@ function AddDocumentModal({ projectId, projectName, uploadedByDefault, onClose, 
 }
 
 // ─── View Document Modal ───────────────────────────────────────────────────────
+
+function docDisplayName(doc: import('../lib/store').DBProjectDocument): string {
+  return (doc.doc_title ?? '').trim() || doc.name;
+}
 
 function ViewDocumentModal({ doc, onClose, onDelete, canDelete }: { doc: import('../lib/store').DBProjectDocument; onClose: () => void; onDelete: () => void; canDelete: boolean }) {
   const isImage = doc.type.startsWith('image/');
@@ -211,7 +254,7 @@ function ViewDocumentModal({ doc, onClose, onDelete, canDelete }: { doc: import(
           <div className="flex items-center gap-3 min-w-0">
             <FileText size={16} className="text-slate-500 shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-200 truncate">{doc.name}</p>
+              <p className="text-sm font-semibold text-slate-200 truncate">{docDisplayName(doc)}</p>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${DOC_CATEGORY_COLORS[doc.category as DocCategory] || 'bg-[#1e2d4a] text-slate-400'}`}>{doc.category}</span>
                 <span className="text-[10px] text-slate-600">{formatBytes(doc.size)}</span>
@@ -246,13 +289,13 @@ function ViewDocumentModal({ doc, onClose, onDelete, canDelete }: { doc: import(
               <p className="text-slate-500 text-sm">Loading document…</p>
             </div>
           ) : isImage && dataUrl ? (
-            <img src={dataUrl} alt={doc.name} className="max-h-[70vh] w-auto mx-auto object-contain p-3" />
+            <img src={dataUrl} alt={docDisplayName(doc)} className="max-h-[70vh] w-auto mx-auto object-contain p-3" />
           ) : isPDF && dataUrl ? (
-            <iframe src={dataUrl} className="w-full h-[65vh]" title={doc.name} />
+            <iframe src={dataUrl} className="w-full h-[65vh]" title={docDisplayName(doc)} />
           ) : dataUrl ? (
             <div className="p-8 text-center">
               <File size={48} className="text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-500 text-sm mb-4">{doc.name}</p>
+              <p className="text-slate-500 text-sm mb-4">{docDisplayName(doc)}</p>
               <button onClick={openDoc} className="px-4 py-2 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors flex items-center gap-2 mx-auto">
                 <Download size={14} />Open / Download
               </button>
@@ -1114,7 +1157,7 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
       id: `doc-${d.id}`,
       icon: Upload,
       iconColor: 'text-orange-400',
-      text: `Document uploaded: ${d.name}`,
+      text: `Document uploaded: ${docDisplayName(d)}`,
       sub: `${d.uploaded_by || 'Unknown'} · ${d.category}`,
       ts: d.created_at || '',
     }));
@@ -1950,7 +1993,7 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-300 line-clamp-1">{doc.name}</p>
+                        <p className="text-sm font-medium text-slate-300 line-clamp-1">{docDisplayName(doc)}</p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${DOC_CATEGORY_COLORS[doc.category as DocCategory] || 'bg-[#1e2d4a] text-slate-400'}`}>{doc.category}</span>
                           <span className="text-[11px] text-slate-600">{formatBytes(doc.size)}</span>

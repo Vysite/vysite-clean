@@ -412,6 +412,7 @@ export interface DBProjectDocument {
   project_id: string;
   project_name: string;
   name: string;
+  doc_title?: string;
   type: string;
   size: number;
   category: string;
@@ -1339,7 +1340,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       console.log('[VYSITE] store.load() started, orgId:', orgId);
       const ATT_COLS = 'id,linked_type,linked_id,project_id,project_name,name,type,size,category,uploaded_by,created_at';
       // data_url excluded — fetched on-demand when a document is opened
-      const DOC_COLS = 'id,project_id,project_name,name,type,size,category,uploaded_by,created_at,org_id';
+      const DOC_COLS = 'id,project_id,project_name,name,doc_title,type,size,category,uploaded_by,created_at,org_id';
 
       // ── Phase 1: essential shell data — blocks the loading spinner ──────────
       // Keep this list short: only data needed to render the first visible screen

@@ -38,7 +38,7 @@ export default function OAndMSourcePicker({ section, projectId, existingSourceId
       .filter(d => d.project_id === proj)
       .map<SourceRecord>(d => ({
         id: d.id,
-        title: d.name,
+        title: (d.doc_title ?? '').trim() || d.name,
         subtitle: d.category || d.type || '',
         module: 'project_document',
       }));
