@@ -382,7 +382,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     const visibleProjects = store.visibleProjectIds === null
       ? store.projects
       : store.projects.filter(p => store.visibleProjectIds!.includes(p.id));
-    return visibleProjects.map(p => p.name).sort();
+    return visibleProjects.map(p => ({ id: p.id, name: p.name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [store.projects, store.visibleProjectIds]);
   const typeOptions    = useMemo(() => Array.from(new Set(forms.map(f => f.type ?? '').filter(Boolean))).sort(), [forms]);
   const statusOptions  = useMemo(() => Array.from(new Set(forms.map(f => f.status ?? '').filter(Boolean))).sort(), [forms]);
@@ -399,7 +399,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   // ── Filtered records ──
   const filtered = useMemo(() => forms.filter(f => {
     if (search && !f.title?.toLowerCase().includes(search.toLowerCase()) && !f.projectName?.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterProject !== 'All' && f.projectName !== filterProject) return false;
+    if (filterProject !== 'All' && (f.projectId ?? f.project_id) !== filterProject) return false;
     if (filterCategory !== 'All' && typeToCatId[f.type] !== filterCategory) return false;
     if (filterType !== 'All' && f.type !== filterType) return false;
     if (filterStatus !== 'All' && f.status !== filterStatus) return false;
@@ -767,7 +767,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
               className="bg-[#1a2236] border border-[#1e2d4a] rounded-lg px-3 py-2 text-xs text-slate-300 outline-none focus:border-slate-500 cursor-pointer"
             >
               <option value="All">All Projects</option>
-              {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
+              {projectOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           <select
             value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
