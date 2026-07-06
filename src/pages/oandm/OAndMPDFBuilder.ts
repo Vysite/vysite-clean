@@ -344,7 +344,7 @@ class BuildContext {
 
       // Copy ALL pages — preserves original size, orientation, vector quality
       const indices = Array.from({ length: pageCount }, (_, i) => i);
-      const copiedPages = await this.output.copyPagesFrom(source, indices);
+      const copiedPages = await this.output.copyPages(source, indices);
       copiedPages.forEach(p => this.output.addPage(p));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
