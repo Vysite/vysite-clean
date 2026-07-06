@@ -992,6 +992,51 @@ export interface DBCommercialRecordComment {
   created_at?: string;
 }
 
+// ─── O&M Manual ───────────────────────────────────────────────────────────────
+
+export type OAndMManualStatus = 'draft' | 'in_progress' | 'finalised';
+export type OAndMSourceModule = 'tc_record' | 'site_form' | 'project_document';
+
+export interface DBOAndMManual {
+  id: string;
+  org_id?: string;
+  project_id: string;
+  title: string;
+  status: OAndMManualStatus;
+  version: string;
+  notes: string;
+  created_by: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DBOAndMSection {
+  id: string;
+  org_id?: string;
+  manual_id: string;
+  project_id: string;
+  title: string;
+  description: string;
+  sort_order: number;
+  created_at?: string;
+}
+
+export interface DBOAndMItem {
+  id: string;
+  org_id?: string;
+  section_id: string;
+  manual_id: string;
+  project_id: string;
+  source_module: OAndMSourceModule;
+  source_record_id: string;
+  title: string;
+  subtitle: string;
+  notes: string;
+  sort_order: number;
+  created_by: string;
+  created_at?: string;
+}
+
 export interface DBCommercialApplication {
   id: string;
   org_id?: string;
@@ -1162,6 +1207,22 @@ export interface AppStore {
   addCommercialApplication: (a: DBCommercialApplication) => Promise<void>;
   updateCommercialApplication: (a: DBCommercialApplication) => Promise<void>;
   removeCommercialApplication: (id: string) => Promise<void>;
+
+  // O&M Manual
+  oAndMManuals: DBOAndMManual[];
+  oAndMSections: DBOAndMSection[];
+  oAndMItems: DBOAndMItem[];
+  addOAndMManual: (m: DBOAndMManual) => Promise<void>;
+  updateOAndMManual: (m: DBOAndMManual) => Promise<void>;
+  removeOAndMManual: (id: string) => Promise<void>;
+  addOAndMSection: (s: DBOAndMSection) => Promise<void>;
+  updateOAndMSection: (s: DBOAndMSection) => Promise<void>;
+  removeOAndMSection: (id: string) => Promise<void>;
+  reorderOAndMSections: (sections: DBOAndMSection[]) => Promise<void>;
+  addOAndMItem: (item: DBOAndMItem) => Promise<void>;
+  updateOAndMItem: (item: DBOAndMItem) => Promise<void>;
+  removeOAndMItem: (id: string) => Promise<void>;
+  reorderOAndMItems: (items: DBOAndMItem[]) => Promise<void>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1218,6 +1279,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [vaComments, setVAComments] = useState<DBVAComment[]>([]);
   const [commercialRecordComments, setCommercialRecordComments] = useState<DBCommercialRecordComment[]>([]);
   const [commercialApplications, setCommercialApplications] = useState<DBCommercialApplication[]>([]);
+  const [oAndMManuals, setOAndMManuals] = useState<DBOAndMManual[]>([]);
+  const [oAndMSections, setOAndMSections] = useState<DBOAndMSection[]>([]);
+  const [oAndMItems, setOAndMItems] = useState<DBOAndMItem[]>([]);
   const [settings, setSettings] = useState<DBSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   // True while Phase 2 background queries are in flight.
@@ -1253,6 +1317,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setVAComments([]);
       setCommercialRecordComments([]);
       setCommercialApplications([]);
+      setOAndMManuals([]);
+      setOAndMSections([]);
+      setOAndMItems([]);
       // Keep platformUsers/settings as-is — they load below with org filter
       setLoading(false);
       setModulesLoading(false);
@@ -1313,7 +1380,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       // These tables are only needed when the user navigates to specific modules.
       // Loading them here (rather than on-demand) keeps state management simple
       // while still avoiding blocking the initial render.
-      const [docRes, attRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes] = await Promise.all([
+      const [docRes, attRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes] = await Promise.all([
         supabase.from('vy_project_documents').select(DOC_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_snagging_reports').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
@@ -1325,6 +1392,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
         supabase.from('vy_programme_tasks').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
         supabase.from('vy_variation_account').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_commercial_applications').select('*').eq('org_id', orgId).order('app_number', { ascending: true }),
+        supabase.from('vy_o_and_m_manuals').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_o_and_m_sections').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
+        supabase.from('vy_o_and_m_items').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
       ]);
 
       if (cancelled) return;
@@ -1348,6 +1418,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setProgrammeTasks((ptaskRes.data ?? []) as DBProgrammeTask[]);
       setVariationAccountItems((vaRes.data ?? []) as DBVariationAccountItem[]);
       setCommercialApplications((appRes.data ?? []) as DBCommercialApplication[]);
+      setOAndMManuals((oomRes.data ?? []) as DBOAndMManual[]);
+      setOAndMSections((ooSRes.data ?? []) as DBOAndMSection[]);
+      setOAndMItems((ooIRes.data ?? []) as DBOAndMItem[]);
       // Phase 2 complete — module pages can now render their full data.
       setModulesLoading(false);
 
@@ -1879,6 +1952,103 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('removeCommercialApplication', 'vy_commercial_applications', error);
   }, []);
 
+  // ── O&M Manual ────────────────────────────────────────────────────────────────
+
+  const addOAndMManual = useCallback(async (m: DBOAndMManual) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setOAndMManuals(prev => [m, ...prev]);
+    const { error } = await supabase.from('vy_o_and_m_manuals').upsert({ ...m, org_id: oid }, { onConflict: 'id' });
+    logWrite('addOAndMManual', 'vy_o_and_m_manuals', error);
+  }, []);
+
+  const updateOAndMManual = useCallback(async (m: DBOAndMManual) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setOAndMManuals(prev => prev.map(x => x.id === m.id ? m : x));
+    const { error } = await supabase.from('vy_o_and_m_manuals').upsert({ ...m, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateOAndMManual', 'vy_o_and_m_manuals', error);
+  }, []);
+
+  const removeOAndMManual = useCallback(async (id: string) => {
+    setOAndMManuals(prev => prev.filter(m => m.id !== id));
+    setOAndMSections(prev => prev.filter(s => s.manual_id !== id));
+    setOAndMItems(prev => prev.filter(i => i.manual_id !== id));
+    const { error } = await supabase.from('vy_o_and_m_manuals').delete().eq('id', id);
+    logWrite('removeOAndMManual', 'vy_o_and_m_manuals', error);
+  }, []);
+
+  const addOAndMSection = useCallback(async (s: DBOAndMSection) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setOAndMSections(prev => [...prev, s].sort((a, b) => a.sort_order - b.sort_order));
+    const { error } = await supabase.from('vy_o_and_m_sections').upsert({ ...s, org_id: oid }, { onConflict: 'id' });
+    logWrite('addOAndMSection', 'vy_o_and_m_sections', error);
+  }, []);
+
+  const updateOAndMSection = useCallback(async (s: DBOAndMSection) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setOAndMSections(prev => prev.map(x => x.id === s.id ? s : x));
+    const { error } = await supabase.from('vy_o_and_m_sections').upsert({ ...s, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateOAndMSection', 'vy_o_and_m_sections', error);
+  }, []);
+
+  const removeOAndMSection = useCallback(async (id: string) => {
+    setOAndMSections(prev => prev.filter(s => s.id !== id));
+    setOAndMItems(prev => prev.filter(i => i.section_id !== id));
+    const { error } = await supabase.from('vy_o_and_m_sections').delete().eq('id', id);
+    logWrite('removeOAndMSection', 'vy_o_and_m_sections', error);
+  }, []);
+
+  const reorderOAndMSections = useCallback(async (sections: DBOAndMSection[]) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setOAndMSections(prev => {
+      const updated = sections.map((s, i) => ({ ...s, sort_order: i }));
+      const ids = new Set(updated.map(s => s.id));
+      return [...prev.filter(s => !ids.has(s.id)), ...updated].sort((a, b) => a.sort_order - b.sort_order);
+    });
+    const rows = sections.map((s, i) => ({ ...s, sort_order: i, org_id: oid }));
+    const { error } = await supabase.from('vy_o_and_m_sections').upsert(rows, { onConflict: 'id' });
+    logWrite('reorderOAndMSections', 'vy_o_and_m_sections', error);
+  }, []);
+
+  const addOAndMItem = useCallback(async (item: DBOAndMItem) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setOAndMItems(prev => [...prev, item].sort((a, b) => a.sort_order - b.sort_order));
+    const { error } = await supabase.from('vy_o_and_m_items').upsert({ ...item, org_id: oid }, { onConflict: 'id' });
+    logWrite('addOAndMItem', 'vy_o_and_m_items', error);
+  }, []);
+
+  const updateOAndMItem = useCallback(async (item: DBOAndMItem) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setOAndMItems(prev => prev.map(x => x.id === item.id ? item : x));
+    const { error } = await supabase.from('vy_o_and_m_items').upsert({ ...item, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateOAndMItem', 'vy_o_and_m_items', error);
+  }, []);
+
+  const removeOAndMItem = useCallback(async (id: string) => {
+    setOAndMItems(prev => prev.filter(i => i.id !== id));
+    const { error } = await supabase.from('vy_o_and_m_items').delete().eq('id', id);
+    logWrite('removeOAndMItem', 'vy_o_and_m_items', error);
+  }, []);
+
+  const reorderOAndMItems = useCallback(async (items: DBOAndMItem[]) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setOAndMItems(prev => {
+      const updated = items.map((it, i) => ({ ...it, sort_order: i }));
+      const ids = new Set(updated.map(it => it.id));
+      return [...prev.filter(it => !ids.has(it.id)), ...updated].sort((a, b) => a.sort_order - b.sort_order);
+    });
+    const rows = items.map((it, i) => ({ ...it, sort_order: i, org_id: oid }));
+    const { error } = await supabase.from('vy_o_and_m_items').upsert(rows, { onConflict: 'id' });
+    logWrite('reorderOAndMItems', 'vy_o_and_m_items', error);
+  }, []);
+
   // ── Settings ──────────────────────────────────────────────────────────────────
 
   const updateSettings = useCallback(async (s: DBSettings) => {
@@ -1943,5 +2113,11 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     loadVADetailData, loadCommercialRecordComments,
     commercialApplications,
     addCommercialApplication, updateCommercialApplication, removeCommercialApplication,
+    oAndMManuals,
+    oAndMSections,
+    oAndMItems,
+    addOAndMManual, updateOAndMManual, removeOAndMManual,
+    addOAndMSection, updateOAndMSection, removeOAndMSection, reorderOAndMSections,
+    addOAndMItem, updateOAndMItem, removeOAndMItem, reorderOAndMItems,
   };
 }
