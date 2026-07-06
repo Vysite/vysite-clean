@@ -1883,3 +1883,21 @@ ${fullBody}
   openPrintTab(html);
 }
 
+// ─── Reusable HTML export for O&M assembler ───────────────────────────────────
+// Returns a complete, self-contained HTML document (no print script, no tab).
+// The O&M builder passes this to html2canvas to capture the form as PDF pages.
+
+export const FORM_RENDERER_CSS: string = CSS;
+
+export function buildStandaloneFormHtml(
+  form: ExtendedSiteForm,
+  orgSettings?: OrgSettings | null,
+): string {
+  if (form.type === 'Practical Completion Certificate') {
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>${CSS}</style></head><body>${buildPCCPageHTML(form, orgSettings)}</body></html>`;
+  }
+  const body = buildFormPageHTML(form, orgSettings);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>${CSS}</style></head><body>${body}</body></html>`;
+}
+
+

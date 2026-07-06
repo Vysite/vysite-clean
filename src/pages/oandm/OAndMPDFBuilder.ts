@@ -16,6 +16,7 @@ import type {
   DBSiteForm,
 } from '../../lib/store';
 import type { Project } from '../../data/types';
+import { formToPdfBytes } from './FormHtmlRenderer';
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -274,15 +275,44 @@ class BuildContext {
       let ly = listY - 12;
       sectionItems.slice(0, 20).forEach((item, i) => {
         if (ly < M + 60) return;
-        dt(p, this.bold, String(i + 1).padStart(2, '0'), M, ly, 8, C_FAINT);
-        dt(p, this.bold, item.title, M + 26, ly, 10, C_BODY);
-        if (item.subtitle) dt(p, this.regular, item.subtitle, M + 26, ly - 12, 8, C_MUTED);
+
         const badge = item.source_module === 'tc_record' ? 'T&C'
           : item.source_module === 'site_form' ? 'FORM' : 'DOC';
         const bw = this.bold.widthOfTextAtSize(badge, 7) + 12;
+        // Title area must leave room for the badge on the right
+        const titleMaxW = A4_W - M - (M + 26) - bw - 10;
+
+        // Measure how many lines the title wraps to
+        const titleWords = san(item.title ?? '').replace(/[\r\n]+/g, ' ').split(' ').filter(Boolean);
+        const titleLines: string[] = [];
+        let cur = '';
+        for (const w of titleWords) {
+          const test = cur ? `${cur} ${w}` : w;
+          if (this.bold.widthOfTextAtSize(test, 10) > titleMaxW && cur) { titleLines.push(cur); cur = w; }
+          else cur = test;
+        }
+        if (cur) titleLines.push(cur);
+        const titleLineH = 13;
+        const titleBlockH = titleLines.length * titleLineH;
+
+        dt(p, this.bold, String(i + 1).padStart(2, '0'), M, ly, 8, C_FAINT);
+
+        // Draw each title line
+        titleLines.forEach((line, li) => {
+          p.drawText(line, { x: M + 26, y: ly - li * titleLineH, size: 10, font: this.bold, color: C_BODY });
+        });
+
+        // Badge aligned to first title line
         p.drawRectangle({ x: A4_W - M - bw, y: ly - 10, width: bw, height: 14, color: C_PANELBG, borderColor: C_FAINT, borderWidth: 0.5 });
         dt(p, this.bold, badge, A4_W - M - bw + 6, ly, 7, C_MUTED);
-        ly -= item.subtitle ? 30 : 20;
+
+        const subtitleOffset = titleBlockH;
+        if (item.subtitle) {
+          dt(p, this.regular, item.subtitle, M + 26, ly - subtitleOffset, 8, C_MUTED);
+        }
+
+        const rowH = titleBlockH + (item.subtitle ? 14 : 0) + 8;
+        ly -= rowH;
         p.drawLine({ start: { x: M + 26, y: ly + 2 }, end: { x: A4_W - M, y: ly + 2 }, thickness: 0.3, color: C_FAINT });
         ly -= 4;
       });
@@ -519,291 +549,23 @@ class BuildContext {
     this.footer(pager.page);
   }
 
-  // ── Site Form — full pdf-lib render ──────────────────────────────────────────
+  // ── Site Form — html2canvas render (identical to standalone export) ──────────
 
   async addSiteForm(item: DBOAndMItem, form: DBSiteForm | undefined) {
     if (!form) { await this.addExceptionPage(item.title, 'Site Form record not found.'); return; }
 
-    const p = this.output.addPage([A4_W, A4_H]);
-    const f = form.extra_data as Record<string, unknown>;
-
-    // Top colour bar — orange for site forms
-    p.drawRectangle({ x: 0, y: A4_H - 5, width: A4_W, height: 5, color: C_ORANGE });
-
-    // Header: logo left, form title right
-    const headerY = A4_H - M;
-    if (this.logoImg) {
-      const scale = Math.min(130 / this.logoImg.width, 34 / this.logoImg.height);
-      p.drawImage(this.logoImg, { x: M, y: headerY - 34, width: this.logoImg.width * scale, height: this.logoImg.height * scale });
-    } else {
-      dt(p, this.bold, this.orgInfo.companyName, M, headerY - 14, 14, C_INK);
-    }
-
-    const typeTag = form.type.toUpperCase();
-    dt(p, this.regular, typeTag, M, headerY - 44, 7.5, C_MUTED, { ls: 2 });
-
-    const titleRX = A4_W / 2 + 10;
-    const titleW = A4_W - M - titleRX;
-    wrapText(p, this.bold, item.title || form.type, titleRX, headerY - 14, titleW, 14, C_INK, 18, 'right');
-    const refLine = [form.project_name, fmtDateShort(form.date), form.completed_by].filter(Boolean).join('  ·  ');
-    dt(p, this.regular, refLine, titleRX, headerY - 36, 9, C_MUTED, { align: 'right', maxWidth: titleW });
-
-    // Divider
-    p.drawLine({ start: { x: M, y: A4_H - M - 54 }, end: { x: A4_W - M, y: A4_H - M - 54 }, thickness: 2, color: C_ORANGE });
-
-    // Top meta strip
-    const metaTop = A4_H - M - 66;
-    const stripH = 40;
-    p.drawRectangle({ x: M, y: metaTop - stripH, width: A4_W - M * 2, height: stripH, color: C_PANELBG, borderColor: C_FAINT, borderWidth: 0.5 });
-    const stripFields: [string, string][] = [
-      ['Project', form.project_name || this.project.name],
-      ['Date', fmtDateShort(form.date)],
-      ['Completed By', form.completed_by || '—'],
-      ['Status', form.status || '—'],
-    ];
-    const sColW = (A4_W - M * 2) / stripFields.length;
-    stripFields.forEach(([label, val], i) => {
-      const sx = M + 10 + i * sColW;
-      const sy = metaTop - 14;
-      dt(p, this.bold, label.toUpperCase(), sx, sy, 6.5, C_MUTED, { ls: 0.7 });
-      dt(p, this.bold, val, sx, sy - 12, 9.5, C_INK);
-    });
-
-    // Form body — delegate to per-type paged renderer
-    const pager: Pager = { page: p, y: metaTop - stripH - 18 };
-    this.renderFormBodyPaged(pager, form.type, f, form.description, form.notes);
-
-    this.footer(pager.page);
-  }
-
-  // Form body router — renders the right fields for each form type, across pages as needed
-  private renderFormBodyPaged(
-    pager: Pager,
-    type: string,
-    f: Record<string, unknown>,
-    description: string,
-    notes: string,
-  ): void {
-    const safe = (v: unknown) => v ? String(v) : '';
-    const title = type;
-
-    // Section heading + data grid
-    const drawSection = (label: string, fields: [string, string][]): void => {
-      const visible = fields.filter(([, v]) => v);
-      if (!visible.length) return;
-      // Need at least heading + one row
-      overflow(pager, this, 60, C_ORANGE, title);
-      dt(pager.page, this.bold, label.toUpperCase(), M, pager.y, 7, C_MUTED, { ls: 1.2 });
-      pager.page.drawLine({ start: { x: M, y: pager.y - 8 }, end: { x: A4_W - M, y: pager.y - 8 }, thickness: 0.5, color: C_FAINT });
-      pager.y -= 18;
-      // Draw grid rows, checking for page break between rows
-      const cols = 3;
-      const colW = (A4_W - M * 2) / cols;
-      const rowCount = Math.ceil(visible.length / cols);
-      for (let row = 0; row < rowCount; row++) {
-        overflow(pager, this, 38, C_ORANGE, title);
-        for (let col = 0; col < cols; col++) {
-          const idx = row * cols + col;
-          if (idx >= visible.length) break;
-          const cx = M + col * colW;
-          const bg = row % 2 === 0 ? C_PANELBG : rgb(1, 1, 1);
-          pager.page.drawRectangle({ x: cx, y: pager.y - 26, width: colW - 4, height: 34, color: bg, borderColor: C_FAINT, borderWidth: 0.3 });
-          dt(pager.page, this.bold, visible[idx][0].toUpperCase(), cx + 6, pager.y - 4, 6.5, C_MUTED, { ls: 0.6 });
-          dt(pager.page, this.bold, visible[idx][1], cx + 6, pager.y - 16, 9.5, C_INK);
-        }
-        pager.y -= 32;
+    try {
+      const pdfBytes = await formToPdfBytes(form, this.orgInfo);
+      const src = await PDFDocument.load(pdfBytes);
+      const count = src.getPageCount();
+      if (count > 0) {
+        const indices = Array.from({ length: count }, (_, i) => i);
+        const copied = await this.output.copyPages(src, indices);
+        copied.forEach(pg => this.output.addPage(pg));
       }
-      pager.y -= 12;
-    };
-
-    // Notes / text block
-    const drawNotes = (label: string, value: string | undefined): void => {
-      if (!value) return;
-      overflow(pager, this, 48, C_ORANGE, title);
-      dt(pager.page, this.bold, label.toUpperCase(), M, pager.y, 7, C_MUTED, { ls: 1.2 });
-      pager.page.drawLine({ start: { x: M, y: pager.y - 8 }, end: { x: A4_W - M, y: pager.y - 8 }, thickness: 0.5, color: C_FAINT });
-      pager.y -= 20;
-      wrapTextPaged(pager, this, value, M + 4, A4_W - M * 2 - 8, 10, C_BODY, 14, C_ORANGE, title);
-      pager.y -= 12;
-    };
-
-    // Pass/fail result block
-    const drawResult = (label: string, value: string | undefined): void => {
-      if (!value) return;
-      overflow(pager, this, 56, C_ORANGE, title);
-      const isPass = /pass/i.test(value);
-      const isFail = /fail/i.test(value);
-      const bg = isPass ? rgb(0.941, 0.996, 0.957) : isFail ? rgb(0.996, 0.949, 0.949) : rgb(1, 0.988, 0.922);
-      const border = isPass ? C_GREEN : isFail ? C_RED : C_AMBER;
-      const textC = isPass ? C_GREEN : isFail ? C_RED : C_AMBER;
-      pager.page.drawRectangle({ x: M, y: pager.y - 30, width: A4_W - M * 2, height: 44, color: bg, borderColor: border, borderWidth: 1.5 });
-      dt(pager.page, this.bold, label.toUpperCase(), M + 12, pager.y - 8, 8, C_MUTED, { ls: 0.8 });
-      const vw = this.bold.widthOfTextAtSize(san(value.toUpperCase()), 14);
-      dt(pager.page, this.bold, value.toUpperCase(), A4_W - M - vw - 12, pager.y - 16, 14, textC);
-      pager.y -= 52;
-    };
-
-    // ── Per-type bodies ───────────────────────────────────────────────────────────
-
-    if (type === 'Pressure Test') {
-      drawSection('Pressure Test Details', [
-        ['Plot / Area', safe(f.plotArea)], ['System / Service', safe(f.systemService)],
-        ['Test Medium', safe(f.testMedium)], ['Test Pressure', f.testPressure ? `${safe(f.testPressure)} ${safe(f.testPressureUnit)}` : ''],
-        ['Start Time', safe(f.startTime)], ['End Time', safe(f.endTime)],
-        ['Duration', safe(f.durationOnTest)], ['Engineer', safe(f.engineer)],
-        ['Company', safe(f.company)], ['Witnessed By', safe(f.witnessedBy)],
-      ]);
-      drawResult('Pressure Test Result', safe(f.testResult));
-      drawNotes('Pipework Description', safe(f.pipeworkDescription));
-      drawNotes('Observations', safe(f.observations));
-    } else if (type === 'Flushing Record') {
-      drawSection('Flushing Details', [
-        ['Plot / Area', safe(f.plotArea)], ['System / Service', safe(f.systemService)],
-        ['Flush Medium', safe(f.flushMedium)], ['Temperature', safe(f.flushTemperature)],
-        ['Duration', safe(f.flushDuration)], ['Turbidity (NTU)', safe(f.turbidity)],
-        ['Chlorine Residual', safe(f.chlorineResidual)],
-        ['Engineer', safe(f.engineer)], ['Witnessed By', safe(f.flushWitnessedBy)],
-      ]);
-      drawResult('Flush Result', safe(f.flushResult));
-      drawNotes('Observations', safe(f.observations));
-    } else if (type === 'Valve Checklist') {
-      drawSection('Valve Details', [
-        ['Plot / Area', safe(f.plotArea)], ['Valve Tag', safe(f.valveTag)],
-        ['Type', safe(f.valveType)], ['Size', safe(f.valveSize)],
-        ['Location', safe(f.valveLocation)], ['Engineer', safe(f.engineer)],
-        ['Witnessed By', safe(f.witnessedBy)],
-      ]);
-      drawSection('Inspection Results', [
-        ['Operation Check', safe(f.operationCheck)], ['Seat Leakage', safe(f.seatLeakageCheck)],
-        ['Gland Leakage', safe(f.glandLeakageCheck)], ['Position Indicator', safe(f.positionIndicator)],
-        ['Actuator Check', safe(f.actuatorCheck)], ['Overall Condition', safe(f.overallCondition)],
-      ]);
-      drawNotes('Observations', safe(f.observations));
-    } else if (type === 'AHU Commissioning') {
-      drawSection('AHU Details', [
-        ['AHU Tag', safe(f.ahuTag)], ['Location', safe(f.ahuLocation)],
-        ['Supply Airflow', safe(f.supplyAirflow)], ['Return Airflow', safe(f.returnAirflow)],
-        ['Supply Fan Amps', safe(f.supplyFanAmps)], ['Return Fan Amps', safe(f.returnFanAmps)],
-        ['Filter Condition', safe(f.filterCondition)], ['Dampers Operation', safe(f.dampersOperation)],
-        ['Coil Condition', safe(f.coilCondition)], ['Setpoint Temp', safe(f.setpointTemp)],
-        ['Measured Temp', safe(f.measuredTemp)],
-      ]);
-      drawResult('AHU Commissioning Result', safe(f.ahuResult));
-      drawNotes('Observations', safe(f.observations));
-    } else if (type === 'Dead Testing') {
-      drawSection('Dead Test Details', [
-        ['Circuit Ref', safe(f.circuitRef)], ['Plot / Area', safe(f.plotArea)],
-        ['Test Instrument', safe(f.testInstrument)], ['Engineer', safe(f.engineer)],
-        ['Witnessed By', safe(f.deadTestWitness)],
-      ]);
-      drawSection('Test Measurements', [
-        ['L1 Insulation Resistance (MOhm)', safe(f.insulationPhaseL1)],
-        ['L2 Insulation Resistance (MOhm)', safe(f.insulationPhaseL2)],
-        ['L3 Insulation Resistance (MOhm)', safe(f.insulationPhaseL3)],
-        ['Neutral Insulation Resistance (MOhm)', safe(f.insulationNeutral)],
-        ['Continuity Ring (Ohm)', safe(f.continuityRing)],
-        ['Earth Fault Loop (Ohm)', safe(f.earthFault)],
-        ['Polarity', safe(f.polarity)],
-      ]);
-      drawResult('Dead Test Result', safe(f.deadTestResult));
-      drawNotes('Observations', safe(f.observations));
-    } else if (type === 'Continuity Test') {
-      drawSection('Continuity Test Details', [
-        ['Conductor Ref', safe(f.conductorRef)], ['Circuit Ref', safe(f.circuitRef)],
-        ['Conductor Type', safe(f.conductorType)], ['Length (m)', safe(f.conductorLength)],
-        ['Test Instrument', safe(f.testInstrument)], ['Engineer', safe(f.engineer)],
-        ['Witnessed By', safe(f.continuityWitness)],
-      ]);
-      drawSection('Resistance Measurements', [
-        ['Measured Resistance (Ohm)', safe(f.measuredResistance)],
-        ['Calculated Resistance (Ohm)', safe(f.calculatedResistance)],
-        ['Deviation (%)', safe(f.deviationPercent)],
-      ]);
-      drawResult('Continuity Test Result', safe(f.continuityResult));
-    } else if (type === 'Electrical Commissioning Report') {
-      drawSection('Commissioning Report Details', [
-        ['Shift', safe(f.ecrShift)], ['Lead Engineer', safe(f.ecrLeadEngineer)],
-        ['Company', safe(f.ecrCompany)], ['System Being Commissioned', safe(f.ecrSystemBeingCommissioned)],
-        ['Overall Status', safe(f.ecrOverallStatus)], ['Site Area', safe(f.ecrSiteArea)],
-        ['% Progress', safe(f.ecrPercentProgress)],
-      ]);
-      drawNotes('Areas Completed', safe(f.ecrAreasCompleted));
-      drawNotes('Areas In Progress', safe(f.ecrAreasInProgress));
-      drawNotes('Actual Works Completed', safe(f.ecrActualWorks));
-      drawNotes('Key Blockers', safe(f.ecrKeyBlockers));
-      drawNotes('Overall Comments', safe(f.ecrOverallComments));
-    } else if (type === 'Daily Site Report') {
-      drawSection('Site Report Details', [
-        ['Site Manager', safe(f.dsrSiteManager)], ['Weather', safe(f.dsrWeather)],
-        ['Temperature', safe(f.dsrTemperature)], ['Site Conditions', safe(f.dsrSiteConditions)],
-        ['Operatives on Site', safe(f.dsrOperativesOnSite)],
-        ['Start Time', safe(f.dsrStartTime)], ['Finish Time', safe(f.dsrFinishTime)],
-        ['Total Hours', safe(f.dsrTotalHours)],
-      ]);
-      drawNotes('Works Completed', safe(f.dsrWorksCompleted));
-      drawNotes('Issues Encountered', safe(f.dsrIssuesEncountered));
-      drawNotes('Overall Comments', safe(f.dsrOverallComments));
-    } else if (type === 'QA Inspection') {
-      drawSection('Inspection Details', [
-        ['Inspector', safe(f.qaInspector)], ['Contractor', safe(f.qaContractor)],
-        ['Area Inspected', safe(f.qaAreaInspected)], ['System / Service', safe(f.qaSystemService)],
-        ['Drawing Ref', safe(f.qaDrawingRef)], ['Witnessed By', safe(f.qaWitnessedBy)],
-      ]);
-      drawResult('Inspection Result', safe(f.qaResult));
-      drawNotes('Observations', safe(f.qaObservations));
-      drawNotes('Actions Required', safe(f.qaActionsRequired));
-    } else if (type === 'H&S Inspection') {
-      drawSection('Inspection Details', [
-        ['Inspector', safe(f.hsInspector)], ['Contractor', safe(f.hsContractor)],
-        ['Area Inspected', safe(f.hsAreaInspected)],
-      ]);
-      drawNotes('Observations', safe(f.hsObservations));
-      drawNotes('Actions Required', safe(f.hsActionsRequired));
-    } else if (type === 'Toolbox Talk') {
-      drawSection('Toolbox Talk Details', [
-        ['Topic', safe(f.tbtTopic)], ['Duration', safe(f.tbtDuration)],
-        ['Location', safe(f.tbtLocation)], ['Presented By', safe(f.tbtPresentedBy)],
-        ['Company', safe(f.company)],
-      ]);
-      drawNotes('Key Points Covered', safe(f.tbtKeyPoints));
-      drawNotes('Attendees', safe(f.tbtAttendees));
-      drawNotes('Action Items', safe(f.tbtActionItems));
-    } else if (type === 'Temperature Water Readings') {
-      drawSection('Water Temperature Details', [
-        ['System', safe(f.twrSystem)], ['Location', safe(f.twrLocation)],
-        ['Flow Temperature (°C)', safe(f.twrFlowTemp)], ['Return Temperature (°C)', safe(f.twrReturnTemp)],
-        ['Cold Water Temp (°C)', safe(f.twrColdTemp)], ['Hot Water Temp (°C)', safe(f.twrHotTemp)],
-        ['Engineer', safe(f.engineer)], ['Witnessed By', safe(f.witnessedBy)],
-      ]);
-      drawResult('Overall Result', safe(f.twrResult));
-      drawNotes('Observations', safe(f.twrObservations));
-    } else if (type === 'Plantroom Commissioning Record') {
-      drawSection('Plantroom Details', [
-        ['Plant Room ID', safe(f.plantRoomId)], ['Location', safe(f.plantRoomLocation)],
-        ['Lead Engineer', safe(f.plantLeadEngineer)], ['Company', safe(f.plantCompany)],
-        ['Commissioning Date', fmtDateShort(safe(f.plantCommissioningDate))],
-        ['Witnessed By', safe(f.plantWitnessedBy)],
-      ]);
-      drawNotes('Systems Commissioned', safe(f.plantSystemsCommissioned));
-      drawNotes('Outstanding Items', safe(f.plantOutstandingItems));
-      drawNotes('Overall Comments', safe(f.plantOverallComments));
-    } else {
-      // Generic fallback — render description + non-empty short extra_data fields
-      if (description) drawNotes('Description', description);
-      const pairs: [string, string][] = Object.entries(f)
-        .filter(([, v]) => v && typeof v === 'string' && (v as string).length < 120)
-        .slice(0, 18)
-        .map(([k, v]) => [k.replace(/_/g, ' '), String(v)]);
-      if (pairs.length) drawSection('Form Data', pairs);
-    }
-
-    // General notes for types that don't have type-specific note rendering
-    const handledTypes = ['Pressure Test', 'Flushing Record', 'Valve Checklist', 'AHU Commissioning',
-      'Dead Testing', 'Continuity Test', 'Electrical Commissioning Report', 'Daily Site Report',
-      'QA Inspection', 'H&S Inspection', 'Toolbox Talk', 'Temperature Water Readings',
-      'Plantroom Commissioning Record'];
-    if (notes && !handledTypes.includes(type)) {
-      drawNotes('Notes', notes);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await this.addExceptionPage(item.title, `Form could not be rendered: ${msg.slice(0, 120)}`);
     }
   }
 
