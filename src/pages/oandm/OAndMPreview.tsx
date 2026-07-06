@@ -978,41 +978,13 @@ function buildPrintManualHTML(
           </div>`;
 
         if (!doc?.data_url) {
-          // data_url not available (shouldn't happen after async pre-fetch, but handle gracefully)
-          return introBlock + `
-            <div style="margin:0 80px 32px;padding:32px 40px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;text-align:center">
-              <div style="font-size:11px;font-weight:600;color:#334155;margin-bottom:4px">${esc(displayName)}</div>
-              <div style="font-size:10px;color:#94a3b8">Document data unavailable — view in interactive preview.</div>
-            </div>`;
+          return introBlock + `<div style="padding:28px 80px;background:#f8fafc;text-align:center;border-top:1px solid #f1f5f9"><p style="font-size:11px;color:#94a3b8">Document not loaded — open the interactive preview to view embedded PDF.</p></div>`;
         }
         const cat = mimeCategory(doc.type);
         if (cat === 'image') {
-          // Images embed directly as data: URIs — full-width, high quality
-          return introBlock + `
-            <div style="padding:24px 80px 40px;background:white;page-break-inside:avoid">
-              <img src="${doc.data_url}" style="width:100%;height:auto;max-height:200mm;object-fit:contain;display:block" alt="${esc(displayName)}" />
-              <p style="font-size:9px;color:#94a3b8;text-align:center;margin-top:10px;font-style:italic">${esc(displayName)}</p>
-            </div>`;
+          return introBlock + `<div style="padding:24px 80px;text-align:center;page-break-inside:avoid"><img src="${doc.data_url}" style="max-width:100%;max-height:200mm;object-fit:contain" alt="${esc(displayName)}" /></div>`;
         }
-        // PDF: binary PDF data cannot be rendered inside an HTML print document.
-        // Show a professional full-page placeholder that matches the manual's design language.
-        const ext = doc.name.split('.').pop()?.toUpperCase() ?? 'PDF';
-        const fileSizeKb = 'size' in doc && typeof (doc as Record<string, unknown>).size === 'number'
-          ? Math.round((doc as Record<string, unknown>).size as number / 1024)
-          : null;
-        return introBlock + `
-          <div style="page-break-inside:avoid;margin:0;padding:48px 80px 56px;background:white;border-top:1px solid #f1f5f9">
-            <div style="max-width:480px;margin:0 auto;text-align:center">
-              <div style="width:64px;height:64px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:18px;font-weight:900;color:#94a3b8;letter-spacing:0.05em">${esc(ext)}</div>
-              <div style="font-size:16px;font-weight:800;color:#1e293b;margin-bottom:6px;line-height:1.3">${esc(displayName)}</div>
-              ${doc.category ? `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.2em;color:#94a3b8;margin-bottom:16px">${esc(doc.category)}</div>` : `<div style="margin-bottom:16px"></div>`}
-              ${fileSizeKb ? `<div style="font-size:10px;color:#94a3b8;margin-bottom:20px">${fileSizeKb} KB · ${esc(ext)} document</div>` : ''}
-              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px">
-                <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;color:#94a3b8;margin-bottom:6px">Document included</div>
-                <div style="font-size:11px;color:#475569;line-height:1.6">This ${esc(ext)} document is part of this O&amp;M Manual. Open the interactive preview to view the full embedded document. To issue the complete manual with embedded PDFs, print directly from the interactive preview.</div>
-              </div>
-            </div>
-          </div>`;
+        return introBlock + `<div style="margin:0 80px 24px;padding:28px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;text-align:center"><p style="font-size:12px;font-weight:700;color:#334155;margin-bottom:4px">${esc(displayName)}</p><p style="font-size:10px;color:#94a3b8">PDF document — open the interactive preview for the embedded version.</p></div>`;
       }
 
       return '';
@@ -1112,55 +1084,20 @@ export default function OAndMPreview({ manual, sections, items, project, orgInfo
   const store = useAppStore();
   const sortedSections = [...sections].sort((a, b) => a.sort_order - b.sort_order);
   const sectionEls = useRef<HTMLDivElement[]>([]);
-  const [downloading, setDownloading] = useState(false);
 
   const setSectionRef = (idx: number) => (el: HTMLDivElement | null) => {
     if (el) sectionEls.current[idx] = el;
   };
 
-  // Pre-fetch data_url for every project document referenced in this manual before
-  // building the print HTML. store.projectDocuments intentionally excludes data_url
-  // (it is lazy-loaded per document in the preview), so we must fetch them here.
-  const handleDownload = useCallback(async () => {
-    setDownloading(true);
-    try {
-      const docItemIds = items
-        .filter(i => i.source_module === 'project_document')
-        .map(i => i.source_record_id);
-
-      // Build a map of id -> data_url, fetching from Supabase for any not yet in store
-      const dataUrlMap = new Map<string, string>();
-      for (const id of docItemIds) {
-        const cached = store.projectDocuments.find(d => d.id === id);
-        if (cached?.data_url) {
-          dataUrlMap.set(id, cached.data_url);
-        } else {
-          const { data } = await supabase
-            .from('vy_project_documents')
-            .select('id,data_url')
-            .eq('id', id)
-            .maybeSingle();
-          if (data?.data_url) dataUrlMap.set(id, data.data_url);
-        }
-      }
-
-      // Merge fetched data_urls back into the docs array for the builder
-      const docsWithData = store.projectDocuments.map(d => ({
-        ...d,
-        data_url: dataUrlMap.get(d.id) ?? d.data_url,
-      }));
-
-      const html = buildPrintManualHTML(
-        manual, sortedSections, items, project, orgInfo,
-        store.siteForms as ExtendedSiteForm[],
-        store.tcRecords,
-        docsWithData,
-        store.attachments,
-      );
-      openPrintTab(html);
-    } finally {
-      setDownloading(false);
-    }
+  const handleDownload = useCallback(() => {
+    const html = buildPrintManualHTML(
+      manual, sortedSections, items, project, orgInfo,
+      store.siteForms as ExtendedSiteForm[],
+      store.tcRecords,
+      store.projectDocuments,
+      store.attachments,
+    );
+    openPrintTab(html);
   }, [manual, sortedSections, items, project, orgInfo, store]);
 
   return (
@@ -1182,23 +1119,13 @@ export default function OAndMPreview({ manual, sections, items, project, orgInfo
           </span>
           <button
             onClick={handleDownload}
-            disabled={downloading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-lg transition-colors"
             style={{ background: '#f97316' }}
-            onMouseEnter={e => { if (!downloading) (e.currentTarget.style.background = '#ea6c0a'); }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#ea6c0a')}
             onMouseLeave={e => (e.currentTarget.style.background = '#f97316')}
           >
-            {downloading ? (
-              <>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.4)', borderTopColor: 'white', animation: 'spin 0.7s linear infinite' }} />
-                Preparing…
-              </>
-            ) : (
-              <>
-                <Download size={12} />
-                Download PDF
-              </>
-            )}
+            <Download size={12} />
+            Download PDF
           </button>
           <button
             onClick={onClose}
