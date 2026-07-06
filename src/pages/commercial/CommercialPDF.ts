@@ -8,8 +8,7 @@ import { openPrintTab } from '../../lib/printTab';
 import type { DBVariationAccountItem, DBCommercialApplication, DBVABuildUpLine, DBVAComment, DBAttachment } from '../../lib/store';
 import type { CommercialRecord } from './types';
 import { typeInfo, statusInfo, parseRawValue } from './types';
-import type { DBKeyDate } from '../../data/types';
-import type { Project } from '../../data/types';
+import type { DBKeyDate, Project } from '../../lib/store';
 
 // ─── Shared utilities ─────────────────────────────────────────────────────────
 
@@ -1362,6 +1361,25 @@ function timelineBody(d: TimelineData): string {
   ${docFooter(d.currentUserName, today)}`;
 }
 
+interface FullReportData {
+  project: Project;
+  keyDates: DBKeyDate[];
+  records: CommercialRecord[];
+  vaItems: DBVariationAccountItem[];
+  apps: DBCommercialApplication[];
+  events: TimelineEvent[];
+  contractNum: number;
+  completedNum: number | null;
+  variationExposure: number;
+  agreedVariations: number;
+  forecastContractSum: number;
+  adjustedContractSum: number;
+  vaExposure: number;
+  vaAgreed: number;
+  currentUserName: string;
+  logoUrl?: string;
+}
+
 function fullReportBody(d: FullReportData): string {
   const today = todayStr();
   const p = d.project;
@@ -1592,19 +1610,16 @@ interface VABuildUpData {
   attachments?: DBAttachment[];
   logoUrl?: string;
   currentUserName?: string;
+  project?: { name?: string; client?: string; projectManager?: string; startDate?: string } | null;
 }
 
 const VA_BUILD_UP_CSS = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
-/* Zero bottom margin eliminates browser URL / date / page-number chrome.
-   Top and side margins are 40px / 52px so every printed page — including
-   page 2 and beyond — starts with the same breathing room as page 1. */
-@page { margin: 40px 52px 0; size: A4; }
+@page { margin: 0; size: A4; }
 @media print {
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-break { page-break-inside: avoid; break-inside: avoid; }
-  .page-break-before { page-break-before: always; break-before: always; }
-  orphans: 3; widows: 3;
+  .pb-before { page-break-before: always; break-before: always; }
 }
 html, body {
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -1614,207 +1629,308 @@ html, body {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
-/* Print: @page margin handles all spacing, so .page needs no padding.
-   Screen: restore padding so the blob tab preview looks correct. */
-.page { padding: 0 0 44px; }
-@media screen { .page { padding: 40px 52px 44px; } }
 
-/* ── Executive header ── */
-.exec-head {
-  display: flex; align-items: flex-end; justify-content: space-between;
-  padding-bottom: 14px; border-bottom: 1.5px solid #0f172a; margin-bottom: 32px;
+/* ── Header band (dark) ─────────────────────────────────────────────────────── */
+.va-header {
+  background: #0f172a;
+  padding: 20px 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
-.exec-brand { font-size: 10pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; line-height: 1; }
-.exec-brand-sub { font-size: 6.5pt; color: #94a3b8; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
-.exec-head-right { text-align: right; }
-.exec-doc-type { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8; margin-bottom: 3px; }
-.exec-doc-title { font-size: 11pt; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
-
-/* ── Variation header band ── */
-.var-header { padding-bottom: 24px; border-bottom: 0.5px solid #e2e8f0; margin-bottom: 32px; }
-.var-ref { font-size: 8.5pt; font-weight: 800; letter-spacing: 0.14em; color: #ea6c00; text-transform: uppercase; margin-bottom: 8px; }
-.var-title { font-size: 18pt; font-weight: 700; color: #0f172a; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 14px; }
-.var-meta-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 16px 0; margin-top: 16px; padding-top: 16px; border-top: 0.5px solid #f1f5f9;
+.va-header-logo img { height: 32px; max-width: 140px; object-fit: contain; display: block; }
+.va-header-logo-text { font-size: 13pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; line-height: 1; }
+.va-header-logo-sub { font-size: 6pt; color: #94a3b8; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
+.va-header-center { text-align: center; flex: 1; padding: 0 24px; }
+.va-header-doc { font-size: 14pt; font-weight: 700; color: #fff; letter-spacing: 0.04em; text-transform: uppercase; }
+.va-header-ref { font-size: 9pt; color: #94a3b8; margin-top: 4px; letter-spacing: 0.06em; }
+.va-header-right { text-align: right; min-width: 130px; }
+.va-copy-badge {
+  display: inline-block; font-size: 7.5pt; font-weight: 800; letter-spacing: 0.12em;
+  text-transform: uppercase; padding: 5px 14px; border-radius: 4px; white-space: nowrap;
 }
-.var-meta-item { }
-.var-meta-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; display: block; margin-bottom: 3px; }
-.var-meta-value { font-size: 8.5pt; color: #334155; font-weight: 500; }
-.status-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+.va-copy-badge.internal { border: 1.5px solid #ea6c00; color: #ea6c00; }
+.va-copy-badge.client   { border: 1.5px solid #38bdf8; color: #38bdf8; }
+.va-header-date { font-size: 7pt; color: #64748b; margin-top: 6px; }
 
-/* ── Section labels ── */
-.section-label {
-  font-size: 6.5pt; font-weight: 800; letter-spacing: 0.18em;
-  text-transform: uppercase; color: #94a3b8;
-  border-bottom: 0.5px solid #e2e8f0; padding-bottom: 7px;
-  margin-top: 40px; margin-bottom: 14px;
+/* ── Project info band ──────────────────────────────────────────────────────── */
+.va-info-band {
+  display: grid;
+  grid-template-columns: 1fr 1fr 220px;
+  gap: 0;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+  background: #fff;
 }
-
-/* ── Description / rich text blocks ── */
-.desc-block { margin-bottom: 0; }
-.desc-text { font-size: 9pt; color: #334155; line-height: 1.75; }
-.desc-text p { margin: 0 0 12px; }
-.desc-text p:last-child { margin-bottom: 0; }
-.desc-text p.gap { margin: 0 0 8px; height: 0; }
-.desc-text ul { margin: 4px 0 14px 22px; padding: 0; list-style: disc; }
-.desc-text ol { margin: 4px 0 14px 22px; padding: 0; list-style: decimal; }
-.desc-text li { margin-bottom: 5px; line-height: 1.65; }
-
-/* ── Cost build-up table ── */
-.build-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 24px; }
-.build-table thead th {
-  font-size: 6pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
-  color: #94a3b8; border-bottom: 1.5px solid #0f172a; padding: 0 10px 10px 0; text-align: left;
+.va-info-col {
+  padding: 16px 20px;
+  border-right: 1px solid #e2e8f0;
 }
-.build-table thead th:first-child { padding-left: 0; }
-.build-table thead th.num { text-align: right; padding-right: 0; }
-.build-table tbody tr:nth-child(even) td { background: #fafafa; }
-.build-table tbody td { padding: 11px 10px 11px 0; border-bottom: 0.5px solid #f1f5f9; vertical-align: top; }
-.build-table tbody td:first-child { padding-left: 0; }
-.build-table tbody td.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0; }
-.build-table tfoot td { padding: 14px 10px 0 0; border-top: 1.5px solid #0f172a; font-weight: 700; font-variant-numeric: tabular-nums; }
-.build-table tfoot td.num { text-align: right; padding-right: 0; }
-.bt-ref { font-size: 7.5pt; color: #94a3b8; }
-.bt-desc { font-size: 9pt; font-weight: 600; color: #0f172a; line-height: 1.4; }
-.bt-type { display: inline-block; padding: 2px 7px; border-radius: 3px; background: #f1f5f9; color: #64748b; font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
-.bt-total { font-size: 11pt; font-weight: 700; color: #ea6c00; }
+.va-info-col:last-child { border-right: none; }
+.va-info-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+.va-info-row:last-child { margin-bottom: 0; }
+.va-info-icon { color: #94a3b8; font-size: 11pt; flex-shrink: 0; margin-top: 1px; line-height: 1; }
+.va-info-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #94a3b8; margin-bottom: 2px; }
+.va-info-value { font-size: 9pt; font-weight: 600; color: #0f172a; line-height: 1.3; }
+.va-info-meta-row { margin-bottom: 10px; }
+.va-info-meta-row:last-child { margin-bottom: 0; }
 
-/* ── Summary figure bands ── */
-.grand-band { border-left: 3px solid #ea6c00; background: #fff7ed; padding: 18px 24px; margin-bottom: 28px; }
-.grand-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #b45309; margin-bottom: 6px; }
-.grand-value { font-size: 24pt; font-weight: 700; color: #ea6c00; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.value-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: 0.5px solid #e2e8f0; border-bottom: 0.5px solid #e2e8f0; padding: 18px 0; margin-bottom: 32px; }
-.value-summary-item { padding-right: 28px; }
-.value-summary-item + .value-summary-item { border-left: 0.5px solid #e2e8f0; padding-left: 28px; padding-right: 0; }
-.value-summary-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; }
-.value-summary-value { font-size: 17pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-.value-summary-value.accent { color: #ea6c00; }
-
-/* ── Comments ── */
-.comments-block { margin-top: 32px; }
-.comment-entry { padding: 14px 0; border-bottom: 0.5px solid #f1f5f9; }
-.comment-author { font-size: 8pt; font-weight: 700; color: #0f172a; }
-.comment-ts { font-size: 7pt; color: #94a3b8; margin-left: 8px; }
-.comment-body { font-size: 8.5pt; color: #334155; margin-top: 6px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
-
-/* ── Attachments table ── */
-.att-section { margin-top: 32px; }
-.att-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-top: 12px; }
-.att-table thead th {
-  text-align: left; padding: 7px 10px;
-  border-bottom: 1.5px solid #0f172a;
-  font-size: 6pt; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #94a3b8;
+/* ── Summary box ────────────────────────────────────────────────────────────── */
+.va-summary-box { border: 1px solid #e2e8f0; border-radius: 0; }
+.va-summary-header {
+  background: #f1f5f9; padding: 7px 14px;
+  font-size: 7pt; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #334155;
+  border-bottom: 1px solid #e2e8f0; text-align: center;
 }
-.att-table thead th.r { text-align: right; }
-.att-table tbody tr:nth-child(even) td { background: #fafafa; }
-.att-table tbody td { padding: 9px 10px; border-bottom: 0.5px solid #f1f5f9; color: #64748b; vertical-align: top; }
-.att-table tbody td.name { color: #0f172a; font-weight: 600; }
-.att-table tbody td.r { text-align: right; }
+.va-summary-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 14px; border-bottom: 1px solid #f1f5f9; }
+.va-summary-row:last-child { border-bottom: none; padding: 9px 14px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+.va-summary-label { font-size: 8pt; color: #475569; }
+.va-summary-value { font-size: 8.5pt; font-weight: 600; font-variant-numeric: tabular-nums; color: #0f172a; }
+.va-summary-value.pos { color: #16a34a; }
+.va-summary-value.neg { color: #dc2626; }
+.va-summary-total-label { font-size: 9pt; font-weight: 700; color: #0f172a; }
+.va-summary-total-value { font-size: 11pt; font-weight: 700; font-variant-numeric: tabular-nums; }
+.va-summary-total-value.neg { color: #dc2626; }
+.va-summary-total-value.pos { color: #16a34a; }
+.va-summary-total-value.zero { color: #0f172a; }
 
-/* ── Evidence images ── */
-.evidence-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 14px; }
-.evidence-img-card { border: 0.5px solid #e2e8f0; border-radius: 6px; overflow: hidden; page-break-inside: avoid; break-inside: avoid; }
-.evidence-img { width: 100%; max-height: 220px; object-fit: contain; background: #f8fafc; display: block; }
-.evidence-img-caption { padding: 7px 10px; font-size: 7.5pt; color: #64748b; background: #f8fafc; border-top: 0.5px solid #e2e8f0; }
+/* ── Page body ──────────────────────────────────────────────────────────────── */
+.va-body { padding: 24px 36px 36px; }
 
-/* ── Footer ── */
-.doc-footer { margin-top: 48px; padding-top: 12px; border-top: 0.5px solid #e2e8f0; display: flex; justify-content: space-between; align-items: baseline; }
-.doc-footer-l { font-size: 7pt; color: #94a3b8; flex: 1; }
-.doc-footer-c { font-size: 6.5pt; color: #cbd5e1; letter-spacing: 0.07em; text-align: center; flex: 1; }
-.doc-footer-r { font-size: 7pt; color: #94a3b8; text-align: right; flex: 1; }
+/* ── Section block ──────────────────────────────────────────────────────────── */
+.va-section { border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 18px; overflow: hidden; }
+.va-section-head {
+  display: flex; align-items: center; gap: 8px;
+  background: #f8fafc; padding: 9px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.va-section-icon { color: #ea6c00; font-size: 11pt; font-weight: 900; line-height: 1; }
+.va-section-title { font-size: 8pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #0f172a; }
+.va-section-body { padding: 14px 16px; }
+
+/* ── Details grid ───────────────────────────────────────────────────────────── */
+.va-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+.va-detail-row { padding: 7px 0; border-bottom: 1px solid #f1f5f9; display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: baseline; }
+.va-detail-row:last-child { border-bottom: none; }
+.va-detail-label { font-size: 7pt; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
+.va-detail-value { font-size: 8.5pt; color: #0f172a; font-weight: 500; line-height: 1.5; word-break: break-word; }
+.va-detail-value.bold { font-weight: 700; }
+.va-direction-badge {
+  display: inline-block; padding: 3px 12px; border-radius: 4px; font-size: 7.5pt; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.va-direction-add { background: #f0fdf4; color: #166534; border: 1px solid #86efac; }
+.va-direction-omit { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
+.va-status-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 7pt; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.va-text-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px 12px; font-size: 8.5pt; color: #334155; line-height: 1.7; white-space: pre-wrap; word-break: break-word; margin-top: 6px; }
+
+/* ── Build-up table ─────────────────────────────────────────────────────────── */
+.bu-table { width: 100%; border-collapse: collapse; font-size: 8pt; }
+.bu-table thead th {
+  padding: 7px 10px; text-align: left; font-size: 6.5pt; font-weight: 800;
+  letter-spacing: 0.1em; text-transform: uppercase; color: #64748b;
+  background: #f8fafc; border-bottom: 1.5px solid #0f172a;
+}
+.bu-table thead th.r { text-align: right; }
+.bu-table tbody td { padding: 8px 10px; border-bottom: 0.5px solid #f1f5f9; color: #334155; vertical-align: top; }
+.bu-table tbody td.r { text-align: right; font-variant-numeric: tabular-nums; }
+.bu-table tbody tr:nth-child(even) td { background: #fafafa; }
+.bu-table tbody tr:last-child td { border-bottom: none; }
+.bu-table tfoot td { padding: 8px 10px; border-top: 1px solid #e2e8f0; font-size: 8pt; }
+.bu-table tfoot td.r { text-align: right; font-variant-numeric: tabular-nums; }
+.bu-table tfoot tr.bu-total-row td { border-top: 1.5px solid #0f172a; padding-top: 10px; font-weight: 700; }
+.bu-ref { color: #94a3b8; font-size: 7.5pt; }
+.bu-desc { font-weight: 600; color: #0f172a; }
+.bu-type { display: inline-block; padding: 1px 6px; background: #f1f5f9; border-radius: 3px; color: #64748b; font-size: 6.5pt; font-weight: 700; text-transform: uppercase; }
+.bu-grand { font-size: 10pt; font-weight: 700; color: #ea6c00; }
+
+/* ── Bottom 3-col section ───────────────────────────────────────────────────── */
+.va-bottom-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+.va-bottom-box { border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
+.va-bottom-head {
+  display: flex; align-items: center; gap: 6px;
+  background: #f8fafc; padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 7pt; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #334155;
+}
+.va-bottom-icon { color: #ea6c00; }
+.va-bottom-body { padding: 10px 12px; }
+
+/* Attachments */
+.att-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 0.5px solid #f1f5f9; }
+.att-item:last-child { border-bottom: none; }
+.att-icon { color: #94a3b8; font-size: 10pt; flex-shrink: 0; margin-top: 1px; }
+.att-name { font-size: 8pt; font-weight: 600; color: #0f172a; word-break: break-all; }
+.att-name a { color: #0f172a; text-decoration: none; }
+.att-meta { font-size: 7pt; color: #94a3b8; margin-top: 2px; }
+.att-dl { font-size: 7pt; color: #ea6c00; text-decoration: none; font-weight: 700; }
+
+/* Comments */
+.comment-item { padding: 6px 0; border-bottom: 0.5px solid #f1f5f9; }
+.comment-item:last-child { border-bottom: none; }
+.comment-meta { font-size: 7.5pt; font-weight: 700; color: #0f172a; }
+.comment-ts { color: #94a3b8; font-weight: 400; font-size: 7pt; margin-left: 6px; }
+.comment-body { font-size: 8pt; color: #334155; margin-top: 4px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+
+/* Approval */
+.approval-row { display: grid; grid-template-columns: 80px 1fr 70px; gap: 4px; padding: 6px 0; border-bottom: 0.5px solid #f1f5f9; align-items: baseline; }
+.approval-row:last-child { border-bottom: none; }
+.approval-label { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #94a3b8; }
+.approval-value { font-size: 8pt; color: #0f172a; font-weight: 500; }
+.approval-date { font-size: 7.5pt; color: #64748b; text-align: right; }
+.sig-line { border-bottom: 1px solid #cbd5e1; margin-top: 8px; height: 18px; }
+.sig-label { font-size: 6pt; color: #94a3b8; margin-top: 2px; }
+
+/* ── Contractual notice ─────────────────────────────────────────────────────── */
+.va-notice { border: 1px solid #fed7aa; border-left: 3px solid #ea6c00; background: #fffbf5; border-radius: 4px; padding: 10px 14px; margin-bottom: 18px; }
+.va-notice-label { font-size: 6.5pt; font-weight: 800; color: #c2410c; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
+.va-notice-text { font-size: 7.5pt; color: #92400e; line-height: 1.65; }
+.va-notice-sign-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+.va-notice-sign-box { }
+.va-notice-sign-field { border-bottom: 1px solid #cbd5e1; height: 20px; margin-top: 10px; }
+.va-notice-sign-label { font-size: 6.5pt; color: #94a3b8; margin-top: 3px; }
+
+/* ── Footer ─────────────────────────────────────────────────────────────────── */
+.va-footer {
+  border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 36px; margin-top: 4px;
+}
+.va-footer-logo img { height: 22px; max-width: 100px; object-fit: contain; display: block; }
+.va-footer-logo-text { font-size: 10pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; }
+.va-footer-center { font-size: 7pt; color: #94a3b8; }
+.va-footer-right { font-size: 7pt; color: #94a3b8; text-align: right; }
 `;
+
+// ─── Status badge HTML ────────────────────────────────────────────────────────
 
 function statusBadgeHtml(status: string): string {
   const colours: Record<string, string> = {
-    draft: 'background:#374151;color:#d1d5db;',
-    submitted: 'background:#0c4a6e;color:#7dd3fc;',
+    draft:        'background:#374151;color:#d1d5db;',
+    submitted:    'background:#0c4a6e;color:#7dd3fc;',
     under_review: 'background:#78350f;color:#fcd34d;',
-    agreed: 'background:#065f46;color:#6ee7b7;',
-    rejected: 'background:#7f1d1d;color:#fca5a5;',
-    paid: 'background:#14532d;color:#86efac;',
-    withdrawn: 'background:#1e293b;color:#64748b;',
+    agreed:       'background:#065f46;color:#6ee7b7;',
+    rejected:     'background:#7f1d1d;color:#fca5a5;',
+    paid:         'background:#14532d;color:#86efac;',
+    withdrawn:    'background:#1e293b;color:#64748b;',
   };
-  const labels: Record<string, string> = { draft:'Draft', submitted:'Submitted', under_review:'Under Review', agreed:'Agreed', rejected:'Rejected', paid:'Paid', withdrawn:'Withdrawn' };
+  const labels: Record<string, string> = {
+    draft: 'Draft', submitted: 'Submitted', under_review: 'Under Review',
+    agreed: 'Agreed', rejected: 'Rejected', paid: 'Paid', withdrawn: 'Withdrawn',
+  };
   const style = colours[status] ?? 'background:#374151;color:#d1d5db;';
-  return `<span class="status-badge" style="${style}">${labels[status] ?? status}</span>`;
+  return `<span class="va-status-badge" style="${style}">${esc(labels[status] ?? status)}</span>`;
 }
+
+// ─── Build-up table HTML ──────────────────────────────────────────────────────
 
 function buildUpTableHtml(lines: DBVABuildUpLine[], total: number, showCost: boolean): string {
   if (lines.length === 0) {
-    return '<p style="font-size:8.5pt;color:#94a3b8;font-style:italic;padding:10px 0;">No cost build-up lines recorded.</p>';
+    return '<p style="font-size:8pt;color:#94a3b8;font-style:italic;padding:8px 0;">No cost build-up lines recorded.</p>';
   }
-  const costCols = showCost
-    ? `<th class="num" style="width:70px;">Cost</th><th class="num" style="width:55px;">Markup</th>`
+
+  const costColsHead = showCost
+    ? `<th class="r" style="width:68px;">Cost (£)</th><th class="r" style="width:60px;">Markup (%)</th>`
     : '';
+
   const rows = lines.map((l, i) => {
     const salesVal = `£${l.sales_price.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const totalVal = `£${l.line_total.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const costVal  = `£${l.cost_price.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const costCells = showCost ? `<td class="num">${costVal}</td><td class="num">${l.markup_pct}%</td>` : '';
+    const costCells = showCost
+      ? `<td class="r">£${l.cost_price.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td class="r">${l.markup_pct}%</td>`
+      : '';
     return `<tr>
-      <td><span class="bt-ref">${i + 1}</span></td>
-      <td><span class="bt-desc">${esc(l.description)}</span></td>
-      <td><span class="bt-type">${esc(l.type)}</span></td>
+      <td><span class="bu-desc">${esc(l.description)}</span></td>
+      <td><span class="bu-type">${esc(l.type)}</span></td>
       <td>${esc(l.unit || '—')}</td>
-      <td class="num">${l.quantity}</td>
+      <td class="r">${l.quantity}</td>
       ${costCells}
-      <td class="num">${salesVal}</td>
-      <td class="num bt-total">${totalVal}</td>
+      <td class="r">${salesVal}</td>
+      <td class="r" style="font-weight:600;color:#0f172a;">${totalVal}</td>
     </tr>`;
   }).join('');
 
-  const totalVal = `£${total.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const colCount = showCost ? 9 : 7;
+  // Totals section
+  const grandVal = `£${total.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const colSpanLabel = showCost ? 6 : 4;
+
+  let tfootRows = '';
+  if (showCost) {
+    const totalCost = lines.reduce((s, l) => s + l.cost_price * l.quantity, 0);
+    const totalSales = lines.reduce((s, l) => s + l.sales_price * l.quantity, 0);
+    const totalMarkup = totalCost > 0 ? ((totalSales - totalCost) / totalCost * 100) : 0;
+    const markupAmt = totalSales - totalCost;
+    const costVal = `£${totalCost.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const markupVal = `£${markupAmt.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    tfootRows = `
+      <tr>
+        <td colspan="${colSpanLabel}" class="r" style="font-size:7.5pt;color:#64748b;font-weight:600;border-top:1px solid #e2e8f0;padding-top:8px;">Total Cost (Excl. Markup)</td>
+        <td class="r" style="font-size:8pt;font-weight:600;color:#0f172a;border-top:1px solid #e2e8f0;padding-top:8px;">${costVal}</td>
+      </tr>
+      <tr>
+        <td colspan="${colSpanLabel}" class="r" style="font-size:7.5pt;color:#64748b;font-weight:600;">Markup (${totalMarkup.toFixed(0)}%)</td>
+        <td class="r" style="font-size:8pt;font-weight:600;color:#0f172a;">${markupVal}</td>
+      </tr>
+      <tr class="bu-total-row">
+        <td colspan="${colSpanLabel}" class="r" style="font-size:8pt;text-transform:uppercase;letter-spacing:.05em;">Total Variation Value (Incl. Markup)</td>
+        <td class="r bu-grand">${grandVal}</td>
+      </tr>`;
+  } else {
+    tfootRows = `
+      <tr class="bu-total-row">
+        <td colspan="${colSpanLabel}" class="r" style="font-size:8pt;text-transform:uppercase;letter-spacing:.05em;">Total Variation Value</td>
+        <td class="r bu-grand">${grandVal}</td>
+      </tr>`;
+  }
+
   return `
-  <table class="build-table">
+  <table class="bu-table">
     <thead>
       <tr>
-        <th style="width:24px;">No.</th>
         <th>Description</th>
-        <th style="width:90px;">Type</th>
-        <th style="width:40px;">Unit</th>
-        <th class="num" style="width:50px;">Qty</th>
-        ${costCols}
-        <th class="num" style="width:70px;">Sales Price</th>
-        <th class="num" style="width:70px;">Line Total</th>
+        <th style="width:72px;">Type</th>
+        <th style="width:38px;">Unit</th>
+        <th class="r" style="width:38px;">Qty</th>
+        ${costColsHead}
+        <th class="r" style="width:68px;">Sales (£)</th>
+        <th class="r" style="width:70px;">Total (£)</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
-    <tfoot>
-      <tr>
-        <td colspan="${colCount - 1}" style="text-align:right;font-size:8pt;color:#64748b;padding-right:12px;">Build-Up Total</td>
-        <td class="num bt-total">${totalVal}</td>
-      </tr>
-    </tfoot>
+    <tfoot>${tfootRows}</tfoot>
   </table>`;
 }
 
-function vaDocHeader(docType: string, variant: string, logoUrl?: string): string {
-  const brandHtml = logoUrl
-    ? `<img src="${logoUrl}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
-    : `<div class="exec-brand">VYSITE</div><div class="exec-brand-sub">Construction Operating System</div>`;
-  return `<div class="exec-head">
-    <div>${brandHtml}</div>
-    <div class="exec-head-right">
-      <div class="exec-doc-type">${esc(docType)}</div>
-      <div class="exec-doc-title">${esc(variant)}</div>
-    </div>
-  </div>`;
-}
+// ─── Attachment list ──────────────────────────────────────────────────────────
 
-function vaDocFooter(today: string, variant: string, generatedBy?: string): string {
-  const conf = variant === 'Internal' ? 'Confidential — Internal Use Only' : 'Commercial Document — Client Copy';
-  const byLine = generatedBy ? `${esc(generatedBy)} &bull; ` : '';
-  return `<div class="doc-footer">
-    <div class="doc-footer-l">${conf}</div>
-    <div class="doc-footer-c">Powered by VYSITE</div>
-    <div class="doc-footer-r">${byLine}${today}</div>
-  </div>`;
+function vaAttachmentHtml(attachments: DBAttachment[]): string {
+  if (!attachments?.length) return '<p style="font-size:8pt;color:#94a3b8;font-style:italic;">No attachments.</p>';
+
+  return attachments.map(a => {
+    const sz = a.size
+      ? (a.size < 1024 * 1024 ? `${(a.size / 1024).toFixed(0)} KB` : `${(a.size / (1024 * 1024)).toFixed(1)} MB`)
+      : '';
+    const uploaded = a.created_at ? new Date(a.created_at).toLocaleDateString('en-GB') : '';
+    const uploadedBy = (a as any).uploaded_by ? ` by ${esc((a as any).uploaded_by)}` : '';
+    const dlLink = a.data_url
+      ? `<a class="att-dl" href="${a.data_url}" download="${esc(a.name)}">&#11015; Download</a>`
+      : '';
+    const isImage = a.type?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(a.name ?? '');
+    const icon = isImage ? '&#128247;' : '&#128196;';
+    return `<div class="att-item">
+      <div class="att-icon">${icon}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="att-name">${esc(a.name)}</div>
+        <div class="att-meta">${a.category ? esc(a.category) + ' &middot; ' : ''}${sz}${uploaded ? ' &middot; Uploaded: ' + uploaded + uploadedBy : ''}</div>
+        ${dlLink ? `<div style="margin-top:3px;">${dlLink}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // Converts plain text with newlines/bullets/numbered lists into semantic HTML
-// preserving exactly what the user typed, without leaking whitespace into render.
 function fmtText(raw: string): string {
   if (!raw) return '';
   const lines = raw.split('\n');
@@ -1848,161 +1964,340 @@ function fmtText(raw: string): string {
     }
   }
   closeList();
-  return `<div class="desc-text">${out.join('')}</div>`;
+  return `<div style="font-size:8.5pt;color:#334155;line-height:1.7;">${out.join('')}</div>`;
 }
 
-function vaAttachmentHtml(attachments: DBAttachment[]): string {
-  if (!attachments?.length) return '';
-  const images = attachments.filter(a => a.type?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(a.name ?? ''));
-  const docs   = attachments.filter(a => !images.includes(a));
+// ─── Shared VA page layout ────────────────────────────────────────────────────
 
-  const imagesHtml = images.length
-    ? `<div class="evidence-grid">${images.map(img =>
-        `<div class="evidence-img-card">${
-          img.data_url
-            ? `<img class="evidence-img" src="${img.data_url}" alt="${esc(img.name)}" />`
-            : `<div class="evidence-img" style="min-height:100px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:8pt;">Image unavailable</div>`
-        }<div class="evidence-img-caption">${esc(img.name)}${img.category ? ` — ${esc(img.category)}` : ''}</div></div>`
-      ).join('')}</div>` : '';
-
-  const docsHtml = docs.length
-    ? `<table class="att-table">
-        <thead><tr>
-          <th>File</th>
-          <th>Category</th>
-          <th class="r">Size</th>
-          <th class="r">Uploaded</th>
-        </tr></thead>
-        <tbody>${docs.map(d => {
-          const sz = d.size ? (d.size < 1024 * 1024 ? `${(d.size / 1024).toFixed(0)} KB` : `${(d.size / (1024 * 1024)).toFixed(1)} MB`) : '—';
-          const dt = d.created_at ? new Date(d.created_at).toLocaleDateString('en-GB') : '—';
-          return `<tr>
-            <td class="name">${esc(d.name)}</td>
-            <td>${esc(d.category || '—')}</td>
-            <td class="r">${sz}</td>
-            <td class="r">${dt}</td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>` : '';
-
-  return `<div class="att-section"><div class="section-label">Evidence &amp; Attachments (${attachments.length})</div>${imagesHtml}${docsHtml}</div>`;
+function vaPageHeader(item: DBVariationAccountItem, variant: 'Internal' | 'Client', logoUrl?: string, today?: string): string {
+  const brandHtml = logoUrl
+    ? `<div class="va-header-logo"><img src="${logoUrl}" alt="Logo"></div>`
+    : `<div class="va-header-logo"><div class="va-header-logo-text">VYSITE</div><div class="va-header-logo-sub">Construction Management</div></div>`;
+  const badgeCls = variant === 'Internal' ? 'internal' : 'client';
+  const dateStr = today ?? new Date().toLocaleDateString('en-GB');
+  return `<div class="va-header">
+  ${brandHtml}
+  <div class="va-header-center">
+    <div class="va-header-doc">Variation Account</div>
+    <div class="va-header-ref">${esc(item.reference || 'VAR')}</div>
+  </div>
+  <div class="va-header-right">
+    <div class="va-copy-badge ${badgeCls}">${variant === 'Internal' ? 'Internal Copy' : 'Client Copy'}</div>
+    <div class="va-header-date">Generated: ${esc(dateStr)}</div>
+  </div>
+</div>`;
 }
+
+function vaInfoBand(item: DBVariationAccountItem, project?: VABuildUpData['project']): string {
+  const projName = project?.name ?? '—';
+  const client   = project?.client ?? '—';
+  const manager  = project?.projectManager ?? '—';
+  const signedVal = item.is_positive ? item.value : -item.value;
+  const totalAdd  = item.is_positive  ? item.value : 0;
+  const totalOmit = !item.is_positive ? item.value : 0;
+  const netVal    = item.is_positive  ? item.value : -item.value;
+  const netFv = (n: number) => (n < 0 ? '-' : '') + '£' + Math.abs(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const addCls  = totalAdd > 0 ? 'pos' : '';
+  const omitCls = totalOmit > 0 ? 'neg' : '';
+  const netCls  = netVal < 0 ? 'neg' : netVal > 0 ? 'pos' : 'zero';
+
+  return `<div class="va-info-band">
+  <!-- Col 1: project/client/contractor -->
+  <div class="va-info-col">
+    <div class="va-info-row">
+      <div class="va-info-icon">&#127968;</div>
+      <div>
+        <div class="va-info-label">Project</div>
+        <div class="va-info-value">${esc(projName)}</div>
+      </div>
+    </div>
+    <div class="va-info-row">
+      <div class="va-info-icon">&#128100;</div>
+      <div>
+        <div class="va-info-label">Client</div>
+        <div class="va-info-value">${esc(client)}</div>
+      </div>
+    </div>
+    <div class="va-info-row">
+      <div class="va-info-icon">&#128736;</div>
+      <div>
+        <div class="va-info-label">Project Manager</div>
+        <div class="va-info-value">${esc(manager)}</div>
+      </div>
+    </div>
+  </div>
+  <!-- Col 2: ref/date/status -->
+  <div class="va-info-col">
+    <div class="va-info-meta-row">
+      <div class="va-info-label">Variation Account No.</div>
+      <div class="va-info-value">${esc(item.reference || '—')}</div>
+    </div>
+    <div class="va-info-meta-row">
+      <div class="va-info-label">Date Raised</div>
+      <div class="va-info-value">${item.date_raised ? new Date(item.date_raised).toLocaleDateString('en-GB') : '—'}</div>
+    </div>
+    <div class="va-info-meta-row">
+      <div class="va-info-label">Date Agreed</div>
+      <div class="va-info-value">${item.date_agreed ? new Date(item.date_agreed).toLocaleDateString('en-GB') : '—'}</div>
+    </div>
+    <div class="va-info-meta-row">
+      <div class="va-info-label">Direction</div>
+      <div class="va-info-value">${item.is_positive ? 'Addition (+)' : 'Omission (-)'}</div>
+    </div>
+  </div>
+  <!-- Col 3: summary box -->
+  <div class="va-info-col" style="padding:0;">
+    <div class="va-summary-box">
+      <div class="va-summary-header">Summary (Incl. Markup &amp; O/H)</div>
+      <div class="va-summary-row">
+        <span class="va-summary-label">Total Addition</span>
+        <span class="va-summary-value ${addCls}">${netFv(totalAdd)}</span>
+      </div>
+      <div class="va-summary-row">
+        <span class="va-summary-label">Total Omission</span>
+        <span class="va-summary-value ${omitCls}">${omitCls ? netFv(-totalOmit) : '£0.00'}</span>
+      </div>
+      <div class="va-summary-row" style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:9px 14px;">
+        <span class="va-summary-total-label">Net Variation Value</span>
+        <span class="va-summary-total-value ${netCls}">${netFv(signedVal)}</span>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function vaVariationDetails(item: DBVariationAccountItem): string {
+  const fmtD = (d: string | null | undefined) =>
+    d ? new Date(d).toLocaleDateString('en-GB') : '—';
+
+  const dirBadge = item.is_positive
+    ? `<span class="va-direction-badge va-direction-add">Addition (+)</span>`
+    : `<span class="va-direction-badge va-direction-omit">Omission (-)</span>`;
+
+  const valueFmt = '£' + Math.abs(item.value).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return `<div class="va-section no-break">
+  <div class="va-section-head">
+    <div class="va-section-icon">&#9632;</div>
+    <div class="va-section-title">Variation Details</div>
+  </div>
+  <div class="va-section-body">
+    <div class="va-details-grid">
+      <!-- Left column -->
+      <div>
+        <div class="va-detail-row">
+          <div class="va-detail-label">Reference</div>
+          <div class="va-detail-value bold">${esc(item.reference || '—')} &nbsp;${statusBadgeHtml(item.status)}</div>
+        </div>
+        <div class="va-detail-row">
+          <div class="va-detail-label">Title</div>
+          <div class="va-detail-value bold">${esc(item.title || '—')}</div>
+        </div>
+        ${item.reason ? `<div class="va-detail-row">
+          <div class="va-detail-label">Reason / Cause</div>
+          <div class="va-detail-value">${esc(item.reason)}</div>
+        </div>` : ''}
+        <div class="va-detail-row">
+          <div class="va-detail-label">Value (£)</div>
+          <div class="va-detail-value bold">${esc(valueFmt)}</div>
+        </div>
+        <div class="va-detail-row">
+          <div class="va-detail-label">Direction</div>
+          <div class="va-detail-value">${dirBadge}</div>
+        </div>
+      </div>
+      <!-- Right column -->
+      <div>
+        <div class="va-detail-row">
+          <div class="va-detail-label">Date Raised</div>
+          <div class="va-detail-value">${fmtD(item.date_raised)}</div>
+        </div>
+        <div class="va-detail-row">
+          <div class="va-detail-label">Date Agreed</div>
+          <div class="va-detail-value">${fmtD(item.date_agreed)}</div>
+        </div>
+        ${item.notes ? `<div class="va-detail-row" style="grid-template-columns:110px 1fr;align-items:baseline;">
+          <div class="va-detail-label">Notes</div>
+          <div class="va-detail-value" style="white-space:pre-wrap;">${esc(item.notes)}</div>
+        </div>` : ''}
+      </div>
+    </div>
+    ${item.description ? `<div style="margin-top:12px;">
+      <div class="va-detail-label" style="margin-bottom:4px;">Description</div>
+      ${fmtText(item.description)}
+    </div>` : ''}
+  </div>
+</div>`;
+}
+
+function vaContractualNotice(): string {
+  return `<div class="va-notice no-break">
+  <div class="va-notice-label">Contractual Notice</div>
+  <div class="va-notice-text">
+    This Variation Account has been raised in accordance with the terms and conditions of the contract/subcontract.
+    The value and/or programme impact stated in this document is a direct result of the change described above and is not included within the original scope of works.
+    We reserve the right to seek an appropriate adjustment to the Contract Sum and/or Programme as a result of this change.
+    By accepting or failing to notify any objection within the contractual timeframe, the Client will be deemed to have accepted the contents of this Variation Account.
+    Nothing in this document shall be construed as a waiver of any contractual right or entitlement of either party.
+  </div>
+  <div class="va-notice-sign-row">
+    <div class="va-notice-sign-box">
+      <div class="va-notice-sign-field"></div><div class="va-notice-sign-label">Authorised By</div>
+      <div class="va-notice-sign-field"></div><div class="va-notice-sign-label">Name</div>
+    </div>
+    <div class="va-notice-sign-box">
+      <div class="va-notice-sign-field"></div><div class="va-notice-sign-label">Position</div>
+      <div class="va-notice-sign-field"></div><div class="va-notice-sign-label">Date</div>
+    </div>
+  </div>
+</div>`;
+}
+
+function vaPageFooter(logoUrl?: string): string {
+  const brand = logoUrl
+    ? `<div class="va-footer-logo"><img src="${logoUrl}" alt="Logo"></div>`
+    : `<div class="va-footer-logo-text">VYSITE</div>`;
+  return `<div class="va-footer">
+  ${brand}
+  <div class="va-footer-center">Powered by VYSITE</div>
+  <div class="va-footer-right">Page 1 of 1</div>
+</div>`;
+}
+
+// ─── Internal body ────────────────────────────────────────────────────────────
 
 function vaInternalBody(d: VABuildUpData): string {
-  const today = todayStr();
+  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const item = d.item;
-  const signedVal = item.is_positive ? item.value : -item.value;
-  const signedStr = (signedVal >= 0 ? '+' : '') + fv(Math.abs(signedVal));
 
-  const commentsHtml = (d.comments ?? []).length > 0
-    ? `<div class="comments-block">
-        <div class="section-label">Comments (${d.comments!.length})</div>
-        ${(d.comments ?? []).map(c => `<div class="comment-entry no-break">
-          <span class="comment-author">${esc(c.author_name)}</span>
-          <span class="comment-ts">${fmtD(c.created_at)}</span>
-          <div class="comment-body">${esc(c.body)}</div>
-        </div>`).join('')}
-      </div>`
-    : '';
+  const atts   = d.attachments ?? [];
+  const comms  = d.comments ?? [];
 
-  const attHtml = vaAttachmentHtml(d.attachments ?? []);
-
-  return `<div class="page">
-    ${vaDocHeader('Variation Account', 'Internal Build-Up', d.logoUrl)}
-
-    <div class="var-header no-break">
-      <div class="var-ref">${esc(item.reference || 'VAR')}</div>
-      <div class="var-title">${esc(item.title || 'Untitled Variation')}</div>
-      <div style="margin-bottom:14px;">${statusBadgeHtml(item.status)}</div>
-      <div class="var-meta-grid">
-        <div class="var-meta-item"><span class="var-meta-label">Date Raised</span><span class="var-meta-value">${fmtD(item.date_raised)}</span></div>
-        ${item.date_agreed ? `<div class="var-meta-item"><span class="var-meta-label">Date Agreed</span><span class="var-meta-value">${fmtD(item.date_agreed)}</span></div>` : ''}
-        <div class="var-meta-item"><span class="var-meta-label">Direction</span><span class="var-meta-value">${item.is_positive ? 'Addition (+)' : 'Omission (-)'}</span></div>
-        <div class="var-meta-item"><span class="var-meta-label">Manual Value</span><span class="var-meta-value">${fv(item.value)}</span></div>
-        ${item.created_by ? `<div class="var-meta-item"><span class="var-meta-label">Raised By</span><span class="var-meta-value">${esc(item.created_by)}</span></div>` : ''}
-      </div>
-    </div>
-
-    ${item.description ? `<div class="desc-block">
-      <div class="section-label">Description of Works</div>
-      ${fmtText(item.description)}
-    </div>` : ''}
-
-    ${item.reason ? `<div class="desc-block">
-      <div class="section-label">Reason / Cause</div>
-      ${fmtText(item.reason)}
-    </div>` : ''}
-
-    ${item.notes ? `<div class="desc-block">
-      <div class="section-label">Internal Notes</div>
-      ${fmtText(item.notes)}
-    </div>` : ''}
-
-    <div class="section-label">Cost Build-Up</div>
+  const buildUpSection = `<div class="va-section no-break">
+  <div class="va-section-head">
+    <div class="va-section-icon">&#9632;</div>
+    <div class="va-section-title">VOST Build-Up Summary (Internal)</div>
+  </div>
+  <div class="va-section-body">
     ${buildUpTableHtml(d.lines, d.buildUpTotal, true)}
+  </div>
+</div>`;
 
-    ${d.buildUpTotal > 0 ? `<div class="grand-band no-break">
-      <div class="grand-label">Build-Up Total (Internal)</div>
-      <div class="grand-value">${fv(d.buildUpTotal)}</div>
-    </div>` : ''}
+  const attHtml = atts.length
+    ? `<div class="va-bottom-box no-break">
+        <div class="va-bottom-head"><span class="va-bottom-icon">&#128206;</span> Attachments (${atts.length})</div>
+        <div class="va-bottom-body">${vaAttachmentHtml(atts)}</div>
+      </div>`
+    : `<div class="va-bottom-box">
+        <div class="va-bottom-head"><span class="va-bottom-icon">&#128206;</span> Attachments</div>
+        <div class="va-bottom-body"><p style="font-size:8pt;color:#94a3b8;font-style:italic;">No attachments.</p></div>
+      </div>`;
 
-    <div class="value-summary-grid no-break">
-      <div class="value-summary-item">
-        <div class="value-summary-label">Manual Variation Value</div>
-        <div class="value-summary-value">${signedStr}</div>
-      </div>
-      ${d.buildUpTotal > 0 ? `<div class="value-summary-item">
-        <div class="value-summary-label">Build-Up Total</div>
-        <div class="value-summary-value accent">${fv(d.buildUpTotal)}</div>
-      </div>` : ''}
+  const commHtml = `<div class="va-bottom-box no-break">
+    <div class="va-bottom-head"><span class="va-bottom-icon">&#128172;</span> Comments (${comms.length})</div>
+    <div class="va-bottom-body">
+      ${comms.length
+        ? comms.map(c => `<div class="comment-item">
+            <div class="comment-meta">${esc(c.author_name)}<span class="comment-ts">${c.created_at ? new Date(c.created_at).toLocaleDateString('en-GB') + ' ' + new Date(c.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''} by ${esc(c.author_name)}</span></div>
+            <div class="comment-body">${esc(c.body)}</div>
+          </div>`).join('')
+        : '<p style="font-size:8pt;color:#94a3b8;font-style:italic;">No comments.</p>'}
     </div>
-
-    ${commentsHtml}
-    ${attHtml}
-    ${vaDocFooter(today, 'Internal', d.currentUserName)}
   </div>`;
+
+  const approvalHtml = `<div class="va-bottom-box no-break">
+    <div class="va-bottom-head"><span class="va-bottom-icon">&#10003;</span> Approval</div>
+    <div class="va-bottom-body">
+      <div class="approval-row">
+        <div class="approval-label">Raised By</div>
+        <div class="approval-value">${esc(item.created_by ?? d.currentUserName ?? '—')}</div>
+        <div class="approval-date">${item.date_raised ? new Date(item.date_raised).toLocaleDateString('en-GB') : ''}</div>
+      </div>
+      <div class="approval-row">
+        <div class="approval-label">Agreed By</div>
+        <div class="approval-value" style="color:#94a3b8;">—</div>
+        <div class="approval-date"></div>
+      </div>
+      <div class="approval-row">
+        <div class="approval-label">Agreed Date</div>
+        <div class="approval-value">${item.date_agreed ? new Date(item.date_agreed).toLocaleDateString('en-GB') : '—'}</div>
+        <div class="approval-date"></div>
+      </div>
+    </div>
+  </div>`;
+
+  return `
+  ${vaPageHeader(item, 'Internal', d.logoUrl, today)}
+  ${vaInfoBand(item, d.project)}
+  <div class="va-body">
+    ${vaVariationDetails(item)}
+    ${buildUpSection}
+    <div class="va-bottom-grid">${attHtml}${commHtml}${approvalHtml}</div>
+    ${vaContractualNotice()}
+  </div>
+  ${vaPageFooter(d.logoUrl)}`;
 }
 
+// ─── Client body ──────────────────────────────────────────────────────────────
+
 function vaClientBody(d: VABuildUpData): string {
-  const today = todayStr();
+  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const item = d.item;
-  const attHtml = vaAttachmentHtml(d.attachments ?? []);
+  const atts = d.attachments ?? [];
 
-  return `<div class="page">
-    ${vaDocHeader('Variation Account', 'Client Copy', d.logoUrl)}
+  const buildUpSection = `<div class="va-section no-break">
+  <div class="va-section-head">
+    <div class="va-section-icon">&#9632;</div>
+    <div class="va-section-title">Cost Build-Up</div>
+  </div>
+  <div class="va-section-body">
+    ${buildUpTableHtml(d.lines, d.buildUpTotal, false)}
+  </div>
+</div>`;
 
-    <div class="var-header no-break">
-      <div class="var-ref">${esc(item.reference || 'VAR')}</div>
-      <div class="var-title">${esc(item.title || 'Untitled Variation')}</div>
-      <div style="margin-bottom:14px;">${statusBadgeHtml(item.status)}</div>
-      <div class="var-meta-grid">
-        <div class="var-meta-item"><span class="var-meta-label">Date Raised</span><span class="var-meta-value">${fmtD(item.date_raised)}</span></div>
-        ${item.date_agreed ? `<div class="var-meta-item"><span class="var-meta-label">Date Agreed</span><span class="var-meta-value">${fmtD(item.date_agreed)}</span></div>` : ''}
-        <div class="var-meta-item"><span class="var-meta-label">Direction</span><span class="var-meta-value">${item.is_positive ? 'Addition (+)' : 'Omission (-)'}</span></div>
+  const attHtml = atts.length
+    ? `<div class="va-bottom-box no-break">
+        <div class="va-bottom-head"><span class="va-bottom-icon">&#128206;</span> Attachments (${atts.length})</div>
+        <div class="va-bottom-body">${vaAttachmentHtml(atts)}</div>
+      </div>`
+    : `<div class="va-bottom-box">
+        <div class="va-bottom-head"><span class="va-bottom-icon">&#128206;</span> Attachments</div>
+        <div class="va-bottom-body"><p style="font-size:8pt;color:#94a3b8;font-style:italic;">No attachments.</p></div>
+      </div>`;
+
+  const approvalHtml = `<div class="va-bottom-box no-break">
+    <div class="va-bottom-head"><span class="va-bottom-icon">&#10003;</span> Approval</div>
+    <div class="va-bottom-body">
+      <div class="approval-row">
+        <div class="approval-label">Raised By</div>
+        <div class="approval-value">${esc(item.created_by ?? d.currentUserName ?? '—')}</div>
+        <div class="approval-date">${item.date_raised ? new Date(item.date_raised).toLocaleDateString('en-GB') : ''}</div>
+      </div>
+      <div class="approval-row">
+        <div class="approval-label">Agreed By</div>
+        <div class="approval-value" style="color:#94a3b8;">—</div>
+        <div class="approval-date"></div>
+      </div>
+      <div class="approval-row">
+        <div class="approval-label">Agreed Date</div>
+        <div class="approval-value">${item.date_agreed ? new Date(item.date_agreed).toLocaleDateString('en-GB') : '—'}</div>
+        <div class="approval-date"></div>
       </div>
     </div>
-
-    ${item.description ? `<div class="desc-block">
-      <div class="section-label">Description of Works</div>
-      ${fmtText(item.description)}
-    </div>` : ''}
-
-    ${item.reason ? `<div class="desc-block">
-      <div class="section-label">Reason / Cause</div>
-      ${fmtText(item.reason)}
-    </div>` : ''}
-
-    <div class="section-label">Cost Build-Up</div>
-    ${buildUpTableHtml(d.lines, d.buildUpTotal, false)}
-
-    ${d.buildUpTotal > 0 ? `<div class="grand-band no-break">
-      <div class="grand-label">Variation Total</div>
-      <div class="grand-value">${fv(d.buildUpTotal)}</div>
-    </div>` : ''}
-
-    ${attHtml}
-    ${vaDocFooter(today, 'Client', d.currentUserName)}
   </div>`;
+
+  const spacer = `<div style="flex:1;"></div>`;
+
+  return `
+  ${vaPageHeader(item, 'Client', d.logoUrl, today)}
+  ${vaInfoBand(item, d.project)}
+  <div class="va-body">
+    ${vaVariationDetails(item)}
+    ${buildUpSection}
+    <div class="va-bottom-grid">${attHtml}${spacer}${approvalHtml}</div>
+    ${vaContractualNotice()}
+  </div>
+  ${vaPageFooter(d.logoUrl)}`;
 }
 
 function vaBuildUpShell(title: string, body: string): string {
@@ -2016,22 +2311,6 @@ function vaBuildUpShell(title: string, body: string): string {
 </head>
 <body>${body}</body>
 </html>`;
-}
-
-
-
-export function exportPositionStatementPDF(data: PositionData): void {
-  openPrintTab(pageShell(`Commercial Position Statement — ${data.project.name}`, positionStatementBody(data)));
-}
-
-export function exportRegisterPDF(data: RegisterData): void {
-  const name = data.project?.name ?? 'All Projects';
-  openPrintTab(pageShell(`Commercial Register — ${name}`, registerBody(data)));
-}
-
-export function exportVariationAccountPDF(data: VAData): void {
-  const name = data.project?.name ?? '—';
-  openPrintTab(pageShell(`Variation Account — ${name}`, variationAccountBody(data)));
 }
 
 export function buildVAInternalHTML(data: VABuildUpData): string {
@@ -2050,6 +2329,20 @@ export function exportVAInternalPDF(data: VABuildUpData): void {
 
 export function exportVAClientPDF(data: VABuildUpData): void {
   openPrintTab(buildVAClientHTML(data));
+}
+
+export function exportPositionStatementPDF(data: PositionData): void {
+  openPrintTab(pageShell(`Commercial Position Statement — ${data.project.name}`, positionStatementBody(data)));
+}
+
+export function exportRegisterPDF(data: RegisterData): void {
+  const name = data.project?.name ?? 'All Projects';
+  openPrintTab(pageShell(`Commercial Register — ${name}`, registerBody(data)));
+}
+
+export function exportVariationAccountPDF(data: VAData): void {
+  const name = data.project?.name ?? '—';
+  openPrintTab(pageShell(`Variation Account — ${name}`, variationAccountBody(data)));
 }
 
 export function exportApplicationsPDF(data: ApplicationsData): void {

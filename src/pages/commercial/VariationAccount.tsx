@@ -786,9 +786,11 @@ function VariationDrawer({
       ...a,
       data_url: attDataCache[a.id] ?? a.data_url ?? '',
     }));
+    const proj = store.projects.find(p => p.id === projectId) ?? null;
     openPrintTab(buildVAInternalHTML({
       item, lines: buildUpLines, comments, attachments: attsWithData,
       buildUpTotal, logoUrl: store.settings?.logo_data_url, currentUserName: store.currentUser?.name,
+      project: proj ? { name: proj.name, client: proj.client, projectManager: proj.projectManager, startDate: proj.startDate } : null,
     }));
   }
 
@@ -799,9 +801,11 @@ function VariationDrawer({
       ...a,
       data_url: attDataCache[a.id] ?? a.data_url ?? '',
     }));
+    const proj = store.projects.find(p => p.id === projectId) ?? null;
     openPrintTab(buildVAClientHTML({
       item, lines: buildUpLines, attachments: attsWithData,
       buildUpTotal, logoUrl: store.settings?.logo_data_url, currentUserName: store.currentUser?.name,
+      project: proj ? { name: proj.name, client: proj.client, projectManager: proj.projectManager, startDate: proj.startDate } : null,
     }));
   }
 
