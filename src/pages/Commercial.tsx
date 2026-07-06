@@ -1553,6 +1553,14 @@ export default function Commercial() {
   useEffect(() => { loadRecords(); }, [loadRecords]);
   useEffect(() => { loadEvents(); }, [loadEvents]);
 
+  // Load detail data excluded from startup (VA build-up lines, VA comments, record
+  // comments). These are only needed in the Commercial module, so defer until here.
+  useEffect(() => {
+    store.loadVADetailData();
+    store.loadCommercialRecordComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function openNew() { setSelectedRecord(null); setIsNewRecord(true); setModalOpen(true); }
   function openRecord(r: CommercialRecord) { setSelectedRecord(r); setIsNewRecord(false); setModalOpen(true); }
 
@@ -1590,11 +1598,17 @@ export default function Commercial() {
 
   async function handleExportFull(selectedRecords: CommercialRecord[]) {
     if (!selectedRecords.length) return;
+
+    // Open a blank tab synchronously (before any await) to preserve the user gesture.
+    // Chrome blocks window.open() that runs after an await. We populate the tab
+    // with document.write() after building the HTML — reliable for same-origin blanks.
+    const tab = window.open('', '_blank');
+
     const ids = selectedRecords.map(r => r.id);
 
     const [lineItemsRes, attachmentsRes] = await Promise.all([
       supabase.from('vy_commercial_line_items').select('*').in('record_id', ids).order('sort_order'),
-      supabase.from('vy_attachments').select('*').in('record_id', ids),
+      supabase.from('vy_attachments').select('*').in('linked_id', ids),
     ]);
 
     const allLines: Record<string, CommercialLineItem[]> = {};
@@ -1632,9 +1646,16 @@ export default function Commercial() {
     ).join('');
 
     const name = bannerProject?.name ?? 'Export';
-    openPrintTab(
-      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(name)} — Commercial Records</title><style>${CLIENT_COPY_CSS}</style><script>window.onload=function(){window.print();};<\/script></head><body>${pages}</body></html>`
-    );
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(name)} — Commercial Records</title><style>${CLIENT_COPY_CSS}</style><script>window.onload=function(){window.print();};<\/script></head><body>${pages}</body></html>`;
+
+    if (tab) {
+      tab.document.write(html);
+      tab.document.close();
+    } else {
+      // Popup was blocked — fall back to blob URL approach
+      openPrintTab(html);
+    }
+
     logActivity({
       orgId,
       userName: store.currentUser?.name ?? '',

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Lock, Ban, AlertTriangle, CheckCircle, FlaskConical } from 'lucide-react';
 import Sidebar, { type Page } from './components/Sidebar';
 import Header from './components/Header';
@@ -20,7 +20,7 @@ import Login from './pages/Login';
 import SetPassword from './pages/SetPassword';
 import SuperAdmin from './pages/SuperAdmin';
 import SuperAdminOrganisations from './pages/SuperAdminOrganisations';
-import { StoreContext, usePermissions } from './lib/StoreContext';
+import { StoreContext, usePermissions, useAppStore } from './lib/StoreContext';
 import { useStore } from './lib/store';
 import { useAuth } from './lib/AuthContext';
 import { OrgSettingsProvider, useOrgSettings } from './lib/OrgSettingsContext';
@@ -52,53 +52,64 @@ function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pending
   isSuperAdmin: boolean;
 }) {
   const perms = usePermissions();
-  const { isModuleEnabled } = useOrgSettings();
+  const { isModuleEnabled, loading: orgSettingsLoading } = useOrgSettings();
+  const store = useAppStore();
+
+  // Do not show "Access Restricted" while org settings or the user profile are
+  // still resolving. Both have brief loading windows where permissions appear
+  // false even for users who genuinely have access. Return null (blank) instead.
+  const permissionsReady = !orgSettingsLoading && !!store.currentUser;
+
+  function guard(condition: boolean, node: React.ReactNode, label: string): React.ReactNode {
+    if (!permissionsReady) return null;
+    return condition ? node : <AccessRestricted label={label} />;
+  }
 
   switch (activePage) {
     case 'dashboard':
       return <Dashboard onNavigate={navigateTo} onNavigateProject={(id) => { setPendingProjectId(id); navigateTo('projects'); }} />;
     case 'tenders':
-      return (perms['tender.view'] && isModuleEnabled('tenders'))
-        ? <TenderTracker onConvertToProject={() => navigateTo('projects')} pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} />
-        : <AccessRestricted label="Tender & Estimating" />;
+      return guard(perms['tender.view'] && isModuleEnabled('tenders'),
+        <TenderTracker onConvertToProject={() => navigateTo('projects')} pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} />,
+        'Tender & Estimating');
     case 'projects':
-      return ((perms['modules.projects'] || perms['projects.view_all'] || perms['projects.view_assigned']) && isModuleEnabled('projects'))
-        ? <Projects onNavigate={(page, open) => { if (open) setPendingOpen(open); navigateTo(page); }} pendingProjectId={pendingProjectId} onPendingProjectConsumed={() => setPendingProjectId(null)} />
-        : <AccessRestricted label="Projects" />;
+      return guard((perms['modules.projects'] || perms['projects.view_all'] || perms['projects.view_assigned']) && isModuleEnabled('projects'),
+        <Projects onNavigate={(page, open) => { if (open) setPendingOpen(open); navigateTo(page); }} pendingProjectId={pendingProjectId} onPendingProjectConsumed={() => setPendingProjectId(null)} />,
+        'Projects');
     case 'commercial':
-      return (perms['modules.commercial'] && isModuleEnabled('commercial'))
-        ? <Commercial />
-        : <AccessRestricted label="Commercial" />;
+      return guard(perms['modules.commercial'] && isModuleEnabled('commercial'),
+        <Commercial />,
+        'Commercial');
     case 'maintenance':
-      return (perms['maintenance.view'] && isModuleEnabled('maintenance'))
-        ? <MaintenanceServicing />
-        : <AccessRestricted label="Maintenance & Servicing" />;
+      return guard(perms['maintenance.view'] && isModuleEnabled('maintenance'),
+        <MaintenanceServicing />,
+        'Maintenance & Servicing');
     case 'site-forms':
-      return (perms['modules.site_forms'] && isModuleEnabled('site-forms'))
-        ? <SiteForms pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} pendingFilter={pendingFilter} onPendingFilterConsumed={() => setPendingFilter(null)} />
-        : <AccessRestricted label="Site Forms" />;
+      return guard(perms['modules.site_forms'] && isModuleEnabled('site-forms'),
+        <SiteForms pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} pendingFilter={pendingFilter} onPendingFilterConsumed={() => setPendingFilter(null)} />,
+        'Site Forms');
     case 'snagging':
-      return (perms['modules.snagging'] && isModuleEnabled('snagging'))
-        ? <Snagging pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} pendingFilter={pendingFilter} onPendingFilterConsumed={() => setPendingFilter(null)} />
-        : <AccessRestricted label="Snagging" />;
+      return guard(perms['modules.snagging'] && isModuleEnabled('snagging'),
+        <Snagging pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} pendingFilter={pendingFilter} onPendingFilterConsumed={() => setPendingFilter(null)} />,
+        'Snagging');
     case 'actions':
-      return (perms['modules.actions'] && isModuleEnabled('actions'))
-        ? <Actions pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} pendingFilter={pendingFilter} onPendingFilterConsumed={() => setPendingFilter(null)} />
-        : <AccessRestricted label="Actions Tracker" />;
+      return guard(perms['modules.actions'] && isModuleEnabled('actions'),
+        <Actions pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} pendingFilter={pendingFilter} onPendingFilterConsumed={() => setPendingFilter(null)} />,
+        'Actions Tracker');
     case 'testing':
-      return (perms['modules.testing'] && isModuleEnabled('testing'))
-        ? <OAndMManual />
-        : <AccessRestricted label="O&M Manual" />;
+      return guard(perms['modules.testing'] && isModuleEnabled('testing'),
+        <OAndMManual />,
+        'O&M Manual');
     case 'reports':
-      return (perms['modules.reports'] && isModuleEnabled('reports'))
-        ? <Reports />
-        : <AccessRestricted label="Reports" />;
+      return guard(perms['modules.reports'] && isModuleEnabled('reports'),
+        <Reports />,
+        'Reports');
     case 'beta-feedback':
       return <BetaFeedback />;
     case 'settings':
-      return perms['admin.manage_settings']
-        ? <Settings />
-        : <AccessRestricted label="Settings" />;
+      return guard(!!perms['admin.manage_settings'],
+        <Settings />,
+        'Settings');
     case 'super-admin':
       return isSuperAdmin ? <SuperAdmin /> : <AccessRestricted label="Super Admin" />;
     case 'super-admin-orgs':

@@ -1150,6 +1150,10 @@ export interface AppStore {
   addCommercialRecordComment: (c: DBCommercialRecordComment) => Promise<void>;
   removeCommercialRecordComment: (id: string) => Promise<void>;
 
+  // On-demand loaders for detail data excluded from startup
+  loadVADetailData: () => Promise<void>;
+  loadCommercialRecordComments: () => Promise<void>;
+
   // Commercial Applications
   commercialApplications: DBCommercialApplication[];
   addCommercialApplication: (a: DBCommercialApplication) => Promise<void>;
@@ -1261,13 +1265,48 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       // data_url excluded — fetched on-demand when a document is opened
       const DOC_COLS = 'id,project_id,project_name,name,type,size,category,uploaded_by,created_at,org_id';
 
-      // All queries are explicitly scoped to the resolved org — no global reads.
-      const [projRes, docRes, attRes, actRes, snaRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, kdRes, puRes, notifRes, settingsRes, vaRes, appRes, vaLinesRes, vaCommentsRes, crCommentsRes] = await Promise.all([
+      // ── Phase 1: essential shell data — blocks the loading spinner ──────────
+      // Keep this list short: only data needed to render the first visible screen
+      // (dashboard, nav, permissions, notifications). Everything else defers.
+      const [projRes, puRes, settingsRes, actRes, snaRes, notifRes, kdRes] = await Promise.all([
         supabase.from('vy_projects').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
-        supabase.from('vy_project_documents').select(DOC_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_platform_users').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
+        supabase.from('vy_settings').select('*').eq('org_id', orgId).maybeSingle(),
         supabase.from('vy_actions').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_snags').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_notifications').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_key_dates').select('*').eq('org_id', orgId).order('date', { ascending: true }),
+      ]);
+
+      if (cancelled) return;
+
+      console.log('[VYSITE] load() phase-1 done:',
+        'projects:', projRes.data?.length ?? 0,
+        '| platformUsers:', puRes.data?.length ?? 0,
+        '| settings:', settingsRes.data ? 'found' : 'none',
+      );
+      if (projRes.error) console.error('[VYSITE] load vy_projects error:', projRes.error);
+      if (puRes.error) console.error('[VYSITE] load vy_platform_users error:', puRes.error);
+      if (settingsRes.error) console.error('[VYSITE] load vy_settings error:', settingsRes.error);
+
+      setProjects((projRes.data ?? []).map(r => dbToProject(r as DBProject)));
+      setPlatformUsers((puRes.data ?? []) as DBPlatformUser[]);
+      if (settingsRes.data) setSettings({ ...DEFAULT_SETTINGS, ...(settingsRes.data as DBSettings) });
+      setActions((actRes.data ?? []).map(r => dbToAction(r as DBAction)));
+      setSnags((snaRes.data ?? []).map(r => dbToSnag(r as DBSnag)));
+      setNotifications((notifRes.data ?? []) as DBNotification[]);
+      setKeyDates((kdRes.data ?? []) as DBKeyDate[]);
+
+      // Release loading spinner — UI can render now. Phase 2 runs in background.
+      setLoading(false);
+
+      // ── Phase 2: supporting data — non-blocking, loads after UI renders ─────
+      // These tables are only needed when the user navigates to specific modules.
+      // Loading them here (rather than on-demand) keeps state management simple
+      // while still avoiding blocking the initial render.
+      const [docRes, attRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes] = await Promise.all([
+        supabase.from('vy_project_documents').select(DOC_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_snagging_reports').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_site_forms').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_tenders').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
@@ -1275,41 +1314,19 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
         supabase.from('vy_maintenance_jobs').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_programmes').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
         supabase.from('vy_programme_tasks').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
-        supabase.from('vy_key_dates').select('*').eq('org_id', orgId).order('date', { ascending: true }),
-        supabase.from('vy_platform_users').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
-        supabase.from('vy_notifications').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_settings').select('*').eq('org_id', orgId).maybeSingle(),
         supabase.from('vy_variation_account').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_commercial_applications').select('*').eq('org_id', orgId).order('app_number', { ascending: true }),
-        supabase.from('vy_va_build_up_lines').select('*').eq('org_id', orgId).order('line_no', { ascending: true }),
-        supabase.from('vy_va_comments').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
-        supabase.from('vy_commercial_record_comments').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
       ]);
 
       if (cancelled) return;
 
-      console.log('[VYSITE] load() results:',
-        'projects:', projRes.data?.length ?? 0,
-        '| platformUsers:', puRes.data?.length ?? 0,
-        '| tenders:', tenRes.data?.length ?? 0,
-        '| settings:', settingsRes.data ? 'found' : 'none',
-      );
-      if (projRes.error) console.error('[VYSITE] load vy_projects error:', projRes.error);
-      if (puRes.error) console.error('[VYSITE] load vy_platform_users error:', puRes.error);
-      if (tenRes.error) console.error('[VYSITE] load vy_tenders error:', tenRes.error);
-      if (settingsRes.error) console.error('[VYSITE] load vy_settings error:', settingsRes.error);
-
-      setProjects((projRes.data ?? []).map(r => dbToProject(r as DBProject)));
       setProjectDocuments((docRes.data ?? []) as DBProjectDocument[]);
       setAttachments((attRes.data ?? []) as DBAttachment[]);
-      setActions((actRes.data ?? []).map(r => dbToAction(r as DBAction)));
-      setSnags((snaRes.data ?? []).map(r => dbToSnag(r as DBSnag)));
       setSnaggingReports((snrRes.data ?? []) as DBSnaggingReport[]);
       setSiteForms(((frmRes.data ?? []) as DBSiteForm[]).map(f => ({
         ...(f.extra_data as Record<string, unknown> ?? {}),
         ...f,
         form_comments: f.form_comments ?? [],
-        // camelCase aliases so UI code using projectName / completedBy works
         projectName: f.project_name,
         projectId: f.project_id,
         completedBy: f.completed_by,
@@ -1320,16 +1337,14 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setMaintenanceJobs((mjRes.data ?? []) as DBMaintenanceJob[]);
       setProgrammes((progRes.data ?? []) as DBProgramme[]);
       setProgrammeTasks((ptaskRes.data ?? []) as DBProgrammeTask[]);
-      setKeyDates((kdRes.data ?? []) as DBKeyDate[]);
-      setPlatformUsers((puRes.data ?? []) as DBPlatformUser[]);
-      setNotifications((notifRes.data ?? []) as DBNotification[]);
-      if (settingsRes.data) setSettings({ ...DEFAULT_SETTINGS, ...(settingsRes.data as DBSettings) });
       setVariationAccountItems((vaRes.data ?? []) as DBVariationAccountItem[]);
-      setVABuildUpLines((vaLinesRes.data ?? []) as DBVABuildUpLine[]);
-      setVAComments((vaCommentsRes.data ?? []) as DBVAComment[]);
-      setCommercialRecordComments((crCommentsRes.data ?? []) as DBCommercialRecordComment[]);
       setCommercialApplications((appRes.data ?? []) as DBCommercialApplication[]);
-      setLoading(false);
+
+      // ── Phase 3: detail data loaded on-demand ────────────────────────────────
+      // vy_va_build_up_lines, vy_va_comments, vy_commercial_record_comments are
+      // never needed until the user opens a specific variation or record.
+      // Call store.loadVADetailData() / store.loadCommercialRecordComments()
+      // from the relevant component on first mount.
     }
 
     load().finally(() => clearTimeout(loadingTimeout));
@@ -1806,6 +1821,29 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('removeCommercialRecordComment', 'vy_commercial_record_comments', error);
   }, []);
 
+  // ── On-demand detail loaders ──────────────────────────────────────────────────
+  // These tables are excluded from startup to reduce initial load time.
+  // Call them once from the relevant component on first mount.
+  // They are idempotent — safe to call multiple times; already-loaded data is merged.
+
+  const loadVADetailData = useCallback(async () => {
+    const oid = orgIdRef.current;
+    if (!oid) return;
+    const [linesRes, commentsRes] = await Promise.all([
+      supabase.from('vy_va_build_up_lines').select('*').eq('org_id', oid).order('line_no', { ascending: true }),
+      supabase.from('vy_va_comments').select('*').eq('org_id', oid).order('created_at', { ascending: true }),
+    ]);
+    if (linesRes.data) setVABuildUpLines(linesRes.data as DBVABuildUpLine[]);
+    if (commentsRes.data) setVAComments(commentsRes.data as DBVAComment[]);
+  }, []);
+
+  const loadCommercialRecordComments = useCallback(async () => {
+    const oid = orgIdRef.current;
+    if (!oid) return;
+    const { data } = await supabase.from('vy_commercial_record_comments').select('*').eq('org_id', oid).order('created_at', { ascending: true });
+    if (data) setCommercialRecordComments(data as DBCommercialRecordComment[]);
+  }, []);
+
   // ── Commercial Applications ────────────────────────────────────────────────
 
   const addCommercialApplication = useCallback(async (a: DBCommercialApplication) => {
@@ -1891,6 +1929,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addVAComment, removeVAComment,
     commercialRecordComments,
     addCommercialRecordComment, removeCommercialRecordComment,
+    loadVADetailData, loadCommercialRecordComments,
     commercialApplications,
     addCommercialApplication, updateCommercialApplication, removeCommercialApplication,
   };
