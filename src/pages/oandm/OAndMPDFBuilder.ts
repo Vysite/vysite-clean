@@ -131,12 +131,12 @@ const FTR_TEXT_Y = 30;   // footer text baseline y
 const CONTENT_BOT = 62;  // content must not go below this y
 
 // ─── Within-content spacing tokens ────────────────────────────────────────────
-const SECTION_GAP = 26;   // gap between major content blocks
-const PARA_GAP    = 14;   // gap between paragraph-level items
-const ROW_H       = 14;   // single row height in lists / tables
-const LABEL_V     = 10;   // vertical space for a small label above its value
-const CARD_H      = 14;   // horizontal padding inside panels / cards
-const CARD_V      = 12;   // vertical padding inside panels / cards
+const SECTION_GAP = 28;   // gap between major content blocks
+const PARA_GAP    = 16;   // gap between paragraph-level items
+const ROW_H       = 16;   // single row height in lists / tables
+const LABEL_V     = 12;   // vertical space for a small label above its value
+const CARD_H      = 16;   // horizontal padding inside panels / cards
+const CARD_V      = 14;   // vertical padding inside panels / cards
 
 // ─── Colour palette ───────────────────────────────────────────────────────────
 
@@ -226,7 +226,7 @@ class BuildContext {
     dt(p, this.regular, leftFtr, PG_L, FTR_TEXT_Y, 6.5, C_MUTED);
     const rightFtr = `VYSITE\xAE  \xB7  Page ${this.pageCount}`;
     const rw = this.regular.widthOfTextAtSize(rightFtr, 6.5);
-    dt(p, this.regular, rightFtr, PAGE_W - PG_R - rw, FTR_TEXT_Y, 6.5, C_FAINT);
+    dt(p, this.regular, rightFtr, PAGE_W - PG_R - rw, FTR_TEXT_Y, 6.5, C_MUTED);
   }
 
   // ── Cover page ───────────────────────────────────────────────────────────────
@@ -273,37 +273,42 @@ class BuildContext {
     dt(p, this.bold, statusText, PAGE_W - PG_R - bw + 11, badgeCentreY - 3, 8, badgeCol);
 
     // ─── Zone B: manual title block  (fixed vertical anchor)
-    // Starts at a consistent position regardless of logo height.
-    // Eyebrow label, then large title, then optional version pill.
+    // Eyebrow label sits at ZONE_B_TOP.
+    // Title starts 32pt below eyebrow — enough clearance so they never touch.
     // Bottom of zone B is clamped so it never reaches zone C.
     const ZONE_B_TOP = Math.round(PAGE_H * 0.595);  // ~501 — eyebrow sits here
     const ZONE_C_TOP = Math.round(PAGE_H * 0.285);  // ~240 — metadata zone starts here
 
     dt(p, this.regular, 'OPERATION & MAINTENANCE MANUAL', LOGO_X, ZONE_B_TOP, 8, C_MUTED, { ls: 2.5 });
 
-    // Title — starting 22pt below eyebrow
-    const TITLE_START_Y = ZONE_B_TOP - 22;
-    // Max width: full content column
-    const titleMaxW = PAGE_W - LOGO_X - PG_R - 6;
-    // lineH for 32pt font: 40pt
-    const titleBottom = wrapText(p, this.bold, manual.title, LOGO_X, TITLE_START_Y,
-      titleMaxW, 32, C_INK, 40);
+    // Separator rule between eyebrow and title — makes hierarchy unmistakable
+    p.drawLine({
+      start: { x: LOGO_X, y: ZONE_B_TOP - 14 },
+      end:   { x: LOGO_X + 200, y: ZONE_B_TOP - 14 },
+      thickness: 0.5,
+      color: C_FAINT,
+    });
 
-    // Version pill — always 18pt below bottom of title block, never below ZONE_C_TOP + 50
+    // Title — starting 32pt below eyebrow baseline (was 22 — too close)
+    const TITLE_START_Y = ZONE_B_TOP - 32;
+    const titleMaxW = PAGE_W - LOGO_X - PG_R - 6;
+    const titleBottom = wrapText(p, this.bold, manual.title, LOGO_X, TITLE_START_Y,
+      titleMaxW, 32, C_INK, 42);
+
+    // Version pill — 20pt below bottom of title block, never below ZONE_C_TOP + 50
     if (manual.version) {
-      const vpTop = Math.max(titleBottom - 18, ZONE_C_TOP + 52);
+      const vpTop = Math.max(titleBottom - 20, ZONE_C_TOP + 52);
       const vw = this.regular.widthOfTextAtSize(manual.version, 10) + 24;
       p.drawRectangle({ x: LOGO_X, y: vpTop - 20, width: vw, height: 20, color: rgb(0.95, 0.97, 0.99), borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
       dt(p, this.regular, manual.version, LOGO_X + 12, vpTop - 10, 10, C_MID);
     }
 
     // ─── Zone C: metadata grid  (fixed anchor at ZONE_C_TOP)
-    // Separator rule at ZONE_C_TOP, metadata below it.
     p.drawLine({ start: { x: LOGO_X, y: ZONE_C_TOP }, end: { x: PAGE_W - PG_R, y: ZONE_C_TOP }, thickness: 0.8, color: C_FAINT });
 
     const COL_W      = (PAGE_W - LOGO_X - PG_R) / 2;
-    const META_ROW_H = 42;
-    const META_START = ZONE_C_TOP - 22;  // first row label top
+    const META_ROW_H = 48;
+    const META_START = ZONE_C_TOP - 24;  // first row value baseline
 
     const metaRows: [string, string][] = [
       ['Project',         project.name],
@@ -318,11 +323,10 @@ class BuildContext {
       const col = i % 2;
       const row = Math.floor(i / 2);
       const gx  = LOGO_X + col * COL_W;
-      // gy is the y of the value text; label sits LABEL_V above it
       const gy  = META_START - row * META_ROW_H;
-      // Guard: don't draw below the page
       if (gy - 14 < 20) return;
-      dt(p, this.bold, label.toUpperCase(), gx, gy + LABEL_V, 6.5, C_MUTED, { ls: 1.2 });
+      // Label sits 14pt above value baseline
+      dt(p, this.regular, label.toUpperCase(), gx, gy + 14, 6.5, C_MUTED, { ls: 1.2 });
       wrapText(p, this.bold, value, gx, gy, COL_W - 14, 10.5, C_BODY, 14);
     });
 
@@ -335,58 +339,69 @@ class BuildContext {
   async addContentsPage(sections: DBOAndMSection[], items: DBOAndMItem[]) {
     const { page, y: startY } = this.newPage(C_ORANGE);
 
-    // Chapter title block — positioned at top of content area
     let y = startY;
-    dt(page, this.regular, 'TABLE OF', PG_L, y, 8, C_MUTED, { ls: 2.5 });
-    y -= 24;
+
+    // Page heading block
+    dt(page, this.regular, 'TABLE OF CONTENTS', PG_L, y, 7.5, C_MUTED, { ls: 2.5 });
+    y -= 26;
     dt(page, this.bold, 'Contents', PG_L, y, 30, C_INK);
-    y -= 10;
-    page.drawRectangle({ x: PG_L, y: y - 3, width: 50, height: 3, color: C_ORANGE });
-    y -= SECTION_GAP + 6;
+    y -= 8;
+    page.drawRectangle({ x: PG_L, y: y - 3, width: 44, height: 3, color: C_ORANGE });
+    y -= SECTION_GAP + 10;
 
     // Section rows
     for (const [idx, sec] of sections.entries()) {
       const itemCount  = items.filter(i => i.section_id === sec.id).length;
       const numStr     = String(idx + 1).padStart(2, '0');
-      const badgeW     = this.bold.widthOfTextAtSize(String(itemCount), 9) + 18;
-      const titleMaxW  = PG_CW - 36 - badgeW - 16;
+      const badgeW     = this.bold.widthOfTextAtSize(String(itemCount), 9) + 20;
+      const titleMaxW  = PG_CW - 40 - badgeW - 20;
       const titleLines = measureLines(this.bold, san(sec.title), titleMaxW, 11);
-      // Row height: title lines + optional description + internal padding
-      const rowH = titleLines.length * ROW_H + (sec.description ? ROW_H + 4 : 0) + 14;
+      const descLines  = sec.description
+        ? measureLines(this.regular, san(sec.description), titleMaxW, 9)
+        : [];
+      // Row height: title lines (16pt each) + optional desc lines (13pt each) + vertical padding
+      const titleBlockH = titleLines.length * ROW_H;
+      const descBlockH  = descLines.length > 0 ? descLines.length * 13 + 6 : 0;
+      const rowH        = titleBlockH + descBlockH + 18;
 
-      if (y - rowH < CONTENT_BOT + 4) break;
+      if (y - rowH < CONTENT_BOT + 8) break;
 
-      // Alternating row tint — positioned to exactly cover the row, no overlap with adjacent rows
+      // Alternating row tint — tight to the row, no overlap
       if (idx % 2 === 0) {
         page.drawRectangle({
-          x: PG_L - 6, y: y - rowH + 8,
-          width: PG_CW + 12, height: rowH,
-          color: rgb(0.985, 0.989, 0.994),
+          x: PG_L - 8,
+          y: y - rowH + 4,
+          width: PG_CW + 16,
+          height: rowH,
+          color: rgb(0.984, 0.988, 0.994),
         });
       }
 
-      // Section number (faint, left)
-      dt(page, this.bold, numStr, PG_L, y, 10, C_FAINT);
+      // Section number — vertically centred to first title line baseline
+      dt(page, this.bold, numStr, PG_L + 2, y, 10, C_FAINT);
 
-      // Section title — wraps within measured width
+      // Section title lines
       titleLines.forEach((line, li) => {
-        page.drawText(line, { x: PG_L + 34, y: y - li * ROW_H, size: 11, font: this.bold, color: C_BODY });
+        page.drawText(san(line), { x: PG_L + 36, y: y - li * ROW_H, size: 11, font: this.bold, color: C_BODY });
       });
 
-      // Item count badge — right side, vertically centred to first title line
-      const badgeTopY = y - titleLines.length * ROW_H / 2 - 9;
-      page.drawRectangle({ x: PAGE_W - PG_R - badgeW, y: badgeTopY, width: badgeW, height: 18, color: rgb(0.93, 0.96, 0.99), borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
-      dt(page, this.bold, String(itemCount), PAGE_W - PG_R - badgeW + 9, badgeTopY + 9, 9, C_MUTED);
+      // Item count badge — right side, vertically centred to the title block
+      const badgeMidY = y - titleBlockH / 2;
+      const badgeY    = badgeMidY - 9;
+      page.drawRectangle({ x: PAGE_W - PG_R - badgeW, y: badgeY, width: badgeW, height: 18, color: rgb(0.930, 0.955, 0.988), borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 3 });
+      dt(page, this.bold, String(itemCount), PAGE_W - PG_R - badgeW + 10, badgeY + 5, 9, C_MUTED);
 
-      // Optional description — immediately below title block
-      if (sec.description) {
-        dt(page, this.regular, san(sec.description), PG_L + 34, y - titleLines.length * ROW_H - 2, 8.5, C_MUTED);
+      // Optional description — below title block with a small gap
+      if (descLines.length > 0) {
+        const descStartY = y - titleBlockH - 4;
+        descLines.forEach((line, li) => {
+          dt(page, this.regular, san(line), PG_L + 36, descStartY - li * 13, 9, C_MUTED);
+        });
       }
 
       y -= rowH;
-      // Separator rule at bottom of row — drawn in neutral faint colour
-      page.drawLine({ start: { x: PG_L, y: y + 2 }, end: { x: PAGE_W - PG_R, y: y + 2 }, thickness: 0.4, color: C_FAINT });
-      y -= 8;
+      page.drawLine({ start: { x: PG_L, y: y + 2 }, end: { x: PAGE_W - PG_R, y: y + 2 }, thickness: 0.3, color: C_FAINT });
+      y -= 6;
     }
   }
 
@@ -397,85 +412,82 @@ class BuildContext {
 
     const numStr = String(index + 1).padStart(2, '0');
 
-    // Watermark number — drawn in the LOWER half of content area so it never
-    // intersects with the text in the upper content area.
-    // At size 148, the glyph is ~148pt tall. We place its baseline at the midpoint
-    // of the content area minus a margin, keeping it entirely decorative.
-    const wmBaseY = Math.round((CONTENT_TOP + CONTENT_BOT) / 2) - 40;
+    // Watermark section number — lower half of content area, purely decorative
+    const wmBaseY = Math.round((CONTENT_TOP + CONTENT_BOT) / 2) - 50;
     page.drawText(numStr, {
-      x: PAGE_W - PG_R - 108,
+      x: PAGE_W - PG_R - 116,
       y: wmBaseY,
       size: 148,
       font: this.bold,
       color: rgb(0.945, 0.958, 0.967),
     });
 
-    // Content — always starts at CONTENT_TOP, well above the watermark baseline
     let y = startY;
 
-    // Section eyebrow
+    // Eyebrow: "SECTION 01"
     dt(page, this.regular, `SECTION ${numStr}`, PG_L, y, 8, C_MUTED, { ls: 2.5 });
-    y -= 20;
+    y -= 24;
 
-    // Section title (large, wraps; available width avoids the watermark area)
+    // Section title — large, wraps; width limited to avoid watermark area
     const titleBottom = wrapText(page, this.bold, section.title, PG_L, y,
-      PG_CW - 90, 28, C_INK, 36);
+      PG_CW - 100, 28, C_INK, 38);
     y = titleBottom;
 
-    // Orange accent rule — 10pt below last line of title
-    y -= 10;
-    page.drawRectangle({ x: PG_L, y: y - 1, width: 50, height: 3, color: C_ORANGE });
-    y -= SECTION_GAP + 2;
+    // Orange accent underline — 12pt below last title line
+    y -= 12;
+    page.drawRectangle({ x: PG_L, y: y - 2, width: 44, height: 3, color: C_ORANGE });
+    y -= SECTION_GAP + 4;
 
     // Optional description
     if (section.description) {
-      const descBottom = wrapText(page, this.regular, section.description, PG_L, y,
-        PG_CW - 90, 11, C_MID, 17);
+      const descBottom = wrapText(page, this.regular, san(section.description), PG_L, y,
+        PG_CW - 100, 11, C_MID, 17);
       y = descBottom - SECTION_GAP;
     }
 
-    // Document list
+    // Document index list
     if (sectionItems.length > 0) {
-      // Ensure the list header never collides with content above it
-      y = Math.min(y, CONTENT_TOP - 140);  // safety cap
+      // Always leave enough room above the list header
+      y = Math.min(y, CONTENT_TOP - 150);
 
-      dt(page, this.bold, 'DOCUMENTS IN THIS SECTION', PG_L, y, 7, C_MUTED, { ls: 1.5 });
-      y -= 12;
+      dt(page, this.bold, 'DOCUMENTS IN THIS SECTION', PG_L, y, 7, C_MUTED, { ls: 1.8 });
+      y -= 14;
       page.drawLine({ start: { x: PG_L, y }, end: { x: PAGE_W - PG_R, y }, thickness: 0.5, color: C_FAINT });
-      y -= 16;
+      y -= 18;
 
       for (const [i, item] of sectionItems.slice(0, 24).entries()) {
-        if (y < CONTENT_BOT + 24) break;
+        if (y < CONTENT_BOT + 28) break;
 
-        const badge      = item.source_module === 'tc_record' ? 'T&C'
+        const badge       = item.source_module === 'tc_record' ? 'T&C'
           : item.source_module === 'site_form' ? 'FORM' : 'DOC';
-        const bw         = this.bold.widthOfTextAtSize(badge, 7) + 14;
-        const titleMaxW  = PG_CW - 30 - bw - 14;
-        const titleLines = measureLines(this.bold, san(item.title ?? ''), titleMaxW, 10);
+        const bw          = this.bold.widthOfTextAtSize(badge, 7) + 16;
+        const titleMaxW   = PG_CW - 36 - bw - 16;
+        const titleLines  = measureLines(this.bold, san(item.title ?? ''), titleMaxW, 10);
         const titleBlockH = titleLines.length * ROW_H;
         const hasSubtitle = !!item.subtitle;
-        const rowH       = titleBlockH + (hasSubtitle ? ROW_H : 0) + 10;
+        const rowH        = titleBlockH + (hasSubtitle ? 14 : 0) + 14;
 
-        // Row index
-        dt(page, this.bold, String(i + 1).padStart(2, '0'), PG_L, y, 8, C_FAINT);
+        // Row index number
+        dt(page, this.bold, String(i + 1).padStart(2, '0'), PG_L, y, 8.5, C_FAINT);
 
-        // Title lines
+        // Title lines — indent from the number
         titleLines.forEach((line, li) => {
-          page.drawText(line, { x: PG_L + 28, y: y - li * ROW_H, size: 10, font: this.bold, color: C_BODY });
+          page.drawText(san(line), { x: PG_L + 30, y: y - li * ROW_H, size: 10, font: this.bold, color: C_BODY });
         });
 
-        // Type badge — top of row, right-aligned
-        page.drawRectangle({ x: PAGE_W - PG_R - bw, y: y - 11, width: bw, height: 14, color: C_PANEL, borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
-        dt(page, this.bold, badge, PAGE_W - PG_R - bw + 7, y - 3, 7, C_MUTED);
+        // Type badge — vertically centred to title block, right-aligned
+        const badgeMidY = y - titleBlockH / 2;
+        page.drawRectangle({ x: PAGE_W - PG_R - bw, y: badgeMidY - 8, width: bw, height: 16, color: C_PANEL, borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
+        dt(page, this.bold, badge, PAGE_W - PG_R - bw + 8, badgeMidY - 3, 7, C_MUTED);
 
-        // Subtitle (below title block, same indent)
+        // Optional subtitle
         if (hasSubtitle) {
-          dt(page, this.regular, san(item.subtitle!), PG_L + 28, y - titleBlockH, 8, C_MUTED);
+          dt(page, this.regular, san(item.subtitle!), PG_L + 30, y - titleBlockH - 2, 8.5, C_MUTED);
         }
 
         y -= rowH;
-        page.drawLine({ start: { x: PG_L + 28, y: y + 2 }, end: { x: PAGE_W - PG_R, y: y + 2 }, thickness: 0.3, color: C_FAINT });
-        y -= 6;
+        page.drawLine({ start: { x: PG_L + 30, y: y + 2 }, end: { x: PAGE_W - PG_R, y: y + 2 }, thickness: 0.3, color: C_FAINT });
+        y -= 8;
       }
     }
   }
@@ -572,24 +584,24 @@ class BuildContext {
     const { page, y: startY } = this.newPage(C_FAINT);
     let y = startY;
 
-    // Left accent rule — spans full content height, never overlaps text
+    // Left accent rule — spans full content height
     page.drawRectangle({
-      x: PG_L - 18,
+      x: PG_L - 20,
       y: CONTENT_BOT,
       width: 2.5,
       height: CONTENT_TOP - CONTENT_BOT,
       color: C_FAINT,
     });
 
-    // Category breadcrumb (top-left) + type badge (top-right) — same baseline
+    // Category breadcrumb (top-left) + type badge (top-right)
     const catLabel = (doc.category || 'Project Document').toUpperCase();
     dt(page, this.regular, catLabel, PG_L, y, 7.5, C_MUTED, { ls: 2 });
 
-    const tagW = this.bold.widthOfTextAtSize(typeTag, 8) + 16;
+    const tagW = this.bold.widthOfTextAtSize(typeTag, 8) + 18;
     page.drawRectangle({ x: PAGE_W - PG_R - tagW, y: y - 14, width: tagW, height: 18, color: C_PANEL, borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
-    dt(page, this.bold, typeTag, PAGE_W - PG_R - tagW + 8, y - 6, 8, C_MID, { ls: 0.8 });
+    dt(page, this.bold, typeTag, PAGE_W - PG_R - tagW + 9, y - 6, 8, C_MID, { ls: 0.8 });
 
-    y -= SECTION_GAP;
+    y -= SECTION_GAP + 4;
 
     // Document title (large, wraps)
     const titleBottom = wrapText(page, this.bold, displayName, PG_L, y, PG_CW - 6, 22, C_INK, 30);
@@ -599,16 +611,16 @@ class BuildContext {
     if (item.subtitle) {
       y -= PARA_GAP;
       dt(page, this.regular, san(item.subtitle), PG_L, y, 11, C_MID);
-      y -= 18;
+      y -= 20;
     } else {
       y -= PARA_GAP;
     }
 
     // Separator rule
     page.drawLine({ start: { x: PG_L, y }, end: { x: PAGE_W - PG_R, y }, thickness: 0.5, color: C_FAINT });
-    y -= SECTION_GAP;
+    y -= SECTION_GAP + 4;
 
-    // Metadata grid — 2 columns, rows of 44pt each
+    // Metadata grid — 2 columns, 52pt row pitch to give labels and values room
     const metaFields: [string, string][] = (
       [
         ['Category',    doc.category || '\x97'],
@@ -618,34 +630,38 @@ class BuildContext {
       ] as [string, string][]
     ).filter(([, v]) => v !== '\x97' && v !== '');
 
-    const mColW = PG_CW / 2;
+    const mColW    = PG_CW / 2;
+    const mRowPitch = 52;
     metaFields.forEach(([label, value], i) => {
       const col = i % 2;
       const row = Math.floor(i / 2);
       const mx  = PG_L + col * mColW;
-      const my  = y - row * 44;
-      dt(page, this.bold, label.toUpperCase(), mx, my, 7, C_MUTED, { ls: 1 });
-      dt(page, this.bold, value, mx, my - 14, 10, C_BODY);
-      page.drawLine({ start: { x: mx, y: my - 28 }, end: { x: mx + mColW - 14, y: my - 28 }, thickness: 0.3, color: C_FAINT });
+      const my  = y - row * mRowPitch;
+      // Label
+      dt(page, this.regular, label.toUpperCase(), mx, my, 7, C_MUTED, { ls: 1.2 });
+      // Value — 16pt below label baseline
+      dt(page, this.bold, value, mx, my - 16, 11, C_BODY);
+      // Rule — 14pt below value baseline
+      page.drawLine({ start: { x: mx, y: my - 30 }, end: { x: mx + mColW - 16, y: my - 30 }, thickness: 0.3, color: C_FAINT });
     });
 
-    // Notes panel — only if it fits above CONTENT_BOT with clearance
+    // Notes panel
     if (item.notes) {
-      const notesTop = y - Math.ceil(metaFields.length / 2) * 44 - SECTION_GAP;
-      const panelH   = 56;
+      const notesTop = y - Math.ceil(metaFields.length / 2) * mRowPitch - SECTION_GAP;
+      const panelH   = 60;
       if (notesTop - panelH > CONTENT_BOT + 16) {
         page.drawRectangle({ x: PG_L, y: notesTop - panelH, width: PG_CW, height: panelH, color: rgb(0.988, 0.994, 1), borderColor: rgb(0.81, 0.88, 0.94), borderWidth: 0.5, borderRadius: 3 });
         dt(page, this.bold, 'NOTES', PG_L + CARD_H, notesTop - CARD_V, 7, C_MUTED, { ls: 1.2 });
-        wrapText(page, this.oblique, item.notes, PG_L + CARD_H, notesTop - CARD_V - 14, PG_CW - CARD_H * 2, 9.5, C_MID, 14);
+        wrapText(page, this.oblique, item.notes, PG_L + CARD_H, notesTop - CARD_V - 16, PG_CW - CARD_H * 2, 9.5, C_MID, 15);
       }
     }
 
-    // Logo — pinned to bottom-right of content area, above CONTENT_BOT
+    // Logo — pinned to bottom-right of content area
     if (this.logoImg) {
       const scale = Math.min(110 / this.logoImg.width, 28 / this.logoImg.height);
       const lw = this.logoImg.width * scale;
       const lh = this.logoImg.height * scale;
-      page.drawImage(this.logoImg, { x: PAGE_W - PG_R - lw, y: CONTENT_BOT + 10, width: lw, height: lh });
+      page.drawImage(this.logoImg, { x: PAGE_W - PG_R - lw, y: CONTENT_BOT + 12, width: lw, height: lh });
     }
   }
 
@@ -689,7 +705,7 @@ class BuildContext {
     y = ruleY - PARA_GAP;
 
     // Meta panel — fixed height, positioned immediately below rule
-    const metaH = 58;
+    const metaH = 68;
     firstPage.drawRectangle({ x: PG_L, y: y - metaH, width: PG_CW, height: metaH, color: C_PANEL, borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 3 });
 
     const mFields: [string, string][] = [
@@ -705,9 +721,9 @@ class BuildContext {
       const col = i % 3;
       const row = Math.floor(i / 3);
       const mx  = PG_L + CARD_H + col * mColW;
-      const my  = y - 14 - row * 26;
-      dt(firstPage, this.bold, label.toUpperCase(), mx, my, 6.5, C_MUTED, { ls: 0.7 });
-      dt(firstPage, this.bold, val, mx, my - 12, 9.5, C_INK);
+      const my  = y - 16 - row * 30;
+      dt(firstPage, this.regular, label.toUpperCase(), mx, my, 6.5, C_MUTED, { ls: 0.7 });
+      dt(firstPage, this.bold, val, mx, my - 13, 9.5, C_INK);
     });
 
     y -= metaH + SECTION_GAP;
