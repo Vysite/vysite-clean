@@ -16,7 +16,7 @@ import type {
   DBSiteForm,
 } from '../../lib/store';
 import type { Project } from '../../data/types';
-import { formToOAndMRender, OAM_CONTENT_BOT_PT } from './FormHtmlRenderer';
+import { formToPdfBytes } from './FormHtmlRenderer';
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -742,33 +742,21 @@ class BuildContext {
   }
 
   // ── Site Form ────────────────────────────────────────────────────────────────
-  // Page 0: full-bleed A4 (standalone form with its own chrome).
-  // Pages 1+: content-zone images placed inside O&M template pages.
+  // Renders the form using the same PDF engine as the standalone "Export PDF"
+  // button and merges the resulting pages directly into the O&M output.
+  // This guarantees: standalone form PDF = form inside the O&M (one renderer,
+  // one standard, zero canvas slicing).
 
   async addSiteForm(item: DBOAndMItem, form: DBSiteForm | undefined) {
     if (!form) { await this.addExceptionPage(item.title, 'Site Form record not found.'); return; }
     try {
-      const render = await formToOAndMRender(form, this.orgInfo);
-
-      // Page 0: full-bleed standalone render
-      const p0Img  = await this.output.embedJpg(render.page0Jpeg);
-      const p0Page = this.output.addPage([PAGE_W, PAGE_H]);
-      p0Page.drawImage(p0Img, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
-
-      // Continuation pages: image inset into the O&M content zone.
-      // Each continuation is drawn at its actual heightPt (proportional slice) so
-      // content is never compressed — shorter last pages leave whitespace above the footer.
-      for (const cont of render.continuationJpegs) {
-        const { page } = this.newPage(C_ORANGE);
-        const contImg  = await this.output.embedJpg(cont.bytes);
-        // Place image flush with CONTENT_BOT, scaled to its exact proportional height
-        page.drawImage(contImg, {
-          x: 0,
-          y: OAM_CONTENT_BOT_PT,
-          width:  PAGE_W,
-          height: cont.heightPt,
-        });
-      }
+      const pdfBytes = await formToPdfBytes(form, this.orgInfo);
+      const src      = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+      const count    = src.getPageCount();
+      if (count === 0) { await this.addExceptionPage(item.title, 'Form rendered no pages.'); return; }
+      const indices = Array.from({ length: count }, (_, i) => i);
+      const copied  = await this.output.copyPages(src, indices);
+      copied.forEach(pg => this.output.addPage(pg));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await this.addExceptionPage(item.title, `Form could not be rendered: ${msg.slice(0, 120)}`);
