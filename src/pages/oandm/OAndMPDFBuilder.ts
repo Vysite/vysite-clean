@@ -16,7 +16,7 @@ import type {
   DBSiteForm,
 } from '../../lib/store';
 import type { Project } from '../../data/types';
-import { formToPdfBytes } from './FormHtmlRenderer';
+import { formToOAndMRender, OAM_CONTENT_H_PT, OAM_CONTENT_BOT_PT } from './FormHtmlRenderer';
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -687,17 +687,31 @@ class BuildContext {
   }
 
   // ── Site Form (html2canvas render) ────────────────────────────────────────────
+  // Page 0: full-bleed A4 image (standalone form — has its own header/footer chrome).
+  // Pages 1+: content-zone images, inset into O&M template pages so every
+  //           continuation page respects the fixed header/footer/margin system.
 
   async addSiteForm(item: DBOAndMItem, form: DBSiteForm | undefined) {
     if (!form) { await this.addExceptionPage(item.title, 'Site Form record not found.'); return; }
     try {
-      const pdfBytes = await formToPdfBytes(form, this.orgInfo);
-      const src      = await PDFDocument.load(pdfBytes);
-      const count    = src.getPageCount();
-      if (count > 0) {
-        const indices = Array.from({ length: count }, (_, i) => i);
-        const copied  = await this.output.copyPages(src, indices);
-        copied.forEach(pg => this.output.addPage(pg));
+      const render = await formToOAndMRender(form, this.orgInfo);
+
+      // ── Page 0: full-bleed standalone render (no template overlay needed)
+      const p0Img  = await this.output.embedJpg(render.page0Jpeg);
+      const p0Page = this.output.addPage([PAGE_W, PAGE_H]);
+      p0Page.drawImage(p0Img, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
+
+      // ── Continuation pages: each image is placed inside the O&M content zone
+      for (const cont of render.continuationJpegs) {
+        const { page } = this.newPage(C_ORANGE);
+        const contImg  = await this.output.embedJpg(cont.bytes);
+        // Position: fill the content area exactly (CONTENT_BOT to CONTENT_TOP)
+        page.drawImage(contImg, {
+          x: 0,
+          y: OAM_CONTENT_BOT_PT,
+          width:  PAGE_W,
+          height: OAM_CONTENT_H_PT,
+        });
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

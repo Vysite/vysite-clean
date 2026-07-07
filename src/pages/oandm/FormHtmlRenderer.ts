@@ -24,6 +24,19 @@ const RENDER_WIDTH_PX = 860; // matches .page max-width in PDFRenderer CSS
 const RENDER_SCALE = 2;      // retina capture for crisp text
 const A4_H_AT_SCALE = Math.round((RENDER_WIDTH_PX * (A4_PDF_H / A4_PDF_W)) * RENDER_SCALE);
 
+// O&M safe content zone — must match the constants in OAndMPDFBuilder.ts exactly.
+// These tell us how many pixels of the canvas correspond to the content area on
+// a template page (header+footer already stamped).
+const OAM_CONTENT_TOP_PT = 784.89;  // CONTENT_TOP in OAndMPDFBuilder
+const OAM_CONTENT_BOT_PT =  62;     // CONTENT_BOT in OAndMPDFBuilder
+
+// Convert the O&M content zone to canvas pixels (canvas y=0 is at page TOP)
+const OAM_CONTENT_TOP_PX = Math.round((A4_PDF_H - OAM_CONTENT_TOP_PT) / A4_PDF_H * A4_H_AT_SCALE);
+const OAM_CONTENT_BOT_PX = Math.round((A4_PDF_H - OAM_CONTENT_BOT_PT) / A4_PDF_H * A4_H_AT_SCALE);
+const OAM_CONTENT_H_PX   = OAM_CONTENT_BOT_PX - OAM_CONTENT_TOP_PX;
+// How many PDF points the content image occupies (= CONTENT_TOP - CONTENT_BOT)
+const OAM_CONTENT_H_PT   = OAM_CONTENT_TOP_PT - OAM_CONTENT_BOT_PT;
+
 // Map DBSiteForm (snake_case, extra_data flat) → ExtendedSiteForm (camelCase, flat)
 function dbFormToExtended(form: DBSiteForm): ExtendedSiteForm {
   return {
@@ -44,22 +57,9 @@ function dbFormToExtended(form: DBSiteForm): ExtendedSiteForm {
   } as ExtendedSiteForm;
 }
 
-// Renders the form HTML into a hidden DOM container and returns an array of
-// canvas elements — one per A4 page worth of content.
-async function renderFormToCanvasPages(html: string): Promise<HTMLCanvasElement[]> {
-  // Hidden container sized to A4 width so the CSS flows at the right width
-  const container = document.createElement('div');
-  container.style.cssText = [
-    'position:absolute',
-    'left:-9999px',
-    'top:0',
-    `width:${RENDER_WIDTH_PX}px`,
-    'background:white',
-    'overflow:visible',
-  ].join(';');
-
-  // We need the CSS and the page HTML in the container.
-  // Use a shadow iframe to avoid polluting the host document's CSS namespace.
+// Renders the form HTML into a hidden DOM container and returns one tall canvas
+// covering the entire form content.
+async function renderFormToFullCanvas(html: string): Promise<HTMLCanvasElement> {
   const iframe = document.createElement('iframe');
   iframe.style.cssText = `position:absolute;left:-9999px;top:0;width:${RENDER_WIDTH_PX}px;border:none;height:1px`;
   document.body.appendChild(iframe);
@@ -70,7 +70,6 @@ async function renderFormToCanvasPages(html: string): Promise<HTMLCanvasElement[
     iDoc.open();
     iDoc.write(html);
     iDoc.close();
-    // In case onload already fired before we attached the handler
     if (iDoc.readyState === 'complete') resolve();
   });
 
@@ -80,11 +79,9 @@ async function renderFormToCanvasPages(html: string): Promise<HTMLCanvasElement[
   const iDoc = iframe.contentDocument!;
   const body = iDoc.body;
 
-  // Expand iframe to natural height so html2canvas captures everything
   const naturalH = body.scrollHeight;
   iframe.style.height = `${naturalH}px`;
 
-  // Capture the whole form as one tall canvas
   const fullCanvas = await html2canvas(body, {
     scale: RENDER_SCALE,
     useCORS: true,
@@ -99,53 +96,127 @@ async function renderFormToCanvasPages(html: string): Promise<HTMLCanvasElement[
   });
 
   document.body.removeChild(iframe);
-
-  // Split into A4-height page slices
-  const pages: HTMLCanvasElement[] = [];
-  const totalH = fullCanvas.height;
-  let offset = 0;
-
-  while (offset < totalH) {
-    const sliceH = Math.min(A4_H_AT_SCALE, totalH - offset);
-    const pageCanvas = document.createElement('canvas');
-    pageCanvas.width = fullCanvas.width;
-    pageCanvas.height = A4_H_AT_SCALE; // always full A4 height (bottom may be blank)
-    const ctx = pageCanvas.getContext('2d')!;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-    ctx.drawImage(fullCanvas, 0, offset, fullCanvas.width, sliceH, 0, 0, fullCanvas.width, sliceH);
-    pages.push(pageCanvas);
-    offset += A4_H_AT_SCALE;
-  }
-
-  return pages;
+  return fullCanvas;
 }
 
-// Main entry: takes a DBSiteForm and org info, returns PDF bytes (all pages).
-// These bytes can be merged directly into the O&M assembled PDF.
+// Slices a full-height canvas into per-page canvases:
+//   - Page 0: full A4 height slice (standalone form — has its own baked chrome)
+//   - Pages 1+: O&M content-zone height slices (will be inset into O&M template pages)
+function sliceCanvasPages(fullCanvas: HTMLCanvasElement): {
+  page0: HTMLCanvasElement;
+  continuations: HTMLCanvasElement[];
+} {
+  const totalH = fullCanvas.height;
+
+  // Page 0 — full A4 slice
+  const p0H = Math.min(A4_H_AT_SCALE, totalH);
+  const page0 = makeSlice(fullCanvas, 0, p0H, fullCanvas.width, A4_H_AT_SCALE);
+
+  // Remaining content after page 0
+  const continuations: HTMLCanvasElement[] = [];
+  let offset = A4_H_AT_SCALE;
+
+  while (offset < totalH) {
+    const sliceH = Math.min(OAM_CONTENT_H_PX, totalH - offset);
+    const slice  = makeSlice(fullCanvas, offset, sliceH, fullCanvas.width, OAM_CONTENT_H_PX);
+    continuations.push(slice);
+    offset += OAM_CONTENT_H_PX;
+  }
+
+  return { page0, continuations };
+}
+
+// Creates a canvas slice: reads `srcH` rows from `fullCanvas` starting at `offsetY`,
+// draws them onto a canvas of fixed `destH` height (remainder is white).
+function makeSlice(
+  src: HTMLCanvasElement,
+  offsetY: number,
+  srcH: number,
+  width: number,
+  destH: number,
+): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width  = width;
+  c.height = destH;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, destH);
+  ctx.drawImage(src, 0, offsetY, width, srcH, 0, 0, width, srcH);
+  return c;
+}
+
+// ─── Standalone export (used by site-form "Export PDF" button) ────────────────
+// Slices at full A4 height — same as before.
+
 export async function formToPdfBytes(
   form: DBSiteForm,
   orgInfo: OrgInfo,
 ): Promise<Uint8Array> {
-  const extended = dbFormToExtended(form);
-  const orgSettings = {
-    company_name: orgInfo.companyName,
-    logo_data_url: orgInfo.logoDataUrl,
-  };
+  const extended   = dbFormToExtended(form);
+  const orgSettings = { company_name: orgInfo.companyName, logo_data_url: orgInfo.logoDataUrl };
+  const html       = buildStandaloneFormHtml(extended, orgSettings);
+  const fullCanvas = await renderFormToFullCanvas(html);
 
-  const html = buildStandaloneFormHtml(extended, orgSettings);
-  const pages = await renderFormToCanvasPages(html);
+  const totalH = fullCanvas.height;
+  const doc    = await PDFDocument.create();
+  let offset   = 0;
 
-  const doc = await PDFDocument.create();
-
-  for (const pageCanvas of pages) {
-    const jpegDataUrl = pageCanvas.toDataURL('image/jpeg', 0.94);
-    const base64 = jpegDataUrl.split(',')[1];
-    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-    const img = await doc.embedJpg(bytes);
-    const page = doc.addPage([A4_PDF_W, A4_PDF_H]);
+  while (offset < totalH) {
+    const sliceH   = Math.min(A4_H_AT_SCALE, totalH - offset);
+    const slice    = makeSlice(fullCanvas, offset, sliceH, fullCanvas.width, A4_H_AT_SCALE);
+    const jpegUrl  = slice.toDataURL('image/jpeg', 0.94);
+    const b64      = jpegUrl.split(',')[1];
+    const bytes    = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const img      = await doc.embedJpg(bytes);
+    const page     = doc.addPage([A4_PDF_W, A4_PDF_H]);
     page.drawImage(img, { x: 0, y: 0, width: A4_PDF_W, height: A4_PDF_H });
+    offset += A4_H_AT_SCALE;
   }
 
   return doc.save();
 }
+
+// ─── O&M export ───────────────────────────────────────────────────────────────
+// Returns structured render data so the O&M builder can place each page correctly:
+//   - page0Jpeg: full-bleed A4 JPEG (standalone form — merged as-is)
+//   - continuationJpegs: shorter JPEG images, one per continuation page,
+//     each exactly OAM_CONTENT_H_PT tall in PDF points, to be placed inside
+//     a template page at CONTENT_BOT y-offset.
+
+export type OAndMFormRender = {
+  page0Jpeg: Uint8Array;
+  continuationJpegs: Array<{
+    bytes: Uint8Array;
+    heightPt: number;  // always OAM_CONTENT_H_PT
+  }>;
+};
+
+export async function formToOAndMRender(
+  form: DBSiteForm,
+  orgInfo: OrgInfo,
+): Promise<OAndMFormRender> {
+  const extended    = dbFormToExtended(form);
+  const orgSettings = { company_name: orgInfo.companyName, logo_data_url: orgInfo.logoDataUrl };
+  const html        = buildStandaloneFormHtml(extended, orgSettings);
+  const fullCanvas  = await renderFormToFullCanvas(html);
+
+  const { page0, continuations } = sliceCanvasPages(fullCanvas);
+
+  const toJpeg = (canvas: HTMLCanvasElement): Uint8Array => {
+    const url   = canvas.toDataURL('image/jpeg', 0.94);
+    const b64   = url.split(',')[1];
+    return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  };
+
+  return {
+    page0Jpeg: toJpeg(page0),
+    continuationJpegs: continuations.map(c => ({
+      bytes:    toJpeg(c),
+      heightPt: OAM_CONTENT_H_PT,
+    })),
+  };
+}
+
+// Export the O&M content zone dimensions so OAndMPDFBuilder can position images
+export { OAM_CONTENT_H_PT, OAM_CONTENT_BOT_PT };
+
