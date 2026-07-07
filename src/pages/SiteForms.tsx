@@ -40,6 +40,7 @@ const FORM_CATEGORIES = [
       { type: 'Daily Site Report',    title: 'Daily Site Report',    description: 'Full operational DSR — attendance, progress, delays, H&S, materials, sign-off' },
       { type: 'Site Hold Up',         title: 'Site Hold Up',         description: 'Record a site disruption, hold up or prevention of works — facts only, not a contractual notice' },
       { type: 'Site Change Request',  title: 'Site Change Request',  description: 'Record a requested change, additional works or scope change identified on site — not a Variation' },
+      { type: 'Site Note',            title: 'Site Note',            description: 'Formal contemporaneous record of important site information, observations and existing conditions' },
     ],
   },
   {
@@ -302,13 +303,17 @@ const SITE_FORM_TYPE_FIELDS: FieldSpec[] = [
   { label: 'Comments',          key: 'comments',         isNarrative: true },
   { label: 'Priority',          key: 'priority' },
   { label: 'Assigned To',       key: 'assignedTo' },
+  { label: 'Site Note Category', key: 'snCategory' },
+  { label: 'Subject',           key: 'snSubject',        isNarrative: true },
+  { label: 'Site Note',         key: 'snBody',           isNarrative: true },
+  { label: 'Recommended Action', key: 'snRecommendedAction', isNarrative: true },
 ];
 
 const ALL_SITE_FORM_FIELDS = [...SITE_FORM_COMMON_FIELDS, ...SITE_FORM_TYPE_FIELDS];
 
 // Fields that should NOT be copied when creating a similar form
 const SKIP_COPY_FIELDS = new Set([
-  'id', 'rfiRef', 'tqRef', 'noticeRef', 'variationRef', 'wcRef', 'inspectionRef', 'shuRef', 'scrRef',
+  'id', 'rfiRef', 'tqRef', 'noticeRef', 'variationRef', 'wcRef', 'inspectionRef', 'shuRef', 'scrRef', 'snRef',
   'comments', 'form_comments', 'submittedDate', 'completedBy', 'date',
 ]);
 
@@ -424,7 +429,8 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
       ?? (data as Record<string, unknown>).wcRef
       ?? (data as Record<string, unknown>).inspectionRef
       ?? (data as Record<string, unknown>).shuRef
-      ?? (data as Record<string, unknown>).scrRef;
+      ?? (data as Record<string, unknown>).scrRef
+      ?? (data as Record<string, unknown>).snRef;
     if (ref) return String(ref);
     return data.type;
   };

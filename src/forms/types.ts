@@ -14,7 +14,8 @@ export type ExtendedFormType =
   | 'Temperature Water Readings'
   | 'Practical Completion Certificate'
   | 'Site Hold Up'
-  | 'Site Change Request';
+  | 'Site Change Request'
+  | 'Site Note';
 
 export type ExtendedFormStatus =
   | FormStatus
@@ -442,6 +443,13 @@ export interface ExtendedSiteForm extends Omit<SiteForm, 'type' | 'status'> {
   scrReason?: string;
   scrProgrammeImpact?: string;
   scrCommercialImpact?: string;
+  // Site Note
+  snRef?: string;
+  snCategory?: string;
+  snSubject?: string;
+  snBody?: string;
+  snRecommendedAction?: string;
+  snTime?: string;
 }
 
 export const TYPE_MAP: Record<string, { bg: string; text: string; label: string; border: string }> = {
@@ -473,6 +481,7 @@ export const TYPE_MAP: Record<string, { bg: string; text: string; label: string;
   'Practical Completion Certificate': { bg: 'bg-emerald-900/60', text: 'text-emerald-300', label: 'PC Certificate', border: 'border-l-emerald-500' },
   'Site Hold Up':                     { bg: 'bg-amber-900/60',   text: 'text-amber-400',   label: 'Site Hold Up',       border: 'border-l-amber-600' },
   'Site Change Request':              { bg: 'bg-sky-900/60',     text: 'text-sky-400',     label: 'Change Request',     border: 'border-l-sky-600' },
+  'Site Note':                        { bg: 'bg-slate-700/60',   text: 'text-slate-300',   label: 'Site Note',          border: 'border-l-slate-500' },
 };
 
 export const inputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600';

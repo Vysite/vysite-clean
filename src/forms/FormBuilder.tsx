@@ -23,6 +23,9 @@ import {
 let rfiCounter = 1;
 function nextRfiRef() { return `RFI-${String(rfiCounter++).padStart(3, '0')}`; }
 
+let snCounter = 1;
+function nextSnRef() { return `SN-${String(snCounter++).padStart(4, '0')}`; }
+
 export interface FormBuilderProps {
   type: ExtendedFormType;
   onClose: () => void;
@@ -439,6 +442,13 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     scrReason:           sv('scrReason'),
     scrProgrammeImpact:  sv('scrProgrammeImpact'),
     scrCommercialImpact: sv('scrCommercialImpact'),
+    // Site Note
+    snRef:               sv('snRef', nextSnRef()),
+    snCategory:          sv('snCategory', ''),
+    snSubject:           sv('snSubject'),
+    snBody:              sv('snBody'),
+    snRecommendedAction: sv('snRecommendedAction'),
+    snTime:              sv('snTime', new Date().toTimeString().slice(0, 5)),
   }));
 
   // Site Walk checklist state — stored separately due to nested structure
@@ -1091,6 +1101,19 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
         comments:            form.comments,
       });
     }
+    if (type === 'Site Note') {
+      Object.assign(base, {
+        title:               form.snSubject || form.title,
+        snRef:               form.snRef,
+        snCategory:          form.snCategory,
+        snSubject:           form.snSubject,
+        snBody:              form.snBody,
+        snRecommendedAction: form.snRecommendedAction,
+        snTime:              form.snTime,
+        areaLocation:        form.areaLocation,
+        comments:            form.comments,
+      });
+    }
     onSave(base, uploadedFiles);
     onClose();
   };
@@ -1123,6 +1146,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
   const isPCC = type === 'Practical Completion Certificate';
   const isSHU = type === 'Site Hold Up';
   const isSCR = type === 'Site Change Request';
+  const isSN  = type === 'Site Note';
 
   const accentColor = isRAMS
     ? 'bg-orange-600 hover:bg-orange-700'
@@ -1478,6 +1502,101 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
                 <div className="relative">
                   <select value={form.status} onChange={set('status')} className={`${inputCls} appearance-none pr-8`}>
                     {scrStatuses.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── Site Note Fields ── */}
+          {isSN && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Site Note Reference</label>
+                  <input value={form.snRef} onChange={set('snRef')} className={inputCls} placeholder="e.g. SN-0001" />
+                </div>
+                <div>
+                  <label className={labelCls}>Date *</label>
+                  <input type="date" value={form.date} onChange={set('date')} className={inputCls} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Time</label>
+                  <input type="time" value={form.snTime} onChange={set('snTime')} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Category *</label>
+                  <div className="relative">
+                    <select value={form.snCategory} onChange={set('snCategory')} className={`${inputCls} appearance-none pr-8`}>
+                      <option value="">Select category...</option>
+                      {[
+                        'Existing Condition', 'Damage', 'Observation', 'Information',
+                        'Client Request', 'Access', 'Safety', 'Environmental',
+                        'Programme', 'Utilities', 'Delivery', 'Other',
+                      ].map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Project *</label>
+                <div className="relative">
+                  <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
+                    <option value="">Select project...</option>
+                    {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Location / Area</label>
+                <input value={form.areaLocation} onChange={set('areaLocation')} className={inputCls} placeholder="e.g. Level 2 – Corridor B" />
+              </div>
+              <div>
+                <label className={labelCls}>Created By *</label>
+                <input value={form.completedBy} onChange={set('completedBy')} className={inputCls} placeholder="Full name of the person creating this note" />
+              </div>
+              <div>
+                <label className={labelCls}>Subject *</label>
+                <input value={form.snSubject} onChange={set('snSubject')} className={inputCls} placeholder="Brief subject / title for this site note..." />
+              </div>
+              <div>
+                <label className={labelCls}>Site Note *</label>
+                <textarea
+                  value={form.snBody}
+                  onChange={set('snBody')}
+                  rows={8}
+                  className={`${inputCls} resize-none`}
+                  placeholder="Record the formal site note here — describe the condition, observation or matter in full. Be factual and contemporaneous. Include location, extent, context and any relevant measurements or dimensions..."
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Recommended Action <span className="text-slate-600 font-normal normal-case">(optional)</span></label>
+                <textarea
+                  value={form.snRecommendedAction}
+                  onChange={set('snRecommendedAction')}
+                  rows={3}
+                  className={`${inputCls} resize-none`}
+                  placeholder="Any recommended action or follow-up required..." />
+              </div>
+              <div>
+                <label className={labelCls}>Additional Comments</label>
+                <textarea value={form.comments} onChange={set('comments')} rows={2} className={`${inputCls} resize-none`}
+                  placeholder="Any additional information..." />
+              </div>
+              <div>
+                <label className={labelCls}>Photos / Attachments</label>
+                <FileUploadComponent files={uploadedFiles} onChange={setUploadedFiles} accept="image/*,.pdf,.doc,.docx" label="Upload photos or supporting documents" />
+              </div>
+              <div>
+                <label className={labelCls}>Status</label>
+                <div className="relative">
+                  <select value={form.status} onChange={set('status')} className={`${inputCls} appearance-none pr-8`}>
+                    {(['Draft', 'Submitted', 'Approved'] as const).map(s => <option key={s}>{s}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                 </div>

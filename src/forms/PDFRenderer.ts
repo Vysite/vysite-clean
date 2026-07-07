@@ -444,6 +444,8 @@ const CONTRACTUAL_NOTICE: Partial<Record<string, string>> = {
     'This record has been compiled in accordance with BSRIA BG 29/2021 (Pre-Commission Cleaning), BSRIA BG 8/2009 (Commissioning Management), CIBSE Commissioning Codes, and the project specification. All test results, asset details, serial numbers, valve numbers and photographic evidence recorded in this document form part of the project O&M documentation, commissioning handover package, and Health & Safety file. This document must be retained as part of the permanent project record.',
   'Temperature Water Readings':
     'Temperature measurements have been taken in accordance with CIBSE TM13, HSG274 (Part 2), the Water Supply (Water Fittings) Regulations 1999, and the project specification. All readings form part of the Legionella risk management programme and must be retained as part of the permanent water hygiene record. Where temperatures fall outside the recommended range, remedial action must be taken immediately and the results re-tested and recorded.',
+  'Site Note':
+    'This Site Note has been issued to formally record information, observations, existing conditions or matters relevant to the Project. It is intended to maintain an accurate contemporaneous project record and does not, by itself, constitute a contractual instruction, variation, acceptance or waiver of any contractual rights or obligations unless expressly stated elsewhere within the Contract.',
 };
 
 // ─── Reusable report footer / legal block ─────────────────────────────────────
@@ -1348,6 +1350,25 @@ function buildSiteChangeRequestBody(f: Record<string, unknown>): string {
   `;
 }
 
+// ─── Site Note ─────────────────────────────────────────────────────────────────
+
+function buildSiteNoteBody(f: Record<string, unknown>): string {
+  return `
+    ${sectionHtml('Note Details', dataGrid([
+      ['Reference',      safeStr(f.snRef)],
+      ['Category',       safeStr(f.snCategory)],
+      ['Date',           fmtDate(safeStr(f.date))],
+      ['Time',           safeStr(f.snTime)],
+      ['Created By',     safeStr(f.completedBy)],
+      ['Location / Area', safeStr(f.areaLocation)],
+    ]))}
+    ${safeStr(f.snSubject) ? sectionHtml('Subject', `<div style="font-size:13px;font-weight:700;color:#0f172a">${esc(safeStr(f.snSubject))}</div>`) : ''}
+    ${section('Site Note', safeStr(f.snBody))}
+    ${safeStr(f.snRecommendedAction) ? section('Recommended Action', safeStr(f.snRecommendedAction)) : ''}
+    ${safeStr(f.comments) ? section('Additional Comments', safeStr(f.comments)) : ''}
+  `;
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 function buildTWRBody(f: Record<string, unknown>): string {
@@ -1758,6 +1779,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
       'Practical Completion Certificate': 'Practical Completion Certificate',
       'Site Hold Up': 'Site Hold Up Record',
       'Site Change Request': 'Site Change Request',
+      'Site Note': 'Site Note',
     };
     return map[form.type] ?? form.type;
   })();
@@ -1793,7 +1815,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
     ['Date', fmtDate(safeStr(f.date))],
     ['Completed By', safeStr(f.completedBy)],
     ['Status', statusStr],
-    ['Document Ref', safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.id)],
+    ['Document Ref', safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.shuRef) || safeStr(f.scrRef) || safeStr(f.snRef) || safeStr(f.id)],
   ].filter(([, v]) => v) as [string, string][];
 
   const metaBlock = `
@@ -1830,6 +1852,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
     case 'Site Instruction':               formBody = buildCommercialBody(f); break;
     case 'Site Hold Up':                   formBody = buildSiteHoldUpBody(f); break;
     case 'Site Change Request':            formBody = buildSiteChangeRequestBody(f); break;
+    case 'Site Note':                      formBody = buildSiteNoteBody(f); break;
     default:                               formBody = buildGenericBody(f); break;
   }
 
@@ -1838,7 +1861,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
     ? sectionHtml('Evidence & Attachments', evidenceHtml(attachments))
     : '';
 
-  const docRef = safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.shuRef) || safeStr(f.scrRef) || safeStr(f.id) || `VY-${Date.now()}`;
+  const docRef = safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.shuRef) || safeStr(f.scrRef) || safeStr(f.snRef) || safeStr(f.id) || `VY-${Date.now()}`;
   const legalFooter = reportFooter({
     formType: form.type,
     docRef,
