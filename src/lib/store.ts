@@ -1006,6 +1006,8 @@ export interface DBOAndMManual {
   status: OAndMManualStatus;
   version: string;
   notes: string;
+  introduction: string;
+  cover_image_data_url: string;
   created_by: string;
   created_at?: string;
   updated_at?: string;

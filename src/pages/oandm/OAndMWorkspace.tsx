@@ -1,5 +1,8 @@
-import { useState, useMemo } from 'react';
-import { BookOpen, Plus, Trash2, CreditCard as Edit2, Check, X, ChevronDown, Building2, LayoutList, AlertCircle, Eye } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import {
+  BookOpen, Plus, Trash2, CreditCard as Edit2, Check, X, ChevronDown,
+  Building2, LayoutList, AlertCircle, Eye, Image, FileText, Settings,
+} from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import type { DBOAndMManual } from './types';
 import {
@@ -22,10 +25,11 @@ export default function OAndMWorkspace() {
   const [editingManual, setEditingManual] = useState<DBOAndMManual | null>(null);
   const [confirmDeleteManualId, setConfirmDeleteManualId] = useState<string | null>(null);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
-  const [showAddSections, setShowAddSections] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
-  // Filter projects to those visible to this user
+  const coverImageInputRef = useRef<HTMLInputElement>(null);
+
   const projects = store.visibleProjectIds
     ? store.projects.filter(p => store.visibleProjectIds!.includes(p.id))
     : store.projects;
@@ -67,6 +71,8 @@ export default function OAndMWorkspace() {
       status: 'draft',
       version: '',
       notes: '',
+      introduction: '',
+      cover_image_data_url: '',
       created_by: currentUserName,
     };
     store.addOAndMManual(manual);
@@ -107,7 +113,31 @@ export default function OAndMWorkspace() {
         sort_order: manualSections.length + idx,
       });
     });
-    setShowAddSections(false);
+  };
+
+  // ── Cover image upload ────────────────────────────────────────────────────────
+
+  const handleCoverImageFile = (file: File) => {
+    if (!selectedManual) return;
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const dataUrl = e.target?.result as string;
+      store.updateOAndMManual({ ...selectedManual, cover_image_data_url: dataUrl });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCoverImageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleCoverImageFile(file);
+    e.target.value = '';
+  };
+
+  const handleCoverImageDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleCoverImageFile(file);
   };
 
   const isLoading = store.modulesLoading;
@@ -133,48 +163,49 @@ export default function OAndMWorkspace() {
     return (
       <div className="min-h-screen bg-[#0a1628] text-white">
         <div className="max-w-3xl mx-auto px-6 py-12">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-[#f97316]/10 border border-[#f97316]/20 flex items-center justify-center">
-                <BookOpen size={15} className="text-[#f97316]" />
+          <div className="mb-10">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-[#f97316]/10 border border-[#f97316]/20 flex items-center justify-center">
+                <BookOpen size={16} className="text-[#f97316]" />
               </div>
-              <h1 className="text-xl font-black tracking-tight text-white">O&M Manual</h1>
+              <div>
+                <h1 className="text-lg font-black tracking-tight text-white leading-none">O&M Manual</h1>
+                <p className="text-xs text-slate-500 mt-0.5">Operation &amp; Maintenance documentation</p>
+              </div>
             </div>
-            <p className="text-sm text-slate-500 ml-11">
-              Select a project to open its O&M workspace.
-            </p>
           </div>
 
-          {/* Project grid */}
           {projects.length === 0 ? (
-            <div className="text-center py-16">
+            <div className="text-center py-20">
               <Building2 size={28} className="text-slate-700 mx-auto mb-3" />
               <p className="text-sm text-slate-500">No projects found.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {projects.map(project => {
-                const pManuals = projectManualsMap[project.id] ?? [];
-                return (
-                  <button
-                    key={project.id}
-                    onClick={() => { setSelectedProjectId(project.id); setSelectedManualId(null); }}
-                    className="text-left bg-[#111827] border border-[#1e2d4a] hover:border-[#f97316]/30 hover:bg-[#1a2236] rounded-xl p-4 transition-all group"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <span className="text-sm font-bold text-white group-hover:text-[#f97316] transition-colors leading-snug">
-                        {project.name}
-                      </span>
-                      <span className={`shrink-0 ml-2 text-[10px] px-1.5 py-0.5 rounded-full border ${pManuals.length > 0 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-slate-600 border-[#1e2d4a]'}`}>
-                        {pManuals.length} manual{pManuals.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500">{project.client || 'No client'}</p>
-                  </button>
-                );
-              })}
-            </div>
+            <>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Select a project</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {projects.map(project => {
+                  const pManuals = projectManualsMap[project.id] ?? [];
+                  return (
+                    <button
+                      key={project.id}
+                      onClick={() => { setSelectedProjectId(project.id); setSelectedManualId(null); }}
+                      className="text-left bg-[#111827] border border-[#1e2d4a] hover:border-[#f97316]/40 hover:bg-[#131f35] rounded-xl p-5 transition-all group"
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-2.5">
+                        <span className="text-sm font-bold text-white group-hover:text-[#f97316] transition-colors leading-snug">
+                          {project.name}
+                        </span>
+                        <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full border font-semibold ${pManuals.length > 0 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-slate-600 border-[#1e2d4a]'}`}>
+                          {pManuals.length} {pManuals.length === 1 ? 'manual' : 'manuals'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">{project.client || 'No client'}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -183,47 +214,47 @@ export default function OAndMWorkspace() {
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
-  // ── Project selected, no manual ───────────────────────────────────────────
+  // ── Sidebar ───────────────────────────────────────────────────────────────
 
   const sidebar = (
-    <aside className="w-64 shrink-0 flex flex-col gap-3">
+    <aside className="w-60 shrink-0 flex flex-col gap-3">
       {/* Project info */}
       <div className="bg-[#111827] border border-[#1e2d4a] rounded-xl p-4">
         <button
           onClick={() => { setSelectedProjectId(''); setSelectedManualId(null); }}
-          className="text-[10px] text-slate-600 hover:text-slate-400 mb-2 transition-colors"
+          className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-[#f97316] mb-3 transition-colors font-medium"
         >
           ← All projects
         </button>
         <p className="text-xs font-bold text-white leading-snug">{selectedProject?.name}</p>
-        <p className="text-xs text-slate-500 mt-0.5">{selectedProject?.client}</p>
+        {selectedProject?.client && <p className="text-[11px] text-slate-500 mt-1">{selectedProject.client}</p>}
       </div>
 
       {/* Manuals list */}
       <div className="bg-[#111827] border border-[#1e2d4a] rounded-xl overflow-hidden flex-1">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e2d4a]">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Manuals</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Manuals</span>
           <button
             onClick={() => setShowCreateManual(v => !v)}
-            className="p-1 text-slate-600 hover:text-[#f97316] hover:bg-[#f97316]/10 rounded transition-colors"
+            className="p-1.5 text-slate-600 hover:text-[#f97316] hover:bg-[#f97316]/10 rounded-lg transition-colors"
             title="New manual"
           >
-            <Plus size={13} />
+            <Plus size={12} />
           </button>
         </div>
 
         {showCreateManual && (
-          <div className="px-3 py-2.5 border-b border-[#1e2d4a] bg-[#0d1628]">
+          <div className="px-3 py-3 border-b border-[#1e2d4a] bg-[#0d1628]">
             <input
               value={newManualTitle}
               onChange={e => setNewManualTitle(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleCreateManual(); if (e.key === 'Escape') { setShowCreateManual(false); setNewManualTitle('O&M Manual'); } }}
               placeholder="Manual title…"
               autoFocus
-              className="w-full bg-transparent text-xs text-white placeholder-slate-600 focus:outline-none mb-2"
+              className="w-full bg-transparent text-xs text-white placeholder-slate-600 focus:outline-none mb-2.5"
             />
             <div className="flex gap-2">
-              <button onClick={handleCreateManual} disabled={!newManualTitle.trim()} className="flex-1 py-1.5 text-[10px] font-bold text-white bg-[#f97316] disabled:opacity-40 rounded transition-colors hover:bg-orange-400">
+              <button onClick={handleCreateManual} disabled={!newManualTitle.trim()} className="flex-1 py-1.5 text-[10px] font-bold text-white bg-[#f97316] disabled:opacity-40 rounded-lg transition-colors hover:bg-orange-400">
                 Create
               </button>
               <button onClick={() => { setShowCreateManual(false); setNewManualTitle('O&M Manual'); }} className="px-2 py-1.5 text-[10px] text-slate-500 hover:text-slate-300 transition-colors">
@@ -235,7 +266,7 @@ export default function OAndMWorkspace() {
 
         <div className="py-1">
           {manuals.length === 0 ? (
-            <p className="px-4 py-6 text-xs text-slate-600 text-center">No manuals yet</p>
+            <p className="px-4 py-8 text-xs text-slate-600 text-center">No manuals yet</p>
           ) : (
             manuals.map(manual => {
               const isActive = selectedManualId === manual.id;
@@ -256,16 +287,16 @@ export default function OAndMWorkspace() {
                         className="w-full bg-transparent text-xs text-white focus:outline-none border-b border-[#f97316]"
                       />
                     ) : (
-                      <p className={`text-xs font-semibold truncate ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                      <p className={`text-xs font-semibold truncate leading-snug ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>
                         {manual.title}
                       </p>
                     )}
-                    <span className={`text-[9px] px-1 py-0.5 rounded border mt-0.5 inline-block ${STATUS_COLOURS[manual.status]}`}>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border mt-1 inline-block font-semibold ${STATUS_COLOURS[manual.status]}`}>
                       {STATUS_LABELS[manual.status]}
                     </span>
                   </button>
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <button onClick={() => setEditingManual(manual)} className="p-1 text-slate-600 hover:text-slate-300 rounded transition-colors">
+                    <button onClick={() => setEditingManual(manual)} className="p-1 text-slate-600 hover:text-slate-300 rounded transition-colors" title="Rename">
                       <Edit2 size={9} />
                     </button>
                     {confirmDeleteManualId === manual.id ? (
@@ -292,25 +323,25 @@ export default function OAndMWorkspace() {
     </aside>
   );
 
-  // ── Manual selected ───────────────────────────────────────────────────────
+  // ── No manual selected ───────────────────────────────────────────────────
 
   if (!selectedManual) {
     return (
       <div className="min-h-screen bg-[#0a1628] text-white">
         <div className="max-w-5xl mx-auto px-6 py-10 flex gap-6">
           {sidebar}
-          <main className="flex-1 flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-[#1a2236] border border-[#1e2d4a] flex items-center justify-center mb-4">
+          <main className="flex-1 flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-[#1a2236] border border-[#1e2d4a] flex items-center justify-center mb-5">
               <LayoutList size={20} className="text-slate-600" />
             </div>
-            <p className="text-sm font-semibold text-slate-400 mb-1">Select or create a manual</p>
+            <p className="text-sm font-bold text-slate-400 mb-2">Select or create a manual</p>
             <p className="text-xs text-slate-600 max-w-xs leading-relaxed">
               Choose a manual from the sidebar or create a new one for this project.
             </p>
             {manuals.length === 0 && (
               <button
                 onClick={() => setShowCreateManual(true)}
-                className="mt-5 flex items-center gap-2 px-4 py-2 bg-[#f97316] text-white text-sm font-semibold rounded-lg hover:bg-orange-400 transition-colors"
+                className="mt-6 flex items-center gap-2 px-5 py-2.5 bg-[#f97316] text-white text-sm font-bold rounded-xl hover:bg-orange-400 transition-colors"
               >
                 <Plus size={14} /> Create First Manual
               </button>
@@ -328,23 +359,38 @@ export default function OAndMWorkspace() {
       <div className="max-w-5xl mx-auto px-6 py-10 flex gap-6">
         {sidebar}
 
-        <main className="flex-1 min-w-0 space-y-5">
+        <main className="flex-1 min-w-0 space-y-4">
+
           {/* Manual header card */}
           <div className="bg-[#111827] border border-[#1e2d4a] rounded-2xl overflow-hidden">
-            {/* Dark header band */}
-            <div className="px-6 py-4 bg-[#0d1628] border-b border-[#1e2d4a] flex items-center gap-4">
+            <div className="px-6 py-4 border-b border-[#1e2d4a] flex items-center gap-4">
               <div className="flex-1 min-w-0">
                 <h2 className="text-base font-black text-white truncate">{selectedManual.title}</h2>
-                <p className="text-xs text-slate-500 mt-0.5">{selectedProject?.name} · {selectedProject?.client}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{selectedProject?.name}{selectedProject?.client ? ` · ${selectedProject.client}` : ''}</p>
               </div>
-              {/* Preview button */}
+
+              {/* Manual settings toggle */}
+              <button
+                onClick={() => setShowSettings(v => !v)}
+                className={`flex items-center gap-1.5 px-3 py-2 border rounded-lg text-xs font-semibold transition-colors shrink-0 ${
+                  showSettings
+                    ? 'bg-[#1e2d4a] border-[#2a3a5a] text-slate-300'
+                    : 'bg-transparent border-[#1e2d4a] text-slate-500 hover:border-[#2a3a5a] hover:text-slate-300'
+                }`}
+              >
+                <Settings size={12} />
+                Settings
+              </button>
+
+              {/* Primary action: Preview / Build */}
               <button
                 onClick={() => setShowPreview(true)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-slate-700/50 hover:bg-slate-600/60 border border-slate-600/40 text-slate-300 hover:text-white text-xs font-semibold rounded-lg transition-colors shrink-0"
+                className="flex items-center gap-2 px-4 py-2 bg-[#f97316] hover:bg-orange-400 text-white text-xs font-bold rounded-lg transition-colors shrink-0 shadow-sm shadow-orange-900/30"
               >
                 <Eye size={13} />
                 Preview Manual
               </button>
+
               {/* Status picker */}
               <div className="relative shrink-0">
                 <button
@@ -355,16 +401,16 @@ export default function OAndMWorkspace() {
                   <ChevronDown size={11} className={`transition-transform ${showStatusMenu ? 'rotate-180' : ''}`} />
                 </button>
                 {showStatusMenu && (
-                  <div className="absolute right-0 top-full mt-1 bg-[#1a2236] border border-[#1e2d4a] rounded-xl shadow-xl z-20 min-w-[140px] overflow-hidden py-1">
+                  <div className="absolute right-0 top-full mt-1 bg-[#1a2236] border border-[#1e2d4a] rounded-xl shadow-xl z-20 min-w-[148px] overflow-hidden py-1">
                     {STATUS_OPTIONS.map(s => (
                       <button
                         key={s}
                         onClick={() => setStatus(s)}
-                        className={`flex items-center gap-2 w-full px-3 py-2 text-xs text-left transition-colors hover:bg-[#1e2d4a] ${
-                          selectedManual.status === s ? 'font-semibold text-white' : 'text-slate-400'
+                        className={`flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs text-left transition-colors hover:bg-[#1e2d4a] ${
+                          selectedManual.status === s ? 'font-bold text-white' : 'text-slate-400'
                         }`}
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full ${s === 'draft' ? 'bg-slate-500' : s === 'in_progress' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s === 'draft' ? 'bg-slate-500' : s === 'in_progress' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
                         {STATUS_LABELS[s]}
                       </button>
                     ))}
@@ -373,27 +419,124 @@ export default function OAndMWorkspace() {
               </div>
             </div>
 
-            {/* Stats band */}
-            <div className="grid grid-cols-3 divide-x divide-[#1e2d4a] px-0 py-0">
+            {/* Stats row */}
+            <div className="grid grid-cols-3 divide-x divide-[#1e2d4a]">
               {[
                 { label: 'Sections', value: manualSections.length },
                 { label: 'Records', value: totalItems },
-                { label: 'Sections populated', value: `${populatedSections} / ${manualSections.length}` },
+                { label: 'Populated', value: `${populatedSections} / ${manualSections.length}` },
               ].map(stat => (
                 <div key={stat.label} className="px-5 py-3 text-center">
-                  <p className="text-lg font-black text-white">{stat.value}</p>
-                  <p className="text-[10px] text-slate-600 uppercase tracking-wider">{stat.label}</p>
+                  <p className="text-xl font-black text-white leading-none">{stat.value}</p>
+                  <p className="text-[9px] text-slate-600 uppercase tracking-widest mt-1">{stat.label}</p>
                 </div>
               ))}
             </div>
           </div>
 
+          {/* Manual settings panel */}
+          {showSettings && (
+            <div className="bg-[#111827] border border-[#1e2d4a] rounded-2xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-[#1e2d4a]">
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest">Manual Settings</h3>
+              </div>
+              <div className="p-6 grid grid-cols-2 gap-6">
+
+                {/* Cover image */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                    Cover Image
+                  </label>
+                  <p className="text-[11px] text-slate-600 mb-3 leading-relaxed">
+                    A project photo displayed on the front cover of the manual.
+                  </p>
+                  <input
+                    ref={coverImageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleCoverImageInputChange}
+                    className="hidden"
+                  />
+                  {selectedManual.cover_image_data_url ? (
+                    <div className="relative group rounded-xl overflow-hidden border border-[#1e2d4a]" style={{ aspectRatio: '16/9' }}>
+                      <img
+                        src={selectedManual.cover_image_data_url}
+                        alt="Cover"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                        <button
+                          onClick={() => coverImageInputRef.current?.click()}
+                          className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-lg backdrop-blur-sm transition-colors border border-white/20"
+                        >
+                          Change
+                        </button>
+                        <button
+                          onClick={() => store.updateOAndMManual({ ...selectedManual, cover_image_data_url: '' })}
+                          className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-semibold rounded-lg backdrop-blur-sm transition-colors border border-red-500/30"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onDrop={handleCoverImageDrop}
+                      onDragOver={e => e.preventDefault()}
+                      onClick={() => coverImageInputRef.current?.click()}
+                      className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[#1e2d4a] hover:border-[#f97316]/40 hover:bg-[#f97316]/5 rounded-xl cursor-pointer transition-colors py-8"
+                      style={{ aspectRatio: '16/9' }}
+                    >
+                      <Image size={20} className="text-slate-600" />
+                      <p className="text-xs text-slate-600 text-center px-4 leading-relaxed">
+                        Click to upload or drag a JPG, PNG or WebP image
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Introduction / version */}
+                <div className="flex flex-col gap-4">
+                  {/* Version */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                      Version / Revision
+                    </label>
+                    <input
+                      value={selectedManual.version}
+                      onChange={e => store.updateOAndMManual({ ...selectedManual, version: e.target.value })}
+                      placeholder="e.g. Rev A, Issue 1, Draft"
+                      className="w-full bg-[#0d1628] border border-[#1e2d4a] hover:border-[#2a3a5a] focus:border-[#f97316] rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  {/* Introduction */}
+                  <div className="flex-1 flex flex-col">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                      Manual Introduction
+                    </label>
+                    <p className="text-[11px] text-slate-600 mb-3 leading-relaxed">
+                      An introduction or project overview that appears as a dedicated page in the manual.
+                    </p>
+                    <textarea
+                      value={selectedManual.introduction}
+                      onChange={e => store.updateOAndMManual({ ...selectedManual, introduction: e.target.value })}
+                      placeholder="Describe the project, the scope of this manual, and any relevant notes for the reader…"
+                      rows={6}
+                      className="flex-1 w-full bg-[#0d1628] border border-[#1e2d4a] hover:border-[#2a3a5a] focus:border-[#f97316] rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none transition-colors resize-none leading-relaxed"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Gap analysis banner */}
           {manualSections.length > 0 && populatedSections < manualSections.length && (
-            <div className="flex items-center gap-3 px-4 py-3 bg-amber-400/5 border border-amber-400/20 rounded-xl">
-              <AlertCircle size={14} className="text-amber-400 shrink-0" />
+            <div className="flex items-center gap-3 px-4 py-3 bg-amber-400/5 border border-amber-400/15 rounded-xl">
+              <AlertCircle size={13} className="text-amber-400 shrink-0" />
               <p className="text-xs text-amber-300">
-                <span className="font-semibold">{manualSections.length - populatedSections} section{manualSections.length - populatedSections !== 1 ? 's' : ''} without records.</span>
+                <span className="font-bold">{manualSections.length - populatedSections} section{manualSections.length - populatedSections !== 1 ? 's' : ''} without records.</span>
                 {' '}Add records to complete this manual.
               </p>
             </div>
@@ -401,14 +544,14 @@ export default function OAndMWorkspace() {
 
           {/* Quick-add default sections */}
           {manualSections.length === 0 && (
-            <div className="flex items-center gap-3 px-4 py-3.5 bg-sky-400/5 border border-sky-400/20 rounded-xl">
-              <BookOpen size={14} className="text-sky-400 shrink-0" />
+            <div className="flex items-center gap-3 px-4 py-3.5 bg-sky-400/5 border border-sky-400/15 rounded-xl">
+              <FileText size={13} className="text-sky-400 shrink-0" />
               <p className="text-xs text-sky-300 flex-1">
                 Start with the standard O&M section structure, or add your own sections below.
               </p>
               <button
                 onClick={addDefaultSections}
-                className="shrink-0 px-3 py-1.5 text-[10px] font-bold text-sky-300 border border-sky-400/30 rounded-lg hover:bg-sky-400/10 transition-colors"
+                className="shrink-0 px-3 py-1.5 text-[10px] font-bold text-sky-300 border border-sky-400/25 rounded-lg hover:bg-sky-400/10 transition-colors"
               >
                 Add standard sections
               </button>
@@ -435,7 +578,6 @@ export default function OAndMWorkspace() {
         </main>
       </div>
 
-      {/* Preview overlay */}
       {showPreview && selectedProject && (
         <OAndMPreview
           manual={selectedManual}

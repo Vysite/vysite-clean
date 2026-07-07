@@ -53,6 +53,7 @@ export async function buildOAndMPdf(
   await ctx.addCoverPage();
   onProgress?.({ stage: 'Building contents page', current: 1, total: totalItems + 3 });
   await ctx.addContentsPage(sortedSections, items);
+  await ctx.addIntroductionPage();
   onProgress?.({ stage: 'Building sections', current: 2, total: totalItems + 3 });
 
   for (const section of sortedSections) {
@@ -161,6 +162,7 @@ class BuildContext {
   regular: PDFFont = null!;
   oblique: PDFFont = null!;
   logoImg: PDFImage | null = null;
+  coverImg: PDFImage | null = null;
 
   // Sequential page counter — incremented for every non-cover page via newPage()
   private pageCount = 0;
@@ -180,6 +182,10 @@ class BuildContext {
     if (this.orgInfo.logoDataUrl) {
       try { this.logoImg = await embedImage(this.output, this.orgInfo.logoDataUrl); }
       catch { this.logoImg = null; }
+    }
+    if (this.manual.cover_image_data_url) {
+      try { this.coverImg = await embedImage(this.output, this.manual.cover_image_data_url); }
+      catch { this.coverImg = null; }
     }
   }
 
@@ -244,11 +250,34 @@ class BuildContext {
     // ── Top band
     p.drawRectangle({ x: 46, y: PAGE_H - 5, width: PAGE_W - 46, height: 5, color: C_ORANGE });
 
-    // ─── Zone A: top band (y: PAGE_H - 5 down to PAGE_H - 72)
-    // Logo sits in zone A, left-aligned.
-    const ZONE_A_TOP = PAGE_H - 18;  // top of content in zone A
+    // ─── Cover photo band — fills a generous area beneath the top bar
+    // When a cover image is present, it takes up the upper ~40% of the page.
+    // The layout below adapts: Zone B (title) anchors at 42% from page top when
+    // an image is present, or at 59.5% when there is no image (original behaviour).
+    const COVER_IMG_H = 310;  // height of the photo band in points
+    const COVER_IMG_Y = PAGE_H - 5 - COVER_IMG_H;  // bottom edge of photo band
+
+    if (this.coverImg) {
+      const { width: iW, height: iH } = this.coverImg.size();
+      const availW = PAGE_W - 46;
+      // Scale to fill the full width of the photo band, then vertically centre-crop
+      const scaleW   = availW / iW;
+      const scaleH   = COVER_IMG_H / iH;
+      const scale    = Math.max(scaleW, scaleH);
+      const drawW    = iW * scale;
+      const drawH    = iH * scale;
+      const drawX    = 46 + (availW - drawW) / 2;
+      const drawY    = COVER_IMG_Y + (COVER_IMG_H - drawH) / 2;
+      p.drawImage(this.coverImg, { x: drawX, y: drawY, width: drawW, height: drawH });
+      // Dark gradient overlay so the title remains readable
+      p.drawRectangle({ x: 46, y: COVER_IMG_Y, width: availW, height: COVER_IMG_H,
+        color: rgb(0.038, 0.059, 0.118), opacity: 0.40 });
+    }
+
+    // ─── Zone A: logo + badge — sits above cover photo (or at page top if no photo)
+    const ZONE_A_TOP = PAGE_H - 18;
     const LOGO_X = 70;
-    let logoBandBottom = ZONE_A_TOP - 16;  // fallback if no logo
+    let logoBandBottom = ZONE_A_TOP - 16;
 
     if (this.logoImg) {
       const scale = Math.min(148 / this.logoImg.width, 38 / this.logoImg.height);
@@ -261,54 +290,60 @@ class BuildContext {
       logoBandBottom = ZONE_A_TOP - 22;
     }
 
-    // Status badge — right side of zone A, vertically centred to logo
+    // Status badge
     const statusText = manual.status === 'finalised' ? 'FINALISED'
       : manual.status === 'in_progress' ? 'IN PROGRESS' : 'DRAFT';
     const badgeCol = manual.status === 'finalised' ? C_GREEN
       : manual.status === 'in_progress' ? C_AMBER : C_MUTED;
     const bw = this.bold.widthOfTextAtSize(statusText, 8) + 22;
     const badgeH = 20;
-    const badgeCentreY = ZONE_A_TOP - 19;  // vertically near top, not overlapping logo
+    const badgeCentreY = ZONE_A_TOP - 19;
     p.drawRectangle({ x: PAGE_W - PG_R - bw, y: badgeCentreY - badgeH / 2, width: bw, height: badgeH, borderColor: badgeCol, borderWidth: 1.5, borderRadius: 2 });
     dt(p, this.bold, statusText, PAGE_W - PG_R - bw + 11, badgeCentreY - 3, 8, badgeCol);
 
-    // ─── Zone B: manual title block  (fixed vertical anchor)
-    // Eyebrow label sits at ZONE_B_TOP.
-    // Title starts 32pt below eyebrow — enough clearance so they never touch.
-    // Bottom of zone B is clamped so it never reaches zone C.
-    const ZONE_B_TOP = Math.round(PAGE_H * 0.595);  // ~501 — eyebrow sits here
-    const ZONE_C_TOP = Math.round(PAGE_H * 0.285);  // ~240 — metadata zone starts here
+    // ─── Zone B: title block
+    // When cover image present, anchor title lower (in the photo band area, white text over overlay)
+    const ZONE_B_TOP = this.coverImg
+      ? COVER_IMG_Y + 120  // ~120pt from bottom of photo band
+      : Math.round(PAGE_H * 0.595);
+    const ZONE_C_TOP = Math.round(PAGE_H * 0.285);
 
-    dt(p, this.regular, 'OPERATION & MAINTENANCE MANUAL', LOGO_X, ZONE_B_TOP, 8, C_MUTED, { ls: 2.5 });
+    const titleColor = this.coverImg ? rgb(1, 1, 1) : C_INK;
+    const eyebrowColor = this.coverImg ? rgb(0.9, 0.9, 0.9) : C_MUTED;
 
-    // Separator rule between eyebrow and title — makes hierarchy unmistakable
+    dt(p, this.regular, 'OPERATION & MAINTENANCE MANUAL', LOGO_X, ZONE_B_TOP, 8, eyebrowColor, { ls: 2.5 });
+
     p.drawLine({
       start: { x: LOGO_X, y: ZONE_B_TOP - 14 },
       end:   { x: LOGO_X + 200, y: ZONE_B_TOP - 14 },
       thickness: 0.5,
-      color: C_FAINT,
+      color: this.coverImg ? rgb(0.7, 0.7, 0.7) : C_FAINT,
     });
 
-    // Title — starting 32pt below eyebrow baseline (was 22 — too close)
     const TITLE_START_Y = ZONE_B_TOP - 32;
     const titleMaxW = PAGE_W - LOGO_X - PG_R - 6;
     const titleBottom = wrapText(p, this.bold, manual.title, LOGO_X, TITLE_START_Y,
-      titleMaxW, 32, C_INK, 42);
+      titleMaxW, 32, titleColor, 42);
 
-    // Version pill — 20pt below bottom of title block, never below ZONE_C_TOP + 50
     if (manual.version) {
       const vpTop = Math.max(titleBottom - 20, ZONE_C_TOP + 52);
       const vw = this.regular.widthOfTextAtSize(manual.version, 10) + 24;
-      p.drawRectangle({ x: LOGO_X, y: vpTop - 20, width: vw, height: 20, color: rgb(0.95, 0.97, 0.99), borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
-      dt(p, this.regular, manual.version, LOGO_X + 12, vpTop - 10, 10, C_MID);
+      if (this.coverImg) {
+        // Version pill on photo — white text, semi-transparent background
+        p.drawRectangle({ x: LOGO_X, y: vpTop - 20, width: vw, height: 20, color: rgb(1, 1, 1), opacity: 0.15, borderColor: rgb(1, 1, 1), borderWidth: 0.5, borderRadius: 2 });
+        dt(p, this.regular, manual.version, LOGO_X + 12, vpTop - 10, 10, rgb(1, 1, 1));
+      } else {
+        p.drawRectangle({ x: LOGO_X, y: vpTop - 20, width: vw, height: 20, color: rgb(0.95, 0.97, 0.99), borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
+        dt(p, this.regular, manual.version, LOGO_X + 12, vpTop - 10, 10, C_MID);
+      }
     }
 
-    // ─── Zone C: metadata grid  (fixed anchor at ZONE_C_TOP)
+    // ─── Zone C: metadata grid
     p.drawLine({ start: { x: LOGO_X, y: ZONE_C_TOP }, end: { x: PAGE_W - PG_R, y: ZONE_C_TOP }, thickness: 0.8, color: C_FAINT });
 
     const COL_W      = (PAGE_W - LOGO_X - PG_R) / 2;
     const META_ROW_H = 48;
-    const META_START = ZONE_C_TOP - 24;  // first row value baseline
+    const META_START = ZONE_C_TOP - 24;
 
     const metaRows: [string, string][] = [
       ['Project',         project.name],
@@ -325,13 +360,40 @@ class BuildContext {
       const gx  = LOGO_X + col * COL_W;
       const gy  = META_START - row * META_ROW_H;
       if (gy - 14 < 20) return;
-      // Label sits 14pt above value baseline
       dt(p, this.regular, label.toUpperCase(), gx, gy + 14, 6.5, C_MUTED, { ls: 1.2 });
       wrapText(p, this.bold, value, gx, gy, COL_W - 14, 10.5, C_BODY, 14);
     });
 
-    // Unused var suppression
     void logoBandBottom;
+  }
+
+  // ── Introduction page ─────────────────────────────────────────────────────────
+  // Rendered only when manual.introduction is non-empty.
+  // A dedicated text page between the contents and the first section.
+
+  async addIntroductionPage() {
+    if (!this.manual.introduction) return;
+
+    const { page, y: startY } = this.newPage(C_ORANGE);
+    let y = startY;
+
+    dt(page, this.regular, 'INTRODUCTION', PG_L, y, 7.5, C_MUTED, { ls: 2.5 });
+    y -= 26;
+    dt(page, this.bold, 'Project Introduction', PG_L, y, 24, C_INK);
+    y -= 6;
+    page.drawRectangle({ x: PG_L, y: y - 3, width: 44, height: 3, color: C_ORANGE });
+    y -= SECTION_GAP + 10;
+
+    // Render the introduction text, flowing across pages if needed
+    const pager: Pager = { page, y };
+    const text = this.manual.introduction;
+    const paragraphs = text.split(/\r?\n+/).filter(s => s.trim());
+
+    for (const para of paragraphs) {
+      overflow(pager, this, 30, C_ORANGE, 'Project Introduction');
+      wrapTextPaged(pager, this, para, PG_L, PG_CW, 11, C_BODY, 17, C_ORANGE, 'Project Introduction');
+      pager.y -= PARA_GAP;
+    }
   }
 
   // ── Contents page ────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, Plus, Trash2, CreditCard as Edit2, Check, X, GripVertical, FileText, FlaskConical, FolderOpen, ExternalLink } from 'lucide-react';
+import { ChevronUp, ChevronDown, Plus, Trash2, CreditCard as Edit2, Check, X, FileText, FlaskConical, FolderOpen } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import type { DBOAndMSection, DBOAndMItem, OAndMSourceModule } from './types';
 import { SOURCE_MODULE_LABELS, SOURCE_MODULE_COLOURS, genId } from './types';
@@ -222,74 +222,82 @@ function SectionRow({
                 const isEditingNotes = editingItemId === item.id;
 
                 return (
-                  <div key={item.id} className="flex items-start gap-2 group bg-[#111827] border border-[#1e2d4a] rounded-lg px-3 py-2.5 hover:border-[#2a3a5a] transition-colors">
-                    {canEdit && (
-                      <div className="flex flex-col gap-0.5 pt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => moveItem(item, 'up')} disabled={iIdx === 0} className="text-slate-700 hover:text-slate-400 disabled:opacity-20 p-0.5 transition-colors">
-                          <ChevronUp size={10} />
-                        </button>
-                        <button onClick={() => moveItem(item, 'down')} disabled={iIdx === sortedItems.length - 1} className="text-slate-700 hover:text-slate-400 disabled:opacity-20 p-0.5 transition-colors">
-                          <ChevronDown size={10} />
-                        </button>
-                      </div>
-                    )}
-                    <GripVertical size={12} className="text-slate-700 mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${colourClass}`}>
-                          <Icon size={9} />
-                          {label}
-                        </span>
-                        <span className="text-xs font-semibold text-slate-200 truncate">{item.title}</span>
+                  <div key={item.id} className="group relative bg-[#0d1628] border border-[#1a2640] rounded-lg hover:border-[#2a3a5a] transition-all duration-150">
+                    <div className="flex items-center gap-0 px-3 py-2.5">
+                      {/* Reorder arrows — visible on hover */}
+                      {canEdit && (
+                        <div className="flex flex-col gap-0 mr-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          <button onClick={() => moveItem(item, 'up')} disabled={iIdx === 0} className="text-slate-700 hover:text-slate-400 disabled:opacity-20 p-0.5 transition-colors">
+                            <ChevronUp size={10} />
+                          </button>
+                          <button onClick={() => moveItem(item, 'down')} disabled={iIdx === sortedItems.length - 1} className="text-slate-700 hover:text-slate-400 disabled:opacity-20 p-0.5 transition-colors">
+                            <ChevronDown size={10} />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Type badge — compact pill left of title */}
+                      <span className={`inline-flex items-center gap-1 shrink-0 text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-md mr-3 ${colourClass}`}>
+                        <Icon size={9} />
+                        {label}
+                      </span>
+
+                      {/* Title + subtitle */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-slate-100 leading-tight truncate">{item.title}</p>
                         {item.subtitle && (
-                          <span className="text-[10px] text-slate-600 truncate">{item.subtitle}</span>
+                          <p className="text-[10px] text-slate-500 mt-0.5 truncate">{item.subtitle}</p>
                         )}
                       </div>
 
-                      {isEditingNotes ? (
-                        <div className="mt-2 space-y-1.5">
-                          <textarea
-                            value={itemNotesDraft}
-                            onChange={e => setItemNotesDraft(e.target.value)}
-                            rows={2}
-                            placeholder="Editor annotation for this item…"
-                            className="w-full bg-[#0d1628] border border-[#2a3a5a] rounded px-2 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#f97316] resize-none transition-colors"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => { onUpdateItem({ ...item, notes: itemNotesDraft }); setEditingItemId(null); }}
-                              className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-white bg-[#f97316] rounded hover:bg-orange-400 transition-colors"
-                            >
-                              <Check size={9} /> Save
-                            </button>
-                            <button onClick={() => setEditingItemId(null)} className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors px-2 py-1">
-                              Cancel
-                            </button>
-                          </div>
+                      {/* Action buttons */}
+                      {canEdit && (
+                        <div className="flex items-center gap-0.5 shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => { setEditingItemId(item.id); setItemNotesDraft(item.notes); }}
+                            className="p-1.5 text-slate-600 hover:text-slate-300 hover:bg-[#1a2640] rounded-md transition-colors"
+                            title="Add annotation"
+                          >
+                            <Edit2 size={11} />
+                          </button>
+                          <button
+                            onClick={() => onRemoveItem(item.id)}
+                            className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors"
+                            title="Remove"
+                          >
+                            <X size={11} />
+                          </button>
                         </div>
-                      ) : item.notes ? (
-                        <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{item.notes}</p>
-                      ) : null}
+                      )}
                     </div>
 
-                    {canEdit && (
-                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
-                        <button
-                          onClick={() => { setEditingItemId(item.id); setItemNotesDraft(item.notes); }}
-                          className="p-1 text-slate-600 hover:text-slate-300 hover:bg-[#1e2d4a] rounded transition-colors"
-                          title="Add note"
-                        >
-                          <Edit2 size={10} />
-                        </button>
-                        <button
-                          onClick={() => onRemoveItem(item.id)}
-                          className="p-1 text-slate-600 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
-                          title="Remove from section"
-                        >
-                          <X size={10} />
-                        </button>
+                    {/* Notes inline — below the main row */}
+                    {isEditingNotes ? (
+                      <div className="px-3 pb-3 space-y-2 border-t border-[#1a2640] pt-2">
+                        <textarea
+                          value={itemNotesDraft}
+                          onChange={e => setItemNotesDraft(e.target.value)}
+                          rows={2}
+                          placeholder="Annotation for this item in the manual…"
+                          className="w-full bg-[#111827] border border-[#2a3a5a] rounded-md px-2.5 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#f97316] resize-none transition-colors"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { onUpdateItem({ ...item, notes: itemNotesDraft }); setEditingItemId(null); }}
+                            className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-white bg-[#f97316] rounded-md hover:bg-orange-400 transition-colors"
+                          >
+                            <Check size={9} /> Save
+                          </button>
+                          <button onClick={() => setEditingItemId(null)} className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors px-2 py-1">
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                    )}
+                    ) : item.notes ? (
+                      <div className="px-3 pb-2.5 border-t border-[#1a2640] pt-2">
+                        <p className="text-[11px] text-slate-500 leading-relaxed italic">{item.notes}</p>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
