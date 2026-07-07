@@ -1198,6 +1198,8 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     ? 'bg-amber-600 hover:bg-amber-700'
     : isSCR
     ? 'bg-sky-600 hover:bg-sky-700'
+    : isSN
+    ? 'bg-slate-600 hover:bg-slate-700'
     : 'bg-[#f97316] hover:bg-orange-600';
 
   const rfiStatuses = ['Draft', 'Issued', 'Awaiting Response', 'Closed'];
@@ -1222,16 +1224,18 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
 
         <div className="p-6 space-y-5">
 
-          {/* ── Title (all forms) ── */}
-          <div>
-            <label className={labelCls}>Title *</label>
-            <input
-              value={form.title}
-              onChange={set('title')}
-              className={`mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-3 text-base font-semibold text-white outline-none focus:border-[#f97316] placeholder:text-slate-600 placeholder:font-normal`}
-              placeholder="Enter a clear, descriptive title for this record..."
-            />
-          </div>
+          {/* ── Title (all forms except Site Note, which uses Subject as title) ── */}
+          {!isSN && (
+            <div>
+              <label className={labelCls}>Title *</label>
+              <input
+                value={form.title}
+                onChange={set('title')}
+                className={`mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-3 text-base font-semibold text-white outline-none focus:border-[#f97316] placeholder:text-slate-600 placeholder:font-normal`}
+                placeholder="Enter a clear, descriptive title for this record..."
+              />
+            </div>
+          )}
 
           {/* ── RFI Fields ── */}
           {isRFI && (
@@ -5030,6 +5034,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
               : isMVHR ? 'Submit MVHR Commissioning Record'
               : isTWR ? 'Submit Temperature Water Readings'
               : isPCC ? 'Issue Certificate'
+              : isSN ? 'Submit Site Note'
               : 'Submit Form'}
           </button>
         </div>

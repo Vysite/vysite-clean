@@ -141,6 +141,7 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
   const isQA   = form.type === 'QA Inspection';
   const isSHU  = form.type === 'Site Hold Up';
   const isSCR  = form.type === 'Site Change Request';
+  const isSN   = form.type === 'Site Note';
 
   // Parse JSON arrays for view
   let ramsHazards: HazardRecord[] = [];
@@ -296,6 +297,39 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
             {s('scrReason') && <ViewField label="Reason for Change" value={s('scrReason')} />}
             {s('scrProgrammeImpact') && <ViewField label="Potential Programme Impact" value={s('scrProgrammeImpact')} />}
             {s('scrCommercialImpact') && <ViewField label="Potential Commercial Impact" value={s('scrCommercialImpact')} />}
+            {s('comments') && <ViewField label="Additional Comments" value={s('comments')} />}
+          </>}
+
+          {/* ── Site Note ── */}
+          {isSN && <>
+            <div className="border-l-4 border-slate-500 bg-slate-900/30 rounded-r-xl px-4 py-3 text-xs text-slate-400 leading-relaxed italic">
+              This Site Note has been issued to formally record information, observations, existing conditions or matters relevant to the Project. It is intended to maintain an accurate contemporaneous project record and does not, by itself, constitute a contractual instruction, variation, acceptance or waiver of any contractual rights or obligations unless expressly stated elsewhere within the Contract.
+            </div>
+            <Section label="Note Details">
+              <Field2Col items={[
+                ['Reference', s('snRef')],
+                ['Category', s('snCategory')],
+                ['Date', fmtDate(s('date'))],
+                ['Time', s('snTime')],
+                ['Location / Area', s('areaLocation')],
+                ['Created By', s('completedBy')],
+              ]} />
+            </Section>
+            {s('snSubject') && (
+              <Section label="Subject">
+                <p className="text-sm font-semibold text-white">{s('snSubject')}</p>
+              </Section>
+            )}
+            {s('snBody') && (
+              <Section label="Site Note">
+                <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{s('snBody')}</p>
+              </Section>
+            )}
+            {s('snRecommendedAction') && (
+              <Section label="Recommended Action">
+                <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{s('snRecommendedAction')}</p>
+              </Section>
+            )}
             {s('comments') && <ViewField label="Additional Comments" value={s('comments')} />}
           </>}
 
@@ -1051,7 +1085,7 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
           </>}
 
           {/* Generic comments/notes fallback */}
-          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isTWR && !isQA && !isPCC && !isSHU && !isSCR && (form.comments || form.notes) && (
+          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isTWR && !isQA && !isPCC && !isSHU && !isSCR && !isSN && (form.comments || form.notes) && (
             <ViewField label="Comments / Notes" value={String(form.comments || form.notes || '')} />
           )}
 
