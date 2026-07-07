@@ -95,16 +95,16 @@ export async function buildOAndMPdf(
 //          │  COLOURED BAR             h = 4                  │
 //   837.89 ├──────────────────────────────────────────────────┤
 //          │  manual title (left)  ·  project name (right)    │
-//          │  text baseline y = 822                           │
-//   810.89 ├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─│  ← HDR_SEP_Y
-//          │  breathing gap        h = 22                     │
-//   788.89 ├──────────────────────────────────────────────────┤  ← CONTENT_TOP
+//          │  text baseline y = 822.89                        │
+//   810.89 ├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  ─ ─ ┤  ← HDR_SEP_Y
+//          │  breathing gap        h = 26                     │
+//   784.89 ├──────────────────────────────────────────────────┤  ← CONTENT_TOP
 //          │                                                  │
-//          │  C O N T E N T   A R E A   (728 pt / ~257 mm)   │
+//          │  C O N T E N T   A R E A   (722 pt / ~255 mm)   │
 //          │                                                  │
-//    60.89 ├──────────────────────────────────────────────────┤  ← CONTENT_BOT
-//          │  breathing gap        h = 14                     │
-//    46.89 ├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─│  ← FTR_SEP_Y
+//    62.89 ├──────────────────────────────────────────────────┤  ← CONTENT_BOT
+//          │  breathing gap        h = 16                     │
+//    46.89 ├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  ─ ─ ┤  ← FTR_SEP_Y
 //          │  project · manual (left)   VYSITE® · Page N (rt)│
 //          │  text baseline y = 30                            │
 //    16.89 │  bottom margin                                   │
@@ -120,23 +120,21 @@ const PG_CW = PAGE_W - PG_L - PG_R;   // 483.28 — content column width
 
 // Fixed y-coordinates for the header band
 const HDR_BAR_H  = 4;
-const HDR_BAR_Y  = PAGE_H - HDR_BAR_H;    // 837.89 — bottom of orange bar rect
+const HDR_BAR_Y  = PAGE_H - HDR_BAR_H;       // 837.89 — bottom edge of bar rect
 const HDR_TEXT_Y = PAGE_H - HDR_BAR_H - 15;  // 822.89 — header text baseline
-const HDR_SEP_Y  = PAGE_H - HDR_BAR_H - 27;  // 810.89 — thin sep rule
-const CONTENT_TOP = PAGE_H - HDR_BAR_H - 53; // 784.89 — first content always here
-//  (27pt to sep + 26pt breathing gap = 53pt total from bottom of bar)
+const HDR_SEP_Y  = PAGE_H - HDR_BAR_H - 27;  // 810.89 — separator rule
+const CONTENT_TOP = PAGE_H - HDR_BAR_H - 53; // 784.89 — guaranteed content start y
 
 // Fixed y-coordinates for the footer band
-const FTR_SEP_Y  = 46;   // thin sep rule above footer text
-const FTR_TEXT_Y = 30;   // footer text baseline
+const FTR_SEP_Y  = 46;   // separator rule y
+const FTR_TEXT_Y = 30;   // footer text baseline y
 const CONTENT_BOT = 62;  // content must not go below this y
-//  (46pt sep + 16pt breathing gap above it = 62pt)
 
 // ─── Within-content spacing tokens ────────────────────────────────────────────
 const SECTION_GAP = 26;   // gap between major content blocks
 const PARA_GAP    = 14;   // gap between paragraph-level items
 const ROW_H       = 14;   // single row height in lists / tables
-const LABEL_V     = 10;   // vertical space between a label and its value
+const LABEL_V     = 10;   // vertical space for a small label above its value
 const CARD_H      = 14;   // horizontal padding inside panels / cards
 const CARD_V      = 12;   // vertical padding inside panels / cards
 
@@ -186,8 +184,8 @@ class BuildContext {
   }
 
   // ── Universal page factory ────────────────────────────────────────────────────
-  // Creates a new A4 page, stamps the standard header+footer template, and returns
-  // { page, y } where y = CONTENT_TOP — the guaranteed starting point for all content.
+  // Creates an A4 page, stamps the fixed template, returns { page, y: CONTENT_TOP }.
+  // All content methods call this and begin drawing at the returned y.
 
   newPage(accent: ReturnType<typeof rgb> = C_ORANGE): { page: PDFPage; y: number } {
     this.pageCount++;
@@ -196,9 +194,8 @@ class BuildContext {
     return { page, y: CONTENT_TOP };
   }
 
-  // Stamps the fixed header+footer chrome onto any page.
-  // Never draws content — only the structural chrome that must appear identically
-  // on every non-cover page.
+  // Stamps the fixed header+footer chrome. Called once per page at creation time.
+  // Draws only structural chrome — never content.
   private stampTemplate(p: PDFPage, accent: ReturnType<typeof rgb>) {
     // Coloured top bar
     p.drawRectangle({ x: 0, y: HDR_BAR_Y, width: PAGE_W, height: HDR_BAR_H, color: accent });
@@ -224,7 +221,7 @@ class BuildContext {
       thickness: 0.4, color: C_FAINT,
     });
 
-    // Footer text: project · manual (left), VYSITE® · Page N (right)
+    // Footer text
     const leftFtr = san(truncate(`${this.project.name}  \xB7  ${this.manual.title}`, 72));
     dt(p, this.regular, leftFtr, PG_L, FTR_TEXT_Y, 6.5, C_MUTED);
     const rightFtr = `VYSITE\xAE  \xB7  Page ${this.pageCount}`;
@@ -233,64 +230,81 @@ class BuildContext {
   }
 
   // ── Cover page ───────────────────────────────────────────────────────────────
-  // The cover uses its own premium layout — not the standard template.
+  // Premium standalone design — not the standard template.
+  // All vertical positions are fixed anchors so nothing can overlap.
 
   async addCoverPage() {
     const p = this.output.addPage([PAGE_W, PAGE_H]);
     const { manual, project, orgInfo } = this;
 
-    // Deep navy left sidebar
+    // ── Structure: deep navy left sidebar
     p.drawRectangle({ x: 0, y: 0, width: 46, height: PAGE_H, color: C_DARK });
-    p.drawRectangle({ x: 0, y: PAGE_H * 0.31, width: 46, height: 4, color: C_ORANGE });
+    p.drawRectangle({ x: 0, y: Math.round(PAGE_H * 0.30), width: 46, height: 4, color: C_ORANGE });
 
-    // Top orange band
+    // ── Top band
     p.drawRectangle({ x: 46, y: PAGE_H - 5, width: PAGE_W - 46, height: 5, color: C_ORANGE });
 
-    // ── Logo / org name  ── top-left of content
+    // ─── Zone A: top band (y: PAGE_H - 5 down to PAGE_H - 72)
+    // Logo sits in zone A, left-aligned.
+    const ZONE_A_TOP = PAGE_H - 18;  // top of content in zone A
     const LOGO_X = 70;
-    const LOGO_TOP = PAGE_H - 60;
+    let logoBandBottom = ZONE_A_TOP - 16;  // fallback if no logo
+
     if (this.logoImg) {
-      const scale = Math.min(156 / this.logoImg.width, 40 / this.logoImg.height);
+      const scale = Math.min(148 / this.logoImg.width, 38 / this.logoImg.height);
       const lw = this.logoImg.width * scale;
       const lh = this.logoImg.height * scale;
-      p.drawImage(this.logoImg, { x: LOGO_X, y: LOGO_TOP - lh, width: lw, height: lh });
+      p.drawImage(this.logoImg, { x: LOGO_X, y: ZONE_A_TOP - lh, width: lw, height: lh });
+      logoBandBottom = ZONE_A_TOP - lh;
     } else {
-      dt(p, this.bold, orgInfo.companyName || 'Organisation', LOGO_X, LOGO_TOP - 16, 16, C_INK);
+      dt(p, this.bold, orgInfo.companyName || 'Organisation', LOGO_X, ZONE_A_TOP - 14, 15, C_INK);
+      logoBandBottom = ZONE_A_TOP - 22;
     }
 
-    // ── Status badge  ── top-right
+    // Status badge — right side of zone A, vertically centred to logo
     const statusText = manual.status === 'finalised' ? 'FINALISED'
       : manual.status === 'in_progress' ? 'IN PROGRESS' : 'DRAFT';
     const badgeCol = manual.status === 'finalised' ? C_GREEN
       : manual.status === 'in_progress' ? C_AMBER : C_MUTED;
     const bw = this.bold.widthOfTextAtSize(statusText, 8) + 22;
-    p.drawRectangle({ x: PAGE_W - PG_R - bw, y: PAGE_H - 62, width: bw, height: 22, borderColor: badgeCol, borderWidth: 1.5, borderRadius: 2 });
-    dt(p, this.bold, statusText, PAGE_W - PG_R - bw + 11, PAGE_H - 54, 8, badgeCol);
+    const badgeH = 20;
+    const badgeCentreY = ZONE_A_TOP - 19;  // vertically near top, not overlapping logo
+    p.drawRectangle({ x: PAGE_W - PG_R - bw, y: badgeCentreY - badgeH / 2, width: bw, height: badgeH, borderColor: badgeCol, borderWidth: 1.5, borderRadius: 2 });
+    dt(p, this.bold, statusText, PAGE_W - PG_R - bw + 11, badgeCentreY - 3, 8, badgeCol);
 
-    // ── Eyebrow label
-    const EYEBROW_Y = Math.round(PAGE_H * 0.60);
-    dt(p, this.regular, 'OPERATION & MAINTENANCE MANUAL', LOGO_X, EYEBROW_Y, 8, C_MUTED, { ls: 2.5 });
+    // ─── Zone B: manual title block  (fixed vertical anchor)
+    // Starts at a consistent position regardless of logo height.
+    // Eyebrow label, then large title, then optional version pill.
+    // Bottom of zone B is clamped so it never reaches zone C.
+    const ZONE_B_TOP = Math.round(PAGE_H * 0.595);  // ~501 — eyebrow sits here
+    const ZONE_C_TOP = Math.round(PAGE_H * 0.285);  // ~240 — metadata zone starts here
 
-    // ── Manual title
-    const TITLE_Y = EYEBROW_Y - 18;
-    const titleBottom = wrapText(p, this.bold, manual.title, LOGO_X, TITLE_Y,
-      PAGE_W - LOGO_X - PG_R - 6, 32, C_INK, 42);
+    dt(p, this.regular, 'OPERATION & MAINTENANCE MANUAL', LOGO_X, ZONE_B_TOP, 8, C_MUTED, { ls: 2.5 });
 
-    // ── Version pill
+    // Title — starting 22pt below eyebrow
+    const TITLE_START_Y = ZONE_B_TOP - 22;
+    // Max width: full content column
+    const titleMaxW = PAGE_W - LOGO_X - PG_R - 6;
+    // lineH for 32pt font: 40pt
+    const titleBottom = wrapText(p, this.bold, manual.title, LOGO_X, TITLE_START_Y,
+      titleMaxW, 32, C_INK, 40);
+
+    // Version pill — always 18pt below bottom of title block, never below ZONE_C_TOP + 50
     if (manual.version) {
-      const vpY = titleBottom - 16;
+      const vpTop = Math.max(titleBottom - 18, ZONE_C_TOP + 52);
       const vw = this.regular.widthOfTextAtSize(manual.version, 10) + 24;
-      p.drawRectangle({ x: LOGO_X, y: vpY - 18, width: vw, height: 20, color: rgb(0.95, 0.97, 0.99), borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
-      dt(p, this.regular, manual.version, LOGO_X + 12, vpY - 8, 10, C_MID);
+      p.drawRectangle({ x: LOGO_X, y: vpTop - 20, width: vw, height: 20, color: rgb(0.95, 0.97, 0.99), borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
+      dt(p, this.regular, manual.version, LOGO_X + 12, vpTop - 10, 10, C_MID);
     }
 
-    // ── Horizontal rule before metadata
-    const RULE_Y = Math.round(PAGE_H * 0.265);
-    p.drawLine({ start: { x: LOGO_X, y: RULE_Y }, end: { x: PAGE_W - PG_R, y: RULE_Y }, thickness: 0.8, color: C_FAINT });
+    // ─── Zone C: metadata grid  (fixed anchor at ZONE_C_TOP)
+    // Separator rule at ZONE_C_TOP, metadata below it.
+    p.drawLine({ start: { x: LOGO_X, y: ZONE_C_TOP }, end: { x: PAGE_W - PG_R, y: ZONE_C_TOP }, thickness: 0.8, color: C_FAINT });
 
-    // ── Project metadata grid (2 columns)
-    const COL_W  = (PAGE_W - LOGO_X - PG_R) / 2;
-    const META_ROW_H = 44;
+    const COL_W      = (PAGE_W - LOGO_X - PG_R) / 2;
+    const META_ROW_H = 42;
+    const META_START = ZONE_C_TOP - 22;  // first row label top
+
     const metaRows: [string, string][] = [
       ['Project',         project.name],
       ['Client',          project.client || '\x97'],
@@ -299,14 +313,21 @@ class BuildContext {
       ['Contractor',      orgInfo.companyName || '\x97'],
       ['Document Date',   fmtDate(manual.updated_at || manual.created_at)],
     ];
+
     metaRows.forEach(([label, value], i) => {
       const col = i % 2;
       const row = Math.floor(i / 2);
       const gx  = LOGO_X + col * COL_W;
-      const gy  = RULE_Y - 24 - row * META_ROW_H;
+      // gy is the y of the value text; label sits LABEL_V above it
+      const gy  = META_START - row * META_ROW_H;
+      // Guard: don't draw below the page
+      if (gy - 14 < 20) return;
       dt(p, this.bold, label.toUpperCase(), gx, gy + LABEL_V, 6.5, C_MUTED, { ls: 1.2 });
       wrapText(p, this.bold, value, gx, gy, COL_W - 14, 10.5, C_BODY, 14);
     });
+
+    // Unused var suppression
+    void logoBandBottom;
   }
 
   // ── Contents page ────────────────────────────────────────────────────────────
@@ -314,127 +335,140 @@ class BuildContext {
   async addContentsPage(sections: DBOAndMSection[], items: DBOAndMItem[]) {
     const { page, y: startY } = this.newPage(C_ORANGE);
 
-    // ── Page chapter title
+    // Chapter title block — positioned at top of content area
     let y = startY;
     dt(page, this.regular, 'TABLE OF', PG_L, y, 8, C_MUTED, { ls: 2.5 });
-    y -= 22;
+    y -= 24;
     dt(page, this.bold, 'Contents', PG_L, y, 30, C_INK);
-    y -= 8;
-    page.drawRectangle({ x: PG_L, y: y - 4, width: 50, height: 3, color: C_ORANGE });
-    y -= SECTION_GAP + 4;
+    y -= 10;
+    page.drawRectangle({ x: PG_L, y: y - 3, width: 50, height: 3, color: C_ORANGE });
+    y -= SECTION_GAP + 6;
 
-    // ── Section rows
+    // Section rows
     for (const [idx, sec] of sections.entries()) {
-      const itemCount = items.filter(i => i.section_id === sec.id).length;
-      const numStr    = String(idx + 1).padStart(2, '0');
-
-      // Estimate row height to check if it fits
-      const badgeW    = this.bold.widthOfTextAtSize(String(itemCount), 9) + 18;
-      const titleMaxW = PG_CW - 36 - badgeW - 16;
+      const itemCount  = items.filter(i => i.section_id === sec.id).length;
+      const numStr     = String(idx + 1).padStart(2, '0');
+      const badgeW     = this.bold.widthOfTextAtSize(String(itemCount), 9) + 18;
+      const titleMaxW  = PG_CW - 36 - badgeW - 16;
       const titleLines = measureLines(this.bold, san(sec.title), titleMaxW, 11);
-      const rowH = titleLines.length * ROW_H + (sec.description ? ROW_H + 2 : 0) + 14;
-      if (y - rowH < CONTENT_BOT) break;
+      // Row height: title lines + optional description + internal padding
+      const rowH = titleLines.length * ROW_H + (sec.description ? ROW_H + 4 : 0) + 14;
 
-      // Alternating tint
+      if (y - rowH < CONTENT_BOT + 4) break;
+
+      // Alternating row tint — positioned to exactly cover the row, no overlap with adjacent rows
       if (idx % 2 === 0) {
-        page.drawRectangle({ x: PG_L - 6, y: y - rowH + 10, width: PG_CW + 12, height: rowH, color: rgb(0.985, 0.989, 0.994) });
+        page.drawRectangle({
+          x: PG_L - 6, y: y - rowH + 8,
+          width: PG_CW + 12, height: rowH,
+          color: rgb(0.985, 0.989, 0.994),
+        });
       }
 
-      // Number glyph
+      // Section number (faint, left)
       dt(page, this.bold, numStr, PG_L, y, 10, C_FAINT);
 
-      // Section title (wraps)
+      // Section title — wraps within measured width
       titleLines.forEach((line, li) => {
         page.drawText(line, { x: PG_L + 34, y: y - li * ROW_H, size: 11, font: this.bold, color: C_BODY });
       });
 
-      // Item count badge (right-aligned)
-      page.drawRectangle({ x: PAGE_W - PG_R - badgeW, y: y - 13, width: badgeW, height: 18, color: rgb(0.93, 0.96, 0.99), borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
-      dt(page, this.bold, String(itemCount), PAGE_W - PG_R - badgeW + 9, y, 9, C_MUTED);
+      // Item count badge — right side, vertically centred to first title line
+      const badgeTopY = y - titleLines.length * ROW_H / 2 - 9;
+      page.drawRectangle({ x: PAGE_W - PG_R - badgeW, y: badgeTopY, width: badgeW, height: 18, color: rgb(0.93, 0.96, 0.99), borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
+      dt(page, this.bold, String(itemCount), PAGE_W - PG_R - badgeW + 9, badgeTopY + 9, 9, C_MUTED);
 
-      // Optional description
+      // Optional description — immediately below title block
       if (sec.description) {
-        const descY = y - titleLines.length * ROW_H - 2;
-        dt(page, this.regular, san(sec.description), PG_L + 34, descY, 8.5, C_MUTED);
+        dt(page, this.regular, san(sec.description), PG_L + 34, y - titleLines.length * ROW_H - 2, 8.5, C_MUTED);
       }
 
       y -= rowH;
-      page.drawLine({ start: { x: PG_L, y }, end: { x: PAGE_W - PG_R, y }, thickness: 0.4, color: C_FAINT });
-      y -= 6;
+      // Separator rule at bottom of row — drawn in neutral faint colour
+      page.drawLine({ start: { x: PG_L, y: y + 2 }, end: { x: PAGE_W - PG_R, y: y + 2 }, thickness: 0.4, color: C_FAINT });
+      y -= 8;
     }
   }
 
   // ── Section divider ───────────────────────────────────────────────────────────
-  // Feels like the opening chapter page of a premium construction manual.
 
   async addSectionDivider(section: DBOAndMSection, index: number, sectionItems: DBOAndMItem[]) {
     const { page, y: startY } = this.newPage(C_ORANGE);
 
-    // ── Faint watermark number (background, content area)
     const numStr = String(index + 1).padStart(2, '0');
+
+    // Watermark number — drawn in the LOWER half of content area so it never
+    // intersects with the text in the upper content area.
+    // At size 148, the glyph is ~148pt tall. We place its baseline at the midpoint
+    // of the content area minus a margin, keeping it entirely decorative.
+    const wmBaseY = Math.round((CONTENT_TOP + CONTENT_BOT) / 2) - 40;
     page.drawText(numStr, {
-      x: PAGE_W - PG_R - 106,
-      y: CONTENT_TOP - 110,
+      x: PAGE_W - PG_R - 108,
+      y: wmBaseY,
       size: 148,
       font: this.bold,
-      color: rgb(0.94, 0.955, 0.965),
+      color: rgb(0.945, 0.958, 0.967),
     });
 
-    // ── Chapter opening treatment
+    // Content — always starts at CONTENT_TOP, well above the watermark baseline
     let y = startY;
 
-    // Eyebrow
+    // Section eyebrow
     dt(page, this.regular, `SECTION ${numStr}`, PG_L, y, 8, C_MUTED, { ls: 2.5 });
-    y -= 18;
+    y -= 20;
 
-    // Section title (large, wraps)
+    // Section title (large, wraps; available width avoids the watermark area)
     const titleBottom = wrapText(page, this.bold, section.title, PG_L, y,
-      PG_CW - 88, 28, C_INK, 36);
+      PG_CW - 90, 28, C_INK, 36);
+    y = titleBottom;
 
-    // Orange accent rule below title
-    const accentY = titleBottom - 10;
-    page.drawRectangle({ x: PG_L, y: accentY, width: 50, height: 3, color: C_ORANGE });
-    y = accentY - SECTION_GAP;
+    // Orange accent rule — 10pt below last line of title
+    y -= 10;
+    page.drawRectangle({ x: PG_L, y: y - 1, width: 50, height: 3, color: C_ORANGE });
+    y -= SECTION_GAP + 2;
 
-    // Optional section description
+    // Optional description
     if (section.description) {
       const descBottom = wrapText(page, this.regular, section.description, PG_L, y,
-        PG_CW - 88, 11, C_MID, 17);
+        PG_CW - 90, 11, C_MID, 17);
       y = descBottom - SECTION_GAP;
     }
 
-    // ── Document list for this section
+    // Document list
     if (sectionItems.length > 0) {
+      // Ensure the list header never collides with content above it
+      y = Math.min(y, CONTENT_TOP - 140);  // safety cap
+
       dt(page, this.bold, 'DOCUMENTS IN THIS SECTION', PG_L, y, 7, C_MUTED, { ls: 1.5 });
-      y -= 10;
+      y -= 12;
       page.drawLine({ start: { x: PG_L, y }, end: { x: PAGE_W - PG_R, y }, thickness: 0.5, color: C_FAINT });
       y -= 16;
 
       for (const [i, item] of sectionItems.slice(0, 24).entries()) {
-        if (y < CONTENT_BOT + 20) break;
+        if (y < CONTENT_BOT + 24) break;
 
-        const badge = item.source_module === 'tc_record' ? 'T&C'
+        const badge      = item.source_module === 'tc_record' ? 'T&C'
           : item.source_module === 'site_form' ? 'FORM' : 'DOC';
         const bw         = this.bold.widthOfTextAtSize(badge, 7) + 14;
         const titleMaxW  = PG_CW - 30 - bw - 14;
         const titleLines = measureLines(this.bold, san(item.title ?? ''), titleMaxW, 10);
         const titleBlockH = titleLines.length * ROW_H;
         const hasSubtitle = !!item.subtitle;
-        const rowH = titleBlockH + (hasSubtitle ? ROW_H : 0) + 10;
+        const rowH       = titleBlockH + (hasSubtitle ? ROW_H : 0) + 10;
 
         // Row index
         dt(page, this.bold, String(i + 1).padStart(2, '0'), PG_L, y, 8, C_FAINT);
 
-        // Title (wraps)
+        // Title lines
         titleLines.forEach((line, li) => {
           page.drawText(line, { x: PG_L + 28, y: y - li * ROW_H, size: 10, font: this.bold, color: C_BODY });
         });
 
-        // Type badge — always at the first title line
+        // Type badge — top of row, right-aligned
         page.drawRectangle({ x: PAGE_W - PG_R - bw, y: y - 11, width: bw, height: 14, color: C_PANEL, borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
         dt(page, this.bold, badge, PAGE_W - PG_R - bw + 7, y - 3, 7, C_MUTED);
 
-        // Subtitle
+        // Subtitle (below title block, same indent)
         if (hasSubtitle) {
           dt(page, this.regular, san(item.subtitle!), PG_L + 28, y - titleBlockH, 8, C_MUTED);
         }
@@ -502,13 +536,18 @@ class BuildContext {
       const { page } = this.newPage(C_FAINT);
       const { width: iW, height: iH } = img.size();
       const maxW  = PG_CW;
-      const maxH  = CONTENT_TOP - CONTENT_BOT - 20;
+      const maxH  = CONTENT_TOP - CONTENT_BOT - 24;
       const scale = Math.min(maxW / iW, maxH / iH);
       const dw = iW * scale;
       const dh = iH * scale;
-      page.drawImage(img, { x: (PAGE_W - dw) / 2, y: (PAGE_H - dh) / 2 + 10, width: dw, height: dh });
+      // Centre image within the content zone
+      const imgX = (PAGE_W - dw) / 2;
+      const imgY = CONTENT_BOT + Math.round((CONTENT_TOP - CONTENT_BOT - dh) / 2);
+      page.drawImage(img, { x: imgX, y: imgY, width: dw, height: dh });
       const capW = this.oblique.widthOfTextAtSize(displayName, 8);
-      dt(page, this.oblique, displayName, (PAGE_W - capW) / 2, CONTENT_BOT, 8, C_MUTED);
+      // Caption sits below image, always above CONTENT_BOT
+      const capY = Math.max(imgY - 14, CONTENT_BOT + 2);
+      dt(page, this.oblique, displayName, (PAGE_W - capW) / 2, capY, 8, C_MUTED);
     } catch {
       await this.addExceptionPage(displayName, 'Image could not be embedded (unsupported or corrupt file).');
     }
@@ -516,35 +555,43 @@ class BuildContext {
 
   private async unsupportedPage(displayName: string, filename: string) {
     const { page, y } = this.newPage(C_FAINT);
-    const ext = filename.split('.').pop()?.toUpperCase() ?? 'FILE';
+    const ext    = filename.split('.').pop()?.toUpperCase() ?? 'FILE';
     const panelH = 92;
-    const panelY = y - 120;
+    // Panel sits at a fixed distance from content top, never near the footer
+    const panelY = y - 100;
     page.drawRectangle({ x: PG_L, y: panelY, width: PG_CW, height: panelH, color: C_PANEL, borderColor: C_FAINT, borderWidth: 1, borderRadius: 4 });
-    dt(page, this.bold, ext + ' FILE', PG_L + CARD_H, panelY + panelH - 20, 8, C_MUTED, { ls: 1.5 });
-    dt(page, this.bold, displayName, PG_L + CARD_H, panelY + panelH - 36, 13, C_INK);
-    dt(page, this.regular, 'This file format cannot be rendered as PDF pages.', PG_L + CARD_H, panelY + panelH - 56, 10, C_MID);
-    dt(page, this.regular, 'Request the digital file package for the original document.', PG_L + CARD_H, panelY + panelH - 72, 10, C_MUTED);
+    dt(page, this.bold, ext + ' FILE',       PG_L + CARD_H, panelY + panelH - CARD_V - 2,  8, C_MUTED, { ls: 1.5 });
+    dt(page, this.bold, displayName,          PG_L + CARD_H, panelY + panelH - CARD_V - 18, 13, C_INK);
+    dt(page, this.regular, 'This file format cannot be rendered as PDF pages.',          PG_L + CARD_H, panelY + panelH - CARD_V - 38, 10, C_MID);
+    dt(page, this.regular, 'Request the digital file package for the original document.', PG_L + CARD_H, panelY + panelH - CARD_V - 54, 10, C_MUTED);
   }
 
   // ── Document title / divider page ─────────────────────────────────────────────
-  // Introduces each project document, image or T&C attachment.
 
   private async docTitlePage(item: DBOAndMItem, doc: DBProjectDocument, displayName: string, typeTag: string) {
     const { page, y: startY } = this.newPage(C_FAINT);
     let y = startY;
 
-    // Left accent rule — spans full content height
-    page.drawRectangle({ x: PG_L - 18, y: CONTENT_BOT, width: 2.5, height: CONTENT_TOP - CONTENT_BOT, color: C_FAINT });
+    // Left accent rule — spans full content height, never overlaps text
+    page.drawRectangle({
+      x: PG_L - 18,
+      y: CONTENT_BOT,
+      width: 2.5,
+      height: CONTENT_TOP - CONTENT_BOT,
+      color: C_FAINT,
+    });
 
-    // Category breadcrumb + type badge (same line)
+    // Category breadcrumb (top-left) + type badge (top-right) — same baseline
     const catLabel = (doc.category || 'Project Document').toUpperCase();
     dt(page, this.regular, catLabel, PG_L, y, 7.5, C_MUTED, { ls: 2 });
+
     const tagW = this.bold.widthOfTextAtSize(typeTag, 8) + 16;
-    page.drawRectangle({ x: PAGE_W - PG_R - tagW, y: y - 13, width: tagW, height: 18, color: C_PANEL, borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
-    dt(page, this.bold, typeTag, PAGE_W - PG_R - tagW + 8, y - 5, 8, C_MID, { ls: 0.8 });
+    page.drawRectangle({ x: PAGE_W - PG_R - tagW, y: y - 14, width: tagW, height: 18, color: C_PANEL, borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
+    dt(page, this.bold, typeTag, PAGE_W - PG_R - tagW + 8, y - 6, 8, C_MID, { ls: 0.8 });
+
     y -= SECTION_GAP;
 
-    // Document title (large)
+    // Document title (large, wraps)
     const titleBottom = wrapText(page, this.bold, displayName, PG_L, y, PG_CW - 6, 22, C_INK, 30);
     y = titleBottom;
 
@@ -557,11 +604,11 @@ class BuildContext {
       y -= PARA_GAP;
     }
 
-    // Separator
+    // Separator rule
     page.drawLine({ start: { x: PG_L, y }, end: { x: PAGE_W - PG_R, y }, thickness: 0.5, color: C_FAINT });
     y -= SECTION_GAP;
 
-    // Metadata grid (2-col)
+    // Metadata grid — 2 columns, rows of 44pt each
     const metaFields: [string, string][] = (
       [
         ['Category',    doc.category || '\x97'],
@@ -582,22 +629,23 @@ class BuildContext {
       page.drawLine({ start: { x: mx, y: my - 28 }, end: { x: mx + mColW - 14, y: my - 28 }, thickness: 0.3, color: C_FAINT });
     });
 
-    // Notes panel
+    // Notes panel — only if it fits above CONTENT_BOT with clearance
     if (item.notes) {
       const notesTop = y - Math.ceil(metaFields.length / 2) * 44 - SECTION_GAP;
-      if (notesTop > CONTENT_BOT + 60) {
-        page.drawRectangle({ x: PG_L, y: notesTop - 44, width: PG_CW, height: 56, color: rgb(0.988, 0.994, 1), borderColor: rgb(0.81, 0.88, 0.94), borderWidth: 0.5, borderRadius: 3 });
+      const panelH   = 56;
+      if (notesTop - panelH > CONTENT_BOT + 16) {
+        page.drawRectangle({ x: PG_L, y: notesTop - panelH, width: PG_CW, height: panelH, color: rgb(0.988, 0.994, 1), borderColor: rgb(0.81, 0.88, 0.94), borderWidth: 0.5, borderRadius: 3 });
         dt(page, this.bold, 'NOTES', PG_L + CARD_H, notesTop - CARD_V, 7, C_MUTED, { ls: 1.2 });
         wrapText(page, this.oblique, item.notes, PG_L + CARD_H, notesTop - CARD_V - 14, PG_CW - CARD_H * 2, 9.5, C_MID, 14);
       }
     }
 
-    // Logo — bottom-right of content area
+    // Logo — pinned to bottom-right of content area, above CONTENT_BOT
     if (this.logoImg) {
       const scale = Math.min(110 / this.logoImg.width, 28 / this.logoImg.height);
       const lw = this.logoImg.width * scale;
       const lh = this.logoImg.height * scale;
-      page.drawImage(this.logoImg, { x: PAGE_W - PG_R - lw, y: CONTENT_BOT + 8, width: lw, height: lh });
+      page.drawImage(this.logoImg, { x: PAGE_W - PG_R - lw, y: CONTENT_BOT + 10, width: lw, height: lh });
     }
   }
 
@@ -609,41 +657,48 @@ class BuildContext {
     const { page: firstPage, y: startY } = this.newPage(C_SKY);
     let y = startY;
 
-    // ── Header block — logo + record identity
+    // ── Identify logo height first so subsequent elements are positioned correctly
+    let logoBlockH = 0;
+
     if (this.logoImg) {
       const scale = Math.min(130 / this.logoImg.width, 32 / this.logoImg.height);
-      const lh = this.logoImg.height * scale;
       const lw = this.logoImg.width * scale;
+      const lh = this.logoImg.height * scale;
       firstPage.drawImage(this.logoImg, { x: PG_L, y: y - lh, width: lw, height: lh });
+      logoBlockH = lh;
     } else {
-      dt(firstPage, this.bold, this.orgInfo.companyName, PG_L, y - 14, 14, C_INK);
+      dt(firstPage, this.bold, this.orgInfo.companyName, PG_L, y - 16, 14, C_INK);
+      logoBlockH = 22;
     }
-    dt(firstPage, this.regular, 'TESTING & COMMISSIONING RECORD', PG_L, y - 42, 7.5, C_MUTED, { ls: 2 });
 
-    // Record title + ref right-aligned
+    // "TESTING & COMMISSIONING RECORD" label — always 12pt below bottom of logo block
+    const labelY = y - logoBlockH - 12;
+    dt(firstPage, this.regular, 'TESTING & COMMISSIONING RECORD', PG_L, labelY, 7.5, C_MUTED, { ls: 2 });
+
+    // Record title + ref — right-aligned, vertically aligned to logo/label block
     const titleRX = PAGE_W / 2 + 10;
     const titleW  = PAGE_W - PG_R - titleRX;
-    wrapText(firstPage, this.bold, rec.title, titleRX, y - 12, titleW, 14, C_INK, 18, 'right');
+    wrapText(firstPage, this.bold, rec.title, titleRX, y - 14, titleW, 14, C_INK, 18, 'right');
     dt(firstPage, this.regular,
       `${rec.ref}${rec.date ? '  \xB7  ' + fmtDateShort(rec.date) : ''}`,
       titleRX, y - 36, 10, C_MUTED, { align: 'right', maxWidth: titleW });
 
-    // Thick sky-blue rule divider
-    y -= 54;
-    firstPage.drawLine({ start: { x: PG_L, y }, end: { x: PAGE_W - PG_R, y }, thickness: 2, color: C_SKY });
-    y -= PARA_GAP;
+    // Thick rule — sits below the taller of (label, ref), with 8pt clearance
+    const ruleY = Math.min(labelY - 10, y - 50);
+    firstPage.drawLine({ start: { x: PG_L, y: ruleY }, end: { x: PAGE_W - PG_R, y: ruleY }, thickness: 2, color: C_SKY });
+    y = ruleY - PARA_GAP;
 
-    // ── Meta panel
+    // Meta panel — fixed height, positioned immediately below rule
     const metaH = 58;
     firstPage.drawRectangle({ x: PG_L, y: y - metaH, width: PG_CW, height: metaH, color: C_PANEL, borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 3 });
 
     const mFields: [string, string][] = [
-      ['Reference',     rec.ref],
-      ['Category',      rec.category],
+      ['Reference',       rec.ref],
+      ['Category',        rec.category],
       ['Area / Location', rec.area || '\x97'],
-      ['Engineer',      rec.engineer || '\x97'],
-      ['Date',          fmtDateShort(rec.date)],
-      ['Status',        rec.status || '\x97'],
+      ['Engineer',        rec.engineer || '\x97'],
+      ['Date',            fmtDateShort(rec.date)],
+      ['Status',          rec.status || '\x97'],
     ];
     const mColW = PG_CW / 3;
     mFields.forEach(([label, val], i) => {
@@ -657,11 +712,11 @@ class BuildContext {
 
     y -= metaH + SECTION_GAP;
 
-    // Set up pager for flowing content
+    // Pager for flowing content below the fixed header block
     const pager: Pager = { page: firstPage, y };
     const contTitle    = rec.title;
 
-    // ── Result block
+    // Result block
     if (rec.result) {
       overflow(pager, this, 56, C_SKY, contTitle);
       const isPass = /pass/i.test(rec.result);
@@ -676,7 +731,7 @@ class BuildContext {
       pager.y -= 64;
     }
 
-    // ── Notes section
+    // Notes section
     if (rec.notes) {
       overflow(pager, this, 52, C_SKY, contTitle);
       dt(pager.page, this.bold, 'NOTES & OBSERVATIONS', PG_L, pager.y, 7, C_MUTED, { ls: 1.2 });
@@ -686,26 +741,24 @@ class BuildContext {
     }
   }
 
-  // ── Site Form (html2canvas render) ────────────────────────────────────────────
-  // Page 0: full-bleed A4 image (standalone form — has its own header/footer chrome).
-  // Pages 1+: content-zone images, inset into O&M template pages so every
-  //           continuation page respects the fixed header/footer/margin system.
+  // ── Site Form ────────────────────────────────────────────────────────────────
+  // Page 0: full-bleed A4 (standalone form with its own chrome).
+  // Pages 1+: content-zone images placed inside O&M template pages.
 
   async addSiteForm(item: DBOAndMItem, form: DBSiteForm | undefined) {
     if (!form) { await this.addExceptionPage(item.title, 'Site Form record not found.'); return; }
     try {
       const render = await formToOAndMRender(form, this.orgInfo);
 
-      // ── Page 0: full-bleed standalone render (no template overlay needed)
+      // Page 0: full-bleed standalone render
       const p0Img  = await this.output.embedJpg(render.page0Jpeg);
       const p0Page = this.output.addPage([PAGE_W, PAGE_H]);
       p0Page.drawImage(p0Img, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
 
-      // ── Continuation pages: each image is placed inside the O&M content zone
+      // Continuation pages: image inset into the O&M content zone
       for (const cont of render.continuationJpegs) {
         const { page } = this.newPage(C_ORANGE);
         const contImg  = await this.output.embedJpg(cont.bytes);
-        // Position: fill the content area exactly (CONTENT_BOT to CONTENT_TOP)
         page.drawImage(contImg, {
           x: 0,
           y: OAM_CONTENT_BOT_PT,
@@ -724,6 +777,7 @@ class BuildContext {
   async addExceptionPage(title: string, reason: string) {
     const { page, y } = this.newPage(C_AMBER);
     const panelH = 110;
+    // Panel centred in upper content area — never near footer
     const panelY = y - 80;
     page.drawRectangle({ x: PG_L, y: panelY, width: PG_CW, height: panelH, color: rgb(1, 0.992, 0.957), borderColor: rgb(0.988, 0.831, 0.302), borderWidth: 1.5, borderRadius: 4 });
     dt(page, this.bold, 'DOCUMENT EXCEPTION', PG_L + CARD_H, panelY + panelH - 20, 8, C_AMBER, { ls: 1.2 });
@@ -775,13 +829,10 @@ function san(text: string): string {
 
 function truncate(text: string, max: number): string {
   if (!text || text.length <= max) return text;
-  return text.slice(0, max - 1) + '\x85';   // \x85 = ellipsis in WinAnsi
+  return text.slice(0, max - 1) + '\x85';
 }
 
 // ─── Pager / overflow ─────────────────────────────────────────────────────────
-// Pager is a mutable cursor: { page, y } where y is the next drawing position.
-// overflow() ensures at least `need` points remain; if not, creates a new page
-// via ctx.newPage() (which stamps the full template) and draws a "continued" label.
 
 interface Pager {
   page: PDFPage;
@@ -796,13 +847,16 @@ function overflow(
   continuationLabel: string,
 ): void {
   if (pager.y - need >= CONTENT_BOT) return;
-  // Current page already has its footer from newPage() — just create the next.
   const { page, y } = ctx.newPage(accent);
-  // Continuation label at top of new page content area
+  // Continuation label with thin rule underneath
   dt(page, ctx.regular, san(continuationLabel) + '  \x97  continued', PG_L, y, 8, C_MUTED);
-  page.drawLine({ start: { x: PG_L, y: y - 12 }, end: { x: PAGE_W - PG_R, y: y - 12 }, thickness: 0.3, color: C_FAINT });
+  page.drawLine({
+    start: { x: PG_L, y: y - 13 },
+    end:   { x: PAGE_W - PG_R, y: y - 13 },
+    thickness: 0.3, color: C_FAINT,
+  });
   pager.page = page;
-  pager.y    = y - 24;   // first content line on continuation page, consistently below label
+  pager.y    = y - 26;
 }
 
 function wrapTextPaged(
@@ -836,7 +890,6 @@ function wrapTextPaged(
 
 // ─── Drawing helpers ──────────────────────────────────────────────────────────
 
-// Pre-calculate wrapped lines without drawing — used for height measurement
 function measureLines(font: PDFFont, text: string, maxWidth: number, size: number): string[] {
   if (!text) return [];
   const words = san(text).replace(/[\r\n]+/g, ' ').split(' ').filter(Boolean);
@@ -871,7 +924,6 @@ function dt(
   p.drawText(s, { x: tx, y, size, font, color, characterSpacing: opts.ls ?? 0 });
 }
 
-// Draws text wrapping at maxWidth; returns the y after the last line.
 function wrapText(
   p: PDFPage,
   font: PDFFont,
@@ -944,5 +996,5 @@ function fmtDateShort(iso?: string | null): string {
   catch { return iso; }
 }
 
-// Expose unused palette entry to satisfy TypeScript
+// Suppress unused-variable warning for C_MID (used inline in wrapText calls)
 void C_MID;

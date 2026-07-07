@@ -99,28 +99,83 @@ async function renderFormToFullCanvas(html: string): Promise<HTMLCanvasElement> 
   return fullCanvas;
 }
 
+// Scan radius (px) around a natural page boundary to find a clean cut point.
+// We look for a row that is predominantly white (minimal dark pixels).
+const CLEAN_CUT_SEARCH_PX = 80;
+const CLEAN_CUT_DARKNESS_THRESHOLD = 8;  // avg channel value below this = dark pixel
+const CLEAN_CUT_MAX_DARK_RATIO = 0.04;  // max fraction of pixels that can be dark
+
+// Finds the best clean horizontal cut point within CLEAN_CUT_SEARCH_PX of `targetY`.
+// Scans up from targetY to prefer cutting above content rather than below it.
+// Returns the adjusted offset (may equal targetY if no cleaner cut is found).
+function findCleanCut(canvas: HTMLCanvasElement, targetY: number, totalH: number): number {
+  const ctx = canvas.getContext('2d')!;
+  const W   = canvas.width;
+  if (targetY <= 0 || targetY >= totalH) return targetY;
+
+  const searchFrom = Math.max(0, targetY - CLEAN_CUT_SEARCH_PX);
+  const searchTo   = Math.min(totalH - 1, targetY + Math.round(CLEAN_CUT_SEARCH_PX / 3));
+
+  // Sample a strip of pixels for each candidate row
+  let bestY    = targetY;
+  let bestScore = Infinity;
+
+  for (let y = searchTo; y >= searchFrom; y--) {
+    const row = ctx.getImageData(0, y, W, 1).data;
+    let darkCount = 0;
+    for (let i = 0; i < row.length; i += 4) {
+      const avg = (row[i] + row[i + 1] + row[i + 2]) / 3;
+      if (avg < 255 - CLEAN_CUT_DARKNESS_THRESHOLD) darkCount++;
+    }
+    const darkRatio = darkCount / (W);
+    if (darkRatio < CLEAN_CUT_MAX_DARK_RATIO) {
+      // Prefer cuts closer to the original target — penalise distance
+      const score = darkRatio + Math.abs(y - targetY) * 0.0001;
+      if (score < bestScore) {
+        bestScore = score;
+        bestY     = y;
+      }
+    }
+  }
+
+  return bestY;
+}
+
 // Slices a full-height canvas into per-page canvases:
 //   - Page 0: full A4 height slice (standalone form — has its own baked chrome)
 //   - Pages 1+: O&M content-zone height slices (will be inset into O&M template pages)
+//
+// For continuation pages, each slice boundary is adjusted toward the nearest clean
+// whitespace row so we avoid cutting through form rows, table borders or text.
 function sliceCanvasPages(fullCanvas: HTMLCanvasElement): {
   page0: HTMLCanvasElement;
   continuations: HTMLCanvasElement[];
 } {
   const totalH = fullCanvas.height;
 
-  // Page 0 — full A4 slice
-  const p0H = Math.min(A4_H_AT_SCALE, totalH);
+  // Page 0 — full A4 slice (no clean-cut search needed — standalone)
+  const p0H   = Math.min(A4_H_AT_SCALE, totalH);
   const page0 = makeSlice(fullCanvas, 0, p0H, fullCanvas.width, A4_H_AT_SCALE);
 
-  // Remaining content after page 0
+  // Continuation pages — use smart cut points
   const continuations: HTMLCanvasElement[] = [];
   let offset = A4_H_AT_SCALE;
 
   while (offset < totalH) {
-    const sliceH = Math.min(OAM_CONTENT_H_PX, totalH - offset);
-    const slice  = makeSlice(fullCanvas, offset, sliceH, fullCanvas.width, OAM_CONTENT_H_PX);
+    // Natural end of this slice
+    const naturalEnd = offset + OAM_CONTENT_H_PX;
+
+    // Find a clean cut point near the natural end boundary
+    const cleanEnd = naturalEnd < totalH
+      ? findCleanCut(fullCanvas, naturalEnd, totalH)
+      : totalH;
+
+    const sliceH = Math.min(cleanEnd - offset, totalH - offset);
+    if (sliceH <= 0) break;
+
+    const slice = makeSlice(fullCanvas, offset, sliceH, fullCanvas.width, OAM_CONTENT_H_PX);
     continuations.push(slice);
-    offset += OAM_CONTENT_H_PX;
+    offset = cleanEnd;
   }
 
   return { page0, continuations };
