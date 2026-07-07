@@ -16,7 +16,7 @@ import type {
   DBSiteForm,
 } from '../../lib/store';
 import type { Project } from '../../data/types';
-import { formToOAndMRender, OAM_CONTENT_H_PT, OAM_CONTENT_BOT_PT } from './FormHtmlRenderer';
+import { formToOAndMRender, OAM_CONTENT_BOT_PT } from './FormHtmlRenderer';
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -755,15 +755,18 @@ class BuildContext {
       const p0Page = this.output.addPage([PAGE_W, PAGE_H]);
       p0Page.drawImage(p0Img, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
 
-      // Continuation pages: image inset into the O&M content zone
+      // Continuation pages: image inset into the O&M content zone.
+      // Each continuation is drawn at its actual heightPt (proportional slice) so
+      // content is never compressed — shorter last pages leave whitespace above the footer.
       for (const cont of render.continuationJpegs) {
         const { page } = this.newPage(C_ORANGE);
         const contImg  = await this.output.embedJpg(cont.bytes);
+        // Place image flush with CONTENT_BOT, scaled to its exact proportional height
         page.drawImage(contImg, {
           x: 0,
           y: OAM_CONTENT_BOT_PT,
           width:  PAGE_W,
-          height: OAM_CONTENT_H_PT,
+          height: cont.heightPt,
         });
       }
     } catch (err) {

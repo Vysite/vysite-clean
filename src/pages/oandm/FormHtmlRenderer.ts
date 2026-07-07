@@ -99,25 +99,26 @@ async function renderFormToFullCanvas(html: string): Promise<HTMLCanvasElement> 
   return fullCanvas;
 }
 
-// Scan radius (px) around a natural page boundary to find a clean cut point.
-// We look for a row that is predominantly white (minimal dark pixels).
+// Scan radius (px) BEFORE a natural page boundary to find a clean cut point.
+// We only search earlier (upward) so a slice is never larger than OAM_CONTENT_H_PX,
+// which would cause content to be compressed when drawn into the fixed PDF height box.
 const CLEAN_CUT_SEARCH_PX = 80;
 const CLEAN_CUT_DARKNESS_THRESHOLD = 8;  // avg channel value below this = dark pixel
 const CLEAN_CUT_MAX_DARK_RATIO = 0.04;  // max fraction of pixels that can be dark
 
-// Finds the best clean horizontal cut point within CLEAN_CUT_SEARCH_PX of `targetY`.
-// Scans up from targetY to prefer cutting above content rather than below it.
+// Finds the best clean horizontal cut point at or before `targetY`.
+// Only searches backward (upward) — never past targetY — so slices are never oversized.
 // Returns the adjusted offset (may equal targetY if no cleaner cut is found).
 function findCleanCut(canvas: HTMLCanvasElement, targetY: number, totalH: number): number {
   const ctx = canvas.getContext('2d')!;
   const W   = canvas.width;
   if (targetY <= 0 || targetY >= totalH) return targetY;
 
+  // Only search at or before the natural boundary — never after
   const searchFrom = Math.max(0, targetY - CLEAN_CUT_SEARCH_PX);
-  const searchTo   = Math.min(totalH - 1, targetY + Math.round(CLEAN_CUT_SEARCH_PX / 3));
+  const searchTo   = targetY;
 
-  // Sample a strip of pixels for each candidate row
-  let bestY    = targetY;
+  let bestY     = targetY;
   let bestScore = Infinity;
 
   for (let y = searchTo; y >= searchFrom; y--) {
@@ -127,9 +128,9 @@ function findCleanCut(canvas: HTMLCanvasElement, targetY: number, totalH: number
       const avg = (row[i] + row[i + 1] + row[i + 2]) / 3;
       if (avg < 255 - CLEAN_CUT_DARKNESS_THRESHOLD) darkCount++;
     }
-    const darkRatio = darkCount / (W);
+    const darkRatio = darkCount / W;
     if (darkRatio < CLEAN_CUT_MAX_DARK_RATIO) {
-      // Prefer cuts closer to the original target — penalise distance
+      // Prefer cuts closer to the original boundary — penalise distance
       const score = darkRatio + Math.abs(y - targetY) * 0.0001;
       if (score < bestScore) {
         bestScore = score;
@@ -142,30 +143,38 @@ function findCleanCut(canvas: HTMLCanvasElement, targetY: number, totalH: number
 }
 
 // Slices a full-height canvas into per-page canvases:
-//   - Page 0: full A4 height slice (standalone form — has its own baked chrome)
-//   - Pages 1+: O&M content-zone height slices (will be inset into O&M template pages)
+//   - page0: full A4 height slice (standalone form — has its own baked chrome)
+//   - continuations: array of { canvas, heightPt } where each canvas is exactly
+//     sliceH pixels tall (never padded to OAM_CONTENT_H_PX), and heightPt is the
+//     corresponding PDF point height. This preserves the pixel-to-point scale ratio
+//     so content is never compressed or stretched regardless of where the cut falls.
 //
-// For continuation pages, each slice boundary is adjusted toward the nearest clean
+// For each continuation, the cut boundary is adjusted toward the nearest clean
 // whitespace row so we avoid cutting through form rows, table borders or text.
+// The search is strictly backward (never past naturalEnd) so slices are never
+// larger than OAM_CONTENT_H_PX — which would compress content.
 function sliceCanvasPages(fullCanvas: HTMLCanvasElement): {
   page0: HTMLCanvasElement;
-  continuations: HTMLCanvasElement[];
+  continuations: Array<{ canvas: HTMLCanvasElement; heightPt: number }>;
 } {
   const totalH = fullCanvas.height;
 
   // Page 0 — full A4 slice (no clean-cut search needed — standalone)
   const p0H   = Math.min(A4_H_AT_SCALE, totalH);
-  const page0 = makeSlice(fullCanvas, 0, p0H, fullCanvas.width, A4_H_AT_SCALE);
+  const page0 = makeSlice(fullCanvas, 0, p0H);
 
-  // Continuation pages — use smart cut points
-  const continuations: HTMLCanvasElement[] = [];
+  // Pixel-to-point ratio: OAM_CONTENT_H_PX pixels = OAM_CONTENT_H_PT points
+  const pxToPt = OAM_CONTENT_H_PT / OAM_CONTENT_H_PX;
+
+  // Continuation pages — use smart cut points, strictly backward only
+  const continuations: Array<{ canvas: HTMLCanvasElement; heightPt: number }> = [];
   let offset = A4_H_AT_SCALE;
 
   while (offset < totalH) {
     // Natural end of this slice
     const naturalEnd = offset + OAM_CONTENT_H_PX;
 
-    // Find a clean cut point near the natural end boundary
+    // Find a clean cut point at or before naturalEnd
     const cleanEnd = naturalEnd < totalH
       ? findCleanCut(fullCanvas, naturalEnd, totalH)
       : totalH;
@@ -173,30 +182,32 @@ function sliceCanvasPages(fullCanvas: HTMLCanvasElement): {
     const sliceH = Math.min(cleanEnd - offset, totalH - offset);
     if (sliceH <= 0) break;
 
-    const slice = makeSlice(fullCanvas, offset, sliceH, fullCanvas.width, OAM_CONTENT_H_PX);
-    continuations.push(slice);
+    // Canvas is exactly sliceH pixels tall — no padding
+    const canvas   = makeSlice(fullCanvas, offset, sliceH);
+    // heightPt is proportional — never exceeds OAM_CONTENT_H_PT
+    const heightPt = Math.round(sliceH * pxToPt * 100) / 100;
+
+    continuations.push({ canvas, heightPt });
     offset = cleanEnd;
   }
 
   return { page0, continuations };
 }
 
-// Creates a canvas slice: reads `srcH` rows from `fullCanvas` starting at `offsetY`,
-// draws them onto a canvas of fixed `destH` height (remainder is white).
+// Creates a canvas slice: reads `srcH` rows from `fullCanvas` starting at `offsetY`.
+// The output canvas is exactly `srcH` tall — no fixed dest height, no padding.
 function makeSlice(
   src: HTMLCanvasElement,
   offsetY: number,
   srcH: number,
-  width: number,
-  destH: number,
 ): HTMLCanvasElement {
   const c = document.createElement('canvas');
-  c.width  = width;
-  c.height = destH;
+  c.width  = src.width;
+  c.height = srcH;
   const ctx = c.getContext('2d')!;
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, width, destH);
-  ctx.drawImage(src, 0, offsetY, width, srcH, 0, 0, width, srcH);
+  ctx.fillRect(0, 0, src.width, srcH);
+  ctx.drawImage(src, 0, offsetY, src.width, srcH, 0, 0, src.width, srcH);
   return c;
 }
 
@@ -218,13 +229,15 @@ export async function formToPdfBytes(
 
   while (offset < totalH) {
     const sliceH   = Math.min(A4_H_AT_SCALE, totalH - offset);
-    const slice    = makeSlice(fullCanvas, offset, sliceH, fullCanvas.width, A4_H_AT_SCALE);
+    const slice    = makeSlice(fullCanvas, offset, sliceH);
     const jpegUrl  = slice.toDataURL('image/jpeg', 0.94);
     const b64      = jpegUrl.split(',')[1];
     const bytes    = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
     const img      = await doc.embedJpg(bytes);
     const page     = doc.addPage([A4_PDF_W, A4_PDF_H]);
-    page.drawImage(img, { x: 0, y: 0, width: A4_PDF_W, height: A4_PDF_H });
+    // Scale image to fill A4 — last page may be shorter so scale proportionally
+    const imgHeightPt = (sliceH / A4_H_AT_SCALE) * A4_PDF_H;
+    page.drawImage(img, { x: 0, y: A4_PDF_H - imgHeightPt, width: A4_PDF_W, height: imgHeightPt });
     offset += A4_H_AT_SCALE;
   }
 
@@ -234,15 +247,16 @@ export async function formToPdfBytes(
 // ─── O&M export ───────────────────────────────────────────────────────────────
 // Returns structured render data so the O&M builder can place each page correctly:
 //   - page0Jpeg: full-bleed A4 JPEG (standalone form — merged as-is)
-//   - continuationJpegs: shorter JPEG images, one per continuation page,
-//     each exactly OAM_CONTENT_H_PT tall in PDF points, to be placed inside
-//     a template page at CONTENT_BOT y-offset.
+//   - continuationJpegs: shorter JPEG images, one per continuation page.
+//     Each has a `heightPt` that reflects the actual slice height in PDF points
+//     (never exceeding OAM_CONTENT_H_PT), maintaining a consistent pixel-to-point
+//     scale so content is never compressed or stretched.
 
 export type OAndMFormRender = {
   page0Jpeg: Uint8Array;
   continuationJpegs: Array<{
     bytes: Uint8Array;
-    heightPt: number;  // always OAM_CONTENT_H_PT
+    heightPt: number;  // actual content height in PDF points (≤ OAM_CONTENT_H_PT)
   }>;
 };
 
@@ -266,8 +280,8 @@ export async function formToOAndMRender(
   return {
     page0Jpeg: toJpeg(page0),
     continuationJpegs: continuations.map(c => ({
-      bytes:    toJpeg(c),
-      heightPt: OAM_CONTENT_H_PT,
+      bytes:    toJpeg(c.canvas),
+      heightPt: c.heightPt,
     })),
   };
 }
