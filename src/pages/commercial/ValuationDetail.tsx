@@ -251,6 +251,7 @@ export default function ValuationDetail({
   const [linesExpanded, setLinesExpanded]   = useState(true);
   const [extrasExpanded, setExtrasExpanded] = useState(true);
   const [pdfLoading, setPdfLoading]         = useState(false);
+  const [pdfError, setPdfError]             = useState<string | null>(null);
   const { state: saveState, lastSaved, onSaveStart, onSaveDone } = useSaveIndicator();
 
   const isLocked = valuation.status === 'locked';
@@ -335,15 +336,23 @@ export default function ValuationDetail({
 
   const handleExportPdf = async () => {
     setPdfLoading(true);
+    setPdfError(null);
     try {
       const lineData  = wbLines.map(l  => ({ line: l,  entry: getLineEntry(l.id) }));
       const extraData = wbExtras.map(e => ({ extra: e, entry: getExtraEntry(e.id) }));
       await buildValuationPdf(
         valuation, project, lineData, extraData, totals,
-        store.settings?.logo_data_url,
-        store.settings?.company_name,
+        store.settings?.logo_data_url || undefined,
+        store.settings?.company_name  || undefined,
       );
-    } finally { setPdfLoading(false); }
+    } catch (err) {
+      console.error('[ValuationPDF] Export failed:', err);
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setPdfError(`PDF generation failed: ${msg}`);
+      setTimeout(() => setPdfError(null), 6000);
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const statusStyle = STATUS_STYLES[valuation.status as ValuationStatus] ?? STATUS_STYLES.draft;
@@ -405,6 +414,18 @@ export default function ValuationDetail({
           </button>
         </div>
       </div>
+
+      {/* PDF error toast */}
+      {pdfError && (
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl mb-4"
+          style={{ background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.25)' }}>
+          <X size={13} className="text-red-400 shrink-0" />
+          <p className="text-xs text-red-400">{pdfError}</p>
+          <button onClick={() => setPdfError(null)} className="ml-auto text-red-400/60 hover:text-red-400 transition-colors">
+            <X size={11} />
+          </button>
+        </div>
+      )}
 
       {/* Locked banner */}
       {isLocked && (
