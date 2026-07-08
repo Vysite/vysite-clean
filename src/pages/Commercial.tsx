@@ -1263,7 +1263,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
       const now = new Date().toISOString();
       newId = genUUID();
 
-      // ── Step 1: Generate next Variation reference ────────────────────────────
+      // ── Step 1: Generate next Variation reference (Commercial Register) ──────
       const existingVars = allRecords.filter(r => r.recordType === 'variation');
       const maxVar = existingVars.reduce((max, r) => {
         const m = r.reference?.match(/^V[-–]?(\d+)$/i);
@@ -1271,7 +1271,18 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
       }, 0);
       const nextVarRef = `V-${String(maxVar + 1).padStart(3, '0')}`;
 
-      // ── Step 2: Insert the Variation record ──────────────────────────────────
+      // ── Step 1b: Generate next Variation Account reference (VAR-001 style) ───
+      const projectVAItems = store.variationAccountItems.filter(
+        v => v.project_id === record.projectId
+      );
+      const maxVarNum = projectVAItems.reduce((max, v) => {
+        const n = parseInt(v.reference.replace(/[^0-9]/g, ''), 10);
+        return isNaN(n) ? max : Math.max(max, n);
+      }, 0);
+      const nextVARef = `VAR-${String(maxVarNum + 1).padStart(3, '0')}`;
+      const vaItemId = genUUID();
+
+      // ── Step 2: Insert the Variation record (Commercial Register) ────────────
       const varRow = {
         id: newId,
         org_id: orgId,
@@ -1290,6 +1301,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
           ...(record.extraData?.document_ref ? { document_ref: record.extraData.document_ref } : {}),
           ...(record.extraData?.related_refs ? { related_refs: record.extraData.related_refs } : {}),
           dn_ref: record.reference || '',
+          va_item_id: vaItemId,
         },
         converted_from_id: record.id,
         created_at: now,
@@ -1318,19 +1330,23 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
         throw new Error(`Failed to link Delay Notice: ${dnErr.message}`);
       }
 
-      // ── Step 4: Copy line items ──────────────────────────────────────────────
+      // ── Step 4: Fetch DN line items and copy to commercial record + VA ───────
+      let dnLines: Record<string, unknown>[] = [];
       try {
-        const { data: dnLines, error: linesErr } = await supabase
+        const { data: fetchedLines, error: linesErr } = await supabase
           .from('vy_commercial_line_items')
           .select('*')
           .eq('record_id', record.id)
           .order('sort_order');
         if (linesErr) throw linesErr;
-        if (dnLines && dnLines.length > 0) {
+        dnLines = fetchedLines ?? [];
+
+        if (dnLines.length > 0) {
+          // 4a: Copy into vy_commercial_line_items for the new Variation record
           const { error: lineInsertErr } = await supabase
             .from('vy_commercial_line_items')
             .insert(
-              dnLines.map((l: Record<string, unknown>, idx: number) => ({
+              dnLines.map((l, idx) => ({
                 id: genUUID(),
                 org_id: orgId,
                 record_id: newId,
@@ -1355,7 +1371,68 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
         warnings.push('Cost breakdown could not be copied.');
       }
 
-      // ── Step 5: Copy attachments ─────────────────────────────────────────────
+      // ── Step 5: Create Variation Account item ────────────────────────────────
+      // Compute total value from DN line items (client_rate × quantity)
+      const vaTotal = dnLines.reduce((sum, l) => {
+        const qty = (typeof l.quantity === 'number' ? l.quantity : parseFloat(String(l.quantity)) || 0);
+        const rate = (typeof l.client_rate === 'number' ? l.client_rate : parseFloat(String(l.client_rate)) || 0);
+        return sum + qty * rate;
+      }, 0);
+
+      try {
+        const vaItem = {
+          id: vaItemId,
+          org_id: orgId,
+          project_id: record.projectId,
+          reference: nextVARef,
+          title: record.title,
+          description: record.notes ?? '',
+          reason: record.reference ? `Converted from Delay Notice ${record.reference}` : 'Converted from Delay Notice',
+          value: vaTotal,
+          is_positive: true,
+          status: 'draft' as const,
+          date_raised: record.dateRaised ?? now.slice(0, 10),
+          date_agreed: null,
+          notes: record.notes ?? '',
+          created_by: store.currentUser?.name ?? null,
+          created_at: now,
+          updated_at: now,
+        };
+        await store.addVariationAccountItem(vaItem);
+
+        // 5b: Copy DN line items into VA build-up lines
+        if (dnLines.length > 0) {
+          for (let i = 0; i < dnLines.length; i++) {
+            const l = dnLines[i];
+            const qty = typeof l.quantity === 'number' ? l.quantity : parseFloat(String(l.quantity)) || 0;
+            const costPrice = typeof l.client_rate === 'number' ? l.client_rate : parseFloat(String(l.client_rate)) || 0;
+            const salesPrice = costPrice;
+            const lineTotal = qty * salesPrice;
+            await store.addVABuildUpLine({
+              id: genUUID(),
+              org_id: orgId,
+              project_id: record.projectId ?? '',
+              va_item_id: vaItemId,
+              line_no: i + 1,
+              description: String(l.description ?? ''),
+              type: String(l.line_type ?? 'Labour'),
+              unit: String(l.unit ?? 'item'),
+              quantity: qty,
+              cost_price: costPrice,
+              markup_pct: 0,
+              sales_price: salesPrice,
+              line_total: lineTotal,
+              created_at: now,
+              updated_at: now,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[ConvertToVar] VA item creation failed:', e);
+        warnings.push('Variation Account entry could not be created.');
+      }
+
+      // ── Step 6: Copy attachments ─────────────────────────────────────────────
       try {
         const dnAttachments = store.attachments.filter(
           a => a.linked_type === 'commercial' && a.linked_id === record.id
@@ -1381,7 +1458,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
         warnings.push('Attachments could not be copied.');
       }
 
-      // ── Step 6: Copy comments ────────────────────────────────────────────────
+      // ── Step 7: Copy comments ────────────────────────────────────────────────
       try {
         const dnComments = store.commercialRecordComments.filter(
           c => c.record_id === record.id
@@ -1402,7 +1479,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
         warnings.push('Comments could not be copied.');
       }
 
-      // ── Step 7: Log lifecycle event ──────────────────────────────────────────
+      // ── Step 8: Log lifecycle event ──────────────────────────────────────────
       try {
         await supabase.from('vy_commercial_events').insert({
           org_id: orgId, record_id: newId, project_id: record.projectId || null,
@@ -1413,7 +1490,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
         console.warn('[ConvertToVar] Events insert failed:', e);
       }
 
-      // ── Step 8: Activity log ─────────────────────────────────────────────────
+      // ── Step 9: Activity log ─────────────────────────────────────────────────
       try {
         const projectName = projects.find(p => p.id === record.projectId)?.name;
         logActivity({
@@ -1422,7 +1499,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
           recordRef: record.reference || record.title,
           recordType: record.recordType, projectId: record.projectId || null, projectName: projectName ?? null,
           actionType: 'record_created',
-          description: `${store.currentUser?.name ?? 'Unknown'} converted ${record.reference || record.title} (Delay Notice) to Variation ${nextVarRef}.`,
+          description: `${store.currentUser?.name ?? 'Unknown'} converted ${record.reference || record.title} (Delay Notice) to Variation ${nextVarRef} / ${nextVARef}.`,
         });
       } catch (e) {
         console.warn('[ConvertToVar] Activity log failed:', e);
