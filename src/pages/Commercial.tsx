@@ -2198,6 +2198,8 @@ export default function Commercial() {
   const [modalOpen, setModalOpen]           = useState(false);
   const [commercialEvents, setCommercialEvents] = useState<CommercialEvent[]>([]);
   const [openVariationId, setOpenVariationId] = useState<string | null>(null);
+  const [deleteVariationTarget, setDeleteVariationTarget] = useState<CommercialRecord | null>(null);
+  const [deletingVariation, setDeletingVariation] = useState(false);
 
   const projects = useMemo(() => store.projects, [store.projects]);
 
@@ -2396,6 +2398,39 @@ export default function Commercial() {
     setModalOpen(false);
   }
 
+  async function confirmDeleteVariationFromCR() {
+    const r = deleteVariationTarget;
+    if (!r) return;
+    setDeletingVariation(true);
+    try {
+      const vaItemId = typeof r.extraData?.va_item_id === 'string' ? r.extraData.va_item_id : null;
+
+      // Delete the linked VA item and its dependent rows
+      if (vaItemId) {
+        // Build-up lines
+        await supabase.from('vy_va_build_up_lines').delete().eq('va_item_id', vaItemId);
+        // VA comments
+        await supabase.from('vy_va_comments').delete().eq('va_item_id', vaItemId);
+        // Attachments linked to VA item
+        await supabase.from('vy_attachments')
+          .delete()
+          .eq('linked_type', 'variation_account')
+          .eq('linked_id', vaItemId);
+        // The VA item itself
+        await store.removeVariationAccountItem(vaItemId);
+      }
+
+      // Delete the commercial record
+      await supabase.from('vy_commercial_records').delete().eq('id', r.id);
+      setRecords(prev => prev.filter(x => x.id !== r.id));
+    } catch (e) {
+      console.error('[DeleteVariationFromCR]', e);
+    } finally {
+      setDeletingVariation(false);
+      setDeleteVariationTarget(null);
+    }
+  }
+
   const projectKeyDates = store.keyDates.filter(d => d.project_id === effectiveBannerProjectId);
 
   // Variation Account metrics for the active project
@@ -2551,6 +2586,7 @@ export default function Commercial() {
           loading={loadingRecords}
           canCreate={canCreate}
           canEdit={canEdit}
+          canDelete={canDelete}
           currentProject={bannerProject}
           keyDates={projectKeyDates}
           currentUserName={store.currentUser?.name ?? ''}
@@ -2559,6 +2595,7 @@ export default function Commercial() {
           onUpdateStatus={handleQuickStatus}
           onExportFull={handleExportFull}
           settings={store.settings}
+          onDeleteVariation={r => setDeleteVariationTarget(r)}
         />
       )}
 
@@ -2672,6 +2709,39 @@ export default function Commercial() {
             }
           }}
         />
+      )}
+
+      {/* Variation delete confirmation (from Commercial Register) */}
+      {deleteVariationTarget && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#111827] border border-[#1e2d4a] rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="px-6 pt-6 pb-4">
+              <h3 className="text-sm font-bold text-white mb-1">Delete Variation</h3>
+              <p className="text-sm text-slate-400">
+                Are you sure you want to delete <span className="text-white font-medium">{deleteVariationTarget.reference ? `${deleteVariationTarget.reference} — ` : ''}{deleteVariationTarget.title}</span>?
+              </p>
+              <p className="text-xs text-slate-500 mt-2">
+                This will remove the variation from the Commercial Register and the Variation Account, including all cost lines, comments and attachments.
+              </p>
+            </div>
+            <div className="flex gap-3 px-6 pb-5">
+              <button
+                onClick={() => setDeleteVariationTarget(null)}
+                disabled={deletingVariation}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-slate-400 border border-[#1e2d4a] hover:text-white transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteVariationFromCR}
+                disabled={deletingVariation}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-500 transition-colors disabled:opacity-50"
+              >
+                {deletingVariation ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   Search, Filter, Plus, TrendingUp, FileText, Printer,
-  ChevronRight, CheckCircle2, Clock, AlertCircle, CircleDot, Banknote,
+  ChevronRight, CheckCircle2, Clock, AlertCircle, CircleDot, Banknote, Trash2,
 } from 'lucide-react';
 import { RECORD_TYPES, STATUSES, typeInfo, statusInfo } from './types';
 import type { CommercialRecord, CommercialRecordType, CommercialRecordStatus } from './types';
@@ -14,6 +14,7 @@ interface CommercialRegisterProps {
   loading: boolean;
   canCreate: boolean;
   canEdit: boolean;
+  canDelete?: boolean;
   currentProject: Project | null;
   keyDates: DBKeyDate[];
   currentUserName: string;
@@ -22,6 +23,7 @@ interface CommercialRegisterProps {
   onOpenRecord: (r: CommercialRecord) => void;
   onUpdateStatus: (r: CommercialRecord, newStatus: CommercialRecordStatus) => void;
   onExportFull: (records: CommercialRecord[]) => void;
+  onDeleteVariation?: (r: CommercialRecord) => void;
 }
 
 // ─── Inline status dropdown ───────────────────────────────────────────────────
@@ -88,8 +90,9 @@ function StatusBadge({ status }: { status: CommercialRecordStatus }) {
 }
 
 export default function CommercialRegister({
-  records, loading, canCreate, canEdit, currentProject,
+  records, loading, canCreate, canEdit, canDelete, currentProject,
   currentUserName, onNewRecord, onOpenRecord, onUpdateStatus, onExportFull, settings,
+  onDeleteVariation,
 }: CommercialRegisterProps) {
   const [searchQuery, setSearchQuery]   = useState('');
   const [filterType, setFilterType]     = useState<CommercialRecordType | ''>('');
@@ -223,7 +226,7 @@ export default function CommercialRegister({
       {/* Register table */}
       <div className="bg-[#111827] border border-[#1e2d4a] rounded-xl overflow-hidden">
         {/* Column headers */}
-        <div className="grid grid-cols-[32px_130px_1fr_160px_160px_180px_90px_100px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+        <div className="grid grid-cols-[32px_130px_1fr_160px_160px_180px_90px_100px_36px] gap-3 px-4 py-2.5 border-b border-[#1e2d4a] text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -239,6 +242,7 @@ export default function CommercialRegister({
           <span>Status</span>
           <span>Raised</span>
           <span>Status Changed</span>
+          <span></span>
         </div>
 
         {loading ? (
@@ -265,7 +269,7 @@ export default function CommercialRegister({
           filteredRecords.map((r, i) => (
             <div
               key={r.id}
-              className={`grid grid-cols-[32px_130px_1fr_160px_160px_180px_90px_100px] gap-3 px-4 py-3 transition-colors hover:bg-[#1a2236] ${
+              className={`grid grid-cols-[32px_130px_1fr_160px_160px_180px_90px_100px_36px] gap-3 px-4 py-3 transition-colors hover:bg-[#1a2236] group ${
                 i < filteredRecords.length - 1 ? 'border-b border-[#1e2d4a]/50' : ''
               } ${selectedIds.has(r.id) ? 'bg-[#1a2236]/60' : ''}`}
             >
@@ -299,6 +303,17 @@ export default function CommercialRegister({
                   ? <span className="text-slate-300">{new Date(r.statusChangedAt).toLocaleDateString('en-GB')}</span>
                   : <span className="text-slate-600">—</span>}
               </button>
+              <div className="flex items-center justify-end" onClick={e => e.stopPropagation()}>
+                {r.recordType === 'variation' && canDelete && onDeleteVariation && (
+                  <button
+                    onClick={() => onDeleteVariation(r)}
+                    className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-[#1e2d4a] opacity-0 group-hover:opacity-100 transition-all"
+                    title="Delete Variation"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
             </div>
           ))
         )}
