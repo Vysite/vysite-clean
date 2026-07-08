@@ -41,7 +41,9 @@ export async function buildValuationPdf(
   const regular = await doc.embedFont(StandardFonts.Helvetica);
   const bold    = await doc.embedFont(StandardFonts.HelveticaBold);
 
-  const ctx: Ctx = { doc, regular, bold, valuation, project };
+  const issueDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  const ctx: Ctx = { doc, regular, bold, valuation, project, issueDate };
 
   addCoverPage(ctx);
   addContractLinesPage(ctx, lineData);
@@ -87,6 +89,7 @@ interface Ctx {
   bold: PDFFont;
   valuation: DBValuation;
   project: Project;
+  issueDate: string;
 }
 
 let _pageCount = 0;
@@ -97,23 +100,39 @@ function newPage(ctx: Ctx): { page: PDFPage; y: number } {
   _pageCount++;
   const page = ctx.doc.addPage([PW, PH]);
 
+  // Top accent bar
   page.drawRectangle({ x: 0, y: PH - 4, width: PW, height: 4, color: C_ORANGE });
 
-  const hY = PH - 30;
-  dt(page, ctx.bold, san(ctx.project.name || ''), ML, hY, 9, C_INK);
-  const refStr = san(`${ctx.valuation.ref}  —  ${ctx.valuation.title}`);
-  const rw = ctx.regular.widthOfTextAtSize(refStr, 7.5);
-  dt(page, ctx.regular, refStr, PW - MR - rw, hY, 7.5, C_MUTED);
+  // Header background
+  page.drawRectangle({ x: 0, y: PH - HDR_H, width: PW, height: HDR_H - 4, color: rgb(0.027, 0.047, 0.094) });
 
-  page.drawLine({ start: { x: ML, y: CT }, end: { x: PW - MR, y: CT }, thickness: 0.5, color: C_FAINT });
-  page.drawLine({ start: { x: ML, y: CB }, end: { x: PW - MR, y: CB }, thickness: 0.3, color: C_FAINT });
+  // Company / project name
+  dt(page, ctx.bold, san(ctx.project.name || 'VYSITE'), ML, PH - 22, 9.5, rgb(0.95, 0.97, 1.0));
+  // Valuation ref right-aligned
+  const refStr = san(ctx.valuation.ref);
+  const rw = ctx.bold.widthOfTextAtSize(refStr, 8);
+  dt(page, ctx.bold, refStr, PW - MR - rw, PH - 22, 8, C_ORANGE);
+  // Title below ref
+  const titleStr = san(ctx.valuation.title);
+  const tw2 = ctx.regular.widthOfTextAtSize(titleStr, 7);
+  dt(page, ctx.regular, titleStr, PW - MR - tw2, PH - 34, 7, C_MUTED);
 
+  // Header bottom rule
+  page.drawLine({ start: { x: 0, y: CT }, end: { x: PW, y: CT }, thickness: 0.5, color: C_ORANGE });
+
+  // Footer background
+  page.drawRectangle({ x: 0, y: 0, width: PW, height: FTR_H, color: rgb(0.027, 0.047, 0.094) });
+
+  // Footer: left = system name + issue date
+  dt(page, ctx.bold, 'VYSITE', ML, CB - 12, 7, C_ORANGE, { ls: 1 });
+  dt(page, ctx.regular, `Valuation Management  ·  Issued ${ctx.issueDate}`, ML + 38, CB - 12, 6.5, C_MUTED);
+
+  // Footer: right = page number
   const pgStr = `Page ${_pageCount}`;
-  const pgW   = ctx.regular.widthOfTextAtSize(pgStr, 6.5);
-  dt(page, ctx.regular, pgStr, PW - MR - pgW, CB - 14, 6.5, C_MUTED);
-  dt(page, ctx.regular, 'VYSITE · Valuation Management', ML, CB - 14, 6.5, C_MUTED);
+  const pgW   = ctx.bold.widthOfTextAtSize(pgStr, 7);
+  dt(page, ctx.bold, pgStr, PW - MR - pgW, CB - 12, 7, C_MUTED);
 
-  return { page, y: CT - 12 };
+  return { page, y: CT - 14 };
 }
 
 // ─── Cover page ───────────────────────────────────────────────────────────────
@@ -122,18 +141,32 @@ function addCoverPage(ctx: Ctx) {
   const { page, y: startY } = newPage(ctx);
   let y = startY;
 
-  page.drawRectangle({ x: ML - 6, y: CB, width: 3, height: CT - CB, color: C_ORANGE });
+  // Left accent rule
+  page.drawRectangle({ x: ML - 6, y: CB + FTR_H, width: 3, height: CT - CB - FTR_H, color: C_ORANGE });
 
+  // Eyebrow
   dt(page, ctx.regular, 'COMMERCIAL VALUATION', ML, y, 8, C_MUTED, { ls: 2 });
-  y -= 28;
+  y -= 10;
 
+  // Divider under eyebrow
+  page.drawLine({ start: { x: ML, y: y }, end: { x: ML + CW * 0.6, y }, thickness: 0.5, color: C_FAINT });
+  y -= 22;
+
+  // Main title
   wrapText(page, ctx.bold, san(ctx.valuation.title), ML, y, CW * 0.6, 26, C_INK, 34);
-  y -= 14 + 34;
+  y -= 10 + 34;
 
+  // Ref pill
   const refW = ctx.bold.widthOfTextAtSize(ctx.valuation.ref, 10) + 20;
   page.drawRectangle({ x: ML, y: y - 16, width: refW, height: 20, color: C_PANEL, borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 2 });
   dt(page, ctx.bold, ctx.valuation.ref, ML + 10, y - 7, 10, C_BODY);
+  y -= 28;
 
+  // Issue date label
+  dt(page, ctx.regular, `Issued: ${ctx.issueDate}`, ML, y, 8.5, C_MID);
+  y -= 6;
+
+  // Metadata right panel
   const META_X = PW / 2 + 10;
   const META_W = PW - MR - META_X;
   const mFields: [string, string][] = [
@@ -141,25 +174,26 @@ function addCoverPage(ctx: Ctx) {
     ['Client',         ctx.valuation.client || ''],
     ['Contractor',     ctx.valuation.contractor || ''],
     ['Valuation Date', fmtDate(ctx.valuation.valuation_date)],
+    ['Issue Date',     ctx.issueDate],
     ['Period',         ctx.valuation.period || ''],
     ['Status',         capitalize(ctx.valuation.status)],
   ].filter(([, v]) => v) as [string, string][];
 
   mFields.forEach(([label, value], i) => {
-    const my = startY - i * 38;
-    if (my < CB + 40) return;
+    const my = startY - i * 36;
+    if (my < CB + FTR_H + 30) return;
     dt(page, ctx.regular, label.toUpperCase(), META_X, my, 6.5, C_MUTED, { ls: 1.2 });
-    wrapText(page, ctx.bold, san(value), META_X, my - 14, META_W, 10, C_BODY, 14);
-    page.drawLine({ start: { x: META_X, y: my - 28 }, end: { x: PW - MR, y: my - 28 }, thickness: 0.3, color: C_FAINT });
+    wrapText(page, ctx.bold, san(value), META_X, my - 13, META_W, 10, C_BODY, 14);
+    page.drawLine({ start: { x: META_X, y: my - 26 }, end: { x: PW - MR, y: my - 26 }, thickness: 0.3, color: C_FAINT });
   });
 
   if (ctx.valuation.notes) {
-    const noteY = Math.min(startY - mFields.length * 38 - 14, y - 40);
-    if (noteY > CB + 50) {
-      const panH = 52;
+    const noteY = Math.min(startY - mFields.length * 36 - 14, y - 36);
+    if (noteY > CB + FTR_H + 50) {
+      const panH = 56;
       page.drawRectangle({ x: ML, y: noteY - panH, width: CW * 0.5, height: panH, color: C_PANEL, borderColor: C_FAINT, borderWidth: 0.5, borderRadius: 3 });
       dt(page, ctx.bold, 'NOTES', ML + 10, noteY - 10, 7, C_MUTED, { ls: 1 });
-      wrapText(page, ctx.regular, san(ctx.valuation.notes), ML + 10, noteY - 22, CW * 0.5 - 20, 9, C_MID, 13);
+      wrapText(page, ctx.regular, san(ctx.valuation.notes), ML + 10, noteY - 24, CW * 0.5 - 20, 9, C_MID, 13);
     }
   }
 }
@@ -408,14 +442,21 @@ function addSummaryPage(ctx: Ctx, totals: ValuationTotals) {
   const note = ctx.valuation.notes || 'No notes recorded for this valuation.';
   wrapText(page, ctx.regular, san(note), noteX, startY - 24, PW - MR - noteX, 10, C_MID, 15);
 
-  // Signature block
-  const sigY = CB + 50;
-  ['Prepared by', 'Checked by', 'Issued to'].forEach((label, i) => {
-    const sx = ML + i * 160;
-    dt(page, ctx.regular, label.toUpperCase(), sx, sigY + 20, 7, C_MUTED, { ls: 0.8 });
-    page.drawLine({ start: { x: sx, y: sigY }, end: { x: sx + 130, y: sigY }, thickness: 0.5, color: C_FAINT });
-    dt(page, ctx.regular, 'Signature / Date', sx, sigY - 10, 7, C_FAINT);
+  // Issue / certification block
+  const sigFloor = CB + FTR_H + 36;
+  const sigY = sigFloor + 14;
+  page.drawLine({ start: { x: ML, y: sigFloor + 28 }, end: { x: ML + 3 * 170, y: sigFloor + 28 }, thickness: 0.3, color: C_FAINT });
+  ['Prepared by', 'Checked by', 'Certified by'].forEach((label, i) => {
+    const sx = ML + i * 170;
+    dt(page, ctx.regular, label.toUpperCase(), sx, sigY + 20, 6.5, C_MUTED, { ls: 0.8 });
+    page.drawLine({ start: { x: sx, y: sigY }, end: { x: sx + 145, y: sigY }, thickness: 0.5, color: C_FAINT });
+    dt(page, ctx.regular, 'Signature / Date', sx, sigY - 10, 6.5, C_FAINT);
   });
+
+  // Issue date note
+  const issuedStr = `Issued: ${ctx.issueDate}`;
+  const issuedW = ctx.regular.widthOfTextAtSize(issuedStr, 7);
+  dt(page, ctx.regular, issuedStr, PW - MR - issuedW, sigFloor - 8, 7, C_MUTED);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

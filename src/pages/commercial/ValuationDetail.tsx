@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, FileText, Download, ChevronDown, ChevronRight, X, CreditCard as Edit2 } from 'lucide-react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { ArrowLeft, FileText, Download, ChevronDown, ChevronRight, X, CreditCard as Edit2, Lock, Unlock, CheckCircle } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import type {
   DBValuation, DBValuationWorkbook, DBWorkbookLine, DBWorkbookExtra,
@@ -23,13 +23,14 @@ interface Props {
   onBack: () => void;
 }
 
-type ValuationStatus = 'draft' | 'submitted' | 'certified' | 'superseded';
+type ValuationStatus = 'draft' | 'submitted' | 'certified' | 'superseded' | 'locked';
 
 const STATUS_OPTS: { value: ValuationStatus; label: string }[] = [
   { value: 'draft',      label: 'Draft' },
   { value: 'submitted',  label: 'Submitted' },
   { value: 'certified',  label: 'Certified' },
   { value: 'superseded', label: 'Superseded' },
+  { value: 'locked',     label: 'Locked' },
 ];
 
 const STATUS_STYLES: Record<ValuationStatus, string> = {
@@ -37,7 +38,10 @@ const STATUS_STYLES: Record<ValuationStatus, string> = {
   submitted:  'bg-blue-500/10 text-blue-400 border-blue-500/20',
   certified:  'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   superseded: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  locked:     'bg-slate-600/20 text-slate-300 border-slate-500/30',
 };
+
+type SaveState = 'idle' | 'saving' | 'saved';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +53,29 @@ function fmtDate(iso?: string | null): string {
   if (!iso) return '';
   try { return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
   catch { return iso; }
+}
+
+// ─── Save indicator hook ──────────────────────────────────────────────────────
+
+function useSaveIndicator() {
+  const [state, setState] = useState<SaveState>('idle');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onSaveStart = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    setState('saving');
+  }, []);
+
+  const onSaveDone = useCallback(() => {
+    setState('saved');
+    setLastSaved(new Date());
+    timer.current = setTimeout(() => setState('idle'), 3000);
+  }, []);
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  return { state, lastSaved, onSaveStart, onSaveDone };
 }
 
 // ─── Pct input ────────────────────────────────────────────────────────────────
@@ -225,6 +252,10 @@ export default function ValuationDetail({
   const [linesExpanded, setLinesExpanded]   = useState(true);
   const [extrasExpanded, setExtrasExpanded] = useState(true);
   const [pdfLoading, setPdfLoading]         = useState(false);
+  const { state: saveState, lastSaved, onSaveStart, onSaveDone } = useSaveIndicator();
+
+  const isLocked = valuation.status === 'locked';
+  const effectiveCanEdit = canEdit && !isLocked;
 
   const lineEntries  = useMemo(() => store.valuationLineEntries.filter(e => e.valuation_id === valuation.id), [store.valuationLineEntries, valuation.id]);
   const extraEntries = useMemo(() => store.valuationExtraEntries.filter(e => e.valuation_id === valuation.id), [store.valuationExtraEntries, valuation.id]);
@@ -260,6 +291,7 @@ export default function ValuationDetail({
   }, [wbLines, wbExtras, getLineEntry, getExtraEntry]);
 
   const handleLinePct = useCallback(async (lineId: string, current_pct: number) => {
+    onSaveStart();
     const existing = lineEntries.find(e => e.workbook_line_id === lineId);
     if (existing) {
       await store.upsertValuationLineEntry({ ...existing, current_pct });
@@ -269,14 +301,16 @@ export default function ValuationDetail({
         previous_pct: 0, current_pct, notes: '',
       });
     }
-  }, [lineEntries, store, valuation.id]);
+    onSaveDone();
+  }, [lineEntries, store, valuation.id, onSaveStart, onSaveDone]);
 
   const handleLineNotes = useCallback(async (lineId: string, notes: string) => {
     const existing = lineEntries.find(e => e.workbook_line_id === lineId);
-    if (existing) await store.upsertValuationLineEntry({ ...existing, notes });
-  }, [lineEntries, store]);
+    if (existing) { onSaveStart(); await store.upsertValuationLineEntry({ ...existing, notes }); onSaveDone(); }
+  }, [lineEntries, store, onSaveStart, onSaveDone]);
 
   const handleExtraPct = useCallback(async (extraId: string, current_pct: number) => {
+    onSaveStart();
     const existing = extraEntries.find(e => e.workbook_extra_id === extraId);
     if (existing) {
       await store.upsertValuationExtraEntry({ ...existing, current_pct });
@@ -286,12 +320,19 @@ export default function ValuationDetail({
         previous_pct: 0, current_pct, notes: '',
       });
     }
-  }, [extraEntries, store, valuation.id]);
+    onSaveDone();
+  }, [extraEntries, store, valuation.id, onSaveStart, onSaveDone]);
 
   const handleExtraNotes = useCallback(async (extraId: string, notes: string) => {
     const existing = extraEntries.find(e => e.workbook_extra_id === extraId);
-    if (existing) await store.upsertValuationExtraEntry({ ...existing, notes });
-  }, [extraEntries, store]);
+    if (existing) { onSaveStart(); await store.upsertValuationExtraEntry({ ...existing, notes }); onSaveDone(); }
+  }, [extraEntries, store, onSaveStart, onSaveDone]);
+
+  const handleUnlock = async () => {
+    onSaveStart();
+    await store.updateValuation({ ...valuation, status: 'draft' });
+    onSaveDone();
+  };
 
   const handleExportPdf = async () => {
     setPdfLoading(true);
@@ -314,12 +355,36 @@ export default function ValuationDetail({
           </button>
           <div className="w-px h-4 bg-[#1e2d4a]" />
           <span className="text-[10px] font-bold font-mono text-slate-500">{valuation.ref}</span>
-          <span className={`inline-flex text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${statusStyle}`}>
+          <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${statusStyle}`}>
+            {isLocked && <Lock size={8} />}
             {valuation.status}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {canEdit && (
+          {/* Save indicator */}
+          {saveState !== 'idle' && (
+            <span className={`text-[10px] font-medium transition-all ${saveState === 'saving' ? 'text-slate-400' : 'text-emerald-400'} flex items-center gap-1`}>
+              {saveState === 'saving' ? (
+                <><span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" /> Saving…</>
+              ) : (
+                <><CheckCircle size={10} /> Saved</>
+              )}
+            </span>
+          )}
+          {saveState === 'idle' && lastSaved && (
+            <span className="text-[10px] text-slate-600">
+              Saved {lastSaved.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+
+          {isLocked && canEdit && (
+            <button onClick={handleUnlock}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors"
+              style={{ background: '#111827', border: '1px solid rgba(245,158,11,0.3)' }}>
+              <Unlock size={11} /> Unlock
+            </button>
+          )}
+          {effectiveCanEdit && (
             <button onClick={() => setShowEditHeader(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition-colors"
               style={{ background: '#111827', border: '1px solid #1e2d4a' }}
@@ -337,6 +402,18 @@ export default function ValuationDetail({
           </button>
         </div>
       </div>
+
+      {/* Locked banner */}
+      {isLocked && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl mb-4"
+          style={{ background: 'rgba(71,85,105,0.12)', border: '1px solid rgba(71,85,105,0.25)' }}>
+          <Lock size={13} className="text-slate-400 shrink-0" />
+          <p className="text-xs text-slate-400">
+            This valuation is <strong className="text-slate-300">locked</strong> and cannot be edited. It can still be viewed and exported as a PDF.
+            {canEdit && <> Use the <strong className="text-amber-400">Unlock</strong> button to enable editing.</>}
+          </p>
+        </div>
+      )}
 
       {/* Info strip */}
       <div className="rounded-xl px-4 py-3 mb-4 flex flex-wrap items-center gap-4" style={{ background: '#0a1020', border: '1px solid #1e2d4a' }}>
@@ -421,12 +498,12 @@ export default function ValuationDetail({
                           <td className="px-2 py-1.5 text-slate-500 text-right tabular-nums">{entry.previous_pct.toFixed(2)}%</td>
                           <td className="px-2 py-1.5 text-slate-500 text-right tabular-nums">{fmtCurrency(prevV)}</td>
                           <td className="px-2 py-1.5 text-right">
-                            <PctInput value={entry.current_pct} disabled={!canEdit} onCommit={v => handleLinePct(l.id, v)} />
+                            <PctInput value={entry.current_pct} disabled={!effectiveCanEdit} onCommit={v => handleLinePct(l.id, v)} />
                           </td>
                           <td className="px-2 py-1.5 text-white text-right tabular-nums font-medium">{fmtCurrency(currV)}</td>
                           <td className={`px-2 py-1.5 text-right tabular-nums font-semibold ${thisV >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtCurrency(thisV)}</td>
                           <td className="px-2 py-1.5">
-                            {canEdit
+                            {effectiveCanEdit
                               ? <NotesInput value={entry.notes} onCommit={v => handleLineNotes(l.id, v)} />
                               : <span className="text-slate-600 text-xs">{entry.notes}</span>}
                           </td>
@@ -485,12 +562,12 @@ export default function ValuationDetail({
                           <td className="px-2 py-1.5 text-slate-500 text-right tabular-nums">{entry.previous_pct.toFixed(2)}%</td>
                           <td className="px-2 py-1.5 text-slate-500 text-right tabular-nums">{fmtCurrency(prevV)}</td>
                           <td className="px-2 py-1.5 text-right">
-                            <PctInput value={entry.current_pct} disabled={!canEdit} onCommit={v => handleExtraPct(ex.id, v)} />
+                            <PctInput value={entry.current_pct} disabled={!effectiveCanEdit} onCommit={v => handleExtraPct(ex.id, v)} />
                           </td>
                           <td className="px-2 py-1.5 text-white text-right tabular-nums font-medium">{fmtCurrency(currV)}</td>
                           <td className={`px-2 py-1.5 text-right tabular-nums font-semibold ${thisV >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtCurrency(thisV)}</td>
                           <td className="px-2 py-1.5">
-                            {canEdit
+                            {effectiveCanEdit
                               ? <NotesInput value={entry.notes} onCommit={v => handleExtraNotes(ex.id, v)} />
                               : <span className="text-slate-600 text-xs">{entry.notes}</span>}
                           </td>
@@ -543,7 +620,7 @@ export default function ValuationDetail({
       {showEditHeader && (
         <EditHeaderModal
           valuation={valuation}
-          onSave={patch => store.updateValuation({ ...valuation, ...patch })}
+          onSave={async patch => { onSaveStart(); await store.updateValuation({ ...valuation, ...patch }); onSaveDone(); }}
           onClose={() => setShowEditHeader(false)}
         />
       )}

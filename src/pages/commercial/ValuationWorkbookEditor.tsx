@@ -1,9 +1,32 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
-import { ArrowLeft, Upload, Plus, Trash2, X, Check, ChevronDown, BookOpen, AlertCircle, Pencil } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Trash2, X, Check, ChevronDown, BookOpen, AlertCircle, Pencil, CheckCircle } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import type { DBValuationWorkbook, DBWorkbookLine, DBWorkbookExtra } from '../../lib/store';
 import type { Project } from '../../data/types';
+
+type SaveState = 'idle' | 'saving' | 'saved';
+
+function useSaveIndicator() {
+  const [state, setState] = useState<SaveState>('idle');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onSaveStart = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    setState('saving');
+  }, []);
+
+  const onSaveDone = useCallback(() => {
+    setState('saved');
+    setLastSaved(new Date());
+    timer.current = setTimeout(() => setState('idle'), 3000);
+  }, []);
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  return { state, lastSaved, onSaveStart, onSaveDone };
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -399,6 +422,7 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
   const [deleteExtraId, setDeleteExtraId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(workbook.title);
+  const { state: saveState, lastSaved, onSaveStart, onSaveDone } = useSaveIndicator();
 
   const lines  = useMemo(() => store.workbookLines.filter(l => l.workbook_id === workbook.id), [store.workbookLines, workbook.id]);
   const extras = useMemo(() => store.workbookExtras.filter(e => e.workbook_id === workbook.id), [store.workbookExtras, workbook.id]);
@@ -460,13 +484,17 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
   const patchLine = async (id: string, patch: Partial<DBWorkbookLine>) => {
     const line = lines.find(l => l.id === id);
     if (!line) return;
+    onSaveStart();
     await store.updateWorkbookLine({ ...line, ...patch });
+    onSaveDone();
   };
 
   const patchExtra = async (id: string, patch: Partial<DBWorkbookExtra>) => {
     const extra = extras.find(e => e.id === id);
     if (!extra) return;
+    onSaveStart();
     await store.updateWorkbookExtra({ ...extra, ...patch });
+    onSaveDone();
   };
 
   const saveTitle = async () => {
@@ -479,7 +507,8 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
   return (
     <div>
       {/* Back + header */}
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center justify-between gap-3 mb-5">
+        <div className="flex items-center gap-3">
         <button onClick={onBack} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
           <ArrowLeft size={13} /> Back
         </button>
@@ -510,6 +539,23 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
           )}
         </div>
         <span className="text-[10px] text-slate-600">{project.name}</span>
+        </div>
+
+        {/* Save indicator */}
+        {saveState !== 'idle' && (
+          <span className={`text-[10px] font-medium flex items-center gap-1 ${saveState === 'saving' ? 'text-slate-400' : 'text-emerald-400'}`}>
+            {saveState === 'saving' ? (
+              <><span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" /> Saving…</>
+            ) : (
+              <><CheckCircle size={10} /> Saved</>
+            )}
+          </span>
+        )}
+        {saveState === 'idle' && lastSaved && (
+          <span className="text-[10px] text-slate-600">
+            Saved {lastSaved.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
       </div>
 
       {/* Summary tiles */}

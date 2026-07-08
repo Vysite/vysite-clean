@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Plus, ChevronRight, Trash2, X, Check, FileText, Calculator, Clock, CheckCircle2, Send, Archive, CreditCard as Edit3, BookOpen, Settings2, AlertCircle, Pencil, MoreVertical } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { Plus, ChevronRight, Trash2, X, Check, FileText, Calculator, Clock, CheckCircle2, Send, Archive, CreditCard as Edit3, BookOpen, Settings2, AlertCircle, Pencil, MoreVertical, Lock, Upload, GitCompare } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import type { DBValuation, DBValuationWorkbook, DBValuationLineEntry, DBValuationExtraEntry } from '../../lib/store';
 import type { Project } from '../../data/types';
@@ -19,7 +19,7 @@ interface Props {
   onProjectChange: (id: string) => void;
 }
 
-type ValuationStatus = 'draft' | 'submitted' | 'certified' | 'superseded';
+type ValuationStatus = 'draft' | 'submitted' | 'certified' | 'superseded' | 'locked';
 type ActiveView = 'list' | 'workbook' | 'valuation';
 
 const STATUS_CONFIG: Record<ValuationStatus, { label: string; icon: React.ComponentType<{ size?: number }>; bg: string; text: string; border: string }> = {
@@ -27,6 +27,7 @@ const STATUS_CONFIG: Record<ValuationStatus, { label: string; icon: React.Compon
   submitted:  { label: 'Submitted',  icon: Send,         bg: 'bg-blue-500/10',    text: 'text-blue-400',    border: 'border-blue-500/20' },
   certified:  { label: 'Certified',  icon: CheckCircle2, bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' },
   superseded: { label: 'Superseded', icon: Archive,      bg: 'bg-amber-500/10',   text: 'text-amber-400',   border: 'border-amber-500/20' },
+  locked:     { label: 'Locked',     icon: Lock,         bg: 'bg-slate-600/20',   text: 'text-slate-300',   border: 'border-slate-500/30' },
 };
 
 function genId(): string {
@@ -39,6 +40,12 @@ function fmtCurrency(n: number): string {
 
 function fmtDate(iso?: string | null): string {
   if (!iso) return '';
+  try { return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
+  catch { return iso; }
+}
+
+function fmtDateShort(iso?: string | null): string {
+  if (!iso) return '—';
   try { return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); }
   catch { return iso; }
 }
@@ -166,6 +173,11 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
   const [renameWbDraft, setRenameWbDraft] = useState('');
   const [showDeleteWb, setShowDeleteWb] = useState(false);
   const [deletingWb, setDeletingWb] = useState(false);
+  const [showReplaceImport, setShowReplaceImport] = useState(false);
+  const [compareToast, setCompareToast] = useState(false);
+  const compareToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (compareToastTimer.current) clearTimeout(compareToastTimer.current); }, []);
 
   const workbook: DBValuationWorkbook | undefined = useMemo(
     () => store.valuationWorkbooks.find(w => w.project_id === project?.id),
@@ -203,20 +215,17 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
     return `VAL-${String(next).padStart(3, '0')}`;
   }, [store.valuations, project?.id]);
 
-  // Carry-forward: find most recent (highest ref number) valuation for this project
   const latestValuation = useMemo(() => {
     if (projectValuations.length === 0) return null;
-    return projectValuations[0]; // already sorted desc
+    return projectValuations[0];
   }, [projectValuations]);
 
   const handleCreate = async (v: DBValuation) => {
     if (!workbook) { setShowCreate(false); return; }
 
-    // Attach workbook reference
     const newVal: DBValuation = { ...v, workbook_id: workbook.id };
     await store.addValuation(newVal);
 
-    // Build entries with carry-forward from previous valuation
     const lineEntries: DBValuationLineEntry[] = wbLines.map(line => {
       const prevEntry = latestValuation
         ? store.valuationLineEntries.find(e => e.valuation_id === latestValuation.id && e.workbook_line_id === line.id)
@@ -261,6 +270,11 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
     if (openId === id) { setOpenId(null); setView('list'); }
   };
 
+  const handleCompare = () => {
+    setCompareToast(true);
+    compareToastTimer.current = setTimeout(() => setCompareToast(false), 3000);
+  };
+
   // ── Routing ──────────────────────────────────────────────────────────────────
 
   if (view === 'workbook' && project && workbook) {
@@ -286,7 +300,7 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
           wbExtras={wbExtras}
           project={project}
           orgId={orgId}
-          canEdit={canEdit}
+          canEdit={canEdit && val.status !== 'locked'}
           canDelete={canDelete}
           currentUserName={currentUserName}
           onBack={() => { setView('list'); setOpenId(null); }}
@@ -299,6 +313,16 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
 
   return (
     <div>
+      {/* Compare toast */}
+      {compareToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl"
+          style={{ background: '#0d1628', border: '1px solid #1e2d4a' }}>
+          <GitCompare size={13} className="text-[#f97316]" />
+          <p className="text-xs font-semibold text-white">Valuation Comparison — coming soon</p>
+          <button onClick={() => setCompareToast(false)} className="ml-1 text-slate-500 hover:text-slate-300 transition-colors"><X size={11} /></button>
+        </div>
+      )}
+
       {/* Top bar */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
@@ -313,17 +337,31 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
             <span className="text-xs text-slate-500">{projectValuations.length} {projectValuations.length === 1 ? 'valuation' : 'valuations'}</span>
           )}
         </div>
-        {canCreate && project && workbook && (
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white transition-colors"
-            style={{ background: '#f97316' }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#ea6c0a')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#f97316')}
-          >
-            <Plus size={14} /> New Valuation
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {project && projectValuations.length >= 2 && (
+            <button
+              onClick={handleCompare}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition-colors"
+              style={{ background: '#0d1628', border: '1px solid #1e2d4a' }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = '#f97316')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = '#1e2d4a')}
+              title="Compare valuations (coming soon)"
+            >
+              <GitCompare size={12} /> Compare
+            </button>
+          )}
+          {canCreate && project && workbook && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white transition-colors"
+              style={{ background: '#f97316' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#ea6c0a')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#f97316')}
+            >
+              <Plus size={14} /> New Valuation
+            </button>
+          )}
+        </div>
       </div>
 
       {!project ? (
@@ -336,6 +374,7 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
           {/* Workbook banner */}
           {workbook ? (
             <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1e2d4a', background: '#0a1020' }}>
+              {/* Banner header */}
               <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #1e2d4a' }}>
                 <div className="flex items-center gap-2.5">
                   <div className="w-7 h-7 rounded-lg bg-[#f97316]/10 border border-[#f97316]/20 flex items-center justify-center shrink-0">
@@ -343,7 +382,9 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                   </div>
                   <div>
                     <p className="text-xs font-bold text-white">{workbook.title}</p>
-                    <p className="text-[10px] text-slate-500">{wbLines.length} contract lines · {wbExtras.length} extras</p>
+                    <p className="text-[10px] text-slate-500">
+                      {wbLines.length} contract line{wbLines.length !== 1 ? 's' : ''} · {wbExtras.length} extra{wbExtras.length !== 1 ? 's' : ''} · {projectValuations.length} valuation{projectValuations.length !== 1 ? 's' : ''}
+                    </p>
                   </div>
                 </div>
                 {canEdit && (
@@ -368,13 +409,19 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                       {showWbMenu && (
                         <>
                           <div className="fixed inset-0 z-30" onClick={() => setShowWbMenu(false)} />
-                          <div className="absolute right-0 top-full mt-1 z-40 rounded-xl overflow-hidden shadow-2xl min-w-[160px]"
+                          <div className="absolute right-0 top-full mt-1 z-40 rounded-xl overflow-hidden shadow-2xl min-w-[180px]"
                             style={{ background: '#111827', border: '1px solid #1e2d4a' }}>
                             <button
                               onClick={() => { setRenameWbDraft(workbook.title); setShowRenameWb(true); setShowWbMenu(false); }}
                               className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left"
                             >
                               <Pencil size={11} /> Rename Workbook
+                            </button>
+                            <button
+                              onClick={() => { setShowReplaceImport(true); setShowWbMenu(false); }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left"
+                            >
+                              <Upload size={11} /> Replace Contract Import
                             </button>
                             <div style={{ height: '1px', background: '#1e2d4a' }} />
                             <button
@@ -390,14 +437,27 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 divide-x divide-[#1e2d4a]">
+
+              {/* Workbook stats grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-[#1e2d4a]">
                 <div className="px-4 py-3">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-0.5">Contract Works</p>
-                  <p className="text-base font-black text-white">{fmtCurrency(contractTotal)}</p>
+                  <p className="text-sm font-black text-white">{fmtCurrency(contractTotal)}</p>
                 </div>
                 <div className="px-4 py-3">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-0.5">Agreed Extras</p>
-                  <p className="text-base font-black text-white">{fmtCurrency(extrasTotal)}</p>
+                  <p className="text-sm font-black text-white">{fmtCurrency(extrasTotal)}</p>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-0.5">Total Contract Value</p>
+                  <p className="text-sm font-black text-[#f97316]">{fmtCurrency(contractTotal + extrasTotal)}</p>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-0.5">Created</p>
+                  <p className="text-xs font-semibold text-slate-400">{fmtDateShort(workbook.created_at)}</p>
+                  {workbook.updated_at && workbook.updated_at !== workbook.created_at && (
+                    <p className="text-[9px] text-slate-600 mt-0.5">Updated {fmtDateShort(workbook.updated_at)}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -462,10 +522,10 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
               {projectValuations.map(val => {
                 const sc = STATUS_CONFIG[val.status as ValuationStatus] ?? STATUS_CONFIG.draft;
                 const StatusIcon = sc.icon;
+                const isLocked = val.status === 'locked';
                 const lineEntries = store.valuationLineEntries.filter(e => e.valuation_id === val.id);
                 const extraEntries = store.valuationExtraEntries.filter(e => e.valuation_id === val.id);
 
-                // Gross to date: sum contract_value * current_pct for each line + extras
                 const contractCurrValue = wbLines.reduce((s, l) => {
                   const e = lineEntries.find(x => x.workbook_line_id === l.id);
                   return s + l.contract_value * (e?.current_pct ?? 0) / 100;
@@ -490,10 +550,11 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                 const completionPct = grandTotal > 0 ? Math.min(grossToDate / grandTotal * 100, 100) : 0;
 
                 return (
-                  <div key={val.id} className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl hover:border-[#2a3a5a] transition-all duration-150 group">
+                  <div key={val.id} className={`border rounded-xl transition-all duration-150 group ${isLocked ? 'opacity-80' : 'hover:border-[#2a3a5a]'}`}
+                    style={{ background: '#0d1628', borderColor: isLocked ? '#2a3040' : '#1e2d4a' }}>
                     <div className="flex items-center gap-4 p-4">
                       <div className="w-9 h-9 rounded-lg bg-[#111827] border border-[#1e2d4a] flex items-center justify-center shrink-0">
-                        <FileText size={15} className="text-slate-500" />
+                        {isLocked ? <Lock size={13} className="text-slate-500" /> : <FileText size={15} className="text-slate-500" />}
                       </div>
 
                       <div className="flex-1 min-w-0">
@@ -544,7 +605,7 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                           onMouseEnter={e => (e.currentTarget.style.borderColor = '#f97316')}
                           onMouseLeave={e => (e.currentTarget.style.borderColor = '#1e2d4a')}
                         >
-                          Open <ChevronRight size={11} />
+                          {isLocked ? 'View' : 'Open'} <ChevronRight size={11} />
                         </button>
                       </div>
                     </div>
@@ -552,12 +613,12 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                     {grandTotal > 0 && (
                       <div className="px-4 pb-3">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[9px] text-slate-600">Contract completion</span>
-                          <span className="text-[9px] text-slate-500">{Math.round(completionPct)}%</span>
+                          <span className="text-[9px] text-slate-600">Contract Value Certified</span>
+                          <span className="text-[9px] text-slate-500">{completionPct.toFixed(1)}%</span>
                         </div>
                         <div className="h-1 bg-[#111827] rounded-full overflow-hidden">
                           <div className="h-full rounded-full transition-all"
-                            style={{ width: `${completionPct}%`, background: 'linear-gradient(to right, #f97316, #fb923c)' }} />
+                            style={{ width: `${completionPct}%`, background: isLocked ? '#475569' : 'linear-gradient(to right, #f97316, #fb923c)' }} />
                         </div>
                       </div>
                     )}
@@ -580,7 +641,7 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
         />
       )}
 
-      {/* Delete confirm */}
+      {/* Delete valuation confirm */}
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
           <div className="w-full max-w-sm mx-4 rounded-2xl p-6" style={{ background: '#0d1628', border: '1px solid #1e2d4a' }}>
@@ -650,6 +711,39 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
         </div>
       )}
 
+      {/* Replace Contract Import modal */}
+      {showReplaceImport && workbook && project && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-md mx-4 rounded-2xl overflow-hidden shadow-2xl" style={{ background: '#0d1628', border: '1px solid #1e2d4a' }}>
+            <div className="flex items-start gap-4 px-6 pt-6 pb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                <Upload size={16} className="text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-white mb-1">Replace Contract Import</p>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  To replace the contract lines, open the workbook editor and use the <strong className="text-slate-300">Import</strong> button to re-import from a new spreadsheet. Existing lines will remain until deleted.
+                </p>
+                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                  If you need a completely fresh start, use <strong className="text-slate-400">Delete Workbook</strong> from this menu to remove all data and reimport.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 px-6 pb-6">
+              <button onClick={() => setShowReplaceImport(false)} className="flex-1 py-2.5 rounded-xl text-xs font-bold"
+                style={{ background: '#111827', color: '#64748b', border: '1px solid #1e2d4a' }}>Close</button>
+              <button
+                onClick={() => { setShowReplaceImport(false); setView('workbook'); }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white"
+                style={{ background: '#f97316' }}
+              >
+                Open Workbook Editor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete workbook confirm */}
       {showDeleteWb && workbook && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
@@ -667,7 +761,6 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                 </div>
               </div>
 
-              {/* Warning list */}
               <div className="rounded-xl p-3 mb-4 space-y-2" style={{ background: '#111827', border: '1px solid #3b1e1e' }}>
                 {[
                   `${wbLines.length} contract line${wbLines.length !== 1 ? 's' : ''}`,
