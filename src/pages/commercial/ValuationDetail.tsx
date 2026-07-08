@@ -6,6 +6,7 @@ import { useAppStore } from '../../lib/StoreContext';import type {
 } from '../../lib/store';
 import type { Project } from '../../data/types';
 import { buildValuationPdf } from './ValuationPDF';
+import { logActivity } from '../../lib/activityLog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -247,6 +248,7 @@ export default function ValuationDetail({
   valuation, workbook, wbLines, wbExtras, project, orgId, canEdit, onBack,
 }: Props) {
   const store = useAppStore();
+  const currentUserName = store.currentUser?.name ?? '';
   const [showEditHeader, setShowEditHeader] = useState(false);
   const [linesExpanded, setLinesExpanded]   = useState(true);
   const [extrasExpanded, setExtrasExpanded] = useState(true);
@@ -256,6 +258,17 @@ export default function ValuationDetail({
 
   const isLocked = valuation.status === 'locked';
   const effectiveCanEdit = canEdit && !isLocked;
+
+  // ── Activity log helper ───────────────────────────────────────────────────────
+
+  const valLog = useCallback((actionType: Parameters<typeof logActivity>[0]['actionType'], description: string, extra?: Partial<Parameters<typeof logActivity>[0]>) => {
+    logActivity({
+      orgId, userName: currentUserName, module: 'valuations',
+      recordId: valuation.id, recordRef: valuation.ref, recordType: 'valuation',
+      projectId: project.id, projectName: project.name,
+      actionType, description, ...extra,
+    });
+  }, [orgId, currentUserName, valuation.id, valuation.ref, project.id, project.name]);
 
   const lineEntries  = useMemo(() => store.valuationLineEntries.filter(e => e.valuation_id === valuation.id), [store.valuationLineEntries, valuation.id]);
   const extraEntries = useMemo(() => store.valuationExtraEntries.filter(e => e.valuation_id === valuation.id), [store.valuationExtraEntries, valuation.id]);
@@ -291,8 +304,10 @@ export default function ValuationDetail({
   }, [wbLines, wbExtras, getLineEntry, getExtraEntry]);
 
   const handleLinePct = useCallback(async (lineId: string, current_pct: number) => {
-    onSaveStart();
     const existing = lineEntries.find(e => e.workbook_line_id === lineId);
+    const prevPct = existing?.current_pct ?? 0;
+    if (current_pct === prevPct) return;
+    onSaveStart();
     if (existing) {
       await store.upsertValuationLineEntry({ ...existing, current_pct });
     } else {
@@ -302,7 +317,12 @@ export default function ValuationDetail({
       });
     }
     onSaveDone();
-  }, [lineEntries, store, valuation.id, onSaveStart, onSaveDone]);
+    const line = wbLines.find(l => l.id === lineId);
+    const label = line ? `${line.item_number ? `[${line.item_number}] ` : ''}${line.description}` : lineId;
+    valLog('record_updated', `${valuation.ref} — Item percentage updated: ${label}: ${prevPct.toFixed(2)}% → ${current_pct.toFixed(2)}%`, {
+      prevValue: `${prevPct.toFixed(2)}%`, newValue: `${current_pct.toFixed(2)}%`,
+    });
+  }, [lineEntries, store, valuation.id, valuation.ref, wbLines, onSaveStart, onSaveDone, valLog]);
 
   const handleLineNotes = useCallback(async (lineId: string, notes: string) => {
     const existing = lineEntries.find(e => e.workbook_line_id === lineId);
@@ -310,8 +330,10 @@ export default function ValuationDetail({
   }, [lineEntries, store, onSaveStart, onSaveDone]);
 
   const handleExtraPct = useCallback(async (extraId: string, current_pct: number) => {
-    onSaveStart();
     const existing = extraEntries.find(e => e.workbook_extra_id === extraId);
+    const prevPct = existing?.current_pct ?? 0;
+    if (current_pct === prevPct) return;
+    onSaveStart();
     if (existing) {
       await store.upsertValuationExtraEntry({ ...existing, current_pct });
     } else {
@@ -321,7 +343,12 @@ export default function ValuationDetail({
       });
     }
     onSaveDone();
-  }, [extraEntries, store, valuation.id, onSaveStart, onSaveDone]);
+    const extra = wbExtras.find(e => e.id === extraId);
+    const label = extra ? `${extra.ref ? `[${extra.ref}] ` : ''}${extra.description}` : extraId;
+    valLog('record_updated', `${valuation.ref} — Extra percentage updated: ${label}: ${prevPct.toFixed(2)}% → ${current_pct.toFixed(2)}%`, {
+      prevValue: `${prevPct.toFixed(2)}%`, newValue: `${current_pct.toFixed(2)}%`,
+    });
+  }, [extraEntries, store, valuation.id, valuation.ref, wbExtras, onSaveStart, onSaveDone, valLog]);
 
   const handleExtraNotes = useCallback(async (extraId: string, notes: string) => {
     const existing = extraEntries.find(e => e.workbook_extra_id === extraId);
@@ -332,6 +359,7 @@ export default function ValuationDetail({
     onSaveStart();
     await store.updateValuation({ ...valuation, status: 'draft' });
     onSaveDone();
+    valLog('status_changed', `${valuation.ref} unlocked — status changed: Locked → Draft`, { prevValue: 'Locked', newValue: 'Draft' });
   };
 
   const handleExportPdf = async () => {
@@ -345,6 +373,7 @@ export default function ValuationDetail({
         store.settings?.logo_data_url || undefined,
         store.settings?.company_name  || undefined,
       );
+      valLog('pdf_exported', `${valuation.ref} — Valuation exported as PDF: ${valuation.title}`);
     } catch (err) {
       console.error('[ValuationPDF] Export failed:', err);
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -644,7 +673,36 @@ export default function ValuationDetail({
       {showEditHeader && (
         <EditHeaderModal
           valuation={valuation}
-          onSave={async patch => { onSaveStart(); await store.updateValuation({ ...valuation, ...patch }); onSaveDone(); }}
+          onSave={async patch => {
+            onSaveStart();
+            await store.updateValuation({ ...valuation, ...patch });
+            onSaveDone();
+            // Build a human-readable diff of what changed
+            const STATUS_LABEL: Record<string, string> = { draft: 'Draft', submitted: 'Submitted', certified: 'Certified', superseded: 'Superseded', locked: 'Locked' };
+            const changes: string[] = [];
+            if (patch.title !== undefined && patch.title !== valuation.title)
+              changes.push(`title: "${valuation.title}" → "${patch.title}"`);
+            if (patch.status !== undefined && patch.status !== valuation.status)
+              changes.push(`status: ${STATUS_LABEL[valuation.status] ?? valuation.status} → ${STATUS_LABEL[patch.status] ?? patch.status}`);
+            if (patch.valuation_date !== undefined && patch.valuation_date !== valuation.valuation_date)
+              changes.push(`date: ${valuation.valuation_date || '—'} → ${patch.valuation_date}`);
+            if (patch.period !== undefined && patch.period !== valuation.period)
+              changes.push(`period: "${valuation.period || '—'}" → "${patch.period}"`);
+            if (patch.client !== undefined && patch.client !== valuation.client)
+              changes.push(`client: "${valuation.client || '—'}" → "${patch.client}"`);
+            if (patch.contractor !== undefined && patch.contractor !== valuation.contractor)
+              changes.push(`contractor: "${valuation.contractor || '—'}" → "${patch.contractor}"`);
+            if (patch.notes !== undefined && patch.notes !== valuation.notes)
+              changes.push('notes updated');
+            if (changes.length > 0) {
+              const isStatusChange = patch.status !== undefined && patch.status !== valuation.status;
+              valLog(
+                isStatusChange ? 'status_changed' : 'record_updated',
+                `${valuation.ref} edited: ${changes.join('; ')}`,
+                isStatusChange ? { prevValue: STATUS_LABEL[valuation.status] ?? valuation.status, newValue: STATUS_LABEL[patch.status!] ?? patch.status } : {},
+              );
+            }
+          }}
           onClose={() => setShowEditHeader(false)}
         />
       )}

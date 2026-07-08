@@ -20,13 +20,14 @@ interface Props {
   project: Project;
   orgInfo: OrgInfo;
   onClose: () => void;
+  onExported?: () => void;
 }
 
 type ExportState = 'idle' | 'building' | 'done' | 'error';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function OAndMPreview({ manual, sections, items, project, orgInfo, onClose }: Props) {
+export default function OAndMPreview({ manual, sections, items, project, orgInfo, onClose, onExported }: Props) {
   const store = useAppStore();
   const sortedSections = [...sections].sort((a, b) => a.sort_order - b.sort_order);
 
@@ -64,6 +65,7 @@ export default function OAndMPreview({ manual, sections, items, project, orgInfo
       setTimeout(() => URL.revokeObjectURL(url), 5000);
 
       setExportState('done');
+      onExported?.();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'An unexpected error occurred.');
       setExportState('error');

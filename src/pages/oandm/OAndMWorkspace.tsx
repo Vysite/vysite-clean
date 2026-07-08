@@ -10,6 +10,7 @@ import {
 } from './types';
 import OAndMSectionEditor from './OAndMSectionEditor';
 import OAndMPreview from './OAndMPreview';
+import { logActivity } from '../../lib/activityLog';
 
 const STATUS_OPTIONS: DBOAndMManual['status'][] = ['draft', 'in_progress', 'finalised'];
 
@@ -76,26 +77,69 @@ export default function OAndMWorkspace() {
       created_by: currentUserName,
     };
     store.addOAndMManual(manual);
+    const project = projects.find(p => p.id === selectedProjectId);
+    logActivity({
+      orgId, userName: currentUserName, module: 'oandm',
+      recordId: manual.id, recordRef: manual.title, recordType: 'oandm_manual',
+      projectId: selectedProjectId, projectName: project?.name ?? null,
+      actionType: 'record_created',
+      description: `O&M Manual created: ${t}`,
+    });
     setSelectedManualId(manual.id);
     setShowCreateManual(false);
     setNewManualTitle('O&M Manual');
   };
 
   const handleDeleteManual = (id: string) => {
+    const manual = store.oAndMManuals.find(m => m.id === id);
     if (selectedManualId === id) setSelectedManualId(null);
     store.removeOAndMManual(id);
+    if (manual) {
+      const project = projects.find(p => p.id === manual.project_id);
+      logActivity({
+        orgId, userName: currentUserName, module: 'oandm',
+        recordId: id, recordRef: manual.title, recordType: 'oandm_manual',
+        projectId: manual.project_id, projectName: project?.name ?? null,
+        actionType: 'record_deleted',
+        description: `O&M Manual deleted: ${manual.title}`,
+      });
+    }
     setConfirmDeleteManualId(null);
   };
 
   const saveManualEdit = () => {
     if (!editingManual) return;
+    const prev = store.oAndMManuals.find(m => m.id === editingManual.id);
     store.updateOAndMManual(editingManual);
+    if (prev && prev.title !== editingManual.title) {
+      const project = projects.find(p => p.id === editingManual.project_id);
+      logActivity({
+        orgId, userName: currentUserName, module: 'oandm',
+        recordId: editingManual.id, recordRef: editingManual.title, recordType: 'oandm_manual',
+        projectId: editingManual.project_id, projectName: project?.name ?? null,
+        actionType: 'record_updated',
+        description: `O&M Manual renamed: ${prev.title} → ${editingManual.title}`,
+        prevValue: prev.title, newValue: editingManual.title,
+      });
+    }
     setEditingManual(null);
   };
 
   const setStatus = (status: DBOAndMManual['status']) => {
     if (!selectedManual) return;
+    const prevStatus = selectedManual.status;
     store.updateOAndMManual({ ...selectedManual, status });
+    if (prevStatus !== status) {
+      const project = projects.find(p => p.id === selectedManual.project_id);
+      logActivity({
+        orgId, userName: currentUserName, module: 'oandm',
+        recordId: selectedManual.id, recordRef: selectedManual.title, recordType: 'oandm_manual',
+        projectId: selectedManual.project_id, projectName: project?.name ?? null,
+        actionType: 'status_changed',
+        description: `O&M Manual status changed: ${STATUS_LABELS[prevStatus]} → ${STATUS_LABELS[status]}`,
+        prevValue: STATUS_LABELS[prevStatus], newValue: STATUS_LABELS[status],
+      });
+    }
     setShowStatusMenu(false);
   };
 
@@ -113,6 +157,16 @@ export default function OAndMWorkspace() {
         sort_order: manualSections.length + idx,
       });
     });
+    if (toAdd.length > 0) {
+      const project = projects.find(p => p.id === selectedManual.project_id);
+      logActivity({
+        orgId, userName: currentUserName, module: 'oandm',
+        recordId: selectedManual.id, recordRef: selectedManual.title, recordType: 'oandm_manual',
+        projectId: selectedManual.project_id, projectName: project?.name ?? null,
+        actionType: 'record_updated',
+        description: `${toAdd.length} default section${toAdd.length !== 1 ? 's' : ''} added to "${selectedManual.title}"`,
+      });
+    }
   };
 
   // ── Cover image upload ────────────────────────────────────────────────────────
@@ -124,6 +178,14 @@ export default function OAndMWorkspace() {
     reader.onload = e => {
       const dataUrl = e.target?.result as string;
       store.updateOAndMManual({ ...selectedManual, cover_image_data_url: dataUrl });
+      const project = projects.find(p => p.id === selectedManual.project_id);
+      logActivity({
+        orgId, userName: currentUserName, module: 'oandm',
+        recordId: selectedManual.id, recordRef: selectedManual.title, recordType: 'oandm_manual',
+        projectId: selectedManual.project_id, projectName: project?.name ?? null,
+        actionType: 'record_updated',
+        description: `Cover image updated for "${selectedManual.title}"`,
+      });
     };
     reader.readAsDataURL(file);
   };
@@ -574,6 +636,15 @@ export default function OAndMWorkspace() {
             onRemoveItem={store.removeOAndMItem}
             onReorderItems={store.reorderOAndMItems}
             currentUserName={currentUserName}
+            onActivityLog={(actionType, description, extra) => {
+              const project = projects.find(p => p.id === selectedManual.project_id);
+              logActivity({
+                orgId, userName: currentUserName, module: 'oandm',
+                recordId: selectedManual.id, recordRef: selectedManual.title, recordType: 'oandm_manual',
+                projectId: selectedManual.project_id, projectName: project?.name ?? null,
+                actionType, description, ...extra,
+              });
+            }}
           />
         </main>
       </div>
@@ -589,6 +660,15 @@ export default function OAndMWorkspace() {
             logoDataUrl: store.settings.logo_data_url || undefined,
           }}
           onClose={() => setShowPreview(false)}
+          onExported={() => {
+            logActivity({
+              orgId, userName: currentUserName, module: 'oandm',
+              recordId: selectedManual.id, recordRef: selectedManual.title, recordType: 'oandm_manual',
+              projectId: selectedManual.project_id, projectName: selectedProject.name,
+              actionType: 'pdf_exported',
+              description: `O&M Manual exported as PDF: "${selectedManual.title}"`,
+            });
+          }}
         />
       )}
     </div>

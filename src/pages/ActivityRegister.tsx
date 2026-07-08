@@ -96,6 +96,8 @@ const MODULE_LABELS: Record<string, string> = {
   testing:     'Testing',
   maintenance: 'Maintenance',
   programmes:  'Programmes',
+  oandm:       'O&M Manual',
+  valuations:  'Valuations',
 };
 
 const MODULE_COLORS: Record<string, string> = {
@@ -110,6 +112,8 @@ const MODULE_COLORS: Record<string, string> = {
   testing:     'bg-cyan-900/40 text-cyan-400',
   maintenance: 'bg-rose-900/40 text-rose-400',
   programmes:  'bg-indigo-900/40 text-indigo-400',
+  oandm:       'bg-lime-900/40 text-lime-400',
+  valuations:  'bg-orange-900/40 text-orange-300',
 };
 
 const ACTION_TYPE_OPTIONS = [

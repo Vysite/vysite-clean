@@ -4,6 +4,7 @@ import { ArrowLeft, Upload, Plus, Trash2, X, Check, ChevronDown, BookOpen, Alert
 import { useAppStore } from '../../lib/StoreContext';
 import type { DBValuationWorkbook, DBWorkbookLine, DBWorkbookExtra } from '../../lib/store';
 import type { Project } from '../../data/types';
+import { logActivity } from '../../lib/activityLog';
 
 type SaveState = 'idle' | 'saving' | 'saved';
 
@@ -416,6 +417,7 @@ function EditCell({ value, numeric, onCommit, className = '' }: EditCellProps) {
 
 export default function ValuationWorkbookEditor({ workbook, project, orgId, canEdit, onBack }: Props) {
   const store = useAppStore();
+  const currentUserName = store.currentUser?.name ?? '';
   const [tab, setTab] = useState<'lines' | 'extras'>('lines');
   const [showImport, setShowImport] = useState<ImportTab | null>(null);
   const [deleteLineId, setDeleteLineId] = useState<string | null>(null);
@@ -432,6 +434,15 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
+  const wbLog = (actionType: Parameters<typeof logActivity>[0]['actionType'], description: string, extra?: Partial<Parameters<typeof logActivity>[0]>) => {
+    logActivity({
+      orgId, userName: currentUserName, module: 'valuations',
+      recordId: workbook.id, recordRef: workbook.title, recordType: 'valuation_workbook',
+      projectId: project.id, projectName: project.name,
+      actionType, description, ...extra,
+    });
+  };
+
   const handleImportLines = async (newLines: DBWorkbookLine[]) => {
     await store.batchAddWorkbookLines(newLines);
     // For every existing valuation, create carry-forward entries for new lines
@@ -447,6 +458,7 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
         await store.batchUpsertValuationLineEntries(entries);
       }
     }
+    wbLog('record_updated', `Contract schedule imported: ${newLines.length} line${newLines.length !== 1 ? 's' : ''} added to workbook "${workbook.title}"`);
   };
 
   const handleImportExtras = async (newExtras: DBWorkbookExtra[]) => {
@@ -463,6 +475,7 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
         await store.batchUpsertValuationExtraEntries(entries);
       }
     }
+    wbLog('record_updated', `Extras / variations imported: ${newExtras.length} item${newExtras.length !== 1 ? 's' : ''} added to workbook "${workbook.title}"`);
   };
 
   const handleAddLine = async () => {
@@ -471,6 +484,7 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
       section: '', unit: '', quantity: null, rate: null, contract_value: 0, sort_order: lines.length,
     };
     await store.addWorkbookLine(line);
+    wbLog('record_updated', `Contract line added to workbook "${workbook.title}"`);
   };
 
   const handleAddExtra = async () => {
@@ -479,6 +493,7 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
       agreed_value: 0, sort_order: extras.length,
     };
     await store.addWorkbookExtra(extra);
+    wbLog('record_updated', `Extra / variation added to workbook "${workbook.title}"`);
   };
 
   const patchLine = async (id: string, patch: Partial<DBWorkbookLine>) => {
@@ -487,6 +502,16 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
     onSaveStart();
     await store.updateWorkbookLine({ ...line, ...patch });
     onSaveDone();
+    const changes: string[] = [];
+    if (patch.description !== undefined && patch.description !== line.description)
+      changes.push(`description: "${line.description}" → "${patch.description}"`);
+    if (patch.contract_value !== undefined && patch.contract_value !== line.contract_value)
+      changes.push(`value: ${fmtCurrency(line.contract_value)} → ${fmtCurrency(patch.contract_value)}`);
+    if (patch.item_number !== undefined && patch.item_number !== line.item_number)
+      changes.push(`item number: "${line.item_number}" → "${patch.item_number}"`);
+    if (changes.length > 0) {
+      wbLog('record_updated', `Contract line updated (${line.item_number || line.description}): ${changes.join('; ')}`);
+    }
   };
 
   const patchExtra = async (id: string, patch: Partial<DBWorkbookExtra>) => {
@@ -495,10 +520,24 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
     onSaveStart();
     await store.updateWorkbookExtra({ ...extra, ...patch });
     onSaveDone();
+    const changes: string[] = [];
+    if (patch.description !== undefined && patch.description !== extra.description)
+      changes.push(`description: "${extra.description}" → "${patch.description}"`);
+    if (patch.agreed_value !== undefined && patch.agreed_value !== extra.agreed_value)
+      changes.push(`value: ${fmtCurrency(extra.agreed_value)} → ${fmtCurrency(patch.agreed_value)}`);
+    if (changes.length > 0) {
+      wbLog('record_updated', `Extra updated (${extra.ref || extra.description}): ${changes.join('; ')}`);
+    }
   };
 
   const saveTitle = async () => {
-    if (titleDraft.trim()) await store.updateValuationWorkbook({ ...workbook, title: titleDraft.trim() });
+    const newTitle = titleDraft.trim();
+    if (newTitle && newTitle !== workbook.title) {
+      await store.updateValuationWorkbook({ ...workbook, title: newTitle });
+      wbLog('record_updated', `Workbook renamed: "${workbook.title}" → "${newTitle}"`, { prevValue: workbook.title, newValue: newTitle });
+    } else if (newTitle) {
+      await store.updateValuationWorkbook({ ...workbook, title: newTitle });
+    }
     setEditingTitle(false);
   };
 
@@ -757,7 +796,12 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
             <div className="flex gap-2">
               <button onClick={() => setDeleteLineId(null)} className="flex-1 py-2 rounded-lg text-xs font-bold transition-colors"
                 style={{ background: '#111827', color: '#64748b', border: '1px solid #1e2d4a' }}>Cancel</button>
-              <button onClick={async () => { await store.removeWorkbookLine(deleteLineId); setDeleteLineId(null); }}
+              <button onClick={async () => {
+                const line = lines.find(l => l.id === deleteLineId);
+                await store.removeWorkbookLine(deleteLineId);
+                if (line) wbLog('record_deleted', `Contract line deleted from workbook "${workbook.title}": ${line.item_number ? `[${line.item_number}] ` : ''}${line.description}`);
+                setDeleteLineId(null);
+              }}
                 className="flex-1 py-2 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors">Delete</button>
             </div>
           </div>
@@ -773,7 +817,12 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
             <div className="flex gap-2">
               <button onClick={() => setDeleteExtraId(null)} className="flex-1 py-2 rounded-lg text-xs font-bold transition-colors"
                 style={{ background: '#111827', color: '#64748b', border: '1px solid #1e2d4a' }}>Cancel</button>
-              <button onClick={async () => { await store.removeWorkbookExtra(deleteExtraId); setDeleteExtraId(null); }}
+              <button onClick={async () => {
+                const extra = extras.find(e => e.id === deleteExtraId);
+                await store.removeWorkbookExtra(deleteExtraId);
+                if (extra) wbLog('record_deleted', `Extra deleted from workbook "${workbook.title}": ${extra.ref ? `[${extra.ref}] ` : ''}${extra.description}`);
+                setDeleteExtraId(null);
+              }}
                 className="flex-1 py-2 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors">Delete</button>
             </div>
           </div>

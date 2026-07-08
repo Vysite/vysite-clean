@@ -4,6 +4,7 @@ import { useAppStore } from '../../lib/StoreContext';
 import type { DBOAndMSection, DBOAndMItem, OAndMSourceModule } from './types';
 import { SOURCE_MODULE_LABELS, SOURCE_MODULE_COLOURS, genId } from './types';
 import OAndMSourcePicker from './OAndMSourcePicker';
+import type { ActivityActionType } from '../../lib/activityLog';
 
 const SOURCE_ICON: Record<OAndMSourceModule, React.ComponentType<{ size?: number; className?: string }>> = {
   project_document: FolderOpen,
@@ -26,13 +27,14 @@ interface Props {
   onRemoveItem: (id: string) => void;
   onReorderItems: (items: DBOAndMItem[]) => void;
   currentUserName: string;
+  onActivityLog?: (actionType: ActivityActionType, description: string, extra?: Record<string, unknown>) => void;
 }
 
 function SectionRow({
   section, items, index, total, canEdit,
   onUpdate, onRemove, onMoveUp, onMoveDown,
   onAddItem, onUpdateItem, onRemoveItem, onReorderItems,
-  projectId, currentUserName,
+  projectId, currentUserName, onActivityLog,
 }: {
   section: DBOAndMSection;
   items: DBOAndMItem[];
@@ -49,6 +51,7 @@ function SectionRow({
   onReorderItems: (items: DBOAndMItem[]) => void;
   projectId: string;
   currentUserName: string;
+  onActivityLog?: (actionType: ActivityActionType, description: string, extra?: Record<string, unknown>) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -64,8 +67,10 @@ function SectionRow({
 
   const saveTitle = () => {
     const t = titleDraft.trim();
-    if (t && t !== section.title) onUpdate({ ...section, title: t });
-    else setTitleDraft(section.title);
+    if (t && t !== section.title) {
+      onUpdate({ ...section, title: t });
+      onActivityLog?.('record_updated', `Section renamed: "${section.title}" → "${t}"`);
+    } else setTitleDraft(section.title);
     setEditingTitle(false);
   };
 
@@ -91,6 +96,12 @@ function SectionRow({
         created_by: currentUserName,
       });
     });
+    if (picked.length > 0) {
+      const names = picked.map(p => p.title).join(', ');
+      onActivityLog?.('record_updated',
+        `${picked.length} record${picked.length !== 1 ? 's' : ''} linked to section "${section.title}": ${names}`,
+      );
+    }
     setShowPicker(false);
   };
 
@@ -156,7 +167,10 @@ function SectionRow({
             </button>
             {confirmDelete ? (
               <div className="flex items-center gap-1">
-                <button onClick={() => onRemove(section.id)} className="px-2 py-1 text-[10px] font-semibold text-red-400 border border-red-400/30 rounded hover:bg-red-400/10 transition-colors">
+                <button onClick={() => {
+                  onActivityLog?.('record_updated', `Section removed: "${section.title}"`);
+                  onRemove(section.id);
+                }} className="px-2 py-1 text-[10px] font-semibold text-red-400 border border-red-400/30 rounded hover:bg-red-400/10 transition-colors">
                   Delete
                 </button>
                 <button onClick={() => setConfirmDelete(false)} className="p-1.5 text-slate-600 hover:text-slate-300 transition-colors">
@@ -261,7 +275,10 @@ function SectionRow({
                             <Edit2 size={11} />
                           </button>
                           <button
-                            onClick={() => onRemoveItem(item.id)}
+                            onClick={() => {
+                              onActivityLog?.('record_updated', `Record removed from section "${section.title}": ${item.title}`);
+                              onRemoveItem(item.id);
+                            }}
                             className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors"
                             title="Remove"
                           >
@@ -334,7 +351,7 @@ export default function OAndMSectionEditor({
   sections, items, manualId, projectId, canEdit,
   onAddSection, onUpdateSection, onRemoveSection, onReorderSections,
   onAddItem, onUpdateItem, onRemoveItem, onReorderItems,
-  currentUserName,
+  currentUserName, onActivityLog,
 }: Props) {
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionTitle, setNewSectionTitle] = useState('');
@@ -352,6 +369,7 @@ export default function OAndMSectionEditor({
       description: '',
       sort_order: sortedSections.length,
     });
+    onActivityLog?.('record_updated', `Section added: "${t}"`);
     setNewSectionTitle('');
     setAddingSection(false);
   };
@@ -406,6 +424,7 @@ export default function OAndMSectionEditor({
           onReorderItems={onReorderItems}
           projectId={projectId}
           currentUserName={currentUserName}
+          onActivityLog={onActivityLog}
         />
       ))}
 

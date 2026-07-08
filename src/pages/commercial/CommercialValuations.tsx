@@ -5,6 +5,7 @@ import type { DBValuation, DBValuationWorkbook, DBValuationLineEntry, DBValuatio
 import type { Project } from '../../data/types';
 import ValuationDetail from './ValuationDetail';
 import ValuationWorkbookEditor from './ValuationWorkbookEditor';
+import { logActivity } from '../../lib/activityLog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -259,13 +260,31 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
     if (lineEntries.length > 0) await store.batchUpsertValuationLineEntries(lineEntries);
     if (extraEntries.length > 0) await store.batchUpsertValuationExtraEntries(extraEntries);
 
+    logActivity({
+      orgId, userName: currentUserName, module: 'valuations',
+      recordId: newVal.id, recordRef: newVal.ref, recordType: 'valuation',
+      projectId: project?.id ?? null, projectName: project?.name ?? null,
+      actionType: 'record_created',
+      description: `Valuation created: ${newVal.ref} — ${newVal.title}${newVal.valuation_date ? ` (${newVal.valuation_date})` : ''}`,
+    });
+
     setShowCreate(false);
     setOpenId(newVal.id);
     setView('valuation');
   };
 
   const handleDelete = async (id: string) => {
+    const val = store.valuations.find(v => v.id === id);
     await store.removeValuation(id);
+    if (val) {
+      logActivity({
+        orgId, userName: currentUserName, module: 'valuations',
+        recordId: id, recordRef: val.ref, recordType: 'valuation',
+        projectId: project?.id ?? null, projectName: project?.name ?? null,
+        actionType: 'record_deleted',
+        description: `Valuation deleted: ${val.ref} — ${val.title}`,
+      });
+    }
     setDeleteId(null);
     if (openId === id) { setOpenId(null); setView('list'); }
   };
@@ -479,6 +498,13 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                       if (!project) return;
                       const wb: DBValuationWorkbook = { id: genId(), project_id: project.id, title: 'Contract Build-Up' };
                       await store.addValuationWorkbook(wb);
+                      logActivity({
+                        orgId, userName: currentUserName, module: 'valuations',
+                        recordId: wb.id, recordRef: wb.title, recordType: 'valuation_workbook',
+                        projectId: project.id, projectName: project.name,
+                        actionType: 'record_created',
+                        description: `Valuation workbook created: "${wb.title}" for ${project.name}`,
+                      });
                       setView('workbook');
                     }}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-white transition-colors"
@@ -683,7 +709,17 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                 autoFocus
                 onKeyDown={async e => {
                   if (e.key === 'Enter' && renameWbDraft.trim()) {
-                    await store.updateValuationWorkbook({ ...workbook, title: renameWbDraft.trim() });
+                    const prev = workbook.title;
+                    const next = renameWbDraft.trim();
+                    await store.updateValuationWorkbook({ ...workbook, title: next });
+                    logActivity({
+                      orgId, userName: currentUserName, module: 'valuations',
+                      recordId: workbook.id, recordRef: next, recordType: 'valuation_workbook',
+                      projectId: project?.id ?? null, projectName: project?.name ?? null,
+                      actionType: 'record_updated',
+                      description: `Workbook renamed: "${prev}" → "${next}"`,
+                      prevValue: prev, newValue: next,
+                    });
                     setShowRenameWb(false);
                   }
                   if (e.key === 'Escape') setShowRenameWb(false);
@@ -697,7 +733,17 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
               <button
                 onClick={async () => {
                   if (!renameWbDraft.trim()) return;
-                  await store.updateValuationWorkbook({ ...workbook, title: renameWbDraft.trim() });
+                  const prev = workbook.title;
+                  const next = renameWbDraft.trim();
+                  await store.updateValuationWorkbook({ ...workbook, title: next });
+                  logActivity({
+                    orgId, userName: currentUserName, module: 'valuations',
+                    recordId: workbook.id, recordRef: next, recordType: 'valuation_workbook',
+                    projectId: project?.id ?? null, projectName: project?.name ?? null,
+                    actionType: 'record_updated',
+                    description: `Workbook renamed: "${prev}" → "${next}"`,
+                    prevValue: prev, newValue: next,
+                  });
                   setShowRenameWb(false);
                 }}
                 disabled={!renameWbDraft.trim()}
@@ -790,7 +836,16 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                     if (!project) return;
                     setDeletingWb(true);
                     try {
+                      const wbTitle = workbook.title;
+                      const valCount = projectValuations.length;
                       await store.removeValuationWorkbook(workbook.id, project.id);
+                      logActivity({
+                        orgId, userName: currentUserName, module: 'valuations',
+                        recordId: workbook.id, recordRef: wbTitle, recordType: 'valuation_workbook',
+                        projectId: project.id, projectName: project.name,
+                        actionType: 'record_deleted',
+                        description: `Valuation workbook deleted: "${wbTitle}" (${wbLines.length} lines, ${valCount} valuations)`,
+                      });
                       setView('list');
                       setOpenId(null);
                     } finally {
