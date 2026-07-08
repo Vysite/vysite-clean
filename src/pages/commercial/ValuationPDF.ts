@@ -590,6 +590,3 @@ function capitalize(s: string): string {
 
 // Satisfy unused import (PDFImage is used in Ctx interface via logoImg field)
 void (null as unknown as PDFImage);
-
-
-export { buildValuationPdf }
