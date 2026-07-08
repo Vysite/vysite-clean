@@ -20,6 +20,7 @@ import CommercialRegister from './commercial/CommercialRegister';
 import VariationAccount, { calcVAMetrics } from './commercial/VariationAccount';
 import CommercialApplications from './commercial/CommercialApplications';
 import CommercialTimeline from './commercial/CommercialTimeline';
+import CommercialValuations from './commercial/CommercialValuations';
 import type { CommercialTab } from './commercial/types';
 import { RECORD_TYPES, STATUSES, typeInfo, statusInfo, parseRawValue, fmtCurrency as fmtC } from './commercial/types';
 import { exportFullCommercialReport } from './commercial/CommercialPDF';
@@ -1493,6 +1494,7 @@ const TABS: { key: CommercialTab; label: string; icon: React.ReactNode; comingSo
   { key: 'variation-account', label: 'Variation Account',   icon: <GitBranch size={13} /> },
   { key: 'applications',      label: 'Applications',        icon: <div className="text-current"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div> },
   { key: 'timeline',          label: 'Commercial Timeline', icon: <Clock size={13} /> },
+  { key: 'valuations',        label: 'Valuations',          icon: <Calculator size={13} /> },
 ];
 
 // ─── Main Commercial page ──────────────────────────────────────────────────────
@@ -1875,6 +1877,18 @@ export default function Commercial() {
           commercialEvents={commercialEvents}
           currentUserName={store.currentUser?.name ?? ''}
           logoUrl={store.settings?.logo_data_url}
+        />
+      )}
+      {activeTab === 'valuations' && (
+        <CommercialValuations
+          project={bannerProject}
+          projects={projects}
+          orgId={orgId}
+          canCreate={canCreate}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          currentUserName={store.currentUser?.name ?? ''}
+          onProjectChange={(id) => setBannerProjectId(id)}
         />
       )}
 

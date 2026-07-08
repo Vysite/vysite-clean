@@ -1080,6 +1080,57 @@ export interface DBCommercialRecord {
 
 // ─── Main store hook ──────────────────────────────────────────────────────────
 
+export interface DBValuation {
+  id: string;
+  org_id?: string;
+  project_id: string;
+  ref: string;
+  title: string;
+  valuation_date: string;
+  period: string;
+  client: string;
+  contractor: string;
+  notes: string;
+  status: string;
+  created_by: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DBValuationLine {
+  id: string;
+  org_id?: string;
+  valuation_id: string;
+  project_id: string;
+  item_number: string;
+  description: string;
+  section: string;
+  unit: string;
+  quantity: number;
+  rate: number;
+  contract_value: number;
+  previous_pct: number;
+  current_pct: number;
+  notes: string;
+  sort_order: number;
+  created_at?: string;
+}
+
+export interface DBValuationExtraLine {
+  id: string;
+  org_id?: string;
+  valuation_id: string;
+  project_id: string;
+  ref: string;
+  description: string;
+  agreed_value: number;
+  previous_pct: number;
+  current_pct: number;
+  notes: string;
+  sort_order: number;
+  created_at?: string;
+}
+
 export interface AppStore {
   projects: Project[];
   projectDocuments: DBProjectDocument[];
@@ -1226,6 +1277,20 @@ export interface AppStore {
   updateOAndMItem: (item: DBOAndMItem) => Promise<void>;
   removeOAndMItem: (id: string) => Promise<void>;
   reorderOAndMItems: (items: DBOAndMItem[]) => Promise<void>;
+
+  // Valuations
+  valuations: DBValuation[];
+  valuationLines: DBValuationLine[];
+  valuationExtraLines: DBValuationExtraLine[];
+  addValuation: (v: DBValuation) => Promise<void>;
+  updateValuation: (v: DBValuation) => Promise<void>;
+  removeValuation: (id: string) => Promise<void>;
+  addValuationLine: (l: DBValuationLine) => Promise<void>;
+  updateValuationLine: (l: DBValuationLine) => Promise<void>;
+  removeValuationLine: (id: string) => Promise<void>;
+  addValuationExtraLine: (l: DBValuationExtraLine) => Promise<void>;
+  updateValuationExtraLine: (l: DBValuationExtraLine) => Promise<void>;
+  removeValuationExtraLine: (id: string) => Promise<void>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1285,6 +1350,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [oAndMManuals, setOAndMManuals] = useState<DBOAndMManual[]>([]);
   const [oAndMSections, setOAndMSections] = useState<DBOAndMSection[]>([]);
   const [oAndMItems, setOAndMItems] = useState<DBOAndMItem[]>([]);
+  const [valuations, setValuations] = useState<DBValuation[]>([]);
+  const [valuationLines, setValuationLines] = useState<DBValuationLine[]>([]);
+  const [valuationExtraLines, setValuationExtraLines] = useState<DBValuationExtraLine[]>([]);
   const [settings, setSettings] = useState<DBSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   // True while Phase 2 background queries are in flight.
@@ -1383,7 +1451,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       // These tables are only needed when the user navigates to specific modules.
       // Loading them here (rather than on-demand) keeps state management simple
       // while still avoiding blocking the initial render.
-      const [docRes, attRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes] = await Promise.all([
+      const [docRes, attRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes, valRes, valLRes, valERes] = await Promise.all([
         supabase.from('vy_project_documents').select(DOC_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_snagging_reports').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
@@ -1398,6 +1466,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
         supabase.from('vy_o_and_m_manuals').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_o_and_m_sections').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
         supabase.from('vy_o_and_m_items').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
+        supabase.from('vy_valuations').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_valuation_lines').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
+        supabase.from('vy_valuation_extra_lines').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
       ]);
 
       if (cancelled) return;
@@ -1424,6 +1495,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setOAndMManuals((oomRes.data ?? []) as DBOAndMManual[]);
       setOAndMSections((ooSRes.data ?? []) as DBOAndMSection[]);
       setOAndMItems((ooIRes.data ?? []) as DBOAndMItem[]);
+      setValuations((valRes.data ?? []) as DBValuation[]);
+      setValuationLines((valLRes.data ?? []) as DBValuationLine[]);
+      setValuationExtraLines((valERes.data ?? []) as DBValuationExtraLine[]);
       // Phase 2 complete — module pages can now render their full data.
       setModulesLoading(false);
 
@@ -2052,6 +2126,76 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('reorderOAndMItems', 'vy_o_and_m_items', error);
   }, []);
 
+  // ── Valuations ────────────────────────────────────────────────────────────────
+
+  const addValuation = useCallback(async (v: DBValuation) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setValuations(prev => [v, ...prev]);
+    const { error } = await supabase.from('vy_valuations').upsert({ ...v, org_id: oid }, { onConflict: 'id' });
+    logWrite('addValuation', 'vy_valuations', error);
+  }, []);
+
+  const updateValuation = useCallback(async (v: DBValuation) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setValuations(prev => prev.map(x => x.id === v.id ? v : x));
+    const { error } = await supabase.from('vy_valuations').upsert({ ...v, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateValuation', 'vy_valuations', error);
+  }, []);
+
+  const removeValuation = useCallback(async (id: string) => {
+    setValuations(prev => prev.filter(v => v.id !== id));
+    setValuationLines(prev => prev.filter(l => l.valuation_id !== id));
+    setValuationExtraLines(prev => prev.filter(l => l.valuation_id !== id));
+    const { error } = await supabase.from('vy_valuations').delete().eq('id', id);
+    logWrite('removeValuation', 'vy_valuations', error);
+  }, []);
+
+  const addValuationLine = useCallback(async (l: DBValuationLine) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setValuationLines(prev => [...prev, l]);
+    const { error } = await supabase.from('vy_valuation_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
+    logWrite('addValuationLine', 'vy_valuation_lines', error);
+  }, []);
+
+  const updateValuationLine = useCallback(async (l: DBValuationLine) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setValuationLines(prev => prev.map(x => x.id === l.id ? l : x));
+    const { error } = await supabase.from('vy_valuation_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateValuationLine', 'vy_valuation_lines', error);
+  }, []);
+
+  const removeValuationLine = useCallback(async (id: string) => {
+    setValuationLines(prev => prev.filter(l => l.id !== id));
+    const { error } = await supabase.from('vy_valuation_lines').delete().eq('id', id);
+    logWrite('removeValuationLine', 'vy_valuation_lines', error);
+  }, []);
+
+  const addValuationExtraLine = useCallback(async (l: DBValuationExtraLine) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setValuationExtraLines(prev => [...prev, l]);
+    const { error } = await supabase.from('vy_valuation_extra_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
+    logWrite('addValuationExtraLine', 'vy_valuation_extra_lines', error);
+  }, []);
+
+  const updateValuationExtraLine = useCallback(async (l: DBValuationExtraLine) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setValuationExtraLines(prev => prev.map(x => x.id === l.id ? l : x));
+    const { error } = await supabase.from('vy_valuation_extra_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateValuationExtraLine', 'vy_valuation_extra_lines', error);
+  }, []);
+
+  const removeValuationExtraLine = useCallback(async (id: string) => {
+    setValuationExtraLines(prev => prev.filter(l => l.id !== id));
+    const { error } = await supabase.from('vy_valuation_extra_lines').delete().eq('id', id);
+    logWrite('removeValuationExtraLine', 'vy_valuation_extra_lines', error);
+  }, []);
+
   // ── Settings ──────────────────────────────────────────────────────────────────
 
   const updateSettings = useCallback(async (s: DBSettings) => {
@@ -2122,5 +2266,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addOAndMManual, updateOAndMManual, removeOAndMManual,
     addOAndMSection, updateOAndMSection, removeOAndMSection, reorderOAndMSections,
     addOAndMItem, updateOAndMItem, removeOAndMItem, reorderOAndMItems,
+    valuations, valuationLines, valuationExtraLines,
+    addValuation, updateValuation, removeValuation,
+    addValuationLine, updateValuationLine, removeValuationLine,
+    addValuationExtraLine, updateValuationExtraLine, removeValuationExtraLine,
   };
 }
