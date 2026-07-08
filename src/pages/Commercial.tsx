@@ -782,6 +782,7 @@ interface DetailModalProps {
   allRecords: CommercialRecord[];
   canViewPricing: boolean;
   canEdit: boolean;
+  canCreate: boolean;
   canDelete: boolean;
   onClose: () => void;
   onSaved: (r: CommercialRecord) => void;
@@ -801,7 +802,7 @@ const COMMERCIAL_FIELDS: FieldSpec[] = [
   { label: 'Notes',          key: 'notes', isNarrative: true },
 ];
 
-function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricing, canEdit, canDelete, onClose, onSaved, onDeleted, onConverted, onOpenRecord }: DetailModalProps) {
+function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricing, canEdit, canCreate, canDelete, onClose, onSaved, onDeleted, onConverted, onOpenRecord }: DetailModalProps) {
   const store = useAppStore();
   const [tab, setTab] = useState<ModalTab>('overview');
   const [saving, setSaving] = useState(false);
@@ -2199,6 +2200,7 @@ export default function Commercial() {
           allRecords={records}
           canViewPricing={canViewPricing}
           canEdit={isNewRecord ? canCreate : canEdit}
+          canCreate={canCreate}
           canDelete={canDelete}
           onClose={() => setModalOpen(false)}
           onSaved={handleSaved}
