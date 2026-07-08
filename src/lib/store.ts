@@ -1084,6 +1084,7 @@ export interface DBValuation {
   id: string;
   org_id?: string;
   project_id: string;
+  workbook_id?: string;
   ref: string;
   title: string;
   valuation_date: string;
@@ -1097,38 +1098,59 @@ export interface DBValuation {
   updated_at?: string;
 }
 
-export interface DBValuationLine {
+export interface DBValuationWorkbook {
   id: string;
   org_id?: string;
-  valuation_id: string;
   project_id: string;
+  title: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DBWorkbookLine {
+  id: string;
+  org_id?: string;
+  workbook_id: string;
   item_number: string;
   description: string;
   section: string;
   unit: string;
-  quantity: number;
-  rate: number;
+  quantity: number | null;
+  rate: number | null;
   contract_value: number;
-  previous_pct: number;
-  current_pct: number;
-  notes: string;
   sort_order: number;
   created_at?: string;
 }
 
-export interface DBValuationExtraLine {
+export interface DBWorkbookExtra {
   id: string;
   org_id?: string;
-  valuation_id: string;
-  project_id: string;
+  workbook_id: string;
   ref: string;
   description: string;
   agreed_value: number;
+  sort_order: number;
+  created_at?: string;
+}
+
+export interface DBValuationLineEntry {
+  id: string;
+  org_id?: string;
+  valuation_id: string;
+  workbook_line_id: string;
   previous_pct: number;
   current_pct: number;
   notes: string;
-  sort_order: number;
-  created_at?: string;
+}
+
+export interface DBValuationExtraEntry {
+  id: string;
+  org_id?: string;
+  valuation_id: string;
+  workbook_extra_id: string;
+  previous_pct: number;
+  current_pct: number;
+  notes: string;
 }
 
 export interface AppStore {
@@ -1280,17 +1302,28 @@ export interface AppStore {
 
   // Valuations
   valuations: DBValuation[];
-  valuationLines: DBValuationLine[];
-  valuationExtraLines: DBValuationExtraLine[];
+  valuationWorkbooks: DBValuationWorkbook[];
+  workbookLines: DBWorkbookLine[];
+  workbookExtras: DBWorkbookExtra[];
+  valuationLineEntries: DBValuationLineEntry[];
+  valuationExtraEntries: DBValuationExtraEntry[];
   addValuation: (v: DBValuation) => Promise<void>;
   updateValuation: (v: DBValuation) => Promise<void>;
   removeValuation: (id: string) => Promise<void>;
-  addValuationLine: (l: DBValuationLine) => Promise<void>;
-  updateValuationLine: (l: DBValuationLine) => Promise<void>;
-  removeValuationLine: (id: string) => Promise<void>;
-  addValuationExtraLine: (l: DBValuationExtraLine) => Promise<void>;
-  updateValuationExtraLine: (l: DBValuationExtraLine) => Promise<void>;
-  removeValuationExtraLine: (id: string) => Promise<void>;
+  addValuationWorkbook: (w: DBValuationWorkbook) => Promise<void>;
+  updateValuationWorkbook: (w: DBValuationWorkbook) => Promise<void>;
+  addWorkbookLine: (l: DBWorkbookLine) => Promise<void>;
+  updateWorkbookLine: (l: DBWorkbookLine) => Promise<void>;
+  removeWorkbookLine: (id: string) => Promise<void>;
+  batchAddWorkbookLines: (lines: DBWorkbookLine[]) => Promise<void>;
+  addWorkbookExtra: (e: DBWorkbookExtra) => Promise<void>;
+  updateWorkbookExtra: (e: DBWorkbookExtra) => Promise<void>;
+  removeWorkbookExtra: (id: string) => Promise<void>;
+  batchAddWorkbookExtras: (extras: DBWorkbookExtra[]) => Promise<void>;
+  upsertValuationLineEntry: (e: DBValuationLineEntry) => Promise<void>;
+  batchUpsertValuationLineEntries: (entries: DBValuationLineEntry[]) => Promise<void>;
+  upsertValuationExtraEntry: (e: DBValuationExtraEntry) => Promise<void>;
+  batchUpsertValuationExtraEntries: (entries: DBValuationExtraEntry[]) => Promise<void>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1351,8 +1384,11 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [oAndMSections, setOAndMSections] = useState<DBOAndMSection[]>([]);
   const [oAndMItems, setOAndMItems] = useState<DBOAndMItem[]>([]);
   const [valuations, setValuations] = useState<DBValuation[]>([]);
-  const [valuationLines, setValuationLines] = useState<DBValuationLine[]>([]);
-  const [valuationExtraLines, setValuationExtraLines] = useState<DBValuationExtraLine[]>([]);
+  const [valuationWorkbooks, setValuationWorkbooks] = useState<DBValuationWorkbook[]>([]);
+  const [workbookLines, setWorkbookLines] = useState<DBWorkbookLine[]>([]);
+  const [workbookExtras, setWorkbookExtras] = useState<DBWorkbookExtra[]>([]);
+  const [valuationLineEntries, setValuationLineEntries] = useState<DBValuationLineEntry[]>([]);
+  const [valuationExtraEntries, setValuationExtraEntries] = useState<DBValuationExtraEntry[]>([]);
   const [settings, setSettings] = useState<DBSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   // True while Phase 2 background queries are in flight.
@@ -1451,7 +1487,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       // These tables are only needed when the user navigates to specific modules.
       // Loading them here (rather than on-demand) keeps state management simple
       // while still avoiding blocking the initial render.
-      const [docRes, attRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes, valRes, valLRes, valERes] = await Promise.all([
+      const [docRes, attRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes, valRes, wbRes, wblRes, wbeRes, vleRes, veeRes] = await Promise.all([
         supabase.from('vy_project_documents').select(DOC_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_snagging_reports').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
@@ -1467,8 +1503,11 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
         supabase.from('vy_o_and_m_sections').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
         supabase.from('vy_o_and_m_items').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
         supabase.from('vy_valuations').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_valuation_lines').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
-        supabase.from('vy_valuation_extra_lines').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
+        supabase.from('vy_valuation_workbooks').select('*').eq('org_id', orgId),
+        supabase.from('vy_workbook_lines').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
+        supabase.from('vy_workbook_extras').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
+        supabase.from('vy_valuation_line_entries').select('*').eq('org_id', orgId),
+        supabase.from('vy_valuation_extra_entries').select('*').eq('org_id', orgId),
       ]);
 
       if (cancelled) return;
@@ -1496,8 +1535,11 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setOAndMSections((ooSRes.data ?? []) as DBOAndMSection[]);
       setOAndMItems((ooIRes.data ?? []) as DBOAndMItem[]);
       setValuations((valRes.data ?? []) as DBValuation[]);
-      setValuationLines((valLRes.data ?? []) as DBValuationLine[]);
-      setValuationExtraLines((valERes.data ?? []) as DBValuationExtraLine[]);
+      setValuationWorkbooks((wbRes.data ?? []) as DBValuationWorkbook[]);
+      setWorkbookLines((wblRes.data ?? []) as DBWorkbookLine[]);
+      setWorkbookExtras((wbeRes.data ?? []) as DBWorkbookExtra[]);
+      setValuationLineEntries((vleRes.data ?? []) as DBValuationLineEntry[]);
+      setValuationExtraEntries((veeRes.data ?? []) as DBValuationExtraEntry[]);
       // Phase 2 complete — module pages can now render their full data.
       setModulesLoading(false);
 
@@ -2146,54 +2188,148 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
 
   const removeValuation = useCallback(async (id: string) => {
     setValuations(prev => prev.filter(v => v.id !== id));
-    setValuationLines(prev => prev.filter(l => l.valuation_id !== id));
-    setValuationExtraLines(prev => prev.filter(l => l.valuation_id !== id));
+    setValuationLineEntries(prev => prev.filter(e => e.valuation_id !== id));
+    setValuationExtraEntries(prev => prev.filter(e => e.valuation_id !== id));
     const { error } = await supabase.from('vy_valuations').delete().eq('id', id);
     logWrite('removeValuation', 'vy_valuations', error);
   }, []);
 
-  const addValuationLine = useCallback(async (l: DBValuationLine) => {
+  const addValuationWorkbook = useCallback(async (w: DBValuationWorkbook) => {
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
-    setValuationLines(prev => [...prev, l]);
-    const { error } = await supabase.from('vy_valuation_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
-    logWrite('addValuationLine', 'vy_valuation_lines', error);
+    setValuationWorkbooks(prev => [...prev, w]);
+    const { error } = await supabase.from('vy_valuation_workbooks').upsert({ ...w, org_id: oid }, { onConflict: 'id' });
+    logWrite('addValuationWorkbook', 'vy_valuation_workbooks', error);
   }, []);
 
-  const updateValuationLine = useCallback(async (l: DBValuationLine) => {
+  const updateValuationWorkbook = useCallback(async (w: DBValuationWorkbook) => {
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
-    setValuationLines(prev => prev.map(x => x.id === l.id ? l : x));
-    const { error } = await supabase.from('vy_valuation_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
-    logWrite('updateValuationLine', 'vy_valuation_lines', error);
+    setValuationWorkbooks(prev => prev.map(x => x.id === w.id ? w : x));
+    const { error } = await supabase.from('vy_valuation_workbooks').upsert({ ...w, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateValuationWorkbook', 'vy_valuation_workbooks', error);
   }, []);
 
-  const removeValuationLine = useCallback(async (id: string) => {
-    setValuationLines(prev => prev.filter(l => l.id !== id));
-    const { error } = await supabase.from('vy_valuation_lines').delete().eq('id', id);
-    logWrite('removeValuationLine', 'vy_valuation_lines', error);
-  }, []);
-
-  const addValuationExtraLine = useCallback(async (l: DBValuationExtraLine) => {
+  const addWorkbookLine = useCallback(async (l: DBWorkbookLine) => {
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
-    setValuationExtraLines(prev => [...prev, l]);
-    const { error } = await supabase.from('vy_valuation_extra_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
-    logWrite('addValuationExtraLine', 'vy_valuation_extra_lines', error);
+    setWorkbookLines(prev => [...prev, l].sort((a, b) => a.sort_order - b.sort_order));
+    const { error } = await supabase.from('vy_workbook_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
+    logWrite('addWorkbookLine', 'vy_workbook_lines', error);
   }, []);
 
-  const updateValuationExtraLine = useCallback(async (l: DBValuationExtraLine) => {
+  const updateWorkbookLine = useCallback(async (l: DBWorkbookLine) => {
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
-    setValuationExtraLines(prev => prev.map(x => x.id === l.id ? l : x));
-    const { error } = await supabase.from('vy_valuation_extra_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
-    logWrite('updateValuationExtraLine', 'vy_valuation_extra_lines', error);
+    setWorkbookLines(prev => prev.map(x => x.id === l.id ? l : x));
+    const { error } = await supabase.from('vy_workbook_lines').upsert({ ...l, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateWorkbookLine', 'vy_workbook_lines', error);
   }, []);
 
-  const removeValuationExtraLine = useCallback(async (id: string) => {
-    setValuationExtraLines(prev => prev.filter(l => l.id !== id));
-    const { error } = await supabase.from('vy_valuation_extra_lines').delete().eq('id', id);
-    logWrite('removeValuationExtraLine', 'vy_valuation_extra_lines', error);
+  const removeWorkbookLine = useCallback(async (id: string) => {
+    setWorkbookLines(prev => prev.filter(l => l.id !== id));
+    setValuationLineEntries(prev => prev.filter(e => e.workbook_line_id !== id));
+    const { error } = await supabase.from('vy_workbook_lines').delete().eq('id', id);
+    logWrite('removeWorkbookLine', 'vy_workbook_lines', error);
+  }, []);
+
+  const batchAddWorkbookLines = useCallback(async (lines: DBWorkbookLine[]) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid || lines.length === 0) return;
+    setWorkbookLines(prev => {
+      const wbId = lines[0].workbook_id;
+      const kept = prev.filter(l => l.workbook_id !== wbId);
+      return [...kept, ...lines].sort((a, b) => a.sort_order - b.sort_order);
+    });
+    const rows = lines.map(l => ({ ...l, org_id: oid }));
+    const { error } = await supabase.from('vy_workbook_lines').upsert(rows, { onConflict: 'id' });
+    logWrite('batchAddWorkbookLines', 'vy_workbook_lines', error);
+  }, []);
+
+  const addWorkbookExtra = useCallback(async (e: DBWorkbookExtra) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setWorkbookExtras(prev => [...prev, e].sort((a, b) => a.sort_order - b.sort_order));
+    const { error } = await supabase.from('vy_workbook_extras').upsert({ ...e, org_id: oid }, { onConflict: 'id' });
+    logWrite('addWorkbookExtra', 'vy_workbook_extras', error);
+  }, []);
+
+  const updateWorkbookExtra = useCallback(async (e: DBWorkbookExtra) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setWorkbookExtras(prev => prev.map(x => x.id === e.id ? e : x));
+    const { error } = await supabase.from('vy_workbook_extras').upsert({ ...e, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateWorkbookExtra', 'vy_workbook_extras', error);
+  }, []);
+
+  const removeWorkbookExtra = useCallback(async (id: string) => {
+    setWorkbookExtras(prev => prev.filter(e => e.id !== id));
+    setValuationExtraEntries(prev => prev.filter(e => e.workbook_extra_id !== id));
+    const { error } = await supabase.from('vy_workbook_extras').delete().eq('id', id);
+    logWrite('removeWorkbookExtra', 'vy_workbook_extras', error);
+  }, []);
+
+  const batchAddWorkbookExtras = useCallback(async (extras: DBWorkbookExtra[]) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid || extras.length === 0) return;
+    setWorkbookExtras(prev => {
+      const wbId = extras[0].workbook_id;
+      const kept = prev.filter(e => e.workbook_id !== wbId);
+      return [...kept, ...extras].sort((a, b) => a.sort_order - b.sort_order);
+    });
+    const rows = extras.map(e => ({ ...e, org_id: oid }));
+    const { error } = await supabase.from('vy_workbook_extras').upsert(rows, { onConflict: 'id' });
+    logWrite('batchAddWorkbookExtras', 'vy_workbook_extras', error);
+  }, []);
+
+  const upsertValuationLineEntry = useCallback(async (entry: DBValuationLineEntry) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setValuationLineEntries(prev => {
+      const existing = prev.findIndex(e => e.valuation_id === entry.valuation_id && e.workbook_line_id === entry.workbook_line_id);
+      if (existing >= 0) { const next = [...prev]; next[existing] = entry; return next; }
+      return [...prev, entry];
+    });
+    const { error } = await supabase.from('vy_valuation_line_entries').upsert({ ...entry, org_id: oid }, { onConflict: 'id' });
+    logWrite('upsertValuationLineEntry', 'vy_valuation_line_entries', error);
+  }, []);
+
+  const batchUpsertValuationLineEntries = useCallback(async (entries: DBValuationLineEntry[]) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid || entries.length === 0) return;
+    setValuationLineEntries(prev => {
+      const valId = entries[0].valuation_id;
+      const kept = prev.filter(e => e.valuation_id !== valId);
+      return [...kept, ...entries];
+    });
+    const rows = entries.map(e => ({ ...e, org_id: oid }));
+    const { error } = await supabase.from('vy_valuation_line_entries').upsert(rows, { onConflict: 'id' });
+    logWrite('batchUpsertValuationLineEntries', 'vy_valuation_line_entries', error);
+  }, []);
+
+  const upsertValuationExtraEntry = useCallback(async (entry: DBValuationExtraEntry) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setValuationExtraEntries(prev => {
+      const existing = prev.findIndex(e => e.valuation_id === entry.valuation_id && e.workbook_extra_id === entry.workbook_extra_id);
+      if (existing >= 0) { const next = [...prev]; next[existing] = entry; return next; }
+      return [...prev, entry];
+    });
+    const { error } = await supabase.from('vy_valuation_extra_entries').upsert({ ...entry, org_id: oid }, { onConflict: 'id' });
+    logWrite('upsertValuationExtraEntry', 'vy_valuation_extra_entries', error);
+  }, []);
+
+  const batchUpsertValuationExtraEntries = useCallback(async (entries: DBValuationExtraEntry[]) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid || entries.length === 0) return;
+    setValuationExtraEntries(prev => {
+      const valId = entries[0].valuation_id;
+      const kept = prev.filter(e => e.valuation_id !== valId);
+      return [...kept, ...entries];
+    });
+    const rows = entries.map(e => ({ ...e, org_id: oid }));
+    const { error } = await supabase.from('vy_valuation_extra_entries').upsert(rows, { onConflict: 'id' });
+    logWrite('batchUpsertValuationExtraEntries', 'vy_valuation_extra_entries', error);
   }, []);
 
   // ── Settings ──────────────────────────────────────────────────────────────────
@@ -2266,9 +2402,12 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addOAndMManual, updateOAndMManual, removeOAndMManual,
     addOAndMSection, updateOAndMSection, removeOAndMSection, reorderOAndMSections,
     addOAndMItem, updateOAndMItem, removeOAndMItem, reorderOAndMItems,
-    valuations, valuationLines, valuationExtraLines,
+    valuations, valuationWorkbooks, workbookLines, workbookExtras, valuationLineEntries, valuationExtraEntries,
     addValuation, updateValuation, removeValuation,
-    addValuationLine, updateValuationLine, removeValuationLine,
-    addValuationExtraLine, updateValuationExtraLine, removeValuationExtraLine,
+    addValuationWorkbook, updateValuationWorkbook,
+    addWorkbookLine, updateWorkbookLine, removeWorkbookLine, batchAddWorkbookLines,
+    addWorkbookExtra, updateWorkbookExtra, removeWorkbookExtra, batchAddWorkbookExtras,
+    upsertValuationLineEntry, batchUpsertValuationLineEntries,
+    upsertValuationExtraEntry, batchUpsertValuationExtraEntries,
   };
 }
