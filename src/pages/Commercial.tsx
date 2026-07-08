@@ -813,6 +813,8 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
   const [uploading, setUploading] = useState(false);
   const [showConvertConfirm, setShowConvertConfirm] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [showConvertToVarConfirm, setShowConvertToVarConfirm] = useState(false);
+  const [convertingToVar, setConvertingToVar] = useState(false);
 
   // Stable ID: generated once at mount for new records, or taken from existing record
   const [stableId] = useState<string>(() =>
@@ -1041,8 +1043,6 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
   }
 
   async function handleConvertToDelayNotice() {
-    if (!record) return;
-    setConverting(true);
     setError(null);
 
     // Helper: generate a proper RFC-4122 v4 UUID
@@ -1244,6 +1244,209 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
     }
   }
 
+  async function handleConvertToVariation() {
+    if (!record) return;
+    setConvertingToVar(true);
+    setError(null);
+
+    function genUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+      });
+    }
+
+    let newId: string | null = null;
+    const warnings: string[] = [];
+
+    try {
+      const now = new Date().toISOString();
+      newId = genUUID();
+
+      // ── Step 1: Generate next Variation reference ────────────────────────────
+      const existingVars = allRecords.filter(r => r.recordType === 'variation');
+      const maxVar = existingVars.reduce((max, r) => {
+        const m = r.reference?.match(/^V[-–]?(\d+)$/i);
+        return m ? Math.max(max, parseInt(m[1], 10)) : max;
+      }, 0);
+      const nextVarRef = `V-${String(maxVar + 1).padStart(3, '0')}`;
+
+      // ── Step 2: Insert the Variation record ──────────────────────────────────
+      const varRow = {
+        id: newId,
+        org_id: orgId,
+        project_id: record.projectId,
+        record_type: 'variation',
+        reference: nextVarRef,
+        title: record.title,
+        client: record.client,
+        status: 'draft',
+        date_raised: record.dateRaised ?? null,
+        date_submitted: null,
+        date_agreed: null,
+        notes: record.notes ?? '',
+        created_by: null,
+        extra_data: {
+          ...(record.extraData?.document_ref ? { document_ref: record.extraData.document_ref } : {}),
+          ...(record.extraData?.related_refs ? { related_refs: record.extraData.related_refs } : {}),
+          dn_ref: record.reference || '',
+        },
+        converted_from_id: record.id,
+        created_at: now,
+        updated_at: now,
+      };
+
+      const { data: varData, error: varErr } = await supabase
+        .from('vy_commercial_records')
+        .insert(varRow)
+        .select('*')
+        .single();
+      if (varErr) {
+        console.error('[ConvertToVar] Variation insert failed:', varErr);
+        throw new Error(`Failed to create Variation: ${varErr.message}`);
+      }
+
+      // ── Step 3: Mark DN as converted ────────────────────────────────────────
+      const { data: dnData, error: dnErr } = await supabase
+        .from('vy_commercial_records')
+        .update({ converted_to_id: newId, updated_at: now })
+        .eq('id', record.id)
+        .select('*')
+        .single();
+      if (dnErr) {
+        console.error('[ConvertToVar] DN update failed:', dnErr);
+        throw new Error(`Failed to link Delay Notice: ${dnErr.message}`);
+      }
+
+      // ── Step 4: Copy line items ──────────────────────────────────────────────
+      try {
+        const { data: dnLines, error: linesErr } = await supabase
+          .from('vy_commercial_line_items')
+          .select('*')
+          .eq('record_id', record.id)
+          .order('sort_order');
+        if (linesErr) throw linesErr;
+        if (dnLines && dnLines.length > 0) {
+          const { error: lineInsertErr } = await supabase
+            .from('vy_commercial_line_items')
+            .insert(
+              dnLines.map((l: Record<string, unknown>, idx: number) => ({
+                id: genUUID(),
+                org_id: orgId,
+                record_id: newId,
+                sort_order: typeof l.sort_order === 'number' ? l.sort_order : idx,
+                description: l.description ?? '',
+                client_description: l.client_description ?? '',
+                line_type: l.line_type ?? 'Labour',
+                unit: l.unit ?? 'item',
+                quantity: l.quantity ?? 0,
+                internal_rate: l.internal_rate ?? 0,
+                client_rate: l.client_rate ?? 0,
+                markup_pct: l.markup_pct ?? null,
+              }))
+            );
+          if (lineInsertErr) {
+            console.warn('[ConvertToVar] Line items copy failed:', lineInsertErr);
+            warnings.push(`Cost breakdown could not be copied: ${lineInsertErr.message}`);
+          }
+        }
+      } catch (e) {
+        console.warn('[ConvertToVar] Line items step failed:', e);
+        warnings.push('Cost breakdown could not be copied.');
+      }
+
+      // ── Step 5: Copy attachments ─────────────────────────────────────────────
+      try {
+        const dnAttachments = store.attachments.filter(
+          a => a.linked_type === 'commercial' && a.linked_id === record.id
+        );
+        for (const att of dnAttachments) {
+          await store.addAttachment({
+            id: genUUID(),
+            linked_type: 'commercial',
+            linked_id: newId!,
+            project_id: att.project_id,
+            project_name: att.project_name,
+            name: att.name,
+            type: att.type,
+            size: att.size,
+            category: att.category,
+            data_url: att.data_url ?? '',
+            uploaded_by: att.uploaded_by,
+            created_at: now,
+          });
+        }
+      } catch (e) {
+        console.warn('[ConvertToVar] Attachments copy failed:', e);
+        warnings.push('Attachments could not be copied.');
+      }
+
+      // ── Step 6: Copy comments ────────────────────────────────────────────────
+      try {
+        const dnComments = store.commercialRecordComments.filter(
+          c => c.record_id === record.id
+        );
+        for (const c of dnComments) {
+          await store.addCommercialRecordComment({
+            id: genUUID(),
+            org_id: orgId,
+            record_id: newId!,
+            body: c.body,
+            author_name: c.author_name,
+            author_id: c.author_id,
+            created_at: now,
+          });
+        }
+      } catch (e) {
+        console.warn('[ConvertToVar] Comments copy failed:', e);
+        warnings.push('Comments could not be copied.');
+      }
+
+      // ── Step 7: Log lifecycle event ──────────────────────────────────────────
+      try {
+        await supabase.from('vy_commercial_events').insert({
+          org_id: orgId, record_id: newId, project_id: record.projectId || null,
+          event_type: 'record_created', from_status: null, to_status: 'draft',
+          user_name: store.currentUser?.name ?? null, occurred_at: now,
+        });
+      } catch (e) {
+        console.warn('[ConvertToVar] Events insert failed:', e);
+      }
+
+      // ── Step 8: Activity log ─────────────────────────────────────────────────
+      try {
+        const projectName = projects.find(p => p.id === record.projectId)?.name;
+        logActivity({
+          orgId, userName: store.currentUser?.name ?? '',
+          module: 'commercial', recordId: record.id,
+          recordRef: record.reference || record.title,
+          recordType: record.recordType, projectId: record.projectId || null, projectName: projectName ?? null,
+          actionType: 'record_created',
+          description: `${store.currentUser?.name ?? 'Unknown'} converted ${record.reference || record.title} (Delay Notice) to Variation ${nextVarRef}.`,
+        });
+      } catch (e) {
+        console.warn('[ConvertToVar] Activity log failed:', e);
+      }
+
+      // ── Done ─────────────────────────────────────────────────────────────────
+      const projectName = projects.find(p => p.id === record.projectId)?.name;
+      const updatedDn = dbToRecord(dnData as Record<string, unknown>, projectName);
+      const newVar = dbToRecord(varData as Record<string, unknown>, projectName);
+
+      if (warnings.length > 0) {
+        setError(`Variation created, but: ${warnings.join(' ')}`);
+      }
+
+      onConverted(updatedDn, newVar);
+      setShowConvertToVarConfirm(false);
+    } catch (e) {
+      console.error('[ConvertToVar] Fatal error:', e);
+      setError(e instanceof Error ? e.message : 'Conversion failed — please try again.');
+    } finally {
+      setConvertingToVar(false);
+    }
+  }
+
   async function handleDelete() {
     if (!record) return;
     setDeleting(true);
@@ -1356,7 +1559,8 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
             <div className="space-y-5">
               {/* ── Linked record banners ─────────────────────────────────────── */}
               {!isNew && record?.convertedToId && (() => {
-                const dn = allRecords.find(r => r.id === record.convertedToId);
+                const linked = allRecords.find(r => r.id === record.convertedToId);
+                const linkedLabel = linked ? typeInfo(linked.recordType).label : 'Record';
                 return (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
                     style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)' }}>
@@ -1364,12 +1568,12 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
                     <div className="flex-1 min-w-0">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-500 mb-0.5">Converted To</p>
                       <p className="text-xs text-emerald-300 font-semibold">
-                        Delay Notice{dn ? ` · ${dn.reference}` : ''}
-                        {dn?.title ? ` — ${dn.title}` : ''}
+                        {linkedLabel}{linked ? ` · ${linked.reference}` : ''}
+                        {linked?.title ? ` — ${linked.title}` : ''}
                       </p>
                     </div>
-                    {dn && (
-                      <button onClick={() => { onClose(); onOpenRecord(dn); }}
+                    {linked && (
+                      <button onClick={() => { onClose(); onOpenRecord(linked); }}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors shrink-0"
                         style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}>
                         Open <ArrowRight size={11} />
@@ -1379,7 +1583,8 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
                 );
               })()}
               {!isNew && record?.convertedFromId && (() => {
-                const ewn = allRecords.find(r => r.id === record.convertedFromId);
+                const origin = allRecords.find(r => r.id === record.convertedFromId);
+                const originLabel = origin ? typeInfo(origin.recordType).label : 'Record';
                 return (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
                     style={{ background: 'rgba(249,115,22,0.07)', border: '1px solid rgba(249,115,22,0.2)' }}>
@@ -1387,12 +1592,12 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
                     <div className="flex-1 min-w-0">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-orange-500 mb-0.5">Origin — Created From</p>
                       <p className="text-xs text-orange-300 font-semibold">
-                        Early Warning Notice{ewn ? ` · ${ewn.reference}` : ''}
-                        {ewn?.title ? ` — ${ewn.title}` : ''}
+                        {originLabel}{origin ? ` · ${origin.reference}` : ''}
+                        {origin?.title ? ` — ${origin.title}` : ''}
                       </p>
                     </div>
-                    {ewn && (
-                      <button onClick={() => { onClose(); onOpenRecord(ewn); }}
+                    {origin && (
+                      <button onClick={() => { onClose(); onOpenRecord(origin); }}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-orange-400 hover:text-orange-300 transition-colors shrink-0"
                         style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.25)' }}>
                         Open <ArrowRight size={11} />
@@ -1686,6 +1891,21 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
                 </button>
               )
             )}
+            {/* Convert to Variation — only for DN records that haven't been converted yet */}
+            {!isNew && canCreate && record?.recordType === 'delay_notice' && (
+              record.convertedToId ? (
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-emerald-500"
+                  style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                  <CheckCircle2 size={12} />
+                  Converted to {allRecords.find(r => r.id === record.convertedToId)?.reference ?? 'V'}
+                </div>
+              ) : (
+                <button onClick={() => setShowConvertToVarConfirm(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1e2d4a] text-slate-400 hover:text-[#f97316] hover:border-[#f97316]/40 text-xs transition-colors">
+                  <GitMerge size={13} /> Convert to Variation
+                </button>
+              )
+            )}
           </div>
           <div className="flex items-center gap-3">
             {error && <span className="text-xs text-red-400">{error}</span>}
@@ -1748,6 +1968,58 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
                 style={{ background: '#f97316' }}>
                 <GitMerge size={12} />
                 {converting ? 'Creating…' : 'Create Delay Notice'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Convert to Variation confirmation dialog ─────────────────────────── */}
+      {showConvertToVarConfirm && record && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-md mx-4 rounded-2xl overflow-hidden shadow-2xl" style={{ background: '#0d1628', border: '1px solid #1e2d4a' }}>
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #1e2d4a' }}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(249,115,22,0.12)' }}>
+                  <GitMerge size={15} className="text-[#f97316]" />
+                </div>
+                <p className="text-sm font-bold text-white">Convert Delay Notice to Variation</p>
+              </div>
+              <button onClick={() => setShowConvertToVarConfirm(false)} className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors"><X size={14} /></button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-slate-300">A new <strong className="text-white">Variation</strong> will be created from this Delay Notice.</p>
+              <div className="space-y-1.5 text-xs text-slate-400"
+                style={{ background: 'rgba(30,45,74,0.4)', border: '1px solid #1e2d4a', borderRadius: '10px', padding: '14px 16px' }}>
+                <p className="font-semibold text-slate-300 mb-2">The following will be copied:</p>
+                {[
+                  'Project', 'Client', 'Title', 'Description / Notes', 'Date Raised',
+                  'Cost Breakdown', 'Comments', 'Attachments', 'Related Records & Cross References', 'Document References',
+                ].map(item => (
+                  <div key={item} className="flex items-center gap-2">
+                    <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl px-4 py-3 text-xs" style={{ background: 'rgba(249,115,22,0.07)', border: '1px solid rgba(249,115,22,0.2)' }}>
+                <p className="text-orange-300 font-semibold mb-1">Please note</p>
+                <p className="text-slate-400">The Delay Notice will remain <strong className="text-slate-300">unchanged</strong>. Variation-specific fields (agreed value, submission dates, etc.) will be blank for you to complete.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-6 pb-5">
+              <button onClick={() => setShowConvertToVarConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold transition-colors"
+                style={{ background: '#111827', color: '#64748b', border: '1px solid #1e2d4a' }}>
+                Cancel
+              </button>
+              <button onClick={handleConvertToVariation} disabled={convertingToVar}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-white disabled:opacity-50 transition-colors"
+                style={{ background: '#f97316' }}>
+                <GitMerge size={12} />
+                {convertingToVar ? 'Creating…' : 'Create Variation'}
               </button>
             </div>
           </div>
