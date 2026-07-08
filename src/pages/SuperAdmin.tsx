@@ -72,7 +72,6 @@ const MODULES = [
 
 const DEFAULT_MODULES: Record<string, boolean> = {
   ...Object.fromEntries(MODULES.map(m => [m.key, true])),
-  commercial: false, // off by default — enabled per-org by Super Admin
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

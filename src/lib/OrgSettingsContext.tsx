@@ -37,7 +37,7 @@ const ALL_MODULES_ON: Record<string, boolean> = {
   actions: true,
   testing: true,
   reports: true,
-  commercial: false,
+  commercial: true,
 };
 
 const DEFAULT_ORG_SETTINGS: OrgSettings = {

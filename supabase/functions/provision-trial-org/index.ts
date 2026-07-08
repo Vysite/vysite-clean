@@ -25,6 +25,7 @@ const DEFAULT_MODULES = {
   actions: true,
   testing: true,
   reports: true,
+  commercial: true,
 };
 
 // Full Admin role permissions — mirrors ROLE_PERMISSIONS['Admin'] in store.ts
