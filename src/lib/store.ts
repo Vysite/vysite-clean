@@ -1105,6 +1105,8 @@ export interface DBValuationWorkbook {
   org_id?: string;
   project_id: string;
   title: string;
+  retention_pct?: number;
+  mcd_pct?: number;
   created_at?: string;
   updated_at?: string;
 }

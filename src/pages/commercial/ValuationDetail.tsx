@@ -294,14 +294,22 @@ export default function ValuationDetail({
     const extrasPrevValue   = wbExtras.reduce((s, e) => s + e.agreed_value * getExtraEntry(e.id).previous_pct / 100, 0);
     const extrasCurrValue   = wbExtras.reduce((s, e) => s + e.agreed_value * getExtraEntry(e.id).current_pct  / 100, 0);
     const extrasThisVal     = extrasCurrValue - extrasPrevValue;
+    const grossToDate    = contractCurrValue + extrasCurrValue;
+    const previousTotal  = contractPrevValue + extrasPrevValue;
+    const amountDue      = contractThisVal   + extrasThisVal;
+    const retentionPct   = workbook?.retention_pct ?? 0;
+    const mcdPct         = workbook?.mcd_pct ?? 0;
+    const retentionAmt   = amountDue * retentionPct / 100;
+    const afterRetention = amountDue - retentionAmt;
+    const mcdAmt         = afterRetention * mcdPct / 100;
+    const netValuation   = afterRetention - mcdAmt;
     return {
       contractOriginal, contractPrevValue, contractCurrValue, contractThisVal,
       extrasOriginal, extrasPrevValue, extrasCurrValue, extrasThisVal,
-      grossToDate:    contractCurrValue + extrasCurrValue,
-      previousTotal:  contractPrevValue + extrasPrevValue,
-      amountDue:      contractThisVal   + extrasThisVal,
+      grossToDate, previousTotal, amountDue,
+      retentionPct, retentionAmt, mcdPct, mcdAmt, netValuation,
     };
-  }, [wbLines, wbExtras, getLineEntry, getExtraEntry]);
+  }, [wbLines, wbExtras, getLineEntry, getExtraEntry, workbook]);
 
   const handleLinePct = useCallback(async (lineId: string, current_pct: number) => {
     const existing = lineEntries.find(e => e.workbook_line_id === lineId);
@@ -660,11 +668,33 @@ export default function ValuationDetail({
               <span className={`text-xs font-bold tabular-nums ${row.value < 0 ? 'text-red-400' : 'text-white'}`}>{fmtCurrency(row.value)}</span>
             </div>
           ))}
+          {/* Amount Due */}
+          <div className="flex items-center justify-between px-4 py-2.5"
+            style={{ borderBottom: totals.retentionPct > 0 || totals.mcdPct > 0 ? '1px solid #1e2d4a' : undefined, background: '#0d1628' }}>
+            <span className="text-xs font-semibold text-slate-300">Current Amount Due (Before Deductions)</span>
+            <span className={`text-xs font-bold tabular-nums ${totals.amountDue >= 0 ? 'text-white' : 'text-red-400'}`}>{fmtCurrency(totals.amountDue)}</span>
+          </div>
+          {totals.retentionPct > 0 && (
+            <div className="flex items-center justify-between px-4 py-2.5"
+              style={{ borderBottom: '1px solid #1e2d4a', background: '#0a1020' }}>
+              <span className="text-xs text-amber-400/80">Less: Retention ({totals.retentionPct.toFixed(2)}%)</span>
+              <span className="text-xs font-bold tabular-nums text-amber-400">({fmtCurrency(totals.retentionAmt)})</span>
+            </div>
+          )}
+          {totals.mcdPct > 0 && (
+            <div className="flex items-center justify-between px-4 py-2.5"
+              style={{ borderBottom: '1px solid #1e2d4a', background: totals.retentionPct > 0 ? '#0d1628' : '#0a1020' }}>
+              <span className="text-xs text-amber-400/80">Less: MCD ({totals.mcdPct.toFixed(2)}%)</span>
+              <span className="text-xs font-bold tabular-nums text-amber-400">({fmtCurrency(totals.mcdAmt)})</span>
+            </div>
+          )}
           <div className="flex items-center justify-between px-4 py-3"
-            style={{ background: 'rgba(16,185,129,0.08)', borderTop: '1px solid rgba(16,185,129,0.2)' }}>
-            <span className="text-sm font-bold text-emerald-400">Amount Due This Valuation</span>
-            <span className={`text-lg font-black tabular-nums ${totals.amountDue >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {fmtCurrency(totals.amountDue)}
+            style={{ background: 'rgba(16,185,129,0.08)', borderTop: totals.retentionPct === 0 && totals.mcdPct === 0 ? '1px solid rgba(16,185,129,0.2)' : undefined }}>
+            <span className="text-sm font-bold text-emerald-400">
+              {totals.retentionPct > 0 || totals.mcdPct > 0 ? 'Net Valuation Due' : 'Amount Due This Valuation'}
+            </span>
+            <span className={`text-lg font-black tabular-nums ${totals.netValuation >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {fmtCurrency(totals.netValuation)}
             </span>
           </div>
         </div>

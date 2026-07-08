@@ -472,10 +472,29 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                   <p className="text-sm font-black text-[#f97316]">{fmtCurrency(contractTotal + extrasTotal)}</p>
                 </div>
                 <div className="px-4 py-3">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-0.5">Created</p>
-                  <p className="text-xs font-semibold text-slate-400">{fmtDateShort(workbook.created_at)}</p>
-                  {workbook.updated_at && workbook.updated_at !== workbook.created_at && (
-                    <p className="text-[9px] text-slate-600 mt-0.5">Updated {fmtDateShort(workbook.updated_at)}</p>
+                  {(workbook.retention_pct ?? 0) > 0 || (workbook.mcd_pct ?? 0) > 0 ? (
+                    <div className="flex flex-col gap-0.5">
+                      {(workbook.retention_pct ?? 0) > 0 && (
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-0.5">Retention</p>
+                          <p className="text-xs font-bold text-amber-400">{(workbook.retention_pct ?? 0).toFixed(2)}%</p>
+                        </div>
+                      )}
+                      {(workbook.mcd_pct ?? 0) > 0 && (
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-0.5">MCD</p>
+                          <p className="text-xs font-bold text-amber-400">{(workbook.mcd_pct ?? 0).toFixed(2)}%</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-0.5">Created</p>
+                      <p className="text-xs font-semibold text-slate-400">{fmtDateShort(workbook.created_at)}</p>
+                      {workbook.updated_at && workbook.updated_at !== workbook.created_at && (
+                        <p className="text-[9px] text-slate-600 mt-0.5">Updated {fmtDateShort(workbook.updated_at)}</p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -572,8 +591,15 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                 const grossToDate = contractCurrValue + extrasCurrValue;
                 const prevTotal   = contractPrevValue + extrasPrevValue;
                 const thisVal     = grossToDate - prevTotal;
+                const retPct      = workbook?.retention_pct ?? 0;
+                const mcdPct      = workbook?.mcd_pct ?? 0;
+                const retAmt      = thisVal * retPct / 100;
+                const afterRet    = thisVal - retAmt;
+                const mcdAmt      = afterRet * mcdPct / 100;
+                const netVal      = afterRet - mcdAmt;
                 const grandTotal  = contractTotal + extrasTotal;
                 const completionPct = grandTotal > 0 ? Math.min(grossToDate / grandTotal * 100, 100) : 0;
+                const hasDeductions = retPct > 0 || mcdPct > 0;
 
                 return (
                   <div key={val.id} className={`border rounded-xl transition-all duration-150 group ${isLocked ? 'opacity-80' : 'hover:border-[#2a3a5a]'}`}
@@ -605,8 +631,8 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                       {grossToDate > 0 && (
                         <div className="hidden sm:flex flex-col items-end gap-1 shrink-0 mr-2">
                           <div className="text-right">
-                            <p className="text-[9px] text-slate-600 uppercase tracking-wider">This Valuation</p>
-                            <p className={`text-sm font-bold ${thisVal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtCurrency(thisVal)}</p>
+                            <p className="text-[9px] text-slate-600 uppercase tracking-wider">{hasDeductions ? 'Net Due' : 'This Valuation'}</p>
+                            <p className={`text-sm font-bold ${netVal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtCurrency(netVal)}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-[9px] text-slate-600 uppercase tracking-wider">Gross to Date</p>

@@ -26,6 +26,11 @@ export interface ValuationTotals {
   grossToDate:       number;
   previousTotal:     number;
   amountDue:         number;
+  retentionPct?:     number;
+  retentionAmt?:     number;
+  mcdPct?:           number;
+  mcdAmt?:           number;
+  netValuation?:     number;
 }
 
 export async function buildValuationPdf(
@@ -470,7 +475,17 @@ function addSummaryPage(ctx: Ctx, totals: ValuationTotals) {
     ['Extras / Agreed Variations Total', totals.extrasOriginal,   false],
     ['Gross Valuation to Date',          totals.grossToDate,      true],
     ['Less: Previous Valuation Total',   -totals.previousTotal,   false],
+    ['Current Amount Due',               totals.amountDue,        false],
   ];
+
+  const retPct = totals.retentionPct ?? 0;
+  const mcdPct = totals.mcdPct ?? 0;
+  const retAmt = totals.retentionAmt ?? 0;
+  const mcdAmt = totals.mcdAmt ?? 0;
+  const netVal = totals.netValuation ?? totals.amountDue;
+
+  if (retPct > 0) summaryRows.push([`Less: Retention (${retPct.toFixed(2)}%)`, -retAmt, false]);
+  if (mcdPct > 0) summaryRows.push([`Less: MCD (${mcdPct.toFixed(2)}%)`, -mcdAmt, false]);
 
   for (const [label, value, isBold] of summaryRows) {
     const font  = isBold ? ctx.bold : ctx.regular;
@@ -491,8 +506,9 @@ function addSummaryPage(ctx: Ctx, totals: ValuationTotals) {
     color: rgb(0.957, 0.996, 0.976), borderColor: C_GREEN, borderWidth: 1.5, borderRadius: 5 });
   // Left colour tab
   page.drawRectangle({ x: ML, y: y - boxH, width: 4, height: boxH, color: C_GREEN, borderRadius: 2 });
-  dt(page, ctx.regular, 'AMOUNT DUE THIS VALUATION', ML + 14, y - 14, 7.5, C_MUTED, { ls: 0.8 });
-  dt(page, ctx.bold, fmtNum(totals.amountDue), ML + 14, y - 38, 22, C_GREEN);
+  const netLabel = (retPct > 0 || mcdPct > 0) ? 'NET VALUATION DUE' : 'AMOUNT DUE THIS VALUATION';
+  dt(page, ctx.regular, netLabel, ML + 14, y - 14, 7.5, C_MUTED, { ls: 0.8 });
+  dt(page, ctx.bold, fmtNum(netVal), ML + 14, y - 38, 22, C_GREEN);
 
   // ── Right column: notes panel ─────────────────────────────────────────────
   const noteX = PW * 0.52;

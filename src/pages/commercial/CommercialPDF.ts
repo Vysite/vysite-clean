@@ -1413,8 +1413,21 @@ function valuationsSectionHtml(d: FullReportData): string {
 
   const contractTotal = wbLines.reduce((s, l) => s + l.contract_value, 0);
   const extrasTotal   = wbExtras.reduce((s, e) => s + e.agreed_value, 0);
+  const retentionPct  = wb.retention_pct ?? 0;
+  const mcdPct        = wb.mcd_pct ?? 0;
+  const hasDeductions = retentionPct > 0 || mcdPct > 0;
 
   // ── Workbook summary ──
+  const deductionCols = hasDeductions ? `
+    <div style="padding:0 28px;border-left:0.5px solid #e2e8f0;">
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Retention</div>
+      <div style="font-size:13pt;font-weight:700;color:#d97706;font-variant-numeric:tabular-nums;">${retentionPct.toFixed(2)}%</div>
+    </div>
+    <div style="padding:0 0 0 28px;border-left:0.5px solid #e2e8f0;">
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">MCD</div>
+      <div style="font-size:13pt;font-weight:700;color:#d97706;font-variant-numeric:tabular-nums;">${mcdPct.toFixed(2)}%</div>
+    </div>` : '';
+
   const wbSummary = `
   <div style="display:flex;gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:14px 0;margin-bottom:16px;">
     <div style="flex:1;padding-right:28px;">
@@ -1425,10 +1438,11 @@ function valuationsSectionHtml(d: FullReportData): string {
       <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Contract Works</div>
       <div style="font-size:13pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fv(contractTotal)}</div>
     </div>
-    <div style="padding:0 0 0 28px;border-left:0.5px solid #e2e8f0;">
+    <div style="padding:0 28px;border-left:0.5px solid #e2e8f0;">
       <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Extras / Variations</div>
       <div style="font-size:13pt;font-weight:700;color:#ea6c00;font-variant-numeric:tabular-nums;">${fv(extrasTotal)}</div>
     </div>
+    ${deductionCols}
   </div>`;
 
   if (valuations.length === 0) {
@@ -1437,6 +1451,15 @@ function valuationsSectionHtml(d: FullReportData): string {
   ${wbSummary}
   <div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:8px 0;">No valuations recorded yet.</div>`;
   }
+
+  // Helper: compute deduction amounts for a given amountDue
+  const computeDeductions = (amountDue: number) => {
+    const retAmt   = amountDue * retentionPct / 100;
+    const afterRet = amountDue - retAmt;
+    const mcdAmt   = afterRet * mcdPct / 100;
+    const net      = afterRet - mcdAmt;
+    return { retAmt, mcdAmt, net };
+  };
 
   // ── History table ──
   const historyRows = valuations.map((v, idx) => {
@@ -1471,8 +1494,13 @@ function valuationsSectionHtml(d: FullReportData): string {
       prevGross = pvContract + pvExtras;
     }
     const amountDue = grossToDate - prevGross;
+    const { retAmt, mcdAmt, net } = computeDeductions(amountDue);
     const statusLabel = VAL_STATUS_LABELS[v.status] ?? v.status;
     const rowStyle = isLatest ? ' background:#fff7ed;' : '';
+
+    const retCol  = hasDeductions ? `<td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(retAmt)})` : '—'}</td>` : '';
+    const mcdCol  = hasDeductions ? `<td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(mcdAmt)})` : '—'}</td>` : '';
+    const netCol  = hasDeductions ? `<td class="num" style="font-size:9pt;font-weight:800;color:${net >= 0 ? '#16a34a' : '#991b1b'};">${fv(net)}</td>` : '';
 
     return `<tr style="${rowStyle}">
       <td class="dt-ref">${esc(v.ref)}${isLatest ? ' <span style="font-size:6.5pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#ea6c00;">LATEST</span>' : ''}</td>
@@ -1481,8 +1509,13 @@ function valuationsSectionHtml(d: FullReportData): string {
       <td class="num" style="font-size:9pt;font-weight:600;">${fv(grossToDate)}</td>
       <td class="num" style="font-size:9pt;color:#64748b;">${fv(prevGross)}</td>
       <td class="num" style="font-size:9pt;font-weight:700;color:${amountDue >= 0 ? '#16a34a' : '#991b1b'};">${amountDue >= 0 ? '+' : ''}${fv(amountDue)}</td>
+      ${retCol}${mcdCol}${netCol}
     </tr>`;
   }).join('');
+
+  const deductionHeaders = hasDeductions
+    ? `<th class="num">Retention</th><th class="num">MCD</th><th class="num">Net Due</th>`
+    : '';
 
   const historyTable = `
   <table class="data-table" style="width:100%;font-size:9pt;margin-bottom:0;">
@@ -1493,6 +1526,7 @@ function valuationsSectionHtml(d: FullReportData): string {
       <th class="num">Gross to Date</th>
       <th class="num">Previous</th>
       <th class="num">Amount Due</th>
+      ${deductionHeaders}
     </tr></thead>
     <tbody>${historyRows}</tbody>
   </table>`;
@@ -1561,6 +1595,12 @@ function valuationsSectionHtml(d: FullReportData): string {
     const grossToDate  = contractCurrValue + extrasCurrValue;
     const prevGross    = contractPrevValue + extrasPrevValue;
     const amountDue    = grossToDate - prevGross;
+    const { retAmt, mcdAmt, net } = computeDeductions(amountDue);
+
+    const deductionTotals = hasDeductions ? `
+      <td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(retAmt)})` : '—'}</td>
+      <td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(mcdAmt)})` : '—'}</td>
+      <td class="num" style="font-size:10pt;font-weight:800;color:${net >= 0 ? '#4ade80' : '#f87171'};">${fv(net)}</td>` : '';
 
     const totalsRow = `<tr style="background:#0f172a;color:#fff;">
       <td colspan="2" style="font-size:8.5pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:8px 10px;color:#fff;">Total</td>
@@ -1570,6 +1610,7 @@ function valuationsSectionHtml(d: FullReportData): string {
       <td class="num" style="font-size:8.5pt;color:#94a3b8;"></td>
       <td class="num" style="font-size:9pt;font-weight:700;color:#f97316;">${fv(grossToDate)}</td>
       <td class="num" style="font-size:10pt;font-weight:800;color:${amountDue >= 0 ? '#4ade80' : '#f87171'};">${amountDue >= 0 ? '+' : ''}${fv(amountDue)}</td>
+      ${deductionTotals}
     </tr>`;
 
     const heading = isLatest
@@ -1577,6 +1618,10 @@ function valuationsSectionHtml(d: FullReportData): string {
       : `<div style="font-size:9pt;font-weight:700;color:#0f172a;margin-bottom:8px;">${esc(v.ref)} — ${fmtD(v.valuation_date)} <span style="font-size:8pt;color:#94a3b8;font-weight:400;">${VAL_STATUS_LABELS[v.status] ?? v.status}</span></div>`;
 
     const hasExtras = wbExtras.length > 0;
+    const deductionHeaders2 = hasDeductions
+      ? `<th class="num" style="width:76px;">Retention</th><th class="num" style="width:76px;">MCD</th><th class="num" style="width:76px;">Net Due</th>`
+      : '';
+
     return `
   <div style="margin-top:20px;page-break-inside:avoid;">
     ${heading}
@@ -1590,10 +1635,11 @@ function valuationsSectionHtml(d: FullReportData): string {
         <th class="num" style="width:44px;">Curr %</th>
         <th class="num" style="width:76px;">Curr Value</th>
         <th class="num" style="width:76px;">This Val</th>
+        ${deductionHeaders2}
       </tr></thead>
       <tbody>
         ${lineRows}
-        ${hasExtras ? `<tr><td colspan="8" style="font-size:7pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;padding:8px 10px 4px;border-bottom:0.5px solid #e2e8f0;">Extras / Variations</td></tr>${extraRows}` : ''}
+        ${hasExtras ? `<tr><td colspan="${8 + (hasDeductions ? 3 : 0)}" style="font-size:7pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;padding:8px 10px 4px;border-bottom:0.5px solid #e2e8f0;">Extras / Variations</td></tr>${extraRows}` : ''}
         ${totalsRow}
       </tbody>
     </table>

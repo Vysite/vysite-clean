@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
-import { ArrowLeft, Upload, Plus, Trash2, X, Check, ChevronDown, BookOpen, AlertCircle, Pencil, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Trash2, X, Check, ChevronDown, BookOpen, AlertCircle, Pencil, CheckCircle, Settings2 } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import type { DBValuationWorkbook, DBWorkbookLine, DBWorkbookExtra } from '../../lib/store';
 import type { Project } from '../../data/types';
@@ -418,12 +418,14 @@ function EditCell({ value, numeric, onCommit, className = '' }: EditCellProps) {
 export default function ValuationWorkbookEditor({ workbook, project, orgId, canEdit, onBack }: Props) {
   const store = useAppStore();
   const currentUserName = store.currentUser?.name ?? '';
-  const [tab, setTab] = useState<'lines' | 'extras'>('lines');
+  const [tab, setTab] = useState<'lines' | 'extras' | 'settings'>('lines');
   const [showImport, setShowImport] = useState<ImportTab | null>(null);
   const [deleteLineId, setDeleteLineId] = useState<string | null>(null);
   const [deleteExtraId, setDeleteExtraId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(workbook.title);
+  const [retentionDraft, setRetentionDraft] = useState(String(workbook.retention_pct ?? 0));
+  const [mcdDraft, setMcdDraft] = useState(String(workbook.mcd_pct ?? 0));
   const { state: saveState, lastSaved, onSaveStart, onSaveDone } = useSaveIndicator();
 
   const lines  = useMemo(() => store.workbookLines.filter(l => l.workbook_id === workbook.id), [store.workbookLines, workbook.id]);
@@ -541,6 +543,22 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
     setEditingTitle(false);
   };
 
+  const saveCommercialSettings = async () => {
+    const ret = Math.min(100, Math.max(0, parseFloat(retentionDraft) || 0));
+    const mcd = Math.min(100, Math.max(0, parseFloat(mcdDraft) || 0));
+    const prevRet = workbook.retention_pct ?? 0;
+    const prevMcd = workbook.mcd_pct ?? 0;
+    onSaveStart();
+    await store.updateValuationWorkbook({ ...workbook, retention_pct: ret, mcd_pct: mcd });
+    onSaveDone();
+    const changes: string[] = [];
+    if (ret !== prevRet) changes.push(`retention: ${prevRet}% → ${ret}%`);
+    if (mcd !== prevMcd) changes.push(`MCD: ${prevMcd}% → ${mcd}%`);
+    if (changes.length > 0) wbLog('record_updated', `Commercial settings updated: ${changes.join('; ')}`);
+    setRetentionDraft(String(ret));
+    setMcdDraft(String(mcd));
+  };
+
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -616,14 +634,14 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
       {/* Tab bar */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex gap-1.5">
-          {(['lines', 'extras'] as const).map(t => (
+          {(['lines', 'extras', 'settings'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${tab === t ? 'bg-[#f97316] text-white' : 'bg-[#0d1628] text-slate-400 hover:text-white border border-[#1e2d4a]'}`}>
-              {t === 'lines' ? `Contract Lines (${lines.length})` : `Extras (${extras.length})`}
+              {t === 'lines' ? `Contract Lines (${lines.length})` : t === 'extras' ? `Extras (${extras.length})` : <span className="flex items-center gap-1"><Settings2 size={10} />Settings</span>}
             </button>
           ))}
         </div>
-        {canEdit && (
+        {canEdit && tab !== 'settings' && (
           <div className="flex gap-2">
             <button
               onClick={() => setShowImport(tab === 'lines' ? 'contract' : 'extras')}
@@ -773,6 +791,88 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
             </table>
           </div>
         )
+      )}
+
+      {/* Settings panel */}
+      {tab === 'settings' && (
+        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1e2d4a', background: '#0d1628' }}>
+          <div className="px-5 py-4" style={{ borderBottom: '1px solid #1e2d4a' }}>
+            <p className="text-xs font-bold text-white mb-0.5">Commercial Settings</p>
+            <p className="text-[10px] text-slate-500">Workbook-level deductions applied to every valuation automatically.</p>
+          </div>
+          <div className="px-5 py-5 space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Retention (%)</label>
+                <input
+                  type="number" min="0" max="100" step="0.01"
+                  value={retentionDraft}
+                  onChange={e => setRetentionDraft(e.target.value)}
+                  disabled={!canEdit}
+                  className="w-full bg-[#111827] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f97316] transition-colors disabled:opacity-50"
+                />
+                <p className="text-[10px] text-slate-600 mt-1">Deducted from the net valuation amount due.</p>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Main Contract Discount — MCD (%)</label>
+                <input
+                  type="number" min="0" max="100" step="0.01"
+                  value={mcdDraft}
+                  onChange={e => setMcdDraft(e.target.value)}
+                  disabled={!canEdit}
+                  className="w-full bg-[#111827] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f97316] transition-colors disabled:opacity-50"
+                />
+                <p className="text-[10px] text-slate-600 mt-1">Applied after retention as a secondary deduction.</p>
+              </div>
+            </div>
+
+            {/* Preview */}
+            {(parseFloat(retentionDraft) > 0 || parseFloat(mcdDraft) > 0) && contractTotal > 0 && (
+              <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1e2d4a' }}>
+                <div className="px-4 py-2.5" style={{ background: '#111827', borderBottom: '1px solid #1e2d4a' }}>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600">Example deduction preview (based on 100% contract + extras)</p>
+                </div>
+                {(() => {
+                  const gross = contractTotal + extrasTotal;
+                  const ret = Math.min(100, Math.max(0, parseFloat(retentionDraft) || 0));
+                  const mcd = Math.min(100, Math.max(0, parseFloat(mcdDraft) || 0));
+                  const retAmt = gross * ret / 100;
+                  const afterRet = gross - retAmt;
+                  const mcdAmt = afterRet * mcd / 100;
+                  const net = afterRet - mcdAmt;
+                  const rows: [string, number, string][] = [
+                    ['Gross Valuation to Date', gross, 'text-white'],
+                    ...(ret > 0 ? [['Less Retention (' + ret.toFixed(2) + '%)', -retAmt, 'text-amber-400']] as [string, number, string][] : []),
+                    ...(mcd > 0 ? [['Less MCD (' + mcd.toFixed(2) + '%)', -mcdAmt, 'text-amber-400']] as [string, number, string][] : []),
+                    ['Net Valuation Due', net, 'text-emerald-400'],
+                  ];
+                  return rows.map(([label, val, cls], i) => (
+                    <div key={i} className="flex items-center justify-between px-4 py-2" style={{ borderBottom: i < rows.length - 1 ? '1px solid #1e2d4a' : undefined, background: i === rows.length - 1 ? 'rgba(16,185,129,0.05)' : undefined }}>
+                      <span className="text-xs text-slate-400">{label}</span>
+                      <span className={`text-xs font-bold tabular-nums ${cls}`}>
+                        {val < 0 ? `(${new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Math.abs(val))})` : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(val)}
+                      </span>
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+
+            {canEdit && (
+              <div className="flex justify-end">
+                <button
+                  onClick={saveCommercialSettings}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white transition-colors"
+                  style={{ background: '#f97316' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#ea6c0a')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '#f97316')}
+                >
+                  <Check size={11} /> Save Settings
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Import modal */}
