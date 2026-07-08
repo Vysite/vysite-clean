@@ -2015,9 +2015,11 @@ export default function Commercial() {
       return [newDn, ...withUpdatedEwn];
     });
     loadEvents();
-    // Swap the modal to show the newly created Delay Notice
+    // Changing selectedRecord.id causes the keyed DetailModal to unmount+remount,
+    // so the new DN's form state initialises fresh from newDn (not from the EWN).
     setSelectedRecord(newDn);
     setIsNewRecord(false);
+    setModalOpen(true);
   }
 
   function handleDeleted(id: string) {
@@ -2237,6 +2239,7 @@ export default function Commercial() {
       {/* Record detail modal */}
       {modalOpen && (
         <DetailModal
+          key={selectedRecord?.id ?? 'new'}
           record={selectedRecord}
           isNew={isNewRecord}
           orgId={orgId}
