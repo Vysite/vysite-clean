@@ -878,7 +878,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
 
   function buildLineRow(l: DraftLineItem, idx: number, id: string) {
     return {
-      id: l.id ?? `li-${Date.now()}-${idx}`,
+      id: l.id ?? genLineId(),
       org_id: orgId, record_id: id, sort_order: idx,
       description: l.description,
       client_description: l.description,
@@ -1547,7 +1547,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
                 onChange={setLineItems}
                 canViewPricing={canViewPricing}
                 onPersistLine={!isNew ? async (line, sortOrder) => {
-                  const rowId = line.id ?? `li-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                  const rowId = line.id ?? genLineId();
                   await supabase.from('vy_commercial_line_items').upsert({
                     id: rowId,
                     org_id: orgId,
