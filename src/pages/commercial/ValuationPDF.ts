@@ -304,7 +304,7 @@ function addContractLinesPage(ctx: Ctx, lineData: LineData[]) {
       const s = san(text);
       if (s) {
         const tw = font.widthOfTextAtSize(s, LINE_FONT);
-        const display = align === 'left' && tw > w - 4 ? s.slice(0, Math.floor(s.length * (w - 4) / tw)) + '\x85' : s;
+        const display = align === 'left' && tw > w - 4 ? s.slice(0, Math.floor(s.length * (w - 4) / tw)) + '...' : s;
         const dispW = font.widthOfTextAtSize(display, LINE_FONT);
         dt(page, font, display, align === 'right' ? x + w - dispW - 2 : x + 2, y - LINE_H + 4, LINE_FONT, color);
       }
@@ -552,15 +552,38 @@ function wrapText(p: PDFPage, font: PDFFont, text: string, x: number, y: number,
 }
 
 const WIN_ANSI: [RegExp, string][] = [
+  // Control characters
   [/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ''],
-  [/\u0085/g, '...'],
+  [/\u0085/g, '...'],                          // NEL / WinAnsi 0x85
+  // Common Unicode punctuation pasted from Excel/Word
+  [/\u2026/g, '...'],                          // … horizontal ellipsis
+  [/[\u2018\u2019\u201A\u201B]/g, "'"],        // smart single quotes / low-9
+  [/[\u201C\u201D\u201E\u201F]/g, '"'],        // smart double quotes / low-9
+  [/\u2013/g, '-'],                            // en dash
+  [/\u2014/g, '-'],                            // em dash
+  [/\u2015/g, '-'],                            // horizontal bar
+  [/\u2022/g, '-'],                            // bullet
+  [/\u2023/g, '-'],                            // triangular bullet
+  [/\u25CF/g, '-'],                            // black circle bullet
+  [/\u00A0/g, ' '],                            // non-breaking space
+  [/\u2009/g, ' '],                            // thin space
+  [/\u200B/g, ''],                             // zero-width space
+  [/[\u2039\u203A]/g, "'"],                    // single angle quotation marks
+  [/[\u00AB\u00BB]/g, '"'],                    // double angle quotation marks (in-range but safety)
+  [/\u2122/g, 'TM'],                           // trademark
+  [/\u00D7/g, 'x'],                            // multiplication sign (already in range, safety)
+  // Accented / Latin extended
   [/[ÀÁÂÃÄÅ]/g, 'A'], [/[àáâãäå]/g, 'a'],
   [/[ÈÉÊË]/g, 'E'],   [/[èéêë]/g, 'e'],
   [/[ÌÍÎÏ]/g, 'I'],   [/[ìíîï]/g, 'i'],
   [/[ÒÓÔÕÖ]/g, 'O'],  [/[òóôõö]/g, 'o'],
   [/[ÙÚÛÜ]/g, 'U'],   [/[ùúûü]/g, 'u'],
+  [/[ÝŸ]/g, 'Y'],     [/ý/g, 'y'],
+  [/Ñ/g, 'N'],        [/ñ/g, 'n'],
   [/Ç/g, 'C'],        [/ç/g, 'c'],
   [/[ŁłĐđ]/g, '-'],
+  [/[ŠšŽž]/g, 's'],
+  // Final catch-all: strip anything still outside printable WinAnsi range
   [/[^\x20-\xFF]/g, ''],
 ];
 function san(text: string): string {
