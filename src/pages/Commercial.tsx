@@ -2087,6 +2087,9 @@ export default function Commercial() {
                   }
                   return evts.sort((a,b) => b.sortDate.localeCompare(a.sortDate));
                 };
+                const _valWb = store.valuationWorkbooks.find(w => w.project_id === bannerProject.id);
+                const _projVals = store.valuations.filter(v => v.project_id === bannerProject.id);
+                const _projValIds = new Set(_projVals.map(v => v.id));
                 exportFullCommercialReport({
                   project: bannerProject,
                   keyDates: projectKeyDates,
@@ -2104,6 +2107,12 @@ export default function Commercial() {
                   vaAgreed: vaMetrics.agreed,
                   currentUserName: store.currentUser?.name ?? '',
                   logoUrl: store.settings?.logo_data_url,
+                  valuationWorkbook: _valWb,
+                  wbLines: _valWb ? store.workbookLines.filter(l => l.workbook_id === _valWb.id) : [],
+                  wbExtras: _valWb ? store.workbookExtras.filter(e => e.workbook_id === _valWb.id) : [],
+                  valuations: _projVals,
+                  valuationLineEntries: store.valuationLineEntries.filter(e => _projValIds.has(e.valuation_id)),
+                  valuationExtraEntries: store.valuationExtraEntries.filter(e => _projValIds.has(e.valuation_id)),
                 });
               }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-slate-600 transition-colors"

@@ -5,7 +5,7 @@
  */
 
 import { openPrintTab } from '../../lib/printTab';
-import type { DBVariationAccountItem, DBCommercialApplication, DBVABuildUpLine, DBVAComment, DBAttachment } from '../../lib/store';
+import type { DBVariationAccountItem, DBCommercialApplication, DBVABuildUpLine, DBVAComment, DBAttachment, DBValuation, DBValuationWorkbook, DBWorkbookLine, DBWorkbookExtra, DBValuationLineEntry, DBValuationExtraEntry } from '../../lib/store';
 import type { CommercialRecord } from './types';
 import { typeInfo, statusInfo, parseRawValue } from './types';
 import type { DBKeyDate, Project } from '../../lib/store';
@@ -1378,6 +1378,235 @@ interface FullReportData {
   vaAgreed: number;
   currentUserName: string;
   logoUrl?: string;
+  // Valuation data (optional — omitted if project has no workbook)
+  valuationWorkbook?: DBValuationWorkbook;
+  wbLines?: DBWorkbookLine[];
+  wbExtras?: DBWorkbookExtra[];
+  valuations?: DBValuation[];
+  valuationLineEntries?: DBValuationLineEntry[];
+  valuationExtraEntries?: DBValuationExtraEntry[];
+}
+
+const VAL_STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft', submitted: 'Submitted', under_review: 'Under Review',
+  agreed: 'Agreed', locked: 'Locked', paid: 'Paid',
+};
+
+function valuationsSectionHtml(d: FullReportData): string {
+  const wb = d.valuationWorkbook;
+
+  if (!wb) {
+    return `
+  <div class="exec-section-label">7. Valuations</div>
+  <div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:16px 0;">No valuation workbook has been set up for this project.</div>`;
+  }
+
+  const wbLines       = d.wbLines ?? [];
+  const wbExtras      = d.wbExtras ?? [];
+  const valuations    = (d.valuations ?? []).slice().sort((a, b) => {
+    const an = parseInt(a.ref.replace(/\D/g, ''), 10) || 0;
+    const bn = parseInt(b.ref.replace(/\D/g, ''), 10) || 0;
+    return bn - an; // descending — latest first
+  });
+  const lineEntries   = d.valuationLineEntries ?? [];
+  const extraEntries  = d.valuationExtraEntries ?? [];
+
+  const contractTotal = wbLines.reduce((s, l) => s + l.contract_value, 0);
+  const extrasTotal   = wbExtras.reduce((s, e) => s + e.agreed_value, 0);
+
+  // ── Workbook summary ──
+  const wbSummary = `
+  <div style="display:flex;gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:14px 0;margin-bottom:16px;">
+    <div style="flex:1;padding-right:28px;">
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Workbook</div>
+      <div style="font-size:13pt;font-weight:700;color:#0f172a;">${esc(wb.title)}</div>
+    </div>
+    <div style="padding:0 28px;border-left:0.5px solid #e2e8f0;">
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Contract Works</div>
+      <div style="font-size:13pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fv(contractTotal)}</div>
+    </div>
+    <div style="padding:0 0 0 28px;border-left:0.5px solid #e2e8f0;">
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Extras / Variations</div>
+      <div style="font-size:13pt;font-weight:700;color:#ea6c00;font-variant-numeric:tabular-nums;">${fv(extrasTotal)}</div>
+    </div>
+  </div>`;
+
+  if (valuations.length === 0) {
+    return `
+  <div class="exec-section-label">7. Valuations — ${esc(wb.title)}</div>
+  ${wbSummary}
+  <div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:8px 0;">No valuations recorded yet.</div>`;
+  }
+
+  // ── History table ──
+  const historyRows = valuations.map((v, idx) => {
+    const isLatest = idx === 0;
+    const vLineEntries  = lineEntries.filter(e => e.valuation_id === v.id);
+    const vExtraEntries = extraEntries.filter(e => e.valuation_id === v.id);
+
+    const contractCurrValue = wbLines.reduce((s, l) => {
+      const e = vLineEntries.find(x => x.workbook_line_id === l.id);
+      return s + l.contract_value * (e?.current_pct ?? 0) / 100;
+    }, 0);
+    const extrasCurrValue = wbExtras.reduce((s, ex) => {
+      const e = vExtraEntries.find(x => x.workbook_extra_id === ex.id);
+      return s + ex.agreed_value * (e?.current_pct ?? 0) / 100;
+    }, 0);
+    const grossToDate = contractCurrValue + extrasCurrValue;
+
+    // Previous valuation gross
+    const prevVal = valuations[idx + 1];
+    let prevGross = 0;
+    if (prevVal) {
+      const pvLineEntries  = lineEntries.filter(e => e.valuation_id === prevVal.id);
+      const pvExtraEntries = extraEntries.filter(e => e.valuation_id === prevVal.id);
+      const pvContract = wbLines.reduce((s, l) => {
+        const e = pvLineEntries.find(x => x.workbook_line_id === l.id);
+        return s + l.contract_value * (e?.current_pct ?? 0) / 100;
+      }, 0);
+      const pvExtras = wbExtras.reduce((s, ex) => {
+        const e = pvExtraEntries.find(x => x.workbook_extra_id === ex.id);
+        return s + ex.agreed_value * (e?.current_pct ?? 0) / 100;
+      }, 0);
+      prevGross = pvContract + pvExtras;
+    }
+    const amountDue = grossToDate - prevGross;
+    const statusLabel = VAL_STATUS_LABELS[v.status] ?? v.status;
+    const rowStyle = isLatest ? ' background:#fff7ed;' : '';
+
+    return `<tr style="${rowStyle}">
+      <td class="dt-ref">${esc(v.ref)}${isLatest ? ' <span style="font-size:6.5pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#ea6c00;">LATEST</span>' : ''}</td>
+      <td style="font-size:8.5pt;color:#64748b;">${fmtD(v.valuation_date)}</td>
+      <td>${statusTag(v.status, statusLabel)}</td>
+      <td class="num" style="font-size:9pt;font-weight:600;">${fv(grossToDate)}</td>
+      <td class="num" style="font-size:9pt;color:#64748b;">${fv(prevGross)}</td>
+      <td class="num" style="font-size:9pt;font-weight:700;color:${amountDue >= 0 ? '#16a34a' : '#991b1b'};">${amountDue >= 0 ? '+' : ''}${fv(amountDue)}</td>
+    </tr>`;
+  }).join('');
+
+  const historyTable = `
+  <table class="data-table" style="width:100%;font-size:9pt;margin-bottom:0;">
+    <thead><tr>
+      <th style="width:72px;">Ref</th>
+      <th style="width:80px;">Date</th>
+      <th>Status</th>
+      <th class="num">Gross to Date</th>
+      <th class="num">Previous</th>
+      <th class="num">Amount Due</th>
+    </tr></thead>
+    <tbody>${historyRows}</tbody>
+  </table>`;
+
+  // ── Per-valuation line detail ──
+  const valDetailSections = valuations.map((v, idx) => {
+    const isLatest = idx === 0;
+    const vLineEntries  = lineEntries.filter(e => e.valuation_id === v.id);
+    const vExtraEntries = extraEntries.filter(e => e.valuation_id === v.id);
+
+    const lineRows = wbLines.map(l => {
+      const e       = vLineEntries.find(x => x.workbook_line_id === l.id);
+      const prevPct = e?.previous_pct ?? 0;
+      const currPct = e?.current_pct  ?? 0;
+      const prevVal = l.contract_value * prevPct / 100;
+      const currVal = l.contract_value * currPct / 100;
+      const thisVal = currVal - prevVal;
+      return `<tr>
+        <td class="dt-ref" style="width:40px;">${esc(l.item_number)}</td>
+        <td style="font-size:9pt;color:#0f172a;">${esc(l.description)}</td>
+        <td class="num" style="font-size:8.5pt;color:#64748b;">${fv(l.contract_value)}</td>
+        <td class="num" style="font-size:8.5pt;color:#64748b;">${prevPct.toFixed(1)}%</td>
+        <td class="num" style="font-size:8.5pt;color:#64748b;">${fv(prevVal)}</td>
+        <td class="num" style="font-size:8.5pt;">${currPct.toFixed(1)}%</td>
+        <td class="num" style="font-size:9pt;font-weight:600;">${fv(currVal)}</td>
+        <td class="num" style="font-size:9pt;font-weight:700;color:${thisVal > 0 ? '#16a34a' : thisVal < 0 ? '#991b1b' : '#64748b'};">${thisVal > 0 ? '+' : ''}${fv(thisVal)}</td>
+      </tr>`;
+    }).join('');
+
+    const extraRows = wbExtras.map(ex => {
+      const e       = vExtraEntries.find(x => x.workbook_extra_id === ex.id);
+      const prevPct = e?.previous_pct ?? 0;
+      const currPct = e?.current_pct  ?? 0;
+      const prevVal = ex.agreed_value * prevPct / 100;
+      const currVal = ex.agreed_value * currPct / 100;
+      const thisVal = currVal - prevVal;
+      return `<tr style="background:#f8fafc;">
+        <td class="dt-ref" style="width:40px;color:#64748b;">${esc(ex.ref)}</td>
+        <td style="font-size:9pt;color:#64748b;font-style:italic;">${esc(ex.description)}</td>
+        <td class="num" style="font-size:8.5pt;color:#64748b;">${fv(ex.agreed_value)}</td>
+        <td class="num" style="font-size:8.5pt;color:#94a3b8;">${prevPct.toFixed(1)}%</td>
+        <td class="num" style="font-size:8.5pt;color:#94a3b8;">${fv(prevVal)}</td>
+        <td class="num" style="font-size:8.5pt;color:#64748b;">${currPct.toFixed(1)}%</td>
+        <td class="num" style="font-size:9pt;font-weight:600;color:#64748b;">${fv(currVal)}</td>
+        <td class="num" style="font-size:9pt;font-weight:700;color:${thisVal > 0 ? '#16a34a' : thisVal < 0 ? '#991b1b' : '#64748b'};">${thisVal > 0 ? '+' : ''}${fv(thisVal)}</td>
+      </tr>`;
+    }).join('');
+
+    // Totals row
+    const contractCurrValue = wbLines.reduce((s, l) => {
+      const e = vLineEntries.find(x => x.workbook_line_id === l.id);
+      return s + l.contract_value * (e?.current_pct ?? 0) / 100;
+    }, 0);
+    const contractPrevValue = wbLines.reduce((s, l) => {
+      const e = vLineEntries.find(x => x.workbook_line_id === l.id);
+      return s + l.contract_value * (e?.previous_pct ?? 0) / 100;
+    }, 0);
+    const extrasCurrValue = wbExtras.reduce((s, ex) => {
+      const e = vExtraEntries.find(x => x.workbook_extra_id === ex.id);
+      return s + ex.agreed_value * (e?.current_pct ?? 0) / 100;
+    }, 0);
+    const extrasPrevValue = wbExtras.reduce((s, ex) => {
+      const e = vExtraEntries.find(x => x.workbook_extra_id === ex.id);
+      return s + ex.agreed_value * (e?.previous_pct ?? 0) / 100;
+    }, 0);
+    const grossToDate  = contractCurrValue + extrasCurrValue;
+    const prevGross    = contractPrevValue + extrasPrevValue;
+    const amountDue    = grossToDate - prevGross;
+
+    const totalsRow = `<tr style="background:#0f172a;color:#fff;">
+      <td colspan="2" style="font-size:8.5pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:8px 10px;color:#fff;">Total</td>
+      <td class="num" style="font-size:8.5pt;color:#94a3b8;">${fv(contractTotal + extrasTotal)}</td>
+      <td class="num" style="font-size:8.5pt;color:#94a3b8;"></td>
+      <td class="num" style="font-size:9pt;font-weight:600;color:#cbd5e1;">${fv(prevGross)}</td>
+      <td class="num" style="font-size:8.5pt;color:#94a3b8;"></td>
+      <td class="num" style="font-size:9pt;font-weight:700;color:#f97316;">${fv(grossToDate)}</td>
+      <td class="num" style="font-size:10pt;font-weight:800;color:${amountDue >= 0 ? '#4ade80' : '#f87171'};">${amountDue >= 0 ? '+' : ''}${fv(amountDue)}</td>
+    </tr>`;
+
+    const heading = isLatest
+      ? `<div style="font-size:9pt;font-weight:800;color:#ea6c00;margin-bottom:8px;">${esc(v.ref)} — ${fmtD(v.valuation_date)} <span style="font-size:6.5pt;letter-spacing:0.12em;text-transform:uppercase;background:#fff7ed;color:#ea6c00;border:1px solid #fed7aa;padding:2px 6px;border-radius:3px;margin-left:6px;">Latest</span> <span style="font-size:8pt;color:#94a3b8;font-weight:400;">${VAL_STATUS_LABELS[v.status] ?? v.status}</span></div>`
+      : `<div style="font-size:9pt;font-weight:700;color:#0f172a;margin-bottom:8px;">${esc(v.ref)} — ${fmtD(v.valuation_date)} <span style="font-size:8pt;color:#94a3b8;font-weight:400;">${VAL_STATUS_LABELS[v.status] ?? v.status}</span></div>`;
+
+    const hasExtras = wbExtras.length > 0;
+    return `
+  <div style="margin-top:20px;page-break-inside:avoid;">
+    ${heading}
+    <table class="data-table" style="width:100%;font-size:8.5pt;">
+      <thead><tr>
+        <th style="width:40px;">Item</th>
+        <th>Description</th>
+        <th class="num" style="width:76px;">Orig Value</th>
+        <th class="num" style="width:44px;">Prev %</th>
+        <th class="num" style="width:76px;">Prev Value</th>
+        <th class="num" style="width:44px;">Curr %</th>
+        <th class="num" style="width:76px;">Curr Value</th>
+        <th class="num" style="width:76px;">This Val</th>
+      </tr></thead>
+      <tbody>
+        ${lineRows}
+        ${hasExtras ? `<tr><td colspan="8" style="font-size:7pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;padding:8px 10px 4px;border-bottom:0.5px solid #e2e8f0;">Extras / Variations</td></tr>${extraRows}` : ''}
+        ${totalsRow}
+      </tbody>
+    </table>
+  </div>`;
+  }).join('');
+
+  return `
+  <div class="exec-section-label">7. Valuations — ${esc(wb.title)}</div>
+  ${wbSummary}
+  <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;">Valuation History — ${valuations.length} valuation${valuations.length !== 1 ? 's' : ''}</div>
+  ${historyTable}
+  <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;margin-top:20px;margin-bottom:8px;">Line Breakdown</div>
+  ${valDetailSections}`;
 }
 
 function fullReportBody(d: FullReportData): string {
@@ -1593,6 +1822,10 @@ function fullReportBody(d: FullReportData): string {
 
   <div class="page-break">
   ${tlSection}
+  </div>
+
+  <div class="page-break">
+  ${valuationsSectionHtml(d)}
   </div>
 
   ${docFooter(d.currentUserName, today)}`;
