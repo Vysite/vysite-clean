@@ -1076,6 +1076,8 @@ export interface DBCommercialRecord {
   created_by: string | null;
   created_at?: string;
   updated_at?: string;
+  converted_to_id?: string | null;
+  converted_from_id?: string | null;
 }
 
 // ─── Main store hook ──────────────────────────────────────────────────────────

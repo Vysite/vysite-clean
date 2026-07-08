@@ -265,6 +265,9 @@ export interface CommercialRecord {
   updatedAt: string;
   lineItems?: CommercialLineItem[];
   extraData?: Record<string, unknown> | null;
+  // EWN → DN conversion links
+  convertedToId?: string | null;
+  convertedFromId?: string | null;
 }
 
 export interface CommercialEvent {

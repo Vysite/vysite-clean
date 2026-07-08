@@ -4,7 +4,7 @@ import {
   Paperclip, Trash2, Eye, Download, FileText,
   Banknote, HardHat, Calculator,
   ChevronRight, AlertCircle, CheckCircle2, Clock, CircleDot,
-  GitBranch, MessageSquare, Send,
+  GitBranch, GitMerge, MessageSquare, Send, ArrowRight,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
@@ -73,6 +73,8 @@ function dbToRecord(r: Record<string, unknown>, projectName?: string): Commercia
     createdAt:       r.created_at as string,
     updatedAt:       r.updated_at as string,
     extraData:       r.extra_data as Record<string, unknown> | null ?? null,
+    convertedToId:   r.converted_to_id as string | null ?? null,
+    convertedFromId: r.converted_from_id as string | null ?? null,
   };
 }
 
@@ -777,12 +779,15 @@ interface DetailModalProps {
   isNew: boolean;
   orgId: string;
   projects: { id: string; name: string; client: string }[];
+  allRecords: CommercialRecord[];
   canViewPricing: boolean;
   canEdit: boolean;
   canDelete: boolean;
   onClose: () => void;
   onSaved: (r: CommercialRecord) => void;
   onDeleted: (id: string) => void;
+  onConverted: (ewn: CommercialRecord, dn: CommercialRecord) => void;
+  onOpenRecord: (r: CommercialRecord) => void;
 }
 
 const COMMERCIAL_FIELDS: FieldSpec[] = [
@@ -796,7 +801,7 @@ const COMMERCIAL_FIELDS: FieldSpec[] = [
   { label: 'Notes',          key: 'notes', isNarrative: true },
 ];
 
-function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, canDelete, onClose, onSaved, onDeleted }: DetailModalProps) {
+function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricing, canEdit, canDelete, onClose, onSaved, onDeleted, onConverted, onOpenRecord }: DetailModalProps) {
   const store = useAppStore();
   const [tab, setTab] = useState<ModalTab>('overview');
   const [saving, setSaving] = useState(false);
@@ -805,6 +810,8 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
   const [error, setError] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [showConvertConfirm, setShowConvertConfirm] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   // Stable ID: generated once at mount for new records, or taken from existing record
   const [stableId] = useState<string>(() =>
@@ -1032,6 +1039,166 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
     }
   }
 
+  async function handleConvertToDelayNotice() {
+    if (!record) return;
+    setConverting(true);
+    setError(null);
+    try {
+      const now = new Date().toISOString();
+      const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+      });
+
+      // Auto-generate next DN reference from existing DN records in the same org
+      const existingDns = allRecords.filter(r => r.recordType === 'delay_notice');
+      const maxDn = existingDns.reduce((max, r) => {
+        const m = r.reference?.match(/^DN[-–]?(\d+)$/i);
+        return m ? Math.max(max, parseInt(m[1], 10)) : max;
+      }, 0);
+      const nextDnRef = `DN-${String(maxDn + 1).padStart(3, '0')}`;
+
+      // Copy cost/line items from EWN to DN
+      const { data: ewnLines } = await supabase
+        .from('vy_commercial_line_items')
+        .select('*')
+        .eq('record_id', record.id)
+        .order('sort_order');
+
+      // Copy attachments list (we'll re-link them by inserting new attachment rows pointing to the new DN id)
+      const ewnAttachments = store.attachments.filter(a => a.linked_type === 'commercial' && a.linked_id === record.id);
+
+      // Copy comments
+      const ewnComments = store.commercialRecordComments.filter(c => c.record_id === record.id);
+
+      // Build new DN row — copy core fields, leave delay-specific blank
+      const dnRow = {
+        id: newId,
+        org_id: orgId,
+        project_id: record.projectId,
+        record_type: 'delay_notice',
+        reference: nextDnRef,
+        title: record.title,
+        client: record.client,
+        status: 'draft',
+        date_raised: record.dateRaised,
+        date_submitted: null,
+        date_agreed: null,
+        notes: record.notes,
+        created_by: store.currentUser?.name ?? null,
+        extra_data: {
+          ...(record.extraData?.document_ref   ? { document_ref:   record.extraData.document_ref   } : {}),
+          ...(record.extraData?.related_refs   ? { related_refs:   record.extraData.related_refs   } : {}),
+          ewn_ref: record.reference || '',
+        },
+        converted_from_id: record.id,
+        created_at: now,
+        updated_at: now,
+      };
+
+      const { data: dnData, error: dnErr } = await supabase
+        .from('vy_commercial_records')
+        .insert(dnRow)
+        .select('*')
+        .single();
+      if (dnErr) throw dnErr;
+
+      // Copy line items
+      if (ewnLines && ewnLines.length > 0) {
+        await supabase.from('vy_commercial_line_items').insert(
+          ewnLines.map((l: Record<string, unknown>, idx: number) => ({
+            id: `li-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+            org_id: orgId,
+            record_id: newId,
+            sort_order: l.sort_order,
+            description: l.description,
+            client_description: l.client_description,
+            line_type: l.line_type,
+            unit: l.unit,
+            quantity: l.quantity,
+            internal_rate: l.internal_rate,
+            client_rate: l.client_rate,
+            markup_pct: l.markup_pct,
+          }))
+        );
+      }
+
+      // Copy attachments
+      for (const att of ewnAttachments) {
+        await store.addAttachment({
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          linked_type: 'commercial',
+          linked_id: newId,
+          project_id: att.project_id,
+          project_name: att.project_name,
+          name: att.name,
+          type: att.type,
+          size: att.size,
+          category: att.category,
+          data_url: att.data_url ?? '',
+          uploaded_by: att.uploaded_by,
+          created_at: now,
+        });
+      }
+
+      // Copy comments
+      for (const c of ewnComments) {
+        await store.addCommercialRecordComment({
+          id: `cmt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          org_id: orgId,
+          record_id: newId,
+          body: c.body,
+          author_name: c.author_name,
+          author_id: c.author_id,
+          created_at: now,
+        });
+      }
+
+      // Mark the EWN as converted
+      const { data: ewnData, error: ewnErr } = await supabase
+        .from('vy_commercial_records')
+        .update({ converted_to_id: newId, updated_at: now })
+        .eq('id', record.id)
+        .select('*')
+        .single();
+      if (ewnErr) throw ewnErr;
+
+      // Log lifecycle events for both records
+      await supabase.from('vy_commercial_events').insert([
+        {
+          org_id: orgId, record_id: record.id, project_id: record.projectId || null,
+          event_type: 'record_created', from_status: null, to_status: 'draft',
+          user_name: store.currentUser?.name ?? null, occurred_at: now,
+        },
+        {
+          org_id: orgId, record_id: newId, project_id: record.projectId || null,
+          event_type: 'record_created', from_status: null, to_status: 'draft',
+          user_name: store.currentUser?.name ?? null, occurred_at: now,
+        },
+      ]);
+
+      const projectName = projects.find(p => p.id === record.projectId)?.name;
+      const updatedEwn = dbToRecord(ewnData as Record<string, unknown>, projectName);
+      const newDn = dbToRecord(dnData as Record<string, unknown>, projectName);
+
+      logActivity({
+        orgId, userName: store.currentUser?.name ?? '',
+        module: 'commercial', recordId: record.id,
+        recordRef: record.reference || record.title,
+        recordType: record.recordType, projectId: record.projectId || null, projectName: projectName ?? null,
+        actionType: 'record_created',
+        description: `${store.currentUser?.name ?? 'Unknown'} converted ${record.reference || record.title} (Early Warning Notice) to Delay Notice ${nextDnRef}.`,
+      });
+
+      onConverted(updatedEwn, newDn);
+      setShowConvertConfirm(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Conversion failed');
+    } finally {
+      setConverting(false);
+    }
+  }
+
   async function handleDelete() {
     if (!record) return;
     setDeleting(true);
@@ -1141,6 +1308,54 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
           {tab === 'overview' && (
+            <div className="space-y-5">
+              {/* ── Linked record banners ─────────────────────────────────────── */}
+              {!isNew && record?.convertedToId && (() => {
+                const dn = allRecords.find(r => r.id === record.convertedToId);
+                return (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                    style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                    <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-500 mb-0.5">Converted To</p>
+                      <p className="text-xs text-emerald-300 font-semibold">
+                        Delay Notice{dn ? ` · ${dn.reference}` : ''}
+                        {dn?.title ? ` — ${dn.title}` : ''}
+                      </p>
+                    </div>
+                    {dn && (
+                      <button onClick={() => { onClose(); onOpenRecord(dn); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors shrink-0"
+                        style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}>
+                        Open <ArrowRight size={11} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+              {!isNew && record?.convertedFromId && (() => {
+                const ewn = allRecords.find(r => r.id === record.convertedFromId);
+                return (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                    style={{ background: 'rgba(249,115,22,0.07)', border: '1px solid rgba(249,115,22,0.2)' }}>
+                    <GitMerge size={14} className="text-orange-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-orange-500 mb-0.5">Origin — Created From</p>
+                      <p className="text-xs text-orange-300 font-semibold">
+                        Early Warning Notice{ewn ? ` · ${ewn.reference}` : ''}
+                        {ewn?.title ? ` — ${ewn.title}` : ''}
+                      </p>
+                    </div>
+                    {ewn && (
+                      <button onClick={() => { onClose(); onOpenRecord(ewn); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-orange-400 hover:text-orange-300 transition-colors shrink-0"
+                        style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.25)' }}>
+                        Open <ArrowRight size={11} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <div>
                 <label className={labelCls}>Record Type</label>
@@ -1205,6 +1420,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
                 <label className={labelCls}>Related Records / Cross-References</label>
                 <input className={inputCls} value={form.relatedRefs} onChange={e => setForm(f => ({ ...f, relatedRefs: e.target.value }))} placeholder="e.g. EWN-003, V-012" disabled={!canEdit} />
               </div>
+            </div>
             </div>
           )}
 
@@ -1396,7 +1612,7 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-[#1e2d4a] shrink-0">
-          <div>
+          <div className="flex items-center gap-2">
             {!isNew && canDelete && (
               confirmDelete ? (
                 <div className="flex items-center gap-2">
@@ -1407,6 +1623,21 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
               ) : (
                 <button onClick={() => setConfirmDelete(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1e2d4a] text-slate-500 hover:text-red-400 hover:border-red-800/50 text-xs transition-colors">
                   <Trash2 size={13} /> Delete
+                </button>
+              )
+            )}
+            {/* Convert to Delay Notice — only for EWN records that haven't been converted yet */}
+            {!isNew && canCreate && record?.recordType === 'early_warning_notice' && (
+              record.convertedToId ? (
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-emerald-500"
+                  style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                  <CheckCircle2 size={12} />
+                  Converted to {allRecords.find(r => r.id === record.convertedToId)?.reference ?? 'DN'}
+                </div>
+              ) : (
+                <button onClick={() => setShowConvertConfirm(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1e2d4a] text-slate-400 hover:text-[#f97316] hover:border-[#f97316]/40 text-xs transition-colors">
+                  <GitMerge size={13} /> Convert to Delay Notice
                 </button>
               )
             )}
@@ -1422,6 +1653,61 @@ function DetailModal({ record, isNew, orgId, projects, canViewPricing, canEdit, 
           </div>
         </div>
       </div>
+
+      {/* ── Convert to Delay Notice confirmation dialog ──────────────────────── */}
+      {showConvertConfirm && record && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-md mx-4 rounded-2xl overflow-hidden shadow-2xl" style={{ background: '#0d1628', border: '1px solid #1e2d4a' }}>
+            {/* Dialog header */}
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #1e2d4a' }}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(249,115,22,0.12)' }}>
+                  <GitMerge size={15} className="text-[#f97316]" />
+                </div>
+                <p className="text-sm font-bold text-white">Convert Early Warning Notice</p>
+              </div>
+              <button onClick={() => setShowConvertConfirm(false)} className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors"><X size={14} /></button>
+            </div>
+
+            {/* Dialog body */}
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-slate-300">A new <strong className="text-white">Delay Notice</strong> will be created.</p>
+              <div className="space-y-1.5 text-xs text-slate-400"
+                style={{ background: 'rgba(30,45,74,0.4)', border: '1px solid #1e2d4a', borderRadius: '10px', padding: '14px 16px' }}>
+                <p className="font-semibold text-slate-300 mb-2">The following will be copied:</p>
+                {[
+                  'Project', 'Title', 'Description / Notes', 'Client', 'Date Raised',
+                  'Cost Breakdown', 'Comments', 'Attachments', 'Related Records & Cross References', 'Document References',
+                ].map(item => (
+                  <div key={item} className="flex items-center gap-2">
+                    <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl px-4 py-3 text-xs" style={{ background: 'rgba(249,115,22,0.07)', border: '1px solid rgba(249,115,22,0.2)' }}>
+                <p className="text-orange-300 font-semibold mb-1">Please note</p>
+                <p className="text-slate-400">The Early Warning Notice will remain <strong className="text-slate-300">unchanged</strong>. Delay-specific fields (delay period, programme impact, etc.) will be blank for you to complete.</p>
+              </div>
+            </div>
+
+            {/* Dialog footer */}
+            <div className="flex gap-3 px-6 pb-5">
+              <button onClick={() => setShowConvertConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold transition-colors"
+                style={{ background: '#111827', color: '#64748b', border: '1px solid #1e2d4a' }}>
+                Cancel
+              </button>
+              <button onClick={handleConvertToDelayNotice} disabled={converting}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-white disabled:opacity-50 transition-colors"
+                style={{ background: '#f97316' }}>
+                <GitMerge size={12} />
+                {converting ? 'Creating…' : 'Create Delay Notice'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1678,6 +1964,17 @@ export default function Commercial() {
     setModalOpen(false);
   }
 
+  function handleConverted(updatedEwn: CommercialRecord, newDn: CommercialRecord) {
+    setRecords(prev => {
+      const withUpdatedEwn = prev.map(r => r.id === updatedEwn.id ? updatedEwn : r);
+      return [newDn, ...withUpdatedEwn];
+    });
+    loadEvents();
+    // Swap the modal to show the newly created Delay Notice
+    setSelectedRecord(newDn);
+    setIsNewRecord(false);
+  }
+
   function handleDeleted(id: string) {
     setRecords(prev => prev.filter(r => r.id !== id));
     setModalOpen(false);
@@ -1899,12 +2196,15 @@ export default function Commercial() {
           isNew={isNewRecord}
           orgId={orgId}
           projects={projectsForModal}
+          allRecords={records}
           canViewPricing={canViewPricing}
           canEdit={isNewRecord ? canCreate : canEdit}
           canDelete={canDelete}
           onClose={() => setModalOpen(false)}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
+          onConverted={handleConverted}
+          onOpenRecord={r => { setSelectedRecord(r); setIsNewRecord(false); }}
         />
       )}
     </div>
