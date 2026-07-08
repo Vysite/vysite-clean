@@ -1312,6 +1312,7 @@ export interface AppStore {
   removeValuation: (id: string) => Promise<void>;
   addValuationWorkbook: (w: DBValuationWorkbook) => Promise<void>;
   updateValuationWorkbook: (w: DBValuationWorkbook) => Promise<void>;
+  removeValuationWorkbook: (workbookId: string, projectId: string) => Promise<void>;
   addWorkbookLine: (l: DBWorkbookLine) => Promise<void>;
   updateWorkbookLine: (l: DBWorkbookLine) => Promise<void>;
   removeWorkbookLine: (id: string) => Promise<void>;
@@ -2210,6 +2211,27 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('updateValuationWorkbook', 'vy_valuation_workbooks', error);
   }, []);
 
+  const removeValuationWorkbook = useCallback(async (workbookId: string, projectId: string) => {
+    // 1. Clear local state for everything tied to this workbook/project
+    const valIds = new Set(
+      (valuations as DBValuation[]).filter(v => v.project_id === projectId).map(v => v.id)
+    );
+    setValuationLineEntries(prev => prev.filter(e => !valIds.has(e.valuation_id)));
+    setValuationExtraEntries(prev => prev.filter(e => !valIds.has(e.valuation_id)));
+    setValuations(prev => prev.filter(v => v.project_id !== projectId));
+    setWorkbookLines(prev => prev.filter(l => l.workbook_id !== workbookId));
+    setWorkbookExtras(prev => prev.filter(e => e.workbook_id !== workbookId));
+    setValuationWorkbooks(prev => prev.filter(w => w.id !== workbookId));
+
+    // 2. Delete valuations (DB cascade removes line/extra entries)
+    for (const id of valIds) {
+      await supabase.from('vy_valuations').delete().eq('id', id);
+    }
+    // 3. Delete workbook (DB cascade removes lines and extras)
+    const { error } = await supabase.from('vy_valuation_workbooks').delete().eq('id', workbookId);
+    logWrite('removeValuationWorkbook', 'vy_valuation_workbooks', error);
+  }, [valuations]);
+
   const addWorkbookLine = useCallback(async (l: DBWorkbookLine) => {
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
@@ -2404,7 +2426,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addOAndMItem, updateOAndMItem, removeOAndMItem, reorderOAndMItems,
     valuations, valuationWorkbooks, workbookLines, workbookExtras, valuationLineEntries, valuationExtraEntries,
     addValuation, updateValuation, removeValuation,
-    addValuationWorkbook, updateValuationWorkbook,
+    addValuationWorkbook, updateValuationWorkbook, removeValuationWorkbook,
     addWorkbookLine, updateWorkbookLine, removeWorkbookLine, batchAddWorkbookLines,
     addWorkbookExtra, updateWorkbookExtra, removeWorkbookExtra, batchAddWorkbookExtras,
     upsertValuationLineEntry, batchUpsertValuationLineEntries,

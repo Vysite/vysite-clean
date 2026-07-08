@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, ChevronRight, Trash2, X, FileText, Calculator, Clock, CheckCircle2, Send, Archive, CreditCard as Edit3, BookOpen, Settings2, AlertCircle } from 'lucide-react';
+import { Plus, ChevronRight, Trash2, X, Check, FileText, Calculator, Clock, CheckCircle2, Send, Archive, CreditCard as Edit3, BookOpen, Settings2, AlertCircle, Pencil, MoreVertical } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import type { DBValuation, DBValuationWorkbook, DBValuationLineEntry, DBValuationExtraEntry } from '../../lib/store';
 import type { Project } from '../../data/types';
@@ -161,6 +161,11 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
   const [openId, setOpenId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [showWbMenu, setShowWbMenu] = useState(false);
+  const [showRenameWb, setShowRenameWb] = useState(false);
+  const [renameWbDraft, setRenameWbDraft] = useState('');
+  const [showDeleteWb, setShowDeleteWb] = useState(false);
+  const [deletingWb, setDeletingWb] = useState(false);
 
   const workbook: DBValuationWorkbook | undefined = useMemo(
     () => store.valuationWorkbooks.find(w => w.project_id === project?.id),
@@ -333,7 +338,7 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
             <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1e2d4a', background: '#0a1020' }}>
               <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #1e2d4a' }}>
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-[#f97316]/10 border border-[#f97316]/20 flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-lg bg-[#f97316]/10 border border-[#f97316]/20 flex items-center justify-center shrink-0">
                     <BookOpen size={12} className="text-[#f97316]" />
                   </div>
                   <div>
@@ -342,15 +347,47 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                   </div>
                 </div>
                 {canEdit && (
-                  <button
-                    onClick={() => setView('workbook')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-400 hover:text-white transition-colors"
-                    style={{ background: '#111827', border: '1px solid #1e2d4a' }}
-                    onMouseEnter={e => (e.currentTarget.style.borderColor = '#f97316')}
-                    onMouseLeave={e => (e.currentTarget.style.borderColor = '#1e2d4a')}
-                  >
-                    <Settings2 size={11} /> Manage Workbook
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setView('workbook')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-400 hover:text-white transition-colors"
+                      style={{ background: '#111827', border: '1px solid #1e2d4a' }}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = '#f97316')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = '#1e2d4a')}
+                    >
+                      <Settings2 size={11} /> Manage Workbook
+                    </button>
+                    {/* Workbook actions menu */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowWbMenu(v => !v)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a] transition-colors"
+                      >
+                        <MoreVertical size={13} />
+                      </button>
+                      {showWbMenu && (
+                        <>
+                          <div className="fixed inset-0 z-30" onClick={() => setShowWbMenu(false)} />
+                          <div className="absolute right-0 top-full mt-1 z-40 rounded-xl overflow-hidden shadow-2xl min-w-[160px]"
+                            style={{ background: '#111827', border: '1px solid #1e2d4a' }}>
+                            <button
+                              onClick={() => { setRenameWbDraft(workbook.title); setShowRenameWb(true); setShowWbMenu(false); }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left"
+                            >
+                              <Pencil size={11} /> Rename Workbook
+                            </button>
+                            <div style={{ height: '1px', background: '#1e2d4a' }} />
+                            <button
+                              onClick={() => { setShowDeleteWb(true); setShowWbMenu(false); }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors text-left"
+                            >
+                              <Trash2 size={11} /> Delete Workbook
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
               <div className="grid grid-cols-2 divide-x divide-[#1e2d4a]">
@@ -564,6 +601,115 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
               <button onClick={() => handleDelete(deleteId)} className="flex-1 py-2 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors">
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rename workbook modal */}
+      {showRenameWb && workbook && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl overflow-hidden shadow-2xl" style={{ background: '#0d1628', border: '1px solid #1e2d4a' }}>
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid #1e2d4a' }}>
+              <p className="text-sm font-bold text-white">Rename Workbook</p>
+              <button onClick={() => setShowRenameWb(false)} className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors"><X size={14} /></button>
+            </div>
+            <div className="px-5 py-4">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Workbook Name</label>
+              <input
+                value={renameWbDraft}
+                onChange={e => setRenameWbDraft(e.target.value)}
+                autoFocus
+                onKeyDown={async e => {
+                  if (e.key === 'Enter' && renameWbDraft.trim()) {
+                    await store.updateValuationWorkbook({ ...workbook, title: renameWbDraft.trim() });
+                    setShowRenameWb(false);
+                  }
+                  if (e.key === 'Escape') setShowRenameWb(false);
+                }}
+                className="w-full bg-[#111827] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f97316] transition-colors"
+              />
+            </div>
+            <div className="flex gap-2 px-5 pb-5">
+              <button onClick={() => setShowRenameWb(false)} className="flex-1 py-2.5 rounded-xl text-xs font-bold"
+                style={{ background: '#111827', color: '#64748b', border: '1px solid #1e2d4a' }}>Cancel</button>
+              <button
+                onClick={async () => {
+                  if (!renameWbDraft.trim()) return;
+                  await store.updateValuationWorkbook({ ...workbook, title: renameWbDraft.trim() });
+                  setShowRenameWb(false);
+                }}
+                disabled={!renameWbDraft.trim()}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white disabled:opacity-40"
+                style={{ background: '#f97316' }}
+              >
+                <Check size={12} className="inline mr-1.5" />Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete workbook confirm */}
+      {showDeleteWb && workbook && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl overflow-hidden shadow-2xl" style={{ background: '#0d1628', border: '1px solid #1e2d4a' }}>
+            <div className="px-6 pt-6 pb-5">
+              <div className="flex items-start gap-4 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                  <Trash2 size={16} className="text-red-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white mb-1">Delete Contract Workbook?</p>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    This will permanently delete <span className="text-white font-semibold">{workbook.title}</span> and all associated data:
+                  </p>
+                </div>
+              </div>
+
+              {/* Warning list */}
+              <div className="rounded-xl p-3 mb-4 space-y-2" style={{ background: '#111827', border: '1px solid #3b1e1e' }}>
+                {[
+                  `${wbLines.length} contract line${wbLines.length !== 1 ? 's' : ''}`,
+                  `${wbExtras.length} extra${wbExtras.length !== 1 ? 's' : ''} / agreed variation${wbExtras.length !== 1 ? 's' : ''}`,
+                  `${projectValuations.length} valuation${projectValuations.length !== 1 ? 's' : ''} (${projectValuations.map(v => v.ref).join(', ') || 'none'})`,
+                  'All period entries and historical % progress',
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="w-1 h-1 rounded-full bg-red-500 shrink-0" />
+                    <span className="text-xs text-red-300">{item}</span>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-[10px] text-slate-500 mb-4">
+                This action cannot be undone. You can then create a new workbook and re-import the correct contract build-up.
+              </p>
+
+              <div className="flex gap-2">
+                <button onClick={() => setShowDeleteWb(false)} className="flex-1 py-2.5 rounded-xl text-xs font-bold"
+                  style={{ background: '#111827', color: '#64748b', border: '1px solid #1e2d4a' }}>
+                  Cancel
+                </button>
+                <button
+                  disabled={deletingWb}
+                  onClick={async () => {
+                    if (!project) return;
+                    setDeletingWb(true);
+                    try {
+                      await store.removeValuationWorkbook(workbook.id, project.id);
+                      setView('list');
+                      setOpenId(null);
+                    } finally {
+                      setDeletingWb(false);
+                      setShowDeleteWb(false);
+                    }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
+                >
+                  {deletingWb ? 'Deleting…' : 'Delete Workbook & All Valuations'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
