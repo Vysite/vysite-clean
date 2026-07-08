@@ -1044,14 +1044,23 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
     if (!record) return;
     setConverting(true);
     setError(null);
-    try {
-      const now = new Date().toISOString();
-      const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+
+    // Helper: generate a proper RFC-4122 v4 UUID
+    function genUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
         const r = Math.random() * 16 | 0;
         return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
       });
+    }
 
-      // Auto-generate next DN reference from existing DN records in the same org
+    let newId: string | null = null;
+    const warnings: string[] = [];
+
+    try {
+      const now = new Date().toISOString();
+      newId = genUUID();
+
+      // ── Step 1: Generate next DN reference ──────────────────────────────────
       const existingDns = allRecords.filter(r => r.recordType === 'delay_notice');
       const maxDn = existingDns.reduce((max, r) => {
         const m = r.reference?.match(/^DN[-–]?(\d+)$/i);
@@ -1059,20 +1068,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
       }, 0);
       const nextDnRef = `DN-${String(maxDn + 1).padStart(3, '0')}`;
 
-      // Copy cost/line items from EWN to DN
-      const { data: ewnLines } = await supabase
-        .from('vy_commercial_line_items')
-        .select('*')
-        .eq('record_id', record.id)
-        .order('sort_order');
-
-      // Copy attachments list (we'll re-link them by inserting new attachment rows pointing to the new DN id)
-      const ewnAttachments = store.attachments.filter(a => a.linked_type === 'commercial' && a.linked_id === record.id);
-
-      // Copy comments
-      const ewnComments = store.commercialRecordComments.filter(c => c.record_id === record.id);
-
-      // Build new DN row — copy core fields, leave delay-specific blank
+      // ── Step 2: Insert the Delay Notice record ───────────────────────────────
       const dnRow = {
         id: newId,
         org_id: orgId,
@@ -1082,14 +1078,14 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
         title: record.title,
         client: record.client,
         status: 'draft',
-        date_raised: record.dateRaised,
+        date_raised: record.dateRaised ?? null,
         date_submitted: null,
         date_agreed: null,
-        notes: record.notes,
-        created_by: store.currentUser?.name ?? null,
+        notes: record.notes ?? '',
+        created_by: null,            // uuid column — must be null or a real uuid
         extra_data: {
-          ...(record.extraData?.document_ref   ? { document_ref:   record.extraData.document_ref   } : {}),
-          ...(record.extraData?.related_refs   ? { related_refs:   record.extraData.related_refs   } : {}),
+          ...(record.extraData?.document_ref ? { document_ref: record.extraData.document_ref } : {}),
+          ...(record.extraData?.related_refs ? { related_refs: record.extraData.related_refs } : {}),
           ewn_ref: record.reference || '',
         },
         converted_from_id: record.id,
@@ -1102,99 +1098,147 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
         .insert(dnRow)
         .select('*')
         .single();
-      if (dnErr) throw dnErr;
-
-      // Copy line items
-      if (ewnLines && ewnLines.length > 0) {
-        await supabase.from('vy_commercial_line_items').insert(
-          ewnLines.map((l: Record<string, unknown>, idx: number) => ({
-            id: `li-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
-            org_id: orgId,
-            record_id: newId,
-            sort_order: l.sort_order,
-            description: l.description,
-            client_description: l.client_description,
-            line_type: l.line_type,
-            unit: l.unit,
-            quantity: l.quantity,
-            internal_rate: l.internal_rate,
-            client_rate: l.client_rate,
-            markup_pct: l.markup_pct,
-          }))
-        );
+      if (dnErr) {
+        console.error('[Convert] DN insert failed:', dnErr);
+        throw new Error(`Failed to create Delay Notice: ${dnErr.message}`);
       }
 
-      // Copy attachments
-      for (const att of ewnAttachments) {
-        await store.addAttachment({
-          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          linked_type: 'commercial',
-          linked_id: newId,
-          project_id: att.project_id,
-          project_name: att.project_name,
-          name: att.name,
-          type: att.type,
-          size: att.size,
-          category: att.category,
-          data_url: att.data_url ?? '',
-          uploaded_by: att.uploaded_by,
-          created_at: now,
-        });
-      }
-
-      // Copy comments
-      for (const c of ewnComments) {
-        await store.addCommercialRecordComment({
-          id: `cmt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          org_id: orgId,
-          record_id: newId,
-          body: c.body,
-          author_name: c.author_name,
-          author_id: c.author_id,
-          created_at: now,
-        });
-      }
-
-      // Mark the EWN as converted
+      // ── Step 3: Mark EWN as converted ───────────────────────────────────────
       const { data: ewnData, error: ewnErr } = await supabase
         .from('vy_commercial_records')
         .update({ converted_to_id: newId, updated_at: now })
         .eq('id', record.id)
         .select('*')
         .single();
-      if (ewnErr) throw ewnErr;
+      if (ewnErr) {
+        console.error('[Convert] EWN update failed:', ewnErr);
+        throw new Error(`Failed to link Early Warning Notice: ${ewnErr.message}`);
+      }
 
-      // Log lifecycle events for both records
-      await supabase.from('vy_commercial_events').insert([
-        {
-          org_id: orgId, record_id: record.id, project_id: record.projectId || null,
-          event_type: 'record_created', from_status: null, to_status: 'draft',
-          user_name: store.currentUser?.name ?? null, occurred_at: now,
-        },
-        {
+      // ── Step 4: Copy line items ──────────────────────────────────────────────
+      try {
+        const { data: ewnLines, error: linesErr } = await supabase
+          .from('vy_commercial_line_items')
+          .select('*')
+          .eq('record_id', record.id)
+          .order('sort_order');
+        if (linesErr) throw linesErr;
+        if (ewnLines && ewnLines.length > 0) {
+          const { error: lineInsertErr } = await supabase
+            .from('vy_commercial_line_items')
+            .insert(
+              ewnLines.map((l: Record<string, unknown>, idx: number) => ({
+                id: genUUID(),          // must be a uuid
+                org_id: orgId,
+                record_id: newId,
+                sort_order: typeof l.sort_order === 'number' ? l.sort_order : idx,
+                description: l.description ?? '',
+                client_description: l.client_description ?? '',
+                line_type: l.line_type ?? 'Labour',
+                unit: l.unit ?? 'item',
+                quantity: l.quantity ?? 0,
+                internal_rate: l.internal_rate ?? 0,
+                client_rate: l.client_rate ?? 0,
+                markup_pct: l.markup_pct ?? null,
+              }))
+            );
+          if (lineInsertErr) {
+            console.warn('[Convert] Line items copy failed:', lineInsertErr);
+            warnings.push(`Cost breakdown could not be copied: ${lineInsertErr.message}`);
+          }
+        }
+      } catch (e) {
+        console.warn('[Convert] Line items step failed:', e);
+        warnings.push('Cost breakdown could not be copied.');
+      }
+
+      // ── Step 5: Copy attachments ─────────────────────────────────────────────
+      try {
+        const ewnAttachments = store.attachments.filter(
+          a => a.linked_type === 'commercial' && a.linked_id === record.id
+        );
+        for (const att of ewnAttachments) {
+          await store.addAttachment({
+            id: genUUID(),
+            linked_type: 'commercial',
+            linked_id: newId!,
+            project_id: att.project_id,
+            project_name: att.project_name,
+            name: att.name,
+            type: att.type,
+            size: att.size,
+            category: att.category,
+            data_url: att.data_url ?? '',
+            uploaded_by: att.uploaded_by,
+            created_at: now,
+          });
+        }
+      } catch (e) {
+        console.warn('[Convert] Attachments copy failed:', e);
+        warnings.push('Attachments could not be copied.');
+      }
+
+      // ── Step 6: Copy comments ────────────────────────────────────────────────
+      try {
+        const ewnComments = store.commercialRecordComments.filter(
+          c => c.record_id === record.id
+        );
+        for (const c of ewnComments) {
+          await store.addCommercialRecordComment({
+            id: genUUID(),
+            org_id: orgId,
+            record_id: newId!,
+            body: c.body,
+            author_name: c.author_name,
+            author_id: c.author_id,
+            created_at: now,
+          });
+        }
+      } catch (e) {
+        console.warn('[Convert] Comments copy failed:', e);
+        warnings.push('Comments could not be copied.');
+      }
+
+      // ── Step 7: Log lifecycle events ─────────────────────────────────────────
+      try {
+        await supabase.from('vy_commercial_events').insert({
           org_id: orgId, record_id: newId, project_id: record.projectId || null,
           event_type: 'record_created', from_status: null, to_status: 'draft',
           user_name: store.currentUser?.name ?? null, occurred_at: now,
-        },
-      ]);
+        });
+      } catch (e) {
+        console.warn('[Convert] Events insert failed:', e);
+      }
 
+      // ── Step 8: Activity log ─────────────────────────────────────────────────
+      try {
+        const projectName = projects.find(p => p.id === record.projectId)?.name;
+        logActivity({
+          orgId, userName: store.currentUser?.name ?? '',
+          module: 'commercial', recordId: record.id,
+          recordRef: record.reference || record.title,
+          recordType: record.recordType, projectId: record.projectId || null, projectName: projectName ?? null,
+          actionType: 'record_created',
+          description: `${store.currentUser?.name ?? 'Unknown'} converted ${record.reference || record.title} (Early Warning Notice) to Delay Notice ${nextDnRef}.`,
+        });
+      } catch (e) {
+        console.warn('[Convert] Activity log failed:', e);
+      }
+
+      // ── Done ─────────────────────────────────────────────────────────────────
       const projectName = projects.find(p => p.id === record.projectId)?.name;
       const updatedEwn = dbToRecord(ewnData as Record<string, unknown>, projectName);
       const newDn = dbToRecord(dnData as Record<string, unknown>, projectName);
 
-      logActivity({
-        orgId, userName: store.currentUser?.name ?? '',
-        module: 'commercial', recordId: record.id,
-        recordRef: record.reference || record.title,
-        recordType: record.recordType, projectId: record.projectId || null, projectName: projectName ?? null,
-        actionType: 'record_created',
-        description: `${store.currentUser?.name ?? 'Unknown'} converted ${record.reference || record.title} (Early Warning Notice) to Delay Notice ${nextDnRef}.`,
-      });
+      if (warnings.length > 0) {
+        setError(`Delay Notice created, but: ${warnings.join(' ')}`);
+      }
 
       onConverted(updatedEwn, newDn);
       setShowConvertConfirm(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Conversion failed');
+      console.error('[Convert] Fatal error:', e);
+      setError(e instanceof Error ? e.message : 'Conversion failed — please try again.');
     } finally {
       setConverting(false);
     }
