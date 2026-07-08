@@ -1687,7 +1687,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
               <div>
                 <label className={labelCls}>Record Type</label>
                 <select className={selectCls} value={form.recordType} onChange={e => setForm(f => ({ ...f, recordType: e.target.value as CommercialRecordType }))} disabled={!canEdit}>
-                  {RECORD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  {RECORD_TYPES.filter(t => t.value !== 'variation').map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
               <div>
@@ -2197,6 +2197,7 @@ export default function Commercial() {
   const [isNewRecord, setIsNewRecord]       = useState(false);
   const [modalOpen, setModalOpen]           = useState(false);
   const [commercialEvents, setCommercialEvents] = useState<CommercialEvent[]>([]);
+  const [openVariationId, setOpenVariationId] = useState<string | null>(null);
 
   const projects = useMemo(() => store.projects, [store.projects]);
 
@@ -2244,7 +2245,16 @@ export default function Commercial() {
   }, []);
 
   function openNew() { setSelectedRecord(null); setIsNewRecord(true); setModalOpen(true); }
-  function openRecord(r: CommercialRecord) { setSelectedRecord(r); setIsNewRecord(false); setModalOpen(true); }
+  function openRecord(r: CommercialRecord) {
+    if (r.recordType === 'variation') {
+      // Route variations to the Variation Account drawer, not the generic modal
+      const vaItemId = typeof r.extraData?.va_item_id === 'string' ? r.extraData.va_item_id : null;
+      setActiveTab('variation-account');
+      setOpenVariationId(vaItemId);
+      return;
+    }
+    setSelectedRecord(r); setIsNewRecord(false); setModalOpen(true);
+  }
 
   async function handleQuickStatus(r: CommercialRecord, newStatus: CommercialRecordStatus) {
     if (r.status === newStatus) return;
@@ -2358,17 +2368,24 @@ export default function Commercial() {
     setModalOpen(false);
   }
 
-  function handleConverted(updatedEwn: CommercialRecord, newDn: CommercialRecord) {
+  function handleConverted(updatedSource: CommercialRecord, newRecord: CommercialRecord) {
     setRecords(prev => {
-      const withUpdatedEwn = prev.map(r => r.id === updatedEwn.id ? updatedEwn : r);
-      return [newDn, ...withUpdatedEwn];
+      const withUpdatedSource = prev.map(r => r.id === updatedSource.id ? updatedSource : r);
+      return [newRecord, ...withUpdatedSource];
     });
     loadEvents();
-    // Changing selectedRecord.id causes the keyed DetailModal to unmount+remount,
-    // so the new DN's form state initialises fresh from newDn (not from the EWN).
-    setSelectedRecord(newDn);
-    setIsNewRecord(false);
-    setModalOpen(true);
+    if (newRecord.recordType === 'variation') {
+      // Route converted variations to the VA drawer
+      const vaItemId = typeof newRecord.extraData?.va_item_id === 'string' ? newRecord.extraData.va_item_id : null;
+      setModalOpen(false);
+      setActiveTab('variation-account');
+      setOpenVariationId(vaItemId);
+    } else {
+      // For EWN→DN and other conversions, open the new record in the modal
+      setSelectedRecord(newRecord);
+      setIsNewRecord(false);
+      setModalOpen(true);
+    }
   }
 
   function handleDeleted(id: string) {
@@ -2471,7 +2488,7 @@ export default function Commercial() {
               Full Report
             </button>
           )}
-          {canCreate && activeTab !== 'overview' && (
+          {canCreate && activeTab !== 'overview' && activeTab !== 'variation-account' && (
             <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f97316] hover:bg-orange-400 text-white text-sm font-semibold transition-colors shadow-lg shadow-orange-900/30">
               <Plus size={15} /> New Record
             </button>
@@ -2551,6 +2568,8 @@ export default function Commercial() {
           canEdit={canEdit}
           canDelete={canDelete}
           currentUserName={store.currentUser?.name ?? ''}
+          openItemId={openVariationId}
+          onItemOpened={() => setOpenVariationId(null)}
           onProjectChange={(id) => setBannerProjectId(id)}
         />
       )}
@@ -2611,7 +2630,16 @@ export default function Commercial() {
           onSaved={handleSaved}
           onDeleted={handleDeleted}
           onConverted={handleConverted}
-          onOpenRecord={r => { setSelectedRecord(r); setIsNewRecord(false); }}
+          onOpenRecord={r => {
+            if (r.recordType === 'variation') {
+              const vaItemId = typeof r.extraData?.va_item_id === 'string' ? r.extraData.va_item_id : null;
+              setModalOpen(false);
+              setActiveTab('variation-account');
+              setOpenVariationId(vaItemId);
+            } else {
+              setSelectedRecord(r); setIsNewRecord(false);
+            }
+          }}
         />
       )}
     </div>

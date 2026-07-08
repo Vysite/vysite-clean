@@ -1141,11 +1141,14 @@ interface VariationAccountProps {
   canEdit: boolean;
   canDelete: boolean;
   currentUserName?: string;
+  openItemId?: string | null;
+  onItemOpened?: () => void;
   onProjectChange: (id: string) => void;
 }
 
 export default function VariationAccount({
-  project, projects, orgId, canCreate, canEdit, canDelete, currentUserName, onProjectChange,
+  project, projects, orgId, canCreate, canEdit, canDelete, currentUserName,
+  openItemId, onItemOpened, onProjectChange,
 }: VariationAccountProps) {
   const store = useAppStore();
 
@@ -1172,6 +1175,16 @@ export default function VariationAccount({
     const max = nums.length > 0 ? Math.max(...nums) : 0;
     return `VAR-${String(max + 1).padStart(3, '0')}`;
   }, [items]);
+
+  // Auto-open a specific VA item when navigated from the Commercial Register
+  useEffect(() => {
+    if (!openItemId) return;
+    const target = store.variationAccountItems.find(v => v.id === openItemId);
+    if (target) {
+      openItem(target);
+      onItemOpened?.();
+    }
+  }, [openItemId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openNew() {
     setSelectedItem(null);
