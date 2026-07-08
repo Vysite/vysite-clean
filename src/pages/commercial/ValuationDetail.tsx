@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { ArrowLeft, FileText, Download, ChevronDown, ChevronRight, X, CreditCard as Edit2, Lock, Unlock, CheckCircle } from 'lucide-react';
-import { useAppStore } from '../../lib/StoreContext';
-import type {
+import { useAppStore } from '../../lib/StoreContext';import type {
   DBValuation, DBValuationWorkbook, DBWorkbookLine, DBWorkbookExtra,
   DBValuationLineEntry, DBValuationExtraEntry,
 } from '../../lib/store';
@@ -339,7 +338,11 @@ export default function ValuationDetail({
     try {
       const lineData  = wbLines.map(l  => ({ line: l,  entry: getLineEntry(l.id) }));
       const extraData = wbExtras.map(e => ({ extra: e, entry: getExtraEntry(e.id) }));
-      await buildValuationPdf(valuation, project, lineData, extraData, totals);
+      await buildValuationPdf(
+        valuation, project, lineData, extraData, totals,
+        store.settings?.logo_data_url,
+        store.settings?.company_name,
+      );
     } finally { setPdfLoading(false); }
   };
 
