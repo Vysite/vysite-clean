@@ -2249,6 +2249,8 @@ export default function Commercial() {
     if (r.recordType === 'variation') {
       // Route variations to the Variation Account drawer, not the generic modal
       const vaItemId = typeof r.extraData?.va_item_id === 'string' ? r.extraData.va_item_id : null;
+      // Sync the banner project so the VA shows the right project
+      if (r.projectId) setBannerProjectId(r.projectId);
       setActiveTab('variation-account');
       setOpenVariationId(vaItemId);
       return;
@@ -2377,6 +2379,7 @@ export default function Commercial() {
     if (newRecord.recordType === 'variation') {
       // Route converted variations to the VA drawer
       const vaItemId = typeof newRecord.extraData?.va_item_id === 'string' ? newRecord.extraData.va_item_id : null;
+      if (newRecord.projectId) setBannerProjectId(newRecord.projectId);
       setModalOpen(false);
       setActiveTab('variation-account');
       setOpenVariationId(vaItemId);
@@ -2570,6 +2573,34 @@ export default function Commercial() {
           currentUserName={store.currentUser?.name ?? ''}
           openItemId={openVariationId}
           onItemOpened={() => setOpenVariationId(null)}
+          onCrRecordCreated={(crId, vaItem) => {
+            const projectName = projects.find(p => p.id === vaItem.project_id)?.name;
+            const now = new Date().toISOString();
+            const newCr: CommercialRecord = {
+              id: crId,
+              orgId,
+              projectId: vaItem.project_id,
+              projectName,
+              recordType: 'variation',
+              reference: vaItem.reference,
+              title: vaItem.title,
+              client: '',
+              status: 'draft',
+              dateRaised: vaItem.date_raised ?? null,
+              dateSubmitted: null,
+              dateAgreed: null,
+              statusChangedAt: null,
+              notes: vaItem.notes ?? '',
+              createdBy: vaItem.created_by ?? null,
+              createdAt: vaItem.created_at ?? now,
+              updatedAt: vaItem.updated_at ?? now,
+              extraData: { va_item_id: vaItem.id },
+            };
+            setRecords(prev => [newCr, ...prev]);
+          }}
+          onCrRecordDeleted={(crId) => {
+            setRecords(prev => prev.filter(r => r.id !== crId));
+          }}
           onProjectChange={(id) => setBannerProjectId(id)}
         />
       )}

@@ -601,11 +601,13 @@ interface VariationDrawerProps {
   onClose: () => void;
   onSaved: (v: DBVariationAccountItem) => void;
   onDeleted: (id: string) => void;
+  onCrRecordCreated?: (crId: string, vaItem: DBVariationAccountItem) => void;
+  onCrRecordDeleted?: (crId: string) => void;
 }
 
 function VariationDrawer({
   mode, item, templateData, orgId, projectId, nextRef, canEdit, canDelete,
-  onClose, onSaved, onDeleted,
+  onClose, onSaved, onDeleted, onCrRecordCreated, onCrRecordDeleted,
 }: VariationDrawerProps) {
   const store = useAppStore();
 
@@ -754,8 +756,34 @@ function VariationDrawer({
             created_at: now,
           });
         }
+        // Create a matching Commercial Register entry so this variation appears in the CR
+        const crId = genId();
+        const { error: crErr } = await supabase.from('vy_commercial_records').insert({
+          id: crId,
+          org_id: orgId,
+          project_id: projectId,
+          record_type: 'variation',
+          reference: row.reference,
+          title: row.title,
+          client: '',
+          status: 'draft',
+          date_raised: row.date_raised ?? null,
+          notes: row.notes ?? '',
+          extra_data: { va_item_id: stableId },
+          created_at: now,
+          updated_at: now,
+        });
+        if (!crErr) {
+          onCrRecordCreated?.(crId, row);
+        }
       } else {
         await store.updateVariationAccountItem(row);
+        // Keep the CR entry title/reference in sync
+        await supabase
+          .from('vy_commercial_records')
+          .update({ title: row.title, reference: row.reference, updated_at: now })
+          .eq('org_id', orgId)
+          .filter('extra_data->>va_item_id', 'eq', stableId);
       }
       onSaved(row);
     } catch (e) {
@@ -768,6 +796,21 @@ function VariationDrawer({
   async function handleDelete() {
     if (!item) return;
     setDeleting(true);
+    // Find and delete the linked Commercial Register entry (if any)
+    try {
+      const { data: linkedCr } = await supabase
+        .from('vy_commercial_records')
+        .select('id')
+        .eq('org_id', orgId)
+        .filter('extra_data->>va_item_id', 'eq', item.id)
+        .maybeSingle();
+      if (linkedCr?.id) {
+        await supabase.from('vy_commercial_records').delete().eq('id', linkedCr.id);
+        onCrRecordDeleted?.(linkedCr.id);
+      }
+    } catch (e) {
+      console.warn('[VariationDelete] CR cleanup failed:', e);
+    }
     await store.removeVariationAccountItem(item.id);
     for (const att of attachments) {
       await supabase.from('vy_attachments').delete().eq('id', att.id);
@@ -1143,12 +1186,14 @@ interface VariationAccountProps {
   currentUserName?: string;
   openItemId?: string | null;
   onItemOpened?: () => void;
+  onCrRecordCreated?: (crId: string, vaItem: DBVariationAccountItem) => void;
+  onCrRecordDeleted?: (crId: string) => void;
   onProjectChange: (id: string) => void;
 }
 
 export default function VariationAccount({
   project, projects, orgId, canCreate, canEdit, canDelete, currentUserName,
-  openItemId, onItemOpened, onProjectChange,
+  openItemId, onItemOpened, onCrRecordCreated, onCrRecordDeleted, onProjectChange,
 }: VariationAccountProps) {
   const store = useAppStore();
 
@@ -1422,6 +1467,8 @@ export default function VariationAccount({
           onClose={() => { setDrawerOpen(false); setSelectedItem(null); setSimilarTemplate(null); }}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
+          onCrRecordCreated={onCrRecordCreated}
+          onCrRecordDeleted={onCrRecordDeleted}
         />
       )}
     </div>
