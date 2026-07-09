@@ -15,8 +15,7 @@ export type ExtendedFormType =
   | 'Practical Completion Certificate'
   | 'Site Hold Up'
   | 'Site Change Request'
-  | 'Site Note'
-  | 'Flushing Register';
+  | 'Site Note';
 
 export type ExtendedFormStatus =
   | FormStatus
@@ -451,25 +450,6 @@ export interface ExtendedSiteForm extends Omit<SiteForm, 'type' | 'status'> {
   snBody?: string;
   snRecommendedAction?: string;
   snTime?: string;
-  // Flushing Register
-  frRef?: string;
-  frSite?: string;
-  frClient?: string;
-  frRaisedBy?: string;
-  frCompany?: string;
-  frRevision?: string;
-  frShiftStartChecks?: string;   // JSON: Record<string, string> — Yes/No per check key
-  frShiftStartNotes?: string;
-  frRows?: string;               // JSON: FlushingRegisterRow[]
-  frShiftEndChecks?: string;     // JSON: Record<string, string>
-  frShiftEndNotes?: string;
-  frTotalFlushed?: string;
-  frOutstandingOutlets?: string;
-  frIssuesIdentified?: string;
-  frActionsRequired?: string;
-  frCompletedBy?: string;
-  frPosition?: string;
-  frDeclarationDate?: string;
 }
 
 export const TYPE_MAP: Record<string, { bg: string; text: string; label: string; border: string }> = {
@@ -502,7 +482,6 @@ export const TYPE_MAP: Record<string, { bg: string; text: string; label: string;
   'Site Hold Up':                     { bg: 'bg-amber-900/60',   text: 'text-amber-400',   label: 'Site Hold Up',       border: 'border-l-amber-600' },
   'Site Change Request':              { bg: 'bg-sky-900/60',     text: 'text-sky-400',     label: 'Change Request',     border: 'border-l-sky-600' },
   'Site Note':                        { bg: 'bg-slate-700/60',   text: 'text-slate-300',   label: 'Site Note',          border: 'border-l-slate-500' },
-  'Flushing Register':                { bg: 'bg-cyan-900/60',    text: 'text-cyan-300',    label: 'Flushing Register',  border: 'border-l-cyan-500' },
 };
 
 export const inputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600';

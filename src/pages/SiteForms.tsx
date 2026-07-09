@@ -55,7 +55,6 @@ const FORM_CATEGORIES = [
       { type: 'HIU Commissioning Record', title: 'HIU Commissioning Record', description: 'Heat Interface Unit commissioning — plot info, HIU details, heat meter, valve checks, temperature/pressure readings, DHW, controls, defects and sign-off' },
       { type: 'MVHR Commissioning Record', title: 'MVHR Commissioning Record', description: 'Mechanical Ventilation with Heat Recovery commissioning — unit details, installation checks, airflow readings per room, functional testing, defects and sign-off' },
       { type: 'Temperature Water Readings', title: 'Temperature Water Readings', description: 'Domestic hot and cold water temperature survey — outlet readings, 20s/60s temps, pass/fail assessment and sign-off' },
-      { type: 'Flushing Register', title: 'Flushing Register', description: 'Daily Legionella flushing register — start/end of shift checks, dynamic outlet register table, daily summary and declaration (ACoP L8 / HSG274 / BSRIA BG29)' },
     ],
   },
   {
@@ -431,8 +430,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
       ?? (data as Record<string, unknown>).inspectionRef
       ?? (data as Record<string, unknown>).shuRef
       ?? (data as Record<string, unknown>).scrRef
-      ?? (data as Record<string, unknown>).snRef
-      ?? (data as Record<string, unknown>).frRef;
+      ?? (data as Record<string, unknown>).snRef;
     if (ref) return String(ref);
     return data.type;
   };
