@@ -446,6 +446,8 @@ const CONTRACTUAL_NOTICE: Partial<Record<string, string>> = {
     'Temperature measurements have been taken in accordance with CIBSE TM13, HSG274 (Part 2), the Water Supply (Water Fittings) Regulations 1999, and the project specification. All readings form part of the Legionella risk management programme and must be retained as part of the permanent water hygiene record. Where temperatures fall outside the recommended range, remedial action must be taken immediately and the results re-tested and recorded.',
   'Site Note':
     'This Site Note has been issued to formally record information, observations, existing conditions or matters relevant to the Project. It is intended to maintain an accurate contemporaneous project record and does not, by itself, constitute a contractual instruction, variation, acceptance or waiver of any contractual rights or obligations unless expressly stated elsewhere within the Contract.',
+  'Flushing Register':
+    'This Flushing Register has been completed in accordance with ACoP L8 (Legionella — The Control of Legionella Bacteria in Water Systems), HSG274, CIBSE TM8, BSRIA BG 29/2021 and the project specification. All flushing records must be retained as part of the statutory Legionella risk management programme. Where any outlet does not run clear or cannot be flushed, this must be reported to the responsible person immediately and logged as a defect. This register forms part of the project health and safety file and O&M documentation.',
 };
 
 // ─── Reusable report footer / legal block ─────────────────────────────────────
@@ -557,6 +559,121 @@ function buildFlushingBody(f: Record<string, unknown>): string {
     ${safeStr(f.pipeworkDescription) ? section('Pipework Description', safeStr(f.pipeworkDescription)) : ''}
     ${resultBlock('Flush Result', safeStr(f.flushResult))}
     ${safeStr(f.observations) ? section('Observations / Notes', safeStr(f.observations)) : ''}
+  `;
+}
+
+function buildFlushingRegisterBody(f: Record<string, unknown>): string {
+  const FR_START_LABELS: Record<string, string> = {
+    waterAvailable:   'Water supply available',
+    pointsIdentified: 'Correct flushing points identified',
+    valvesChecked:    'Isolation valves checked',
+    equipAvailable:   'Flushing equipment available',
+    areaSafe:         'Area safe to commence flushing',
+    ppeWorn:          'Appropriate PPE worn',
+    ramsFollowed:     'RAMS followed',
+  };
+  const FR_END_LABELS: Record<string, string> = {
+    allFlushingDone: 'All flushing completed',
+    valvesIsolated:  'All flushing valves isolated',
+    hosesRemoved:    'Temporary flushing hoses removed',
+    valvesReturned:  'All valves returned to correct position',
+    capsFitted:      'Isolation caps fitted where applicable',
+    deadLegsSafe:    'Dead legs left safe',
+    noLeaks:         'No leaks identified',
+    systemSafe:      'System left in safe condition',
+    areaClean:       'Area left clean and tidy',
+  };
+
+  function checksTable(checks: Record<string, string>, labels: Record<string, string>): string {
+    const rows = Object.entries(labels).map(([k, label]) => {
+      const v = checks[k] ?? '';
+      const colour = v === 'Yes' ? '#16a34a' : v === 'No' ? '#dc2626' : '#64748b';
+      return `<tr>
+        <td style="padding:5px 10px;font-size:10px;color:#334155;border-bottom:1px solid #f1f5f9;">${esc(label)}</td>
+        <td style="padding:5px 10px;font-size:10px;font-weight:700;color:${colour};text-align:center;border-bottom:1px solid #f1f5f9;white-space:nowrap;">${esc(v)||'—'}</td>
+      </tr>`;
+    }).join('');
+    return `<table style="width:100%;border-collapse:collapse;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+      <thead><tr style="background:#f1f5f9;">
+        <th style="padding:6px 10px;font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;text-align:left;">Check Item</th>
+        <th style="padding:6px 10px;font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;text-align:center;width:60px;">Result</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  let startChecks: Record<string, string> = {};
+  let endChecks: Record<string, string> = {};
+  try { startChecks = JSON.parse(safeStr(f.frStartChecks)) as Record<string, string>; } catch { /* */ }
+  try { endChecks = JSON.parse(safeStr(f.frEndChecks)) as Record<string, string>; } catch { /* */ }
+
+  interface FRow { date?: string; areaRoom?: string; outletAsset?: string; system?: string; durationMins?: string; valveSafe?: string; capped?: string; runningClear?: string; engineer?: string; rowNotes?: string; }
+  let rows: FRow[] = [];
+  try { rows = JSON.parse(safeStr(f.frRows)) as FRow[]; } catch { /* */ }
+
+  const ynCol = (v: string) => v === 'Yes' ? '#16a34a' : v === 'No' ? '#dc2626' : '#64748b';
+
+  const registerHtml = rows.length > 0 ? `
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:9px;">
+      <thead>
+        <tr style="background:#0f172a;color:#94a3b8;">
+          <th style="padding:5px 7px;text-align:left;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid #1e293b;white-space:nowrap;">Date</th>
+          <th style="padding:5px 7px;text-align:left;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid #1e293b;">Area / Room</th>
+          <th style="padding:5px 7px;text-align:left;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid #1e293b;">Outlet / Asset</th>
+          <th style="padding:5px 7px;text-align:left;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid #1e293b;">System</th>
+          <th style="padding:5px 7px;text-align:center;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid #1e293b;white-space:nowrap;">Dur.<br>(min)</th>
+          <th style="padding:5px 7px;text-align:center;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid #1e293b;white-space:nowrap;">Valve<br>Safe</th>
+          <th style="padding:5px 7px;text-align:center;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid #1e293b;white-space:nowrap;">Capped</th>
+          <th style="padding:5px 7px;text-align:center;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid #1e293b;white-space:nowrap;">Running<br>Clear</th>
+          <th style="padding:5px 7px;text-align:left;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid #1e293b;">Engineer</th>
+          <th style="padding:5px 7px;text-align:left;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid #1e293b;">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((r, i) => `
+          <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+            <td style="padding:4px 7px;border:1px solid #e2e8f0;white-space:nowrap;">${esc(r.date ? new Date(r.date).toLocaleDateString('en-GB') : '')}</td>
+            <td style="padding:4px 7px;border:1px solid #e2e8f0;">${esc(r.areaRoom??'')}</td>
+            <td style="padding:4px 7px;border:1px solid #e2e8f0;">${esc(r.outletAsset??'')}</td>
+            <td style="padding:4px 7px;border:1px solid #e2e8f0;">${esc(r.system??'')}</td>
+            <td style="padding:4px 7px;border:1px solid #e2e8f0;text-align:center;">${esc(r.durationMins??'')}</td>
+            <td style="padding:4px 7px;border:1px solid #e2e8f0;text-align:center;font-weight:700;color:${ynCol(r.valveSafe??'')};">${esc(r.valveSafe??'—')}</td>
+            <td style="padding:4px 7px;border:1px solid #e2e8f0;text-align:center;font-weight:700;color:${ynCol(r.capped??'')};">${esc(r.capped??'—')}</td>
+            <td style="padding:4px 7px;border:1px solid #e2e8f0;text-align:center;font-weight:700;color:${ynCol(r.runningClear??'')};">${esc(r.runningClear??'—')}</td>
+            <td style="padding:4px 7px;border:1px solid #e2e8f0;">${esc(r.engineer??'')}</td>
+            <td style="padding:4px 7px;border:1px solid #e2e8f0;color:#64748b;">${esc(r.rowNotes??'')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>
+  ` : '<p style="font-size:10px;color:#94a3b8;font-style:italic;padding:8px 0;">No flushing entries recorded.</p>';
+
+  const summaryGrid = dataGrid([
+    ['Total Flushing Points Completed', safeStr(f.frTotalPoints)],
+    ['Total Flushing Duration', safeStr(f.frTotalDuration)],
+    ['Completed By', safeStr(f.frCompletedBy || f.completedBy)],
+    ['Position', safeStr(f.frPosition)],
+    ['Declaration Date', safeStr(f.frDeclDate) ? fmtDate(safeStr(f.frDeclDate)) : ''],
+  ]);
+
+  return `
+    ${sectionHtml('Register Details', dataGrid([
+      ['Form Reference', safeStr(f.frRef)], ['Revision', safeStr(f.frRevision)],
+      ['Site', safeStr(f.frSite)], ['Client', safeStr(f.frClient)],
+      ['Raised By', safeStr(f.frRaisedBy)], ['Company', safeStr(f.frCompany)],
+    ]))}
+    ${safeStr(f.notes) ? section('Notes', safeStr(f.notes)) : ''}
+    ${sectionHtml('Start of Shift Checks', checksTable(startChecks, FR_START_LABELS) + (safeStr(f.frStartNotes) ? `<p style="font-size:10px;color:#475569;margin-top:8px;padding:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">${esc(safeStr(f.frStartNotes))}</p>` : ''))}
+    ${sectionHtml('Flushing Register', registerHtml)}
+    ${sectionHtml('End of Shift Checks', checksTable(endChecks, FR_END_LABELS) + (safeStr(f.frEndNotes) ? `<p style="font-size:10px;color:#475569;margin-top:8px;padding:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">${esc(safeStr(f.frEndNotes))}</p>` : ''))}
+    ${safeStr(f.frOutstanding) ? section('Outstanding Flushing Points', safeStr(f.frOutstanding)) : ''}
+    ${safeStr(f.frIssues) ? section('Issues Identified', safeStr(f.frIssues)) : ''}
+    ${safeStr(f.frFurtherActions) ? section('Further Actions Required', safeStr(f.frFurtherActions)) : ''}
+    ${sectionHtml('Daily Summary & Declaration', summaryGrid)}
+    <div class="section" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin-top:16px;">
+      <p style="font-size:9.5px;color:#475569;font-style:italic;line-height:1.6;">"I confirm that the above flushing activities have been completed and that all flushing points, valves and associated equipment have been left in a safe condition appropriate for the current stage of the works."</p>
+    </div>
   `;
 }
 
@@ -1780,6 +1897,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
       'Site Hold Up': 'Site Hold Up Record',
       'Site Change Request': 'Site Change Request',
       'Site Note': 'Site Note',
+      'Flushing Register': 'Mechanical — Daily Flushing Register',
     };
     return map[form.type] ?? form.type;
   })();
@@ -1829,6 +1947,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
   switch (form.type) {
     case 'Pressure Test':                  formBody = buildPressureTestBody(f); break;
     case 'Flushing Record':                formBody = buildFlushingBody(f); break;
+    case 'Flushing Register':              formBody = buildFlushingRegisterBody(f); break;
     case 'Valve Checklist':                formBody = buildValveBody(f); break;
     case 'AHU Commissioning':              formBody = buildAHUBody(f); break;
     case 'Dead Testing':                   formBody = buildDeadTestBody(f); break;
@@ -1861,7 +1980,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
     ? sectionHtml('Evidence & Attachments', evidenceHtml(attachments))
     : '';
 
-  const docRef = safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.shuRef) || safeStr(f.scrRef) || safeStr(f.snRef) || safeStr(f.id) || `VY-${Date.now()}`;
+  const docRef = safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.shuRef) || safeStr(f.scrRef) || safeStr(f.snRef) || safeStr(f.frRef) || safeStr(f.id) || `VY-${Date.now()}`;
   const legalFooter = reportFooter({
     formType: form.type,
     docRef,

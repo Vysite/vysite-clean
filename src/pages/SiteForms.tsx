@@ -431,7 +431,8 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
       ?? (data as Record<string, unknown>).inspectionRef
       ?? (data as Record<string, unknown>).shuRef
       ?? (data as Record<string, unknown>).scrRef
-      ?? (data as Record<string, unknown>).snRef;
+      ?? (data as Record<string, unknown>).snRef
+      ?? (data as Record<string, unknown>).frRef;
     if (ref) return String(ref);
     return data.type;
   };

@@ -451,6 +451,31 @@ export interface ExtendedSiteForm extends Omit<SiteForm, 'type' | 'status'> {
   snBody?: string;
   snRecommendedAction?: string;
   snTime?: string;
+  // Flushing Register
+  frRef?: string;
+  frSite?: string;
+  frClient?: string;
+  frRaisedBy?: string;
+  frCompany?: string;
+  frRevision?: string;
+  // Start of shift checks — JSON: Record<string, string> (Yes/No per key)
+  frStartChecks?: string;
+  frStartNotes?: string;
+  // Dynamic flushing rows — JSON: FlushingRegisterRow[]
+  frRows?: string;
+  // End of shift checks — JSON: Record<string, string>
+  frEndChecks?: string;
+  frEndNotes?: string;
+  // Daily summary
+  frTotalPoints?: string;
+  frTotalDuration?: string;
+  frOutstanding?: string;
+  frIssues?: string;
+  frFurtherActions?: string;
+  // Declaration
+  frCompletedBy?: string;
+  frPosition?: string;
+  frDeclDate?: string;
 }
 
 export const TYPE_MAP: Record<string, { bg: string; text: string; label: string; border: string }> = {
