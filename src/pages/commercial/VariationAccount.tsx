@@ -698,6 +698,35 @@ function VariationDrawer({
     setLocalBuildUpLines(prev => prev.filter(l => l.id !== id));
   }, []);
 
+  // Sync item.value to build-up total after any line mutation in edit mode
+  async function syncItemValue(linesAfter: DBVABuildUpLine[]) {
+    if (!item) return;
+    const newTotal = linesAfter.reduce((s, l) => s + (l.line_total ?? 0), 0);
+    const updated: DBVariationAccountItem = { ...item, value: newTotal, updated_at: new Date().toISOString() };
+    await store.updateVariationAccountItem(updated);
+  }
+
+  const editAddLine = useCallback(async (l: DBVABuildUpLine) => {
+    await store.addVABuildUpLine(l);
+    const currentLines = (store.vaBuildUpLines ?? []).filter(x => x.va_item_id === stableId);
+    await syncItemValue([...currentLines, l]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, stableId, item]);
+
+  const editUpdateLine = useCallback(async (l: DBVABuildUpLine) => {
+    await store.updateVABuildUpLine(l);
+    const currentLines = (store.vaBuildUpLines ?? []).filter(x => x.va_item_id === stableId);
+    await syncItemValue(currentLines.map(x => x.id === l.id ? l : x));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, stableId, item]);
+
+  const editRemoveLine = useCallback(async (id: string) => {
+    await store.removeVABuildUpLine(id);
+    const currentLines = (store.vaBuildUpLines ?? []).filter(x => x.va_item_id === stableId);
+    await syncItemValue(currentLines.filter(x => x.id !== id));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, stableId, item]);
+
   // Close PDF menu on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -711,8 +740,10 @@ function VariationDrawer({
 
   async function handleSave() {
     if (!form.title.trim()) { setError('Title is required'); return; }
-    const valueNum = parseFloat(form.value.replace(/[£,\s]/g, ''));
-    if (isNaN(valueNum) || valueNum < 0) { setError('Enter a valid positive number for Value'); return; }
+    // If build-up lines exist, they are the single source of truth for value.
+    // Only fall back to the manually entered field when there are no lines.
+    const effectiveValue = buildUpLines.length > 0 ? buildUpTotal : parseFloat(form.value.replace(/[£,\s]/g, ''));
+    if (isNaN(effectiveValue) || effectiveValue < 0) { setError('Enter a valid positive number for Value'); return; }
     setSaving(true); setError(null);
     const now = new Date().toISOString();
     const row: DBVariationAccountItem = {
@@ -723,7 +754,7 @@ function VariationDrawer({
       title:       form.title.trim(),
       description: form.description.trim(),
       reason:      form.reason.trim(),
-      value:       valueNum,
+      value:       effectiveValue,
       is_positive: form.isPositive,
       status:      form.status,
       date_raised: form.dateRaised || null,
@@ -958,8 +989,22 @@ function VariationDrawer({
 
                 {/* Value + Direction */}
                 <div>
-                  <label className={labelCls}>Value (£)</label>
-                  <input type="text" inputMode="numeric" className={inputCls} value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value.replace(/[^0-9.]/g, '') }))} placeholder="0.00" disabled={!canEdit} />
+                  <label className={labelCls}>
+                    Value (£)
+                    {buildUpLines.length > 0 && (
+                      <span className="ml-1.5 text-[10px] font-semibold text-[#f97316]">computed from build-up</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className={`${inputCls} ${buildUpLines.length > 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    value={buildUpLines.length > 0 ? buildUpTotal.toFixed(2) : form.value}
+                    onChange={e => buildUpLines.length === 0 && setForm(f => ({ ...f, value: e.target.value.replace(/[^0-9.]/g, '') }))}
+                    readOnly={buildUpLines.length > 0}
+                    placeholder="0.00"
+                    disabled={!canEdit && buildUpLines.length === 0}
+                  />
                 </div>
                 <div>
                   <label className={labelCls}>Direction</label>
@@ -1014,9 +1059,9 @@ function VariationDrawer({
                 orgId={orgId}
                 projectId={projectId}
                 canEdit={canEdit}
-                onAdd={mode === 'create' ? localAddLine : store.addVABuildUpLine}
-                onUpdate={mode === 'create' ? localUpdateLine : store.updateVABuildUpLine}
-                onRemove={mode === 'create' ? localRemoveLine : store.removeVABuildUpLine}
+                onAdd={mode === 'create' ? localAddLine : editAddLine}
+                onUpdate={mode === 'create' ? localUpdateLine : editUpdateLine}
+                onRemove={mode === 'create' ? localRemoveLine : editRemoveLine}
               />
             </div>
           )}
