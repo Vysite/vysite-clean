@@ -66,8 +66,11 @@ const rfiColors: Record<RFIStatus, string> = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function daysRemaining(returnDate: string): number {
-  const diff = new Date(returnDate).getTime() - new Date('2026-05-19').getTime();
-  return Math.ceil(diff / 86400000);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(returnDate);
+  due.setHours(0, 0, 0, 0);
+  return Math.round((due.getTime() - today.getTime()) / 86400000);
 }
 
 function formatValue(v: number): string {
