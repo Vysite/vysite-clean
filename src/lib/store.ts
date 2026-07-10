@@ -378,6 +378,8 @@ export function resolvePermissions(user: DBPlatformUser): Record<PermissionKey, 
     'maintenance.assign','maintenance.export','maintenance.comment','maintenance.upload','maintenance.complete',
     'programmes.view','programmes.create','programmes.edit','programmes.delete','programmes.export',
     'modules.commercial','commercial.create','commercial.edit','commercial.delete',
+    'admin.view_activity_register',
+    'modules.supply_chain','supply_chain.view','supply_chain.create_edit',
   ];
   for (const key of allKeys) {
     all[key] = key in overrides ? (overrides[key] ?? false) : (defaults[key] ?? false);

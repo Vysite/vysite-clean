@@ -104,6 +104,13 @@ const PERM_GROUPS: PermGroup[] = [
     ],
   },
   {
+    label: 'Supply Chain',
+    keys: [
+      { key: 'supply_chain.view',        label: 'View suppliers & supply chain' },
+      { key: 'supply_chain.create_edit', label: 'Create & edit suppliers' },
+    ],
+  },
+  {
     label: 'AI Tools',
     keys: [
       { key: 'ai.upload_docs',       label: 'Upload documents for AI review' },
@@ -135,6 +142,7 @@ const PERM_GROUPS: PermGroup[] = [
       { key: 'modules.reports',     label: 'Access Reports' },
       { key: 'modules.comments',    label: 'Access Comments / Activity' },
       { key: 'modules.commercial',  label: 'Access Commercial' },
+      { key: 'modules.supply_chain', label: 'Access Supply Chain' },
     ],
   },
   {

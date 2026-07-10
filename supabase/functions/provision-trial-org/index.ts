@@ -26,6 +26,7 @@ const DEFAULT_MODULES = {
   testing: true,
   reports: true,
   commercial: true,
+  "supply-chain": true,
 };
 
 // Full Admin role permissions — mirrors ROLE_PERMISSIONS['Admin'] in store.ts
@@ -46,6 +47,7 @@ const ADMIN_PERMISSIONS = {
   "modules.projects": true, "modules.snagging": true, "modules.site_forms": true, "modules.testing": true,
   "modules.actions": true, "modules.comments": true, "modules.reports": true,
   "modules.commercial": true,
+  "modules.supply_chain": true, "supply_chain.view": true, "supply_chain.create_edit": true,
   "snagging.create": true, "snagging.edit": true, "snagging.delete": true, "snagging.export": true,
   "actions.create": true, "actions.edit": true, "actions.delete": true, "actions.export": true,
   "site_forms.create": true, "site_forms.edit": true, "site_forms.delete": true, "site_forms.export": true,
