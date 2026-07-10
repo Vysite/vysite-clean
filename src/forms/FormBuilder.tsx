@@ -17,6 +17,7 @@ import {
   type TWRReadingRecord, TWRReadingRows,
   type PCCAssetRecord, PCCAssetRows,
   type PCCChecklistItem, PCCChecklistRows,
+  type FlushingRegisterRow, FlushingRegisterRows,
 } from './SubComponents';
 
 // counter lives in module scope — resets on full page reload, which is fine
@@ -449,6 +450,23 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     snBody:              sv('snBody'),
     snRecommendedAction: sv('snRecommendedAction'),
     snTime:              sv('snTime', new Date().toTimeString().slice(0, 5)),
+    // Flushing Register
+    frRef:          sv('frRef', `FR-${String(Math.floor(Math.random() * 9000) + 1000)}`),
+    frSite:         sv('frSite'),
+    frClient:       sv('frClient'),
+    frRaisedBy:     sv('frRaisedBy'),
+    frCompany:      sv('frCompany'),
+    frRevision:     sv('frRevision', 'A'),
+    frStartNotes:   sv('frStartNotes'),
+    frEndNotes:     sv('frEndNotes'),
+    frTotalPoints:  sv('frTotalPoints'),
+    frTotalDuration:sv('frTotalDuration'),
+    frOutstanding:  sv('frOutstanding'),
+    frIssues:       sv('frIssues'),
+    frFurtherActions:sv('frFurtherActions'),
+    frCompletedBy:  sv('frCompletedBy'),
+    frPosition:     sv('frPosition'),
+    frDeclDate:     sv('frDeclDate', new Date().toISOString().split('T')[0]),
   }));
 
   // Site Walk checklist state — stored separately due to nested structure
@@ -615,6 +633,21 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     if (!init?.pccChecklist) return [];
     try { return JSON.parse(init.pccChecklist as string) as PCCChecklistItem[]; } catch { return []; }
   });
+
+  // Flushing Register — dynamic state
+  const [frRows, setFrRows] = useState<FlushingRegisterRow[]>(() => {
+    if (!init?.frRows) return [];
+    try { return JSON.parse(init.frRows as string) as FlushingRegisterRow[]; } catch { return []; }
+  });
+  type FrChecks = Record<string, string>;
+  const parseFrChecks = (key: string): FrChecks => {
+    if (!init?.[key]) return {};
+    try { return JSON.parse(init[key] as string) as FrChecks; } catch { return {}; }
+  };
+  const [frStartChecks, setFrStartChecks] = useState<FrChecks>(() => parseFrChecks('frStartChecks'));
+  const [frEndChecks,   setFrEndChecks]   = useState<FrChecks>(() => parseFrChecks('frEndChecks'));
+  const setFrCheck = (setter: Dispatch<SetStateAction<FrChecks>>, key: string, val: string) =>
+    setter(prev => ({ ...prev, [key]: val }));
 
   const set = (key: string) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [key]: e.target.value }));
@@ -1114,6 +1147,31 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
         comments:            form.comments,
       });
     }
+    if (type === 'Flushing Register') {
+      Object.assign(base, {
+        title:            form.title || form.frRef,
+        frRef:            form.frRef,
+        frSite:           form.frSite,
+        frClient:         form.frClient,
+        frRaisedBy:       form.frRaisedBy,
+        frCompany:        form.frCompany,
+        frRevision:       form.frRevision,
+        frStartChecks:    JSON.stringify(frStartChecks),
+        frStartNotes:     form.frStartNotes,
+        frRows:           JSON.stringify(frRows),
+        frEndChecks:      JSON.stringify(frEndChecks),
+        frEndNotes:       form.frEndNotes,
+        frTotalPoints:    form.frTotalPoints,
+        frTotalDuration:  form.frTotalDuration,
+        frOutstanding:    form.frOutstanding,
+        frIssues:         form.frIssues,
+        frFurtherActions: form.frFurtherActions,
+        frCompletedBy:    form.frCompletedBy || form.completedBy,
+        frPosition:       form.frPosition,
+        frDeclDate:       form.frDeclDate,
+        notes:            form.notes,
+      });
+    }
     onSave(base, uploadedFiles);
     onClose();
   };
@@ -1147,6 +1205,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
   const isSHU = type === 'Site Hold Up';
   const isSCR = type === 'Site Change Request';
   const isSN  = type === 'Site Note';
+  const isFR  = type === 'Flushing Register';
 
   const accentColor = isRAMS
     ? 'bg-orange-600 hover:bg-orange-700'
@@ -1200,6 +1259,8 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     ? 'bg-sky-600 hover:bg-sky-700'
     : isSN
     ? 'bg-slate-600 hover:bg-slate-700'
+    : isFR
+    ? 'bg-cyan-600 hover:bg-cyan-700'
     : 'bg-[#f97316] hover:bg-orange-600';
 
   const rfiStatuses = ['Draft', 'Issued', 'Awaiting Response', 'Closed'];
@@ -4963,11 +5024,223 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
             </>
           )}
 
+          {/* ── Flushing Register ── */}
+          {isFR && (() => {
+            const START_CHECKS = [
+              'All outlet details confirmed on register',
+              'TMV / blending valve serviced and functional',
+              'System cold water temperature below 20°C confirmed',
+              'Sentinel outlet flushed and recorded',
+              'Risk assessment reviewed',
+              'Permit to work in place (if required)',
+              'Appropriate PPE donned',
+            ];
+            const END_CHECKS = [
+              'All outlets flushed as per register',
+              'Any failed outlets reported to supervisor',
+              'Register completed in full',
+              'Water temperature recorded for all outlets',
+              'Capping confirmed where applicable',
+              'Sentinel outlet re-checked at end of shift',
+              'Equipment cleaned and stored safely',
+              'Supervisor / responsible person notified',
+              'Records handed to responsible person',
+            ];
+            const ynBtnCls = (val: string, opt: string) => {
+              const active = val === opt;
+              return `px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                active
+                  ? opt === 'Yes' ? 'bg-emerald-600 border-emerald-600 text-white'
+                    : opt === 'No' ? 'bg-red-600 border-red-600 text-white'
+                    : 'bg-slate-600 border-slate-600 text-white'
+                  : 'bg-transparent border-[#1e2d4a] text-slate-600 hover:border-slate-500 hover:text-slate-400'
+              }`;
+            };
+            return (
+              <>
+                {/* Banner */}
+                <div className="border-l-4 border-cyan-500 bg-cyan-950/20 rounded-r-xl px-4 py-3">
+                  <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-0.5">Mechanical — Daily Flushing Register</p>
+                  <p className="text-[10px] text-slate-500">ACoP L8 · HSG274 Part 2 · CIBSE TM8 · BSRIA BG 29/2021</p>
+                </div>
+
+                {/* Register Details */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-[#1e2d4a] pb-1.5">Register Details</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Register Ref</label>
+                      <input value={form.frRef} readOnly className={`${inputCls} opacity-60 cursor-not-allowed`} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Revision</label>
+                      <input value={form.frRevision} onChange={set('frRevision')} className={inputCls} placeholder="A" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Project *</label>
+                    <div className="relative">
+                      <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
+                        <option value="">Select project...</option>
+                        {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Date *</label>
+                      <input type="date" value={form.date} onChange={set('date')} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Site</label>
+                      <input value={form.frSite} onChange={set('frSite')} className={inputCls} placeholder="Site name or address" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Client</label>
+                      <input value={form.frClient} onChange={set('frClient')} className={inputCls} placeholder="Client name" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Raised By *</label>
+                      <input value={form.frRaisedBy} onChange={set('frRaisedBy')} className={inputCls} placeholder="Your name" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Company</label>
+                    <input value={form.frCompany} onChange={set('frCompany')} className={inputCls} placeholder="Contracting company" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Notes</label>
+                    <textarea value={form.notes} onChange={set('notes')} rows={2} className={`${inputCls} resize-none`} placeholder="General notes for this register..." />
+                  </div>
+                </div>
+
+                {/* Start of Shift Checks */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-[#1e2d4a] pb-1.5">Start of Shift Checks</p>
+                  <div className="space-y-2">
+                    {START_CHECKS.map(item => (
+                      <div key={item} className="flex items-center justify-between py-2 border-b border-[#1e2d4a]/40 last:border-0">
+                        <span className="text-xs text-slate-300 pr-4 flex-1">{item}</span>
+                        <div className="flex gap-1 shrink-0">
+                          {(['Yes','No','N/A'] as const).map(opt => (
+                            <button key={opt} type="button"
+                              onClick={() => setFrCheck(setFrStartChecks, item, frStartChecks[item] === opt ? '' : opt)}
+                              className={ynBtnCls(frStartChecks[item] ?? '', opt)}>
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <label className={labelCls}>Start of Shift Notes</label>
+                    <textarea value={form.frStartNotes} onChange={set('frStartNotes')} rows={2} className={`${inputCls} resize-none`} placeholder="Additional start-of-shift observations..." />
+                  </div>
+                </div>
+
+                {/* Flushing Register Rows */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-[#1e2d4a] pb-1.5">Flushing Register ({frRows.length} {frRows.length === 1 ? 'entry' : 'entries'})</p>
+                  <FlushingRegisterRows rows={frRows} onChange={setFrRows} />
+                </div>
+
+                {/* End of Shift Checks */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-[#1e2d4a] pb-1.5">End of Shift Checks</p>
+                  <div className="space-y-2">
+                    {END_CHECKS.map(item => (
+                      <div key={item} className="flex items-center justify-between py-2 border-b border-[#1e2d4a]/40 last:border-0">
+                        <span className="text-xs text-slate-300 pr-4 flex-1">{item}</span>
+                        <div className="flex gap-1 shrink-0">
+                          {(['Yes','No','N/A'] as const).map(opt => (
+                            <button key={opt} type="button"
+                              onClick={() => setFrCheck(setFrEndChecks, item, frEndChecks[item] === opt ? '' : opt)}
+                              className={ynBtnCls(frEndChecks[item] ?? '', opt)}>
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <label className={labelCls}>End of Shift Notes</label>
+                    <textarea value={form.frEndNotes} onChange={set('frEndNotes')} rows={2} className={`${inputCls} resize-none`} placeholder="Additional end-of-shift observations..." />
+                  </div>
+                </div>
+
+                {/* Daily Summary */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-[#1e2d4a] pb-1.5">Daily Summary</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className={labelCls}>Total Outlets Flushed</label>
+                      <input type="number" min="0" value={form.frTotalPoints} onChange={set('frTotalPoints')} className={inputCls} placeholder="0" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Total Duration (mins)</label>
+                      <input type="number" min="0" value={form.frTotalDuration} onChange={set('frTotalDuration')} className={inputCls} placeholder="0" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Outstanding Points</label>
+                      <input type="number" min="0" value={form.frOutstanding} onChange={set('frOutstanding')} className={inputCls} placeholder="0" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Issues Encountered</label>
+                    <textarea value={form.frIssues} onChange={set('frIssues')} rows={2} className={`${inputCls} resize-none`} placeholder="Any issues, anomalies or departures from the expected procedure..." />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Further Actions Required</label>
+                    <textarea value={form.frFurtherActions} onChange={set('frFurtherActions')} rows={2} className={`${inputCls} resize-none`} placeholder="Actions to be taken at next visit or by responsible person..." />
+                  </div>
+                </div>
+
+                {/* Declaration */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-[#1e2d4a] pb-1.5">Declaration</p>
+                  <div className="border-l-4 border-cyan-800 bg-cyan-950/20 rounded-r-xl p-3.5">
+                    <p className="text-[10px] text-slate-400 leading-relaxed italic">
+                      I confirm that the flushing activities recorded on this register have been carried out in accordance with the site-specific Legionella risk assessment, the Written Scheme of Control and the requirements of HSG274 Part 2. All outlets flushed as required and any deficiencies or observations have been recorded above. This register forms part of the formal Legionella control records required under ACoP L8 (HSG274) and must be retained for a minimum of 5 years.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Completed By *</label>
+                      <input value={form.frCompletedBy || form.completedBy}
+                        onChange={e => setForm(f => ({ ...f, frCompletedBy: e.target.value, completedBy: e.target.value }))}
+                        className={inputCls} placeholder="Full name" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Position / Job Title</label>
+                      <input value={form.frPosition} onChange={set('frPosition')} className={inputCls} placeholder="e.g. Water Treatment Technician" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Declaration Date</label>
+                    <input type="date" value={form.frDeclDate} onChange={set('frDeclDate')} className={inputCls} />
+                  </div>
+                </div>
+
+                {/* Attachments */}
+                <div>
+                  <label className={labelCls}>Attachments</label>
+                  <FileUploadComponent files={uploadedFiles} onChange={setUploadedFiles} label="Upload supporting evidence or photos" />
+                </div>
+              </>
+            );
+          })()}
+
           {/* Common fields fallback */}
           {!isRFI && !isHoldUp && !isDelay && !isVariation && !isEWN && !isSI && !isTQ && !isHS
             && !isPressureTest && !isFlushingRecord && !isValveChecklist && !isAHUCommissioning
             && !isDeadTesting && !isContinuityTest && !isToolboxTalk && !isSiteWalkAudit
-            && !isECR && !isDaily && !isRAMS && !isAIR && !isPCR && !isHIU && !isMVHR && !isTWR && !isPCC && (
+            && !isECR && !isDaily && !isRAMS && !isAIR && !isPCR && !isHIU && !isMVHR && !isTWR && !isPCC
+            && !isSHU && !isSCR && !isSN && !isFR && (
             <>
               <div>
                 <label className={labelCls}>Project</label>
@@ -5035,6 +5308,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
               : isTWR ? 'Submit Temperature Water Readings'
               : isPCC ? 'Issue Certificate'
               : isSN ? 'Submit Site Note'
+              : isFR ? 'Submit Flushing Register'
               : 'Submit Form'}
           </button>
         </div>

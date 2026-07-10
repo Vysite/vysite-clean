@@ -960,3 +960,123 @@ export function PCCChecklistRows({ rows, onChange }: { rows: PCCChecklistItem[];
     </div>
   );
 }
+
+// ─── Flushing Register ────────────────────────────────────────────────────────
+
+export interface FlushingRegisterRow {
+  date: string;
+  areaRoom: string;
+  outletAsset: string;
+  system: string;
+  durationMins: string;
+  valveSafe: string;
+  capped: string;
+  runningClear: string;
+  engineer: string;
+  rowNotes: string;
+}
+
+export const DEFAULT_FLUSHING_ROW: FlushingRegisterRow = {
+  date: '', areaRoom: '', outletAsset: '', system: '', durationMins: '',
+  valveSafe: '', capped: '', runningClear: '', engineer: '', rowNotes: '',
+};
+
+function YNBtn({ value, opt, onSet }: { value: string; opt: string; onSet: (v: string) => void }) {
+  const active = value === opt;
+  const cls = active
+    ? opt === 'Yes' ? 'bg-emerald-600 border-emerald-600 text-white'
+      : opt === 'No' ? 'bg-red-600 border-red-600 text-white'
+      : 'bg-slate-600 border-slate-600 text-white'
+    : 'bg-transparent border-[#1e2d4a] text-slate-600 hover:border-slate-500 hover:text-slate-400';
+  return (
+    <button type="button" onClick={() => onSet(active ? '' : opt)}
+      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${cls}`}>
+      {opt}
+    </button>
+  );
+}
+
+export function FlushingRegisterRows({
+  rows, onChange,
+}: { rows: FlushingRegisterRow[]; onChange: (rows: FlushingRegisterRow[]) => void }) {
+  const add = () => onChange([...rows, { ...DEFAULT_FLUSHING_ROW, date: new Date().toISOString().split('T')[0] }]);
+  const rem = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
+  const upd = (i: number, field: keyof FlushingRegisterRow, val: string) =>
+    onChange(rows.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+
+  return (
+    <div className="space-y-3">
+      {rows.map((row, i) => (
+        <div key={i} className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Entry {i + 1}</span>
+            <button type="button" onClick={() => rem(i)} className="text-slate-700 hover:text-red-400 transition-colors">
+              <X size={14} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Date</label>
+              <input type="date" value={row.date} onChange={e => upd(i, 'date', e.target.value)} className={`${inputCls} mt-1`} />
+            </div>
+            <div>
+              <label className={labelCls}>Engineer</label>
+              <input value={row.engineer} onChange={e => upd(i, 'engineer', e.target.value)} className={`${inputCls} mt-1`} placeholder="Name" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Area / Room</label>
+              <input value={row.areaRoom} onChange={e => upd(i, 'areaRoom', e.target.value)} className={`${inputCls} mt-1`} placeholder="e.g. Level 2 — Kitchen" />
+            </div>
+            <div>
+              <label className={labelCls}>Outlet / Asset ID</label>
+              <input value={row.outletAsset} onChange={e => upd(i, 'outletAsset', e.target.value)} className={`${inputCls} mt-1`} placeholder="e.g. TM-L2-K-01" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>System</label>
+              <input value={row.system} onChange={e => upd(i, 'system', e.target.value)} className={`${inputCls} mt-1`} placeholder="e.g. DHW / CW" />
+            </div>
+            <div>
+              <label className={labelCls}>Duration (mins)</label>
+              <input type="number" min="0" value={row.durationMins} onChange={e => upd(i, 'durationMins', e.target.value)} className={`${inputCls} mt-1`} placeholder="e.g. 2" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className={labelCls}>Checks</label>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-[9px] text-slate-500 mb-1">Valve Safe Isolated</p>
+                <div className="flex gap-1">
+                  {(['Yes','No','N/A'] as const).map(o => <YNBtn key={o} value={row.valveSafe} opt={o} onSet={v => upd(i, 'valveSafe', v)} />)}
+                </div>
+              </div>
+              <div>
+                <p className="text-[9px] text-slate-500 mb-1">Capped / Bunged</p>
+                <div className="flex gap-1">
+                  {(['Yes','No','N/A'] as const).map(o => <YNBtn key={o} value={row.capped} opt={o} onSet={v => upd(i, 'capped', v)} />)}
+                </div>
+              </div>
+              <div>
+                <p className="text-[9px] text-slate-500 mb-1">Running Clear</p>
+                <div className="flex gap-1">
+                  {(['Yes','No','N/A'] as const).map(o => <YNBtn key={o} value={row.runningClear} opt={o} onSet={v => upd(i, 'runningClear', v)} />)}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Notes</label>
+            <input value={row.rowNotes} onChange={e => upd(i, 'rowNotes', e.target.value)} className={`${inputCls} mt-1`} placeholder="Observations, anomalies or actions..." />
+          </div>
+        </div>
+      ))}
+      <button type="button" onClick={add}
+        className="w-full py-2.5 border border-dashed border-cyan-900/50 rounded-xl text-xs text-cyan-900 hover:text-cyan-400 hover:border-cyan-700/60 transition-colors font-semibold">
+        + Add Flushing Entry
+      </button>
+    </div>
+  );
+}
