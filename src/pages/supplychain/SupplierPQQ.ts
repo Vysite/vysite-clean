@@ -47,33 +47,37 @@ function fv(n: number | null | undefined): string {
 
 interface ChecklistItem {
   document: string;
-  requirement: 'Mandatory' | 'If Applicable' | 'Preferred';
+  requirement: 'Mandatory' | 'If Applicable' | 'Optional';
   notes: string;
 }
 
 const SUBMISSION_CHECKLIST: ChecklistItem[] = [
-  { document: 'Health & Safety Policy', requirement: 'Mandatory', notes: 'Current signed and dated version — must be less than 12 months old' },
-  { document: "Employer's Liability Insurance Certificate", requirement: 'Mandatory', notes: 'Minimum £5m — show policy number, limit and expiry date' },
-  { document: 'Public Liability Insurance Certificate', requirement: 'Mandatory', notes: 'Minimum £2m — show policy number, limit and expiry date' },
-  { document: 'Companies House Confirmation Statement', requirement: 'Mandatory', notes: 'Or equivalent proof of company registration' },
-  { document: 'VAT Registration Certificate', requirement: 'Mandatory', notes: 'If VAT registered' },
-  { document: 'Equality & Diversity Policy', requirement: 'Mandatory', notes: 'Current signed version — demonstrating commitment to equality' },
-  { document: 'Environmental Policy', requirement: 'Mandatory', notes: 'Current signed version' },
-  { document: 'Anti-Bribery & Corruption Policy', requirement: 'Mandatory', notes: 'Must reference the Bribery Act 2010' },
-  { document: 'Modern Slavery Act Transparency Statement', requirement: 'Mandatory', notes: 'Required if turnover exceeds £36m; summary statement otherwise' },
-  { document: 'CHAS Certificate', requirement: 'Preferred', notes: 'Or Constructionline / SSIP-equivalent scheme certificate' },
-  { document: 'Constructionline / SafeContractor Certificate', requirement: 'Preferred', notes: 'Preferred — expedites assessment' },
-  { document: 'ISO 9001 Quality Management Certificate', requirement: 'If Applicable', notes: 'If held — include scope and issue/expiry dates' },
-  { document: 'ISO 14001 Environmental Management Certificate', requirement: 'If Applicable', notes: 'If held — include scope and issue/expiry dates' },
-  { document: 'ISO 45001 Occupational Health & Safety Certificate', requirement: 'If Applicable', notes: 'If held — replaces OHSAS 18001' },
-  { document: 'Professional Indemnity Insurance Certificate', requirement: 'If Applicable', notes: 'Required for design, consultancy or professional services' },
-  { document: 'Gas Safe Registration Certificate', requirement: 'If Applicable', notes: 'Required for any gas installation or maintenance works' },
-  { document: 'NICEIC / ECA / NAPIT Registration', requirement: 'If Applicable', notes: 'Required for electrical installation works' },
-  { document: 'Waste Carrier Licence', requirement: 'If Applicable', notes: 'Required if removing waste from site — include licence number' },
-  { document: 'COSHH Risk Assessments (sample)', requirement: 'If Applicable', notes: 'For trades involving hazardous substances' },
-  { document: 'RAMS — Risk Assessment & Method Statement (sample)', requirement: 'If Applicable', notes: 'For high-risk activities: working at height, confined spaces, etc.' },
-  { document: 'Training Matrix / Competency Evidence', requirement: 'Preferred', notes: 'Evidence of operative skills and qualifications — CSCS, IPAF, PASMA etc.' },
-  { document: 'Last 3 Years Audited Accounts', requirement: 'Mandatory', notes: 'Or latest available — banks may substitute for trade or bank reference letters' },
+  // ── Mandatory ──────────────────────────────────────────────────────────────
+  { document: 'Public Liability Insurance Certificate',      requirement: 'Mandatory',      notes: 'Show policy number, indemnity limit and expiry date' },
+  { document: "Employer's Liability Insurance Certificate",  requirement: 'Mandatory',      notes: 'Show policy number, indemnity limit and expiry date' },
+  { document: 'Health & Safety Policy',                      requirement: 'Mandatory',      notes: 'Current signed and dated version — reviewed within last 12 months' },
+  { document: 'Example Risk Assessment / Method Statement',  requirement: 'Mandatory',      notes: 'A sample RAMS relevant to the trades or works you are applying under' },
+  // ── If Applicable ─────────────────────────────────────────────────────────
+  { document: 'Professional Indemnity Insurance',            requirement: 'If Applicable',  notes: 'Required for design, consultancy or professional services' },
+  { document: 'Contract Works Insurance',                    requirement: 'If Applicable',  notes: 'Required if you will be responsible for works in progress' },
+  { document: 'NICEIC / ECA / NAPIT Registration',           requirement: 'If Applicable',  notes: 'Required for any electrical installation works' },
+  { document: 'Gas Safe Registration Certificate',           requirement: 'If Applicable',  notes: 'Required for any gas installation or maintenance works' },
+  { document: 'CHAS Certificate',                            requirement: 'If Applicable',  notes: 'Or equivalent SSIP-recognised scheme certificate' },
+  { document: 'Constructionline Certificate',                requirement: 'If Applicable',  notes: 'Or SafeContractor / Achilles / equivalent' },
+  { document: 'SafeContractor Certificate',                  requirement: 'If Applicable',  notes: 'If held' },
+  { document: 'ISO 9001 Certificate',                        requirement: 'If Applicable',  notes: 'Include scope and expiry date if held' },
+  { document: 'ISO 14001 Certificate',                       requirement: 'If Applicable',  notes: 'Include scope and expiry date if held' },
+  { document: 'ISO 45001 Certificate',                       requirement: 'If Applicable',  notes: 'Occupational H&S — if held' },
+  { document: 'Waste Carrier Licence',                       requirement: 'If Applicable',  notes: 'Required if removing waste from site — include licence number' },
+  { document: 'Modern Slavery Policy / Statement',           requirement: 'If Applicable',  notes: 'If your organisation has published a statement' },
+  // ── Optional ──────────────────────────────────────────────────────────────
+  { document: 'Company Brochure / Capability Statement',     requirement: 'Optional',       notes: 'Helps assessors understand your business and typical works' },
+  { document: 'Case Studies or Project References',          requirement: 'Optional',       notes: 'Recent relevant projects' },
+  { document: 'Training Matrix / Competency Evidence',       requirement: 'Optional',       notes: 'Evidence of operative qualifications — CSCS, IPAF, PASMA, etc.' },
+  { document: 'Equality & Diversity Policy',                 requirement: 'Optional',       notes: 'Current signed version' },
+  { document: 'Environmental Policy',                        requirement: 'Optional',       notes: 'Current signed version' },
+  { document: 'Anti-Bribery & Corruption Policy',            requirement: 'Optional',       notes: 'Current signed version' },
+  { document: 'Latest Available Accounts',                   requirement: 'Optional',       notes: 'Most recent filed accounts or financial reference' },
 ];
 
 // ─── Shared PDF CSS ───────────────────────────────────────────────────────────
@@ -225,7 +229,7 @@ html, body {
 }
 .req-mandatory { background: #fef2f2; color: #991b1b; border: 0.5px solid #fecaca; }
 .req-applicable { background: #eff6ff; color: #1d4ed8; border: 0.5px solid #bfdbfe; }
-.req-preferred  { background: #f0fdf4; color: #166534; border: 0.5px solid #bbf7d0; }
+.req-optional   { background: #f0fdf4; color: #166534; border: 0.5px solid #bbf7d0; }
 .attach-box { width: 14px; height: 14px; border: 1.5px solid #cbd5e1; border-radius: 1px; margin: 0 auto; }
 .notes-field { width: 100%; border-bottom: 1px solid #e2e8f0; min-height: 16px; display: block; }
 
@@ -510,7 +514,7 @@ ${pageFooter(`Section ${idx + 1} — ${section.title}`)}
 
   // Submission Checklist
   const reqBadge = (r: ChecklistItem['requirement']) => {
-    const cls = r === 'Mandatory' ? 'req-mandatory' : r === 'If Applicable' ? 'req-applicable' : 'req-preferred';
+    const cls = r === 'Mandatory' ? 'req-mandatory' : r === 'If Applicable' ? 'req-applicable' : 'req-optional';
     return `<span class="req-badge ${cls}">${r}</span>`;
   };
 
@@ -547,8 +551,8 @@ ${pageHeader()}
 <div style="margin-top:16px;padding:10px 14px;background:#fafafa;border:0.5px solid #e2e8f0;border-radius:2px;font-size:7.5pt;color:#475569;line-height:1.5">
   <strong style="color:#0f172a">Checklist Key:</strong> &nbsp;
   <span class="req-badge req-mandatory">Mandatory</span>&nbsp; Must be included for your submission to be assessed. &nbsp;&nbsp;
-  <span class="req-badge req-applicable">If Applicable</span>&nbsp; Required only if this applies to your organisation or scope of work. &nbsp;&nbsp;
-  <span class="req-badge req-preferred">Preferred</span>&nbsp; Not required but will strengthen your assessment.
+  <span class="req-badge req-applicable">If Applicable</span>&nbsp; Include only if this applies to your organisation or scope of work. &nbsp;&nbsp;
+  <span class="req-badge req-optional">Optional</span>&nbsp; Not required, but additional information is always welcome.
 </div>
 ${pageFooter('Submission Checklist')}
 </div>`;
@@ -934,7 +938,7 @@ function buildDocxXml(data: PqqTemplateData): string {
   parts.push(docxPara('Return all applicable documents with your completed questionnaire. Use the Attached column to confirm each document is included.', 'Normal', false, 18, '475569', 120));
 
   // Legend
-  parts.push(docxPara('MANDATORY: Must be included for your submission to be assessed.    IF APPLICABLE: Required only if this applies to your organisation.    PREFERRED: Not required but will strengthen your assessment.', 'Normal', false, 16, '475569', 120));
+  parts.push(docxPara('MANDATORY: Must be included for your submission to be assessed.    IF APPLICABLE: Include only if this applies to your organisation.    OPTIONAL: Not required, but additional information is always welcome.', 'Normal', false, 16, '475569', 120));
 
   // Checklist table
   const clHeaders = [
@@ -952,7 +956,6 @@ function buildDocxXml(data: PqqTemplateData): string {
       { text: item.notes, width: 3480, color: '475569' },
     ])
   );
-
   parts.push(`<w:tbl>
     <w:tblPr>
       <w:tblW w:w="8640" w:type="dxa"/>
