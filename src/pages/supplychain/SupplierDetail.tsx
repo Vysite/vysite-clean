@@ -1277,6 +1277,7 @@ export default function SupplierDetail({ supplier, onClose, onUpdate }: Supplier
       rateTypeNames,
       pqqResponses,
       documents,
+      orgLogo: store.settings?.logo_data_url,
     });
   }
 
@@ -1289,7 +1290,7 @@ export default function SupplierDetail({ supplier, onClose, onUpdate }: Supplier
       .map(l => store.supplierSpecialisms.find(s => s.id === l.specialism_id)?.name)
       .filter(Boolean) as string[];
     const rateTypeNames = new Map(store.supplierLabourRateTypes.map(rt => [rt.id, rt.name]));
-    const data = { supplier: localSupplier, pqqResponses, tradeNames, specialismNames, rateTypeNames, labourRates };
+    const data = { supplier: localSupplier, pqqResponses, tradeNames, specialismNames, rateTypeNames, labourRates, orgLogo: store.settings?.logo_data_url };
     if (format === 'pdf') downloadPqqPdf(data);
     else downloadPqqWord(data);
     setShowPqqMenu(false);

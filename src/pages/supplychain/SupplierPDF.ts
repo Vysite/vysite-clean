@@ -96,20 +96,22 @@ export interface SupplierSummaryData {
   rateTypeNames: Map<string, string>;
   pqqResponses: DBSupplierPqqResponse[];
   documents: DBSupplierDocument[];
+  orgLogo?: string;
 }
 
 export function exportSupplierSummaryPdf(data: SupplierSummaryData): void {
-  const { supplier: s, tradeNames, specialismNames, labourRates, rateTypeNames, pqqResponses, documents } = data;
+  const { supplier: s, tradeNames, specialismNames, labourRates, rateTypeNames, pqqResponses, documents, orgLogo } = data;
 
   const ref = supplierRef(s.id);
 
   // ── Header ─────────────────────────────────────────────────────────────────
+  const brandHtml = orgLogo
+    ? `<img src="${orgLogo}" alt="Logo" style="height:32px;max-width:140px;object-fit:contain;display:block">`
+    : `<div class="exec-brand">VYSITE</div><div class="exec-brand-sub">Construction Operating System</div>`;
+
   const header = `
 <div class="exec-head">
-  <div>
-    <div class="exec-brand">VYSITE</div>
-    <div class="exec-brand-sub">Construction Operating System</div>
-  </div>
+  <div>${brandHtml}</div>
   <div class="exec-head-right">
     <div class="exec-doc-type">Supply Chain</div>
     <div class="exec-doc-title">Supplier Summary</div>
@@ -323,7 +325,9 @@ ${s.approval_notes ? `<div style="font-size:8.5pt;color:#1e293b;padding:10px 14p
   // ── Footer ─────────────────────────────────────────────────────────────────
   const footer = `
 <div class="doc-footer">
-  <div class="doc-footer-l">VYSITE · Supply Chain · ${esc(ref)} · ${esc(s.company_name)}</div>
+  <div class="doc-footer-l">
+    ${orgLogo ? '<span style="color:#94a3b8">Powered by </span><span style="font-weight:700;color:#ea6c00">VYSITE</span><span style="color:#94a3b8"> Construction Operating System &nbsp;·&nbsp; </span>' : ''}VYSITE · Supply Chain · ${esc(ref)} · ${esc(s.company_name)}
+  </div>
   <div class="doc-footer-r">Generated ${todayLong()}</div>
 </div>
 <div class="pack-note">
