@@ -5,6 +5,7 @@ import {
   type HazardRecord, type RamsSignOffRecord,
   ViewField, SWAChecklistView,
   type PlantAssetRecord, type PlantDefectRecord,
+  type FlushingRegisterRow,
 } from './SubComponents';
 import { renderFormPDF } from './PDFRenderer';
 
@@ -142,6 +143,7 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
   const isSHU  = form.type === 'Site Hold Up';
   const isSCR  = form.type === 'Site Change Request';
   const isSN   = form.type === 'Site Note';
+  const isFR   = form.type === 'Flushing Register';
 
   // Parse JSON arrays for view
   let ramsHazards: HazardRecord[] = [];
@@ -196,6 +198,14 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
   if (isPCC && form.pccAssets) { try { pccAssets = JSON.parse(form.pccAssets as string); } catch { /* */ } }
   let pccChecklist: PCCChecklistItem[] = [];
   if (isPCC && form.pccChecklist) { try { pccChecklist = JSON.parse(form.pccChecklist as string); } catch { /* */ } }
+
+  let frRows: FlushingRegisterRow[] = [];
+  if (isFR && form.frRows) { try { frRows = JSON.parse(form.frRows as string); } catch { /* */ } }
+  type FrChecks = Record<string, string>;
+  let frStartChecks: FrChecks = {};
+  if (isFR && form.frStartChecks) { try { frStartChecks = JSON.parse(form.frStartChecks as string); } catch { /* */ } }
+  let frEndChecks: FrChecks = {};
+  if (isFR && form.frEndChecks) { try { frEndChecks = JSON.parse(form.frEndChecks as string); } catch { /* */ } }
 
   const attachments = f.attachments;
 
@@ -1084,8 +1094,132 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
             </Section>
           </>}
 
+          {/* ── Flushing Register ── */}
+          {isFR && <>
+            <div className="border-l-4 border-cyan-500 bg-cyan-950/20 rounded-r-xl px-4 py-3 text-xs text-cyan-300/80 leading-relaxed italic">
+              This Flushing Register has been completed in accordance with ACoP L8, HSG274 Part 2, CIBSE TM8 and BSRIA BG 29/2021. Records must be retained for a minimum of 5 years and made available to the Responsible Person on request.
+            </div>
+
+            <Section label="Register Details">
+              <Field2Col items={[
+                ['Register Ref', s('frRef')],
+                ['Revision', s('frRevision')],
+                ['Site', s('frSite')],
+                ['Client', s('frClient')],
+                ['Raised By', s('frRaisedBy')],
+                ['Company', s('frCompany')],
+                ['Date', fmtDate(s('date'))],
+                ['Project', form.projectName ?? undefined],
+              ]} />
+              {s('notes') && <ViewField label="Notes" value={s('notes')} />}
+            </Section>
+
+            {Object.keys(frStartChecks).length > 0 && (
+              <Section label="Start of Shift Checks">
+                <div className="space-y-1">
+                  {Object.entries(frStartChecks).map(([label, val]) => {
+                    const badgeCls = val === 'Yes' ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700/40'
+                      : val === 'No' ? 'bg-red-900/60 text-red-300 border-red-700/40'
+                      : 'bg-slate-700/60 text-slate-400 border-slate-600/40';
+                    return (
+                      <div key={label} className="flex items-center justify-between py-2 border-b border-[#1e2d4a]/50 last:border-0">
+                        <span className="text-xs text-slate-300 pr-4">{label}</span>
+                        <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${badgeCls}`}>{val || '—'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {s('frStartNotes') && <ViewField label="Start of Shift Notes" value={s('frStartNotes')} />}
+              </Section>
+            )}
+
+            {frRows.length > 0 && (
+              <Section label={`Flushing Register (${frRows.length} entr${frRows.length !== 1 ? 'ies' : 'y'})`}>
+                <div className="space-y-2">
+                  {frRows.map((row, i) => (
+                    <div key={i} className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-900/60 text-cyan-300">Entry {i + 1}</span>
+                        {row.date && <span className="text-[10px] text-slate-400">{row.date}</span>}
+                        {row.engineer && <span className="text-[10px] text-slate-400">{row.engineer}</span>}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs mb-2">
+                        {row.areaRoom && <span className="text-slate-400">Area / Room: <span className="text-slate-200">{row.areaRoom}</span></span>}
+                        {row.outletAsset && <span className="text-slate-400">Outlet / Asset: <span className="text-slate-200">{row.outletAsset}</span></span>}
+                        {row.system && <span className="text-slate-400">System: <span className="text-slate-200">{row.system}</span></span>}
+                        {row.durationMins && <span className="text-slate-400">Duration: <span className="text-slate-200">{row.durationMins} min</span></span>}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {row.valveSafe && (
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${row.valveSafe === 'Yes' ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700/40' : row.valveSafe === 'No' ? 'bg-red-900/60 text-red-300 border-red-700/40' : 'bg-slate-700/60 text-slate-400 border-slate-600/40'}`}>
+                            Valve Safe: {row.valveSafe}
+                          </span>
+                        )}
+                        {row.capped && (
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${row.capped === 'Yes' ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700/40' : row.capped === 'No' ? 'bg-red-900/60 text-red-300 border-red-700/40' : 'bg-slate-700/60 text-slate-400 border-slate-600/40'}`}>
+                            Capped: {row.capped}
+                          </span>
+                        )}
+                        {row.runningClear && (
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${row.runningClear === 'Yes' ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700/40' : row.runningClear === 'No' ? 'bg-red-900/60 text-red-300 border-red-700/40' : 'bg-slate-700/60 text-slate-400 border-slate-600/40'}`}>
+                            Running Clear: {row.runningClear}
+                          </span>
+                        )}
+                      </div>
+                      {row.rowNotes && <p className="text-xs text-slate-400 mt-1.5 italic">{row.rowNotes}</p>}
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            )}
+
+            {Object.keys(frEndChecks).length > 0 && (
+              <Section label="End of Shift Checks">
+                <div className="space-y-1">
+                  {Object.entries(frEndChecks).map(([label, val]) => {
+                    const badgeCls = val === 'Yes' ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700/40'
+                      : val === 'No' ? 'bg-red-900/60 text-red-300 border-red-700/40'
+                      : 'bg-slate-700/60 text-slate-400 border-slate-600/40';
+                    return (
+                      <div key={label} className="flex items-center justify-between py-2 border-b border-[#1e2d4a]/50 last:border-0">
+                        <span className="text-xs text-slate-300 pr-4">{label}</span>
+                        <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${badgeCls}`}>{val || '—'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {s('frEndNotes') && <ViewField label="End of Shift Notes" value={s('frEndNotes')} />}
+              </Section>
+            )}
+
+            {(s('frTotalPoints') || s('frTotalDuration') || s('frOutstanding')) && (
+              <Section label="Daily Summary">
+                <Field2Col items={[
+                  ['Total Outlets Flushed', s('frTotalPoints')],
+                  ['Total Duration (mins)', s('frTotalDuration')],
+                  ['Outstanding Points', s('frOutstanding')],
+                ]} />
+                {s('frIssues') && <ViewField label="Issues Encountered" value={s('frIssues')} />}
+                {s('frFurtherActions') && <ViewField label="Further Actions Required" value={s('frFurtherActions')} />}
+              </Section>
+            )}
+
+            <Section label="Declaration">
+              <div className="border-l-4 border-cyan-500 bg-cyan-950/20 rounded-r-xl p-3.5">
+                <p className="text-xs text-slate-300 leading-relaxed italic">
+                  I confirm that the flushing activities recorded on this register have been carried out in accordance with the site-specific Legionella risk assessment, the Written Scheme of Control and the requirements of HSG274 Part 2. All outlets flushed as required and any deficiencies or observations have been recorded above. This register forms part of the formal Legionella control records required under ACoP L8 (HSG274) and must be retained for a minimum of 5 years.
+                </p>
+              </div>
+              <Field2Col items={[
+                ['Completed By', s('frCompletedBy') ?? s('completedBy')],
+                ['Position', s('frPosition')],
+                ['Date', fmtDate(s('frDeclDate'))],
+              ]} />
+            </Section>
+          </>}
+
           {/* Generic comments/notes fallback */}
-          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isTWR && !isQA && !isPCC && !isSHU && !isSCR && !isSN && (form.comments || form.notes) && (
+          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isTWR && !isQA && !isPCC && !isSHU && !isSCR && !isSN && !isFR && (form.comments || form.notes) && (
             <ViewField label="Comments / Notes" value={String(form.comments || form.notes || '')} />
           )}
 
