@@ -1167,22 +1167,27 @@ export function VariationAccount({ project, orgId, canEdit, canDelete }: Variati
                   {(canEdit || canDelete) && (
                     <td className={tdCls} onClick={e => e.stopPropagation()}>
                       <RowActionsMenu
-                        onEdit={canEdit ? () => openEdit(item) : undefined}
-                        onDuplicate={canEdit ? () => openDuplicate(item) : undefined}
-                        onDelete={canDelete ? async () => {
-                          if (!confirm(`Delete ${item.reference}?`)) return;
-                          const { data: crRows } = await supabase
-                            .from('vy_commercial_records')
-                            .select('id')
-                            .eq('org_id', orgId)
-                            .filter('extra_data->>va_item_id', 'eq', item.id);
-                          if (crRows) {
-                            for (const cr of crRows) {
-                              await supabase.from('vy_commercial_records').delete().eq('id', cr.id);
-                            }
-                          }
-                          await store.removeVariationAccountItem(item.id);
-                        } : undefined}
+                        actions={[
+                          ...(canEdit ? [{ label: 'Edit', icon: Edit2, onClick: () => openEdit(item) }] : []),
+                          ...(canEdit ? [{ label: 'Duplicate', icon: Copy, onClick: () => openDuplicate(item) }] : []),
+                          ...(canDelete ? [{
+                            label: 'Delete', icon: Trash2, danger: true, dividerBefore: true,
+                            onClick: async () => {
+                              if (!confirm(`Delete ${item.reference}?`)) return;
+                              const { data: crRows } = await supabase
+                                .from('vy_commercial_records')
+                                .select('id')
+                                .eq('org_id', orgId)
+                                .filter('extra_data->>va_item_id', 'eq', item.id);
+                              if (crRows) {
+                                for (const cr of crRows) {
+                                  await supabase.from('vy_commercial_records').delete().eq('id', cr.id);
+                                }
+                              }
+                              await store.removeVariationAccountItem(item.id);
+                            },
+                          }] : []),
+                        ]}
                       />
                     </td>
                   )}
