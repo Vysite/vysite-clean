@@ -4,6 +4,7 @@ import {
   Clock, AlertTriangle, ChevronDown, ChevronUp, Upload, FileText,
   Paperclip, Download, Trash2, Eye, Plus, Check, Shield, Tag,
   Banknote, ClipboardList, FileCheck, StickyNote, Network,
+  FileDown, ClipboardCheck, MoreHorizontal, AlertCircle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
@@ -12,6 +13,10 @@ import type {
   DBSupplierLabourRate, DBSupplierPqqResponse, DBSupplierDocument,
 } from './types';
 import { PQQ_SECTIONS, REGIONS, DOCUMENT_CATEGORIES, APPROVAL_STATUSES } from './types';
+import { exportSupplierSummaryPdf } from './SupplierPDF';
+import { downloadPqqPdf, downloadPqqWord } from './SupplierPQQ';
+import UploadPqqModal from './UploadPqqModal';
+import type { PqqImportMeta } from './UploadPqqModal';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1149,6 +1154,11 @@ export default function SupplierDetail({ supplier, onClose, onUpdate }: Supplier
 
   const [notesDraft, setNotesDraft] = useState(supplier.notes);
   const [notesSaved, setNotesSaved] = useState(false);
+  const [showPqqMenu, setShowPqqMenu] = useState(false);
+  const [showUploadPqq, setShowUploadPqq] = useState(false);
+  const [importMeta, setImportMeta] = useState<PqqImportMeta | null>(
+    (supplier.pqq_import_raw as PqqImportMeta | null) ?? null
+  );
 
   const orgId = store.currentOrgId ?? '';
   const currentUserName = store.currentUser?.name ?? '';
@@ -1242,7 +1252,48 @@ export default function SupplierDetail({ supplier, onClose, onUpdate }: Supplier
     setTimeout(() => setNotesSaved(false), 2000);
   }
 
-  const TABS: { id: DetailTab; label: string; icon: React.ReactNode }[] = [
+  // Handle PQQ upload completion
+  function handlePqqUploaded(doc: DBSupplierDocument, meta: PqqImportMeta, updatedSupplier: DBSupplier) {
+    setDocuments(prev => [doc, ...prev]);
+    setImportMeta(meta);
+    setLocalSupplier(updatedSupplier);
+    onUpdate(updatedSupplier);
+  }
+
+  // Export: Supplier Summary PDF
+  function handleExportSummary() {
+    const tradeNames = tradeLinks
+      .map(l => store.supplierTrades.find(t => t.id === l.trade_id)?.name)
+      .filter(Boolean) as string[];
+    const specialismNames = specialismLinks
+      .map(l => store.supplierSpecialisms.find(s => s.id === l.specialism_id)?.name)
+      .filter(Boolean) as string[];
+    const rateTypeNames = new Map(store.supplierLabourRateTypes.map(rt => [rt.id, rt.name]));
+    exportSupplierSummaryPdf({
+      supplier: localSupplier,
+      tradeNames,
+      specialismNames,
+      labourRates,
+      rateTypeNames,
+      pqqResponses,
+      documents,
+    });
+  }
+
+  // Export: PQQ Template
+  function handlePqqTemplate(format: 'pdf' | 'word') {
+    const tradeNames = tradeLinks
+      .map(l => store.supplierTrades.find(t => t.id === l.trade_id)?.name)
+      .filter(Boolean) as string[];
+    const specialismNames = specialismLinks
+      .map(l => store.supplierSpecialisms.find(s => s.id === l.specialism_id)?.name)
+      .filter(Boolean) as string[];
+    const rateTypeNames = new Map(store.supplierLabourRateTypes.map(rt => [rt.id, rt.name]));
+    const data = { supplier: localSupplier, pqqResponses, tradeNames, specialismNames, rateTypeNames, labourRates };
+    if (format === 'pdf') downloadPqqPdf(data);
+    else downloadPqqWord(data);
+    setShowPqqMenu(false);
+  } { id: DetailTab; label: string; icon: React.ReactNode }[] = [
     { id: 'overview',   label: 'Overview',         icon: <Building2 size={13} /> },
     { id: 'company',    label: 'Company',           icon: <Network size={13} /> },
     { id: 'trades',     label: 'Trades & Coverage', icon: <Tag size={13} /> },
@@ -1282,9 +1333,59 @@ export default function SupplierDetail({ supplier, onClose, onUpdate }: Supplier
             </div>
           </div>
         </div>
-        <button onClick={onClose} className="p-2 text-slate-500 hover:text-white hover:bg-[#1a2236] rounded-lg transition-colors">
-          <X size={18} />
-        </button>
+        {/* Action buttons */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Export Supplier Pack */}
+          <button
+            onClick={handleExportSummary}
+            title="Export Supplier Pack"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[#1a2236] border border-[#1e2d4a] hover:border-[#f97316] text-slate-300 hover:text-white rounded-lg text-xs font-semibold transition-colors"
+          >
+            <FileDown size={13} /> <span className="hidden sm:inline">Export Supplier Pack</span>
+          </button>
+
+          {/* Download PQQ Template dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowPqqMenu(o => !o)}
+              title="Download PQQ Template"
+              className="flex items-center gap-1.5 px-3 py-2 bg-[#1a2236] border border-[#1e2d4a] hover:border-[#f97316] text-slate-300 hover:text-white rounded-lg text-xs font-semibold transition-colors"
+            >
+              <ClipboardCheck size={13} /> <span className="hidden sm:inline">Download PQQ Template</span>
+              <ChevronDown size={11} />
+            </button>
+            {showPqqMenu && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setShowPqqMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 w-48 bg-[#1a2236] border border-[#1e2d4a] rounded-xl shadow-2xl z-30 py-1">
+                  <button
+                    onClick={() => handlePqqTemplate('pdf')}
+                    className="w-full text-left px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-[#0d1628] transition-colors flex items-center gap-2"
+                  >
+                    <FileText size={12} className="text-red-400" /> Download as PDF
+                  </button>
+                  <button
+                    onClick={() => handlePqqTemplate('word')}
+                    className="w-full text-left px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-[#0d1628] transition-colors flex items-center gap-2"
+                  >
+                    <FileText size={12} className="text-blue-400" /> Download as Word
+                  </button>
+                  <div className="border-t border-[#1e2d4a] my-1" />
+                  <button
+                    onClick={() => { setShowPqqMenu(false); setShowUploadPqq(true); }}
+                    className="w-full text-left px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-[#0d1628] transition-colors flex items-center gap-2"
+                  >
+                    <Upload size={12} className="text-emerald-400" /> Upload Completed PQQ
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <button onClick={onClose} className="p-2 text-slate-500 hover:text-white hover:bg-[#1a2236] rounded-lg transition-colors">
+            <X size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -1351,14 +1452,58 @@ export default function SupplierDetail({ supplier, onClose, onUpdate }: Supplier
               />
             )}
             {activeTab === 'pqq' && (
-              <PqqTab
-                supplier={localSupplier}
-                pqqResponses={pqqResponses}
-                orgId={orgId}
-                canEdit={canEdit}
-                currentUserName={currentUserName}
-                onResponsesChange={handlePqqResponsesChange}
-              />
+              <div className="space-y-4">
+                {/* Import status banner */}
+                {importMeta && (
+                  <div className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${
+                    importMeta.import_status === 'pending_review'
+                      ? 'bg-amber-900/20 border-amber-800/50'
+                      : 'bg-emerald-900/20 border-emerald-800/50'
+                  }`}>
+                    <AlertCircle size={15} className={importMeta.import_status === 'pending_review' ? 'text-amber-400 shrink-0 mt-0.5' : 'text-emerald-400 shrink-0 mt-0.5'} />
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-bold ${importMeta.import_status === 'pending_review' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                        {importMeta.import_status === 'pending_review' ? 'Completed PQQ Uploaded — Pending Review' : 'PQQ Import Reviewed'}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {importMeta.document_name} · Uploaded by {importMeta.uploaded_by} · {new Date(importMeta.uploaded_at).toLocaleDateString('en-GB')}
+                      </p>
+                      {importMeta.import_note && <p className="text-xs text-slate-500 mt-0.5">{importMeta.import_note}</p>}
+                    </div>
+                    <button
+                      onClick={() => setShowUploadPqq(true)}
+                      className="text-[10px] text-slate-400 hover:text-white underline whitespace-nowrap"
+                    >
+                      Replace
+                    </button>
+                  </div>
+                )}
+                {!importMeta && (
+                  <div className="flex items-center justify-between px-4 py-3 bg-[#0d1628] border border-[#1e2d4a] rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <Upload size={14} className="text-slate-500" />
+                      <div>
+                        <p className="text-xs font-semibold text-slate-300">Have a completed PQQ to upload?</p>
+                        <p className="text-xs text-slate-500">Upload a returned questionnaire to store it against this record.</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowUploadPqq(true)}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-[#1a2236] border border-[#1e2d4a] hover:border-[#f97316] text-slate-300 hover:text-white rounded-lg text-xs font-semibold transition-colors"
+                    >
+                      <Upload size={11} /> Upload Completed PQQ
+                    </button>
+                  </div>
+                )}
+                <PqqTab
+                  supplier={localSupplier}
+                  pqqResponses={pqqResponses}
+                  orgId={orgId}
+                  canEdit={canEdit}
+                  currentUserName={currentUserName}
+                  onResponsesChange={handlePqqResponsesChange}
+                />
+              </div>
             )}
             {activeTab === 'documents' && (
               <DocumentsTab
@@ -1401,6 +1546,17 @@ export default function SupplierDetail({ supplier, onClose, onUpdate }: Supplier
           </div>
         )}
       </div>
+
+      {/* Upload Completed PQQ modal */}
+      {showUploadPqq && (
+        <UploadPqqModal
+          supplier={localSupplier}
+          orgId={orgId}
+          currentUserName={currentUserName}
+          onClose={() => setShowUploadPqq(false)}
+          onUploaded={handlePqqUploaded}
+        />
+      )}
     </div>
   );
 }
