@@ -1488,16 +1488,16 @@ function buildTWRBody(f: Record<string, unknown>): string {
             const passColor = r.passFail === 'Pass' ? '#065f46' : r.passFail === 'Fail' ? '#7f1d1d' : '#1e293b';
             const passText  = r.passFail === 'Pass' ? '#6ee7b7' : r.passFail === 'Fail' ? '#fca5a5' : '#475569';
             return `<tr>
-              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0">${esc(r.id)}</td>
-              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0">${esc(r.area)}</td>
-              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0">${esc(r.description)}</td>
-              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0;text-align:center">${r.flowRate ? `${esc(r.flowRate)} L/min` : '—'}</td>
-              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0;text-align:center">${esc(r.temp20s)}</td>
-              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0;text-align:center">${esc(r.temp60s)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#0f172a">${esc(r.id)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#0f172a">${esc(r.area)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#0f172a">${esc(r.description)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#0f172a;text-align:center">${r.flowRate ? `${esc(r.flowRate)} L/min` : '—'}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#0f172a;text-align:center">${esc(r.temp20s)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#0f172a;text-align:center">${esc(r.temp60s)}</td>
               <td style="padding:5px 7px;border:1px solid #1e2d4a;text-align:center">
                 <span style="background:${passColor};color:${passText};padding:2px 8px;border-radius:12px;font-size:9px;font-weight:700">${esc(r.passFail)}</span>
               </td>
-              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#475569;font-style:italic">${esc(r.notes)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#0f172a;font-style:italic">${esc(r.notes)}</td>
             </tr>`;
           }).join('')}
         </tbody>
