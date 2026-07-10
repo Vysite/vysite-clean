@@ -59,15 +59,16 @@ interface SuperAdminRow {
 // ─── Module config — mirrors the main sidebar ─────────────────────────────────
 
 const MODULES = [
-  { key: 'tenders',     label: 'Tender & Estimating' },
-  { key: 'projects',    label: 'Projects' },
-  { key: 'commercial',  label: 'Commercial' },
-  { key: 'maintenance', label: 'Maintenance & Servicing' },
-  { key: 'site-forms',  label: 'Site Forms' },
-  { key: 'snagging',    label: 'Snagging' },
-  { key: 'actions',     label: 'Actions Tracker' },
-  { key: 'testing',     label: 'O&M Manual' },
-  { key: 'reports',     label: 'Reports' },
+  { key: 'tenders',       label: 'Tender & Estimating' },
+  { key: 'projects',      label: 'Projects' },
+  { key: 'commercial',    label: 'Commercial' },
+  { key: 'maintenance',   label: 'Maintenance & Servicing' },
+  { key: 'site-forms',    label: 'Site Forms' },
+  { key: 'snagging',      label: 'Snagging' },
+  { key: 'actions',       label: 'Actions Tracker' },
+  { key: 'testing',       label: 'O&M Manual' },
+  { key: 'supply-chain',  label: 'Supply Chain' },
+  { key: 'reports',       label: 'Reports' },
 ];
 
 const DEFAULT_MODULES: Record<string, boolean> = {
