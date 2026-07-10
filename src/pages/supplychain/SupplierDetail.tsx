@@ -1293,7 +1293,9 @@ export default function SupplierDetail({ supplier, onClose, onUpdate }: Supplier
     if (format === 'pdf') downloadPqqPdf(data);
     else downloadPqqWord(data);
     setShowPqqMenu(false);
-  } { id: DetailTab; label: string; icon: React.ReactNode }[] = [
+  }
+
+  const TABS: { id: DetailTab; label: string; icon: React.ReactNode }[] = [
     { id: 'overview',   label: 'Overview',         icon: <Building2 size={13} /> },
     { id: 'company',    label: 'Company',           icon: <Network size={13} /> },
     { id: 'trades',     label: 'Trades & Coverage', icon: <Tag size={13} /> },
