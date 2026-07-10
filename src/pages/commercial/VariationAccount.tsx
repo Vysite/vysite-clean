@@ -531,7 +531,7 @@ function VariationDrawer({
     notes:       item?.notes       ?? '',
   });
 
-  const attachments = store.attachments.filter(
+  const attachments = (store.attachments ?? []).filter(
     a => a.linked_type === 'variation_account' && a.linked_id === (item?.id ?? '')
   );
 

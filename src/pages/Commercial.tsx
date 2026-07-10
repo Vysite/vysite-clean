@@ -853,12 +853,12 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
   const [lineItemsLoaded, setLineItemsLoaded] = useState(false);
 
   // For new records, show pending files as a preview list; for existing records, show uploaded attachments
-  const attachments = store.attachments.filter(a => a.linked_type === 'commercial' && a.linked_id === (record?.id ?? ''));
+  const attachments = (store.attachments ?? []).filter(a => a.linked_type === 'commercial' && a.linked_id === (record?.id ?? ''));
 
   // Comments: local pending state for new records, store state for existing
   const recordComments = isNew
     ? pendingComments
-    : store.commercialRecordComments.filter(c => c.record_id === (record?.id ?? ''));
+    : (store.commercialRecordComments ?? []).filter(c => c.record_id === (record?.id ?? ''));
 
   function handleProjectChange(projectId: string) {
     const proj = projects.find(p => p.id === projectId);
