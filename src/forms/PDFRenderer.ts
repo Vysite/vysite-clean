@@ -446,6 +446,8 @@ const CONTRACTUAL_NOTICE: Partial<Record<string, string>> = {
     'Temperature measurements have been taken in accordance with CIBSE TM13, HSG274 (Part 2), the Water Supply (Water Fittings) Regulations 1999, and the project specification. All readings form part of the Legionella risk management programme and must be retained as part of the permanent water hygiene record. Where temperatures fall outside the recommended range, remedial action must be taken immediately and the results re-tested and recorded.',
   'Site Note':
     'This Site Note has been issued to formally record information, observations, existing conditions or matters relevant to the Project. It is intended to maintain an accurate contemporaneous project record and does not, by itself, constitute a contractual instruction, variation, acceptance or waiver of any contractual rights or obligations unless expressly stated elsewhere within the Contract.',
+  'Flushing Register':
+    'This Flushing Register has been completed in accordance with ACoP L8 (Control of Legionella bacteria in water systems), HSG274 Part 2 (The control of Legionella bacteria in hot and cold water systems), CIBSE TM8, and BSRIA BG 29/2021. These records must be retained for a minimum of 5 years and must be made available to the Responsible Person, the Water Treatment Contractor, and enforcement authorities on request. Failure to maintain adequate flushing records may constitute a breach of the Health and Safety at Work Act 1974 and the COSHH Regulations 2002.',
 };
 
 // ─── Reusable report footer / legal block ─────────────────────────────────────
@@ -557,6 +559,97 @@ function buildFlushingBody(f: Record<string, unknown>): string {
     ${safeStr(f.pipeworkDescription) ? section('Pipework Description', safeStr(f.pipeworkDescription)) : ''}
     ${resultBlock('Flush Result', safeStr(f.flushResult))}
     ${safeStr(f.observations) ? section('Observations / Notes', safeStr(f.observations)) : ''}
+  `;
+}
+
+function buildFlushingRegisterBody(f: Record<string, unknown>): string {
+  // Parse JSON structures
+  type FrChecks = Record<string, string>;
+  interface FrRow { date: string; areaRoom: string; outletAsset: string; system: string; durationMins: string; valveSafe: string; capped: string; runningClear: string; engineer: string; rowNotes: string; }
+  let frStartChecks: FrChecks = {};
+  let frEndChecks: FrChecks = {};
+  let frRows: FrRow[] = [];
+  try { if (f.frStartChecks) frStartChecks = JSON.parse(f.frStartChecks as string); } catch { /* */ }
+  try { if (f.frEndChecks)   frEndChecks   = JSON.parse(f.frEndChecks as string); }   catch { /* */ }
+  try { if (f.frRows)        frRows        = JSON.parse(f.frRows as string); }         catch { /* */ }
+
+  const checksBadge = (val: string) => {
+    const v = (val || '').trim();
+    if (v === 'Yes') return '<span class="badge-pass">Yes</span>';
+    if (v === 'No')  return '<span class="badge-fail">No</span>';
+    return `<span class="badge-na">${esc(v) || '—'}</span>`;
+  };
+
+  const checksTable = (checks: FrChecks) => {
+    const entries = Object.entries(checks);
+    if (!entries.length) return '<p style="color:#94a3b8;font-size:10px;font-style:italic">No checks recorded.</p>';
+    return `<table class="data-table">
+      <tr><th style="width:75%">Check Item</th><th>Result</th></tr>
+      ${entries.map(([label, val]) => `<tr><td>${esc(label)}</td><td>${checksBadge(val)}</td></tr>`).join('')}
+    </table>`;
+  };
+
+  const rowsTable = frRows.length ? `
+    <table class="data-table">
+      <tr>
+        <th>Date</th><th>Area / Room</th><th>Outlet / Asset</th><th>System</th>
+        <th>Dur. (min)</th><th>Valve Safe</th><th>Capped</th><th>Running Clear</th>
+        <th>Engineer</th><th>Notes</th>
+      </tr>
+      ${frRows.map(r => `<tr>
+        <td>${esc(r.date)}</td>
+        <td>${esc(r.areaRoom)}</td>
+        <td>${esc(r.outletAsset)}</td>
+        <td>${esc(r.system)}</td>
+        <td style="text-align:center">${esc(r.durationMins)}</td>
+        <td style="text-align:center">${checksBadge(r.valveSafe)}</td>
+        <td style="text-align:center">${checksBadge(r.capped)}</td>
+        <td style="text-align:center">${checksBadge(r.runningClear)}</td>
+        <td>${esc(r.engineer)}</td>
+        <td style="font-style:italic;color:#64748b">${esc(r.rowNotes)}</td>
+      </tr>`).join('')}
+    </table>` : '<p style="color:#94a3b8;font-size:10px;font-style:italic">No flushing entries recorded.</p>';
+
+  return `
+    ${sectionHtml('Register Details', dataGrid([
+      ['Register Ref', safeStr(f.frRef)],
+      ['Revision', safeStr(f.frRevision)],
+      ['Site', safeStr(f.frSite)],
+      ['Client', safeStr(f.frClient)],
+      ['Raised By', safeStr(f.frRaisedBy)],
+      ['Company', safeStr(f.frCompany)],
+      ['Date', safeStr(f.date) ? fmtDate(safeStr(f.date)) : ''],
+      ['Project', safeStr(f.projectName)],
+    ], 3))}
+    ${safeStr(f.notes) ? section('Notes', safeStr(f.notes)) : ''}
+
+    ${sectionHtml('Start of Shift Checks', checksTable(frStartChecks))}
+    ${safeStr(f.frStartNotes) ? section('Start of Shift Notes', safeStr(f.frStartNotes)) : ''}
+
+    ${sectionHtml(`Flushing Register (${frRows.length} ${frRows.length === 1 ? 'entry' : 'entries'})`, rowsTable)}
+
+    ${sectionHtml('End of Shift Checks', checksTable(frEndChecks))}
+    ${safeStr(f.frEndNotes) ? section('End of Shift Notes', safeStr(f.frEndNotes)) : ''}
+
+    ${sectionHtml('Daily Summary', dataGrid([
+      ['Total Outlets Flushed', safeStr(f.frTotalPoints)],
+      ['Total Duration (mins)', safeStr(f.frTotalDuration)],
+      ['Outstanding Points', safeStr(f.frOutstanding)],
+    ]))}
+    ${safeStr(f.frIssues) ? section('Issues Encountered', safeStr(f.frIssues)) : ''}
+    ${safeStr(f.frFurtherActions) ? section('Further Actions Required', safeStr(f.frFurtherActions)) : ''}
+
+    <div class="section">
+      ${sectionHeading('Declaration')}
+      <div class="section-content" style="font-style:italic;background:#f0fdfa;border-color:#99f6e4">
+        I confirm that the flushing activities recorded on this register have been carried out in accordance with the site-specific Legionella risk assessment, the Written Scheme of Control and the requirements of HSG274 Part 2. All outlets flushed as required and any deficiencies or observations have been recorded above. This register forms part of the formal Legionella control records required under ACoP L8 (HSG274) and must be retained for a minimum of 5 years.
+      </div>
+    </div>
+    ${sectionHtml('Sign-Off', dataGrid([
+      ['Completed By', safeStr(f.frCompletedBy) || safeStr(f.completedBy)],
+      ['Position', safeStr(f.frPosition)],
+      ['Declaration Date', safeStr(f.frDeclDate) ? fmtDate(safeStr(f.frDeclDate)) : ''],
+    ]))}
   `;
 }
 
@@ -1780,6 +1873,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
       'Site Hold Up': 'Site Hold Up Record',
       'Site Change Request': 'Site Change Request',
       'Site Note': 'Site Note',
+      'Flushing Register': 'Mechanical — Daily Flushing Register',
     };
     return map[form.type] ?? form.type;
   })();
@@ -1853,6 +1947,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
     case 'Site Hold Up':                   formBody = buildSiteHoldUpBody(f); break;
     case 'Site Change Request':            formBody = buildSiteChangeRequestBody(f); break;
     case 'Site Note':                      formBody = buildSiteNoteBody(f); break;
+    case 'Flushing Register':              formBody = buildFlushingRegisterBody(f); break;
     default:                               formBody = buildGenericBody(f); break;
   }
 
@@ -1861,7 +1956,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
     ? sectionHtml('Evidence & Attachments', evidenceHtml(attachments))
     : '';
 
-  const docRef = safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.shuRef) || safeStr(f.scrRef) || safeStr(f.snRef) || safeStr(f.id) || `VY-${Date.now()}`;
+  const docRef = safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.shuRef) || safeStr(f.scrRef) || safeStr(f.snRef) || safeStr(f.frRef) || safeStr(f.id) || `VY-${Date.now()}`;
   const legalFooter = reportFooter({
     formType: form.type,
     docRef,
