@@ -16,6 +16,7 @@ import TestingCommissioning from './pages/TestingCommissioning';
 import OAndMManual from './pages/OAndMManual';
 import MaintenanceServicing from './pages/MaintenanceServicing';
 import Commercial from './pages/Commercial';
+import SupplyChain from './pages/SupplyChain';
 import Login from './pages/Login';
 import SetPassword from './pages/SetPassword';
 import SuperAdmin from './pages/SuperAdmin';
@@ -100,6 +101,10 @@ function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pending
       return guard(perms['modules.testing'] && isModuleEnabled('testing'),
         <OAndMManual />,
         'O&M Manual');
+    case 'supply-chain':
+      return guard((perms['modules.supply_chain'] && (perms['supply_chain.view'] || perms['supply_chain.create_edit'])) && isModuleEnabled('supply-chain'),
+        <SupplyChain />,
+        'Supply Chain');
     case 'reports':
       return guard(perms['modules.reports'] && isModuleEnabled('reports'),
         <Reports />,

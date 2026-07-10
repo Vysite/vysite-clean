@@ -4,6 +4,9 @@ import type {
   Action, Snag, Tender, Project,
   ContractReviewRecord, StoredContractReview,
 } from '../data/types';
+import type {
+  DBSupplier, DBSupplierTrade, DBSupplierSpecialism, DBSupplierLabourRateType,
+} from '../pages/supplychain/types';
 
 // ─── Types for DB rows ────────────────────────────────────────────────────────
 
@@ -126,7 +129,11 @@ export type PermissionKey =
   | 'modules.commercial'
   | 'commercial.create'
   | 'commercial.edit'
-  | 'commercial.delete';
+  | 'commercial.delete'
+  // Supply Chain
+  | 'modules.supply_chain'
+  | 'supply_chain.view'
+  | 'supply_chain.create_edit';
 
 export interface DBPlatformUser {
   id: string;
@@ -172,6 +179,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.assign': true, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
     'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': true, 'programmes.export': true,
     'modules.commercial': true, 'commercial.create': true, 'commercial.edit': true, 'commercial.delete': true,
+    'modules.supply_chain': true, 'supply_chain.view': true, 'supply_chain.create_edit': true,
   },
   'Commercial Lead': {
     'projects.view_all': true, 'projects.view_assigned': true,
@@ -195,6 +203,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.assign': true, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
     'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': true, 'programmes.export': true,
     'modules.commercial': true, 'commercial.create': true, 'commercial.edit': true, 'commercial.delete': true,
+    'modules.supply_chain': true, 'supply_chain.view': true,
   },
   'Project Manager': {
     'projects.view_assigned': true, 'projects.edit': true,
@@ -1329,6 +1338,24 @@ export interface AppStore {
   batchUpsertValuationLineEntries: (entries: DBValuationLineEntry[]) => Promise<void>;
   upsertValuationExtraEntry: (e: DBValuationExtraEntry) => Promise<void>;
   batchUpsertValuationExtraEntries: (entries: DBValuationExtraEntry[]) => Promise<void>;
+
+  // Supply Chain
+  suppliers: DBSupplier[];
+  supplierTrades: DBSupplierTrade[];
+  supplierSpecialisms: DBSupplierSpecialism[];
+  supplierLabourRateTypes: DBSupplierLabourRateType[];
+  addSupplier: (s: DBSupplier) => Promise<void>;
+  updateSupplier: (s: DBSupplier) => Promise<void>;
+  removeSupplier: (id: string) => Promise<void>;
+  addSupplierTrade: (t: DBSupplierTrade) => Promise<void>;
+  updateSupplierTrade: (t: DBSupplierTrade) => Promise<void>;
+  removeSupplierTrade: (id: string) => Promise<void>;
+  addSupplierSpecialism: (s: DBSupplierSpecialism) => Promise<void>;
+  updateSupplierSpecialism: (s: DBSupplierSpecialism) => Promise<void>;
+  removeSupplierSpecialism: (id: string) => Promise<void>;
+  addSupplierLabourRateType: (rt: DBSupplierLabourRateType) => Promise<void>;
+  updateSupplierLabourRateType: (rt: DBSupplierLabourRateType) => Promise<void>;
+  removeSupplierLabourRateType: (id: string) => Promise<void>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1394,6 +1421,10 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [workbookExtras, setWorkbookExtras] = useState<DBWorkbookExtra[]>([]);
   const [valuationLineEntries, setValuationLineEntries] = useState<DBValuationLineEntry[]>([]);
   const [valuationExtraEntries, setValuationExtraEntries] = useState<DBValuationExtraEntry[]>([]);
+  const [suppliers, setSuppliers] = useState<DBSupplier[]>([]);
+  const [supplierTrades, setSupplierTrades] = useState<DBSupplierTrade[]>([]);
+  const [supplierSpecialisms, setSupplierSpecialisms] = useState<DBSupplierSpecialism[]>([]);
+  const [supplierLabourRateTypes, setSupplierLabourRateTypes] = useState<DBSupplierLabourRateType[]>([]);
   const [settings, setSettings] = useState<DBSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   // True while Phase 2 background queries are in flight.
@@ -1432,6 +1463,10 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setOAndMManuals([]);
       setOAndMSections([]);
       setOAndMItems([]);
+      setSuppliers([]);
+      setSupplierTrades([]);
+      setSupplierSpecialisms([]);
+      setSupplierLabourRateTypes([]);
       // Keep platformUsers/settings as-is — they load below with org filter
       setLoading(false);
       setModulesLoading(false);
@@ -1492,7 +1527,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       // These tables are only needed when the user navigates to specific modules.
       // Loading them here (rather than on-demand) keeps state management simple
       // while still avoiding blocking the initial render.
-      const [docRes, attRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes, valRes, wbRes, wblRes, wbeRes, vleRes, veeRes] = await Promise.all([
+      const [docRes, attRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes, valRes, wbRes, wblRes, wbeRes, vleRes, veeRes, supRes, scTRes, scSpRes, scLRTRes] = await Promise.all([
         supabase.from('vy_project_documents').select(DOC_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('vy_snagging_reports').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
@@ -1513,6 +1548,10 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
         supabase.from('vy_workbook_extras').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
         supabase.from('vy_valuation_line_entries').select('*').eq('org_id', orgId),
         supabase.from('vy_valuation_extra_entries').select('*').eq('org_id', orgId),
+        supabase.from('vy_suppliers').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('vy_supplier_trades').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
+        supabase.from('vy_supplier_specialisms').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
+        supabase.from('vy_supplier_labour_rate_types').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
       ]);
 
       if (cancelled) return;
@@ -1545,6 +1584,10 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setWorkbookExtras((wbeRes.data ?? []) as DBWorkbookExtra[]);
       setValuationLineEntries((vleRes.data ?? []) as DBValuationLineEntry[]);
       setValuationExtraEntries((veeRes.data ?? []) as DBValuationExtraEntry[]);
+      setSuppliers((supRes.data ?? []) as DBSupplier[]);
+      setSupplierTrades((scTRes.data ?? []) as DBSupplierTrade[]);
+      setSupplierSpecialisms((scSpRes.data ?? []) as DBSupplierSpecialism[]);
+      setSupplierLabourRateTypes((scLRTRes.data ?? []) as DBSupplierLabourRateType[]);
       // Phase 2 complete — module pages can now render their full data.
       setModulesLoading(false);
 
@@ -2385,6 +2428,96 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     ? null
     : currentUser.assigned_project_ids;
 
+  // ── Supply Chain ──────────────────────────────────────────────────────────────
+
+  const addSupplier = useCallback(async (s: DBSupplier) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSuppliers(prev => [s, ...prev]);
+    const { error } = await supabase.from('vy_suppliers').upsert({ ...s, org_id: oid }, { onConflict: 'id' });
+    logWrite('addSupplier', 'vy_suppliers', error);
+  }, []);
+
+  const updateSupplier = useCallback(async (s: DBSupplier) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSuppliers(prev => prev.map(x => x.id === s.id ? s : x));
+    const { error } = await supabase.from('vy_suppliers').upsert({ ...s, org_id: oid, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+    logWrite('updateSupplier', 'vy_suppliers', error);
+  }, []);
+
+  const removeSupplier = useCallback(async (id: string) => {
+    setSuppliers(prev => prev.filter(s => s.id !== id));
+    const { error } = await supabase.from('vy_suppliers').delete().eq('id', id);
+    logWrite('removeSupplier', 'vy_suppliers', error);
+  }, []);
+
+  const addSupplierTrade = useCallback(async (t: DBSupplierTrade) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSupplierTrades(prev => [...prev, t]);
+    const { error } = await supabase.from('vy_supplier_trades').upsert({ ...t, org_id: oid }, { onConflict: 'id' });
+    logWrite('addSupplierTrade', 'vy_supplier_trades', error);
+  }, []);
+
+  const updateSupplierTrade = useCallback(async (t: DBSupplierTrade) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSupplierTrades(prev => prev.map(x => x.id === t.id ? t : x));
+    const { error } = await supabase.from('vy_supplier_trades').upsert({ ...t, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateSupplierTrade', 'vy_supplier_trades', error);
+  }, []);
+
+  const removeSupplierTrade = useCallback(async (id: string) => {
+    setSupplierTrades(prev => prev.filter(t => t.id !== id));
+    const { error } = await supabase.from('vy_supplier_trades').delete().eq('id', id);
+    logWrite('removeSupplierTrade', 'vy_supplier_trades', error);
+  }, []);
+
+  const addSupplierSpecialism = useCallback(async (s: DBSupplierSpecialism) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSupplierSpecialisms(prev => [...prev, s]);
+    const { error } = await supabase.from('vy_supplier_specialisms').upsert({ ...s, org_id: oid }, { onConflict: 'id' });
+    logWrite('addSupplierSpecialism', 'vy_supplier_specialisms', error);
+  }, []);
+
+  const updateSupplierSpecialism = useCallback(async (s: DBSupplierSpecialism) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSupplierSpecialisms(prev => prev.map(x => x.id === s.id ? s : x));
+    const { error } = await supabase.from('vy_supplier_specialisms').upsert({ ...s, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateSupplierSpecialism', 'vy_supplier_specialisms', error);
+  }, []);
+
+  const removeSupplierSpecialism = useCallback(async (id: string) => {
+    setSupplierSpecialisms(prev => prev.filter(s => s.id !== id));
+    const { error } = await supabase.from('vy_supplier_specialisms').delete().eq('id', id);
+    logWrite('removeSupplierSpecialism', 'vy_supplier_specialisms', error);
+  }, []);
+
+  const addSupplierLabourRateType = useCallback(async (rt: DBSupplierLabourRateType) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSupplierLabourRateTypes(prev => [...prev, rt]);
+    const { error } = await supabase.from('vy_supplier_labour_rate_types').upsert({ ...rt, org_id: oid }, { onConflict: 'id' });
+    logWrite('addSupplierLabourRateType', 'vy_supplier_labour_rate_types', error);
+  }, []);
+
+  const updateSupplierLabourRateType = useCallback(async (rt: DBSupplierLabourRateType) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSupplierLabourRateTypes(prev => prev.map(x => x.id === rt.id ? rt : x));
+    const { error } = await supabase.from('vy_supplier_labour_rate_types').upsert({ ...rt, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateSupplierLabourRateType', 'vy_supplier_labour_rate_types', error);
+  }, []);
+
+  const removeSupplierLabourRateType = useCallback(async (id: string) => {
+    setSupplierLabourRateTypes(prev => prev.filter(rt => rt.id !== id));
+    const { error } = await supabase.from('vy_supplier_labour_rate_types').delete().eq('id', id);
+    logWrite('removeSupplierLabourRateType', 'vy_supplier_labour_rate_types', error);
+  }, []);
+
   return {
     projects, projectDocuments, attachments,
     actions, snags, snaggingReports, siteForms, tenders, tcRecords, maintenanceJobs, programmes, programmeTasks, keyDates,
@@ -2435,5 +2568,10 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addWorkbookExtra, updateWorkbookExtra, removeWorkbookExtra, batchAddWorkbookExtras,
     upsertValuationLineEntry, batchUpsertValuationLineEntries,
     upsertValuationExtraEntry, batchUpsertValuationExtraEntries,
+    suppliers, supplierTrades, supplierSpecialisms, supplierLabourRateTypes,
+    addSupplier, updateSupplier, removeSupplier,
+    addSupplierTrade, updateSupplierTrade, removeSupplierTrade,
+    addSupplierSpecialism, updateSupplierSpecialism, removeSupplierSpecialism,
+    addSupplierLabourRateType, updateSupplierLabourRateType, removeSupplierLabourRateType,
   };
 }
