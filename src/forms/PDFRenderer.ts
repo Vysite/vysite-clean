@@ -40,48 +40,48 @@ const CSS = `
   .doc-header { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 14px; border-bottom: 3px solid #f97316; margin-bottom: 20px; }
   .doc-logo-img { height: 38px; max-width: 160px; display: block; margin-bottom: 4px; }
   .doc-logo-text { font-size: 22px; font-weight: 900; color: #f97316; letter-spacing: 0.05em; }
-  .doc-type-label { font-size: 10px; color: #64748b; margin-top: 4px; }
+  .doc-type-label { font-size: 10px; color: #334155; margin-top: 4px; }
   .doc-header-right { text-align: right; }
   .doc-title { font-size: 18px; font-weight: 900; color: #111; margin-bottom: 4px; line-height: 1.25; max-width: 380px; }
-  .doc-dateline { font-size: 11px; color: #64748b; }
+  .doc-dateline { font-size: 11px; color: #334155; }
   /* Subtitle bar — project/date/status summary line */
-  .doc-subtitle-bar { font-size: 11px; color: #64748b; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
+  .doc-subtitle-bar { font-size: 11px; color: #334155; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
   /* Status badge */
   .status-badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 2px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; margin-left: 6px; vertical-align: middle; }
   .status-submitted    { background: #dbeafe; color: #1d4ed8; }
   .status-approved     { background: #d1fae5; color: #065f46; }
-  .status-draft        { background: #f1f5f9; color: #475569; }
+  .status-draft        { background: #f1f5f9; color: #1e293b; }
   .status-issued       { background: #e0f2fe; color: #0369a1; }
   .status-open         { background: #fef9c3; color: #854d0e; }
   .status-acknowledged { background: #cffafe; color: #0e7490; }
   .status-actioned     { background: #ede9fe; color: #5b21b6; }
   .status-resolved     { background: #d1fae5; color: #065f46; }
-  .status-closed       { background: #f1f5f9; color: #475569; }
-  .status-other        { background: #f1f5f9; color: #475569; }
+  .status-closed       { background: #f1f5f9; color: #1e293b; }
+  .status-other        { background: #f1f5f9; color: #1e293b; }
   /* Meta block */
   .meta-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; }
   .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 20px; }
   .meta-grid-2 { grid-template-columns: repeat(2, 1fr); }
   .meta-grid-4 { grid-template-columns: repeat(4, 1fr); }
   .meta-item {}
-  .meta-label { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+  .meta-label { font-size: 8px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
   .meta-value { font-size: 11px; font-weight: 600; color: #0f172a; }
   /* Result badge */
   .result-block { display: flex; align-items: center; justify-content: space-between; border-radius: 8px; padding: 12px 18px; margin: 14px 0; page-break-inside: avoid; }
   .result-pass  { background: #f0fdf4; border: 1.5px solid #86efac; }
   .result-fail  { background: #fef2f2; border: 1.5px solid #fca5a5; }
   .result-other { background: #fffbeb; border: 1.5px solid #fcd34d; }
-  .result-label { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
+  .result-label { font-size: 9px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.08em; }
   .result-value-pass  { font-size: 14px; font-weight: 800; color: #16a34a; }
   .result-value-fail  { font-size: 14px; font-weight: 800; color: #dc2626; }
   .result-value-other { font-size: 14px; font-weight: 800; color: #d97706; }
   /* Sections */
   .section { margin-top: 20px; page-break-inside: avoid; }
-  .section-heading { font-size: 8.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 6px; border-bottom: 1.5px solid #e2e8f0; margin-bottom: 10px; }
-  .section-content { font-size: 11px; color: #334155; line-height: 1.65; white-space: pre-wrap; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; }
+  .section-heading { font-size: 8.5px; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 6px; border-bottom: 1.5px solid #e2e8f0; margin-bottom: 10px; }
+  .section-content { font-size: 11px; color: #1e293b; line-height: 1.65; white-space: pre-wrap; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; }
   /* Data tables */
   .data-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 2px; }
-  .data-table th { padding: 8px 10px; text-align: left; font-size: 9px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; background: #f1f5f9; border-bottom: 2px solid #e2e8f0; }
+  .data-table th { padding: 8px 10px; text-align: left; font-size: 9px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.05em; background: #f1f5f9; border-bottom: 2px solid #e2e8f0; }
   .data-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: top; }
   .data-table tr:nth-child(even) td { background: #f8fafc; }
   .data-table tr:last-child td { border-bottom: none; }
@@ -89,7 +89,7 @@ const CSS = `
   .data-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: #e2e8f0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-top: 2px; }
   .data-grid-3 { grid-template-columns: repeat(3, 1fr); }
   .data-cell { background: white; padding: 9px 12px; }
-  .data-cell-label { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 3px; }
+  .data-cell-label { font-size: 8px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 3px; }
   .data-cell-value { font-size: 11px; font-weight: 600; color: #0f172a; }
   /* Risk badges */
   .risk-low      { background: #dcfce7; color: #166534; border-radius: 20px; padding: 2px 10px; font-size: 9px; font-weight: 700; display: inline-block; }
@@ -101,7 +101,7 @@ const CSS = `
   .hazard-header { background: #f8fafc; padding: 9px 14px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
   .hazard-body { padding: 10px 14px; }
   .hazard-row { display: grid; grid-template-columns: 140px 1fr; gap: 8px; margin-bottom: 6px; font-size: 10px; }
-  .hazard-row-label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; padding-top: 1px; }
+  .hazard-row-label { font-size: 9px; font-weight: 700; color: #475569; text-transform: uppercase; padding-top: 1px; }
   .hazard-controls { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 5px; padding: 8px 10px; margin-top: 8px; font-size: 10px; color: #166534; }
   /* SWA checklist */
   .checklist-row { display: grid; grid-template-columns: 1fr 80px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9; font-size: 10px; }
@@ -109,36 +109,36 @@ const CSS = `
   .checklist-fail { color: #dc2626; font-weight: 600; }
   .badge-pass { background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 20px; font-size: 8.5px; font-weight: 700; }
   .badge-fail { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 20px; font-size: 8.5px; font-weight: 700; }
-  .badge-na   { background: #f1f5f9; color: #64748b;  padding: 2px 8px; border-radius: 20px; font-size: 8.5px; font-weight: 700; }
+  .badge-na   { background: #f1f5f9; color: #334155;  padding: 2px 8px; border-radius: 20px; font-size: 8.5px; font-weight: 700; }
   .badge-action { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 20px; font-size: 8.5px; font-weight: 700; margin-left: 4px; }
   /* Legal footer */
   .legal-footer { margin-top: 28px; border-top: 2px solid #e2e8f0; page-break-inside: avoid; }
   .legal-footer-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 0 8px; }
-  .legal-footer-title { font-size: 8px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; }
-  .legal-footer-ref { font-size: 8px; color: #94a3b8; }
+  .legal-footer-title { font-size: 8px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.1em; }
+  .legal-footer-ref { font-size: 8px; color: #475569; }
   .legal-notice-bar { background: #fffbf5; border: 1px solid #fed7aa; border-left: 3px solid #f97316; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
   .legal-notice-label { font-size: 7.5px; font-weight: 800; color: #c2410c; text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 3px; }
   .legal-notice-text { font-size: 8.5px; color: #92400e; line-height: 1.65; }
   .legal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
   .legal-cell { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 5px; padding: 8px 12px; }
-  .legal-cell-label { font-size: 7.5px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
-  .legal-cell-text { font-size: 8.5px; color: #475569; line-height: 1.6; }
+  .legal-cell-label { font-size: 7.5px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+  .legal-cell-text { font-size: 8.5px; color: #1e293b; line-height: 1.6; }
   .legal-branding { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid #e2e8f0; }
-  .legal-branding-left { font-size: 8px; color: #94a3b8; }
-  .legal-branding-right { font-size: 8px; color: #94a3b8; text-align: right; }
+  .legal-branding-left { font-size: 8px; color: #475569; }
+  .legal-branding-right { font-size: 8px; color: #475569; text-align: right; }
   /* Images — thumbnail grid */
   .evidence-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
   .evidence-item { border: 1px solid #e2e8f0; border-radius: 5px; overflow: hidden; page-break-inside: avoid; }
   .evidence-img { width: 100%; height: 110px; object-fit: cover; display: block; background: #f8fafc; }
-  .evidence-caption { padding: 3px 6px; font-size: 7.5px; color: #64748b; background: #f8fafc; border-top: 1px solid #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .evidence-caption { padding: 3px 6px; font-size: 7.5px; color: #334155; background: #f8fafc; border-top: 1px solid #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* Sign-off table */
   .signoff-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-  .signoff-table th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-size: 9px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; }
+  .signoff-table th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-size: 9px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; }
   .signoff-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
   .signoff-table tr:nth-child(even) td { background: #f8fafc; }
   .sig-box { min-width: 90px; height: 28px; border-bottom: 1px solid #cbd5e1; }
   /* doc-footer retained for any external callers — kept but not emitted by this renderer */
-  .doc-footer { margin-top: 32px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; text-align: center; }
+  .doc-footer { margin-top: 32px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #475569; text-align: center; }
   @page { margin: 0; size: A4; }
   @media print {
     .page { padding: 20px 24px; }
@@ -256,8 +256,8 @@ function swaChecklistHtml(jsonStr: string | undefined): string {
   const rows = entries.map(([key, v]) => {
     const badgeCls = v.result === 'Pass' ? 'badge-pass' : v.result === 'Fail' ? 'badge-fail' : 'badge-na';
     const actionBadge = v.action ? `<span class="badge-action">Action</span>` : '';
-    const detail = v.comment ? `<div style="font-size:9px;color:#64748b;margin-top:2px;font-style:italic">${esc(v.comment)}</div>` : '';
-    const resp = v.responsible ? `<div style="font-size:9px;color:#64748b">Responsible: ${esc(v.responsible)}${v.closeDate ? ' · Close: ' + esc(v.closeDate) : ''}</div>` : '';
+    const detail = v.comment ? `<div style="font-size:9px;color:#334155;margin-top:2px;font-style:italic">${esc(v.comment)}</div>` : '';
+    const resp = v.responsible ? `<div style="font-size:9px;color:#334155">Responsible: ${esc(v.responsible)}${v.closeDate ? ' · Close: ' + esc(v.closeDate) : ''}</div>` : '';
     return `<tr>
       <td>${esc(key.replace(/_/g, ' '))}</td>
       <td style="text-align:center"><span class="${badgeCls}">${esc(v.result)}</span>${actionBadge}</td>
@@ -289,7 +289,7 @@ function ramsHazardsHtml(jsonStr: string | undefined): string {
     ${Object.entries(tally).map(([l, c]) => {
       const cls = `risk-${l.toLowerCase()}`;
       return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px">${l}</div>
+        <div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#334155;margin-bottom:4px">${l}</div>
         <div style="font-size:22px;font-weight:900"><span class="${cls}" style="padding:4px 12px">${c}</span></div>
       </div>`;
     }).join('')}
@@ -311,7 +311,7 @@ function ramsHazardsHtml(jsonStr: string | undefined): string {
         ${h.personsAtRisk ? `<div class="hazard-row"><div class="hazard-row-label">Persons at Risk</div><div>${esc(h.personsAtRisk)}</div></div>` : ''}
         ${h.existingControls ? `<div class="hazard-row"><div class="hazard-row-label">Existing Controls</div><div>${esc(h.existingControls)}</div></div>` : ''}
         ${h.additionalControls ? `<div class="hazard-controls"><strong style="font-size:8.5px;text-transform:uppercase;letter-spacing:.05em">Additional Controls Required:</strong><div style="margin-top:4px">${esc(h.additionalControls)}</div></div>` : ''}
-        ${h.responsiblePerson ? `<div style="margin-top:8px;font-size:9.5px;color:#64748b">Responsible: <strong>${esc(h.responsiblePerson)}</strong>${h.actionRequired ? ' · Action: ' + esc(h.actionRequired) : ''}</div>` : ''}
+        ${h.responsiblePerson ? `<div style="margin-top:8px;font-size:9.5px;color:#334155">Responsible: <strong>${esc(h.responsiblePerson)}</strong>${h.actionRequired ? ' · Action: ' + esc(h.actionRequired) : ''}</div>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -372,7 +372,7 @@ function evidenceHtml(attachments: unknown): string {
         return `<div class="evidence-item">
           ${src
             ? `<img class="evidence-img" src="${src}" alt="${esc(img.name ?? 'Photo')}" />`
-            : `<div class="evidence-img" style="display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:9px">Unavailable</div>`}
+            : `<div class="evidence-img" style="display:flex;align-items:center;justify-content:center;color:#475569;font-size:9px">Unavailable</div>`}
           <div class="evidence-caption" title="${esc(img.name ?? 'Photo')}">${esc(img.name ?? 'Photo')}</div>
         </div>`;
       }).join('')}
@@ -385,7 +385,7 @@ function evidenceHtml(attachments: unknown): string {
         const name = esc(d.name ?? 'File');
         const ext = (d.name ?? '').split('.').pop()?.toUpperCase().slice(0, 4) || 'DOC';
         return `<div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid #e2e8f0;border-radius:4px;margin-bottom:5px;background:#f8fafc">
-          <div style="width:28px;height:28px;background:#e2e8f0;border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:800;color:#475569;letter-spacing:.02em">${ext}</div>
+          <div style="width:28px;height:28px;background:#e2e8f0;border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:800;color:#1e293b;letter-spacing:.02em">${ext}</div>
           <span style="font-size:10px;color:#1e293b;font-weight:500">${name}</span>
         </div>`;
       }).join('')}
@@ -582,7 +582,7 @@ function buildFlushingRegisterBody(f: Record<string, unknown>): string {
 
   const checksTable = (checks: FrChecks) => {
     const entries = Object.entries(checks);
-    if (!entries.length) return '<p style="color:#94a3b8;font-size:10px;font-style:italic">No checks recorded.</p>';
+    if (!entries.length) return '<p style="color:#475569;font-size:10px;font-style:italic">No checks recorded.</p>';
     return `<table class="data-table">
       <tr><th style="width:75%">Check Item</th><th>Result</th></tr>
       ${entries.map(([label, val]) => `<tr><td>${esc(label)}</td><td>${checksBadge(val)}</td></tr>`).join('')}
@@ -606,9 +606,9 @@ function buildFlushingRegisterBody(f: Record<string, unknown>): string {
         <td style="text-align:center">${checksBadge(r.capped)}</td>
         <td style="text-align:center">${checksBadge(r.runningClear)}</td>
         <td>${esc(r.engineer)}</td>
-        <td style="font-style:italic;color:#64748b">${esc(r.rowNotes)}</td>
+        <td style="font-style:italic;color:#334155">${esc(r.rowNotes)}</td>
       </tr>`).join('')}
-    </table>` : '<p style="color:#94a3b8;font-size:10px;font-style:italic">No flushing entries recorded.</p>';
+    </table>` : '<p style="color:#475569;font-size:10px;font-style:italic">No flushing entries recorded.</p>';
 
   return `
     ${sectionHtml('Register Details', dataGrid([
@@ -949,20 +949,20 @@ function buildAIRBody(f: Record<string, unknown>): string {
     ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${immediateActions.map(a =>
         `<span style="background:#d1fae5;color:#065f46;font-size:9px;font-weight:700;padding:3px 10px;border-radius:20px">${esc(a)}</span>`
       ).join('')}</div>`
-    : '<p style="font-size:10px;color:#94a3b8;font-style:italic">None recorded</p>';
+    : '<p style="font-size:10px;color:#475569;font-style:italic">None recorded</p>';
 
   const witnessesHtml = witnesses.length
     ? witnesses.map((w, i) => `
         <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:10px;page-break-inside:avoid">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
             <span style="font-size:11px;font-weight:700;color:#0f172a">Witness ${i+1}${w.name ? ': ' + esc(w.name) : ''}</span>
-            ${w.company ? `<span style="font-size:10px;color:#64748b">${esc(w.company)}</span>` : ''}
-            ${w.contact ? `<span style="font-size:10px;color:#94a3b8">${esc(w.contact)}</span>` : ''}
+            ${w.company ? `<span style="font-size:10px;color:#334155">${esc(w.company)}</span>` : ''}
+            ${w.contact ? `<span style="font-size:10px;color:#475569">${esc(w.contact)}</span>` : ''}
           </div>
-          ${w.statement ? `<p style="font-size:10px;color:#334155;line-height:1.65;white-space:pre-wrap">${esc(w.statement)}</p>` : ''}
+          ${w.statement ? `<p style="font-size:10px;color:#1e293b;line-height:1.65;white-space:pre-wrap">${esc(w.statement)}</p>` : ''}
         </div>
       `).join('')
-    : '<p style="font-size:10px;color:#94a3b8;font-style:italic">No witness statements recorded</p>';
+    : '<p style="font-size:10px;color:#475569;font-style:italic">No witness statements recorded</p>';
 
   return `
     ${sectionHtml('Incident Details', dataGrid([
@@ -1039,11 +1039,11 @@ function buildPCRBody(f: Record<string, unknown>): string {
         <td>${esc(a.location)}</td>
         <td>${a.installedCorrectly === 'Yes' ? '<span class="badge-pass">Yes</span>' : '<span class="badge-fail">No</span>'}</td>
         <td>${a.accessible === 'Yes' ? '<span class="badge-pass">Yes</span>' : '<span class="badge-fail">No</span>'}</td>
-        <td style="font-style:italic;color:#64748b">${esc(a.comments)}</td>
+        <td style="font-style:italic;color:#334155">${esc(a.comments)}</td>
       </tr>`).join('')}
     </table>
-    <div style="font-size:9px;color:#94a3b8;margin-top:4px">${assets.length} asset${assets.length !== 1 ? 's' : ''} registered</div>
-  ` : '<p style="font-size:10px;color:#94a3b8;font-style:italic">No assets recorded</p>';
+    <div style="font-size:9px;color:#475569;margin-top:4px">${assets.length} asset${assets.length !== 1 ? 's' : ''} registered</div>
+  ` : '<p style="font-size:10px;color:#475569;font-style:italic">No assets recorded</p>';
 
   const defectRows = defects.length ? `
     <table class="data-table">
@@ -1060,7 +1060,7 @@ function buildPCRBody(f: Record<string, unknown>): string {
         </tr>`;
       }).join('')}
     </table>
-  ` : '<p style="font-size:10px;color:#94a3b8;font-style:italic">No defects recorded</p>';
+  ` : '<p style="font-size:10px;color:#475569;font-style:italic">No defects recorded</p>';
 
   return `
     ${sectionHtml('Project Information', dataGrid([
@@ -1144,7 +1144,7 @@ function buildMVHRBody(f: Record<string, unknown>): string {
   const ynaBadge = (v: string) =>
     v === 'Yes' ? '<span class="badge-pass">Yes</span>'
     : v === 'No' ? '<span class="badge-fail">No</span>'
-    : `<span style="background:#e2e8f0;color:#475569;font-size:9px;font-weight:700;padding:2px 9px;border-radius:20px">${esc(v || 'N/A')}</span>`;
+    : `<span style="background:#e2e8f0;color:#1e293b;font-size:9px;font-weight:700;padding:2px 9px;border-radius:20px">${esc(v || 'N/A')}</span>`;
 
   const checklistTable = (checks: Record<string, string>, items: string[]) => `
     <table class="data-table">
@@ -1171,10 +1171,10 @@ function buildMVHRBody(f: Record<string, unknown>): string {
           <td>${esc(r.designExtract)} l/s</td>
           <td>${esc(r.actualExtract)} l/s</td>
           <td>${badge}</td>
-          <td style="font-style:italic;color:#64748b">${esc(r.comments)}</td>
+          <td style="font-style:italic;color:#334155">${esc(r.comments)}</td>
         </tr>`;
       }).join('')}
-    </table>` : '<p style="font-size:10px;color:#94a3b8;font-style:italic">No room entries recorded</p>';
+    </table>` : '<p style="font-size:10px;color:#475569;font-style:italic">No room entries recorded</p>';
 
   const defectRows = defects.length ? `
     <table class="data-table">
@@ -1188,17 +1188,17 @@ function buildMVHRBody(f: Record<string, unknown>): string {
           <td>${esc(d.responsiblePerson)}</td>
           <td>${fmtDate(d.dueDate)}</td>
           <td><span style="background:${stBg};color:${stClr};font-size:9px;font-weight:700;padding:2px 9px;border-radius:20px">${esc(d.status)}</span></td>
-          <td style="font-style:italic;color:#64748b">${esc(d.comments)}</td>
+          <td style="font-style:italic;color:#334155">${esc(d.comments)}</td>
         </tr>`;
       }).join('')}
-    </table>` : '<p style="font-size:10px;color:#94a3b8;font-style:italic">No defects recorded</p>';
+    </table>` : '<p style="font-size:10px;color:#475569;font-style:italic">No defects recorded</p>';
 
   const statusColor = (() => {
     const s = safeStr(f.mvhrCommissioningStatus);
     if (s === 'Passed') return { bg: '#d1fae5', text: '#065f46' };
     if (s === 'Passed with Comments') return { bg: '#fef9c3', text: '#854d0e' };
     if (s === 'Failed') return { bg: '#fee2e2', text: '#991b1b' };
-    return { bg: '#e2e8f0', text: '#475569' };
+    return { bg: '#e2e8f0', text: '#1e293b' };
   })();
 
   return `
@@ -1233,7 +1233,7 @@ function buildMVHRBody(f: Record<string, unknown>): string {
     ${sectionHtml('Commissioning Result', `
       <div style="display:flex;align-items:center;justify-content:space-between;background:${statusColor.bg};border:1.5px solid ${statusColor.text}40;border-radius:8px;padding:14px 18px;margin-bottom:12px">
         <div>
-          <div style="font-size:8px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Commissioning Status</div>
+          <div style="font-size:8px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Commissioning Status</div>
           <div style="font-size:16px;font-weight:800;color:${statusColor.text}">${esc(safeStr(f.mvhrCommissioningStatus) || 'Not Set')}</div>
         </div>
       </div>
@@ -1266,18 +1266,18 @@ function buildHIUBody(f: Record<string, unknown>): string {
           <td>${esc(d.responsiblePerson)}</td>
           <td>${fmtDate(d.dueDate)}</td>
           <td><span style="background:${stBg};color:${stClr};font-size:9px;font-weight:700;padding:2px 9px;border-radius:20px">${esc(d.status)}</span></td>
-          <td style="font-style:italic;color:#64748b">${esc(d.comments)}</td>
+          <td style="font-style:italic;color:#334155">${esc(d.comments)}</td>
         </tr>`;
       }).join('')}
     </table>
-  ` : '<p style="font-size:10px;color:#94a3b8;font-style:italic">No defects recorded</p>';
+  ` : '<p style="font-size:10px;color:#475569;font-style:italic">No defects recorded</p>';
 
   const statusColor = (() => {
     const s = safeStr(f.hiuCommissioningStatus);
     if (s === 'Passed') return { bg: '#d1fae5', text: '#065f46' };
     if (s === 'Passed with Comments') return { bg: '#fef9c3', text: '#854d0e' };
     if (s === 'Failed') return { bg: '#fee2e2', text: '#991b1b' };
-    return { bg: '#e2e8f0', text: '#475569' };
+    return { bg: '#e2e8f0', text: '#1e293b' };
   })();
 
   return `
@@ -1473,20 +1473,20 @@ function buildTWRBody(f: Record<string, unknown>): string {
     ? `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px">
         <thead>
           <tr style="background:#1a2236">
-            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">ID / Ref</th>
-            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Area</th>
-            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Outlet / Description</th>
-            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Flow Rate (L/min)</th>
-            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Temp @ 20s (°C)</th>
-            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Temp @ 60s (°C)</th>
-            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Result</th>
-            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#94a3b8;font-weight:700;font-size:9px;text-transform:uppercase">Notes</th>
+            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#475569;font-weight:700;font-size:9px;text-transform:uppercase">ID / Ref</th>
+            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#475569;font-weight:700;font-size:9px;text-transform:uppercase">Area</th>
+            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#475569;font-weight:700;font-size:9px;text-transform:uppercase">Outlet / Description</th>
+            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#475569;font-weight:700;font-size:9px;text-transform:uppercase">Flow Rate (L/min)</th>
+            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#475569;font-weight:700;font-size:9px;text-transform:uppercase">Temp @ 20s (°C)</th>
+            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#475569;font-weight:700;font-size:9px;text-transform:uppercase">Temp @ 60s (°C)</th>
+            <th style="padding:5px 7px;text-align:center;border:1px solid #1e2d4a;color:#475569;font-weight:700;font-size:9px;text-transform:uppercase">Result</th>
+            <th style="padding:5px 7px;text-align:left;border:1px solid #1e2d4a;color:#475569;font-weight:700;font-size:9px;text-transform:uppercase">Notes</th>
           </tr>
         </thead>
         <tbody>
           ${readings.map(r => {
-            const passColor = r.passFail === 'Pass' ? '#065f46' : r.passFail === 'Fail' ? '#7f1d1d' : '#334155';
-            const passText  = r.passFail === 'Pass' ? '#6ee7b7' : r.passFail === 'Fail' ? '#fca5a5' : '#94a3b8';
+            const passColor = r.passFail === 'Pass' ? '#065f46' : r.passFail === 'Fail' ? '#7f1d1d' : '#1e293b';
+            const passText  = r.passFail === 'Pass' ? '#6ee7b7' : r.passFail === 'Fail' ? '#fca5a5' : '#475569';
             return `<tr>
               <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0">${esc(r.id)}</td>
               <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#e2e8f0">${esc(r.area)}</td>
@@ -1497,12 +1497,12 @@ function buildTWRBody(f: Record<string, unknown>): string {
               <td style="padding:5px 7px;border:1px solid #1e2d4a;text-align:center">
                 <span style="background:${passColor};color:${passText};padding:2px 8px;border-radius:12px;font-size:9px;font-weight:700">${esc(r.passFail)}</span>
               </td>
-              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#94a3b8;font-style:italic">${esc(r.notes)}</td>
+              <td style="padding:5px 7px;border:1px solid #1e2d4a;color:#475569;font-style:italic">${esc(r.notes)}</td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>`
-    : '<p style="color:#64748b;font-size:11px;font-style:italic">No readings recorded.</p>';
+    : '<p style="color:#334155;font-size:11px;font-style:italic">No readings recorded.</p>';
 
   return `
     ${sectionHtml('Survey Information', dataGrid([
@@ -1541,7 +1541,7 @@ function buildPCCBody(f: Record<string, unknown>): string {
           </tr>`).join('')}
         </tbody>
       </table>`
-    : '<p style="font-size:10px;color:#94a3b8;font-style:italic">No assets recorded.</p>';
+    : '<p style="font-size:10px;color:#475569;font-style:italic">No assets recorded.</p>';
 
   const checkRows = checklist.length
     ? `<table class="data-table" style="margin-top:6px">
@@ -1552,7 +1552,7 @@ function buildPCCBody(f: Record<string, unknown>): string {
           }).join('')}
         </tbody>
       </table>`
-    : '<p style="font-size:10px;color:#94a3b8;font-style:italic">No checklist items.</p>';
+    : '<p style="font-size:10px;color:#475569;font-style:italic">No checklist items.</p>';
 
   const metaItems: [string, string][] = [
     ['Certificate Ref', safeStr(f.pccRef)],
@@ -1584,21 +1584,21 @@ function buildPCCBody(f: Record<string, unknown>): string {
     </div>
     ${sectionHtml('Acceptance', `
       <div class="data-grid meta-grid-2" style="margin-bottom:14px">
-        <div class="data-cell"><div class="data-cell-label">Handed Over By</div><div class="data-cell-value">${hovName || '—'}</div>${hovTitle ? `<div style="font-size:9px;color:#64748b;margin-top:2px">${hovTitle}</div>` : ''}</div>
-        <div class="data-cell"><div class="data-cell-label">Accepted By</div><div class="data-cell-value">${accName || '—'}</div>${accTitle ? `<div style="font-size:9px;color:#64748b;margin-top:2px">${accTitle}</div>` : ''}</div>
+        <div class="data-cell"><div class="data-cell-label">Handed Over By</div><div class="data-cell-value">${hovName || '—'}</div>${hovTitle ? `<div style="font-size:9px;color:#334155;margin-top:2px">${hovTitle}</div>` : ''}</div>
+        <div class="data-cell"><div class="data-cell-label">Accepted By</div><div class="data-cell-value">${accName || '—'}</div>${accTitle ? `<div style="font-size:9px;color:#334155;margin-top:2px">${accTitle}</div>` : ''}</div>
         <div class="data-cell"><div class="data-cell-label">Company</div><div class="data-cell-value">${accCompany || '—'}</div></div>
         <div class="data-cell"><div class="data-cell-label">Date of Acceptance</div><div class="data-cell-value">${safeStr(f.pccAcceptanceDate) ? fmtDate(safeStr(f.pccAcceptanceDate)) : '—'}</div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:4px">
         <div>
-          <div style="font-size:8.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Signature (Handing Over)</div>
+          <div style="font-size:8.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Signature (Handing Over)</div>
           <div class="sig-box"></div>
-          <div style="font-size:9px;color:#64748b;margin-top:3px">${hovName}${hovTitle ? ` &mdash; ${hovTitle}` : ''}</div>
+          <div style="font-size:9px;color:#334155;margin-top:3px">${hovName}${hovTitle ? ` &mdash; ${hovTitle}` : ''}</div>
         </div>
         <div>
-          <div style="font-size:8.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Signature (Acceptance)</div>
+          <div style="font-size:8.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Signature (Acceptance)</div>
           <div class="sig-box"></div>
-          <div style="font-size:9px;color:#64748b;margin-top:3px">${accName}${accTitle ? ` &mdash; ${accTitle}` : ''}${accCompany ? ' &mdash; ' + accCompany : ''}</div>
+          <div style="font-size:9px;color:#334155;margin-top:3px">${accName}${accTitle ? ` &mdash; ${accTitle}` : ''}${accCompany ? ' &mdash; ' + accCompany : ''}</div>
         </div>
       </div>
     `)}
@@ -1628,9 +1628,9 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
 
   /* ── Styles ── */
   // micro-label above a value cell — keep spacing low so letters don't break apart
-  const lbl  = 'font-size:7px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px';
+  const lbl  = 'font-size:7px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px';
   const val  = 'font-size:11px;font-weight:700;color:#0f172a;line-height:1.3';
-  const sub  = 'font-size:9px;color:#64748b;margin-top:2px';
+  const sub  = 'font-size:9px;color:#334155;margin-top:2px';
   const cell = 'background:#fff;border:1px solid #e2e8f0;border-radius:4px;padding:8px 12px';
   // section heading — letter-spacing must stay very low or word shapes distort
   const sh   = 'font-size:8px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;padding-bottom:6px;border-bottom:1.5px solid #e2e8f0;margin-bottom:11px';
@@ -1641,26 +1641,26 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
     <table style="width:100%;border-collapse:collapse;font-size:10px">
       <thead>
         <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
-          <th style="padding:6px 9px;text-align:left;font-size:7px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.03em">Item</th>
-          <th style="padding:6px 9px;text-align:left;font-size:7px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.03em">Manufacturer</th>
-          <th style="padding:6px 9px;text-align:left;font-size:7px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.03em">Model</th>
-          <th style="padding:6px 9px;text-align:left;font-size:7px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.03em">Serial Number</th>
-          <th style="padding:6px 9px;text-align:left;font-size:7px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.03em">Asset Number</th>
-          <th style="padding:6px 9px;text-align:center;font-size:7px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.03em">Qty</th>
+          <th style="padding:6px 9px;text-align:left;font-size:7px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.03em">Item</th>
+          <th style="padding:6px 9px;text-align:left;font-size:7px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.03em">Manufacturer</th>
+          <th style="padding:6px 9px;text-align:left;font-size:7px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.03em">Model</th>
+          <th style="padding:6px 9px;text-align:left;font-size:7px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.03em">Serial Number</th>
+          <th style="padding:6px 9px;text-align:left;font-size:7px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.03em">Asset Number</th>
+          <th style="padding:6px 9px;text-align:center;font-size:7px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.03em">Qty</th>
         </tr>
       </thead>
       <tbody>
         ${assets.map((a, i) => `<tr style="${i % 2 !== 0 ? 'background:#f8fafc' : ''}">
           <td style="padding:6px 9px;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:600">${esc(a.item)}</td>
-          <td style="padding:6px 9px;border-bottom:1px solid #f1f5f9;color:#334155">${esc(a.manufacturer)}</td>
-          <td style="padding:6px 9px;border-bottom:1px solid #f1f5f9;color:#334155">${esc(a.model)}</td>
-          <td style="padding:6px 9px;border-bottom:1px solid #f1f5f9;color:#334155;font-family:'Courier New',monospace;font-size:9px">${esc(a.serialNumber)}</td>
-          <td style="padding:6px 9px;border-bottom:1px solid #f1f5f9;color:#334155;font-family:'Courier New',monospace;font-size:9px">${esc(a.assetNumber)}</td>
+          <td style="padding:6px 9px;border-bottom:1px solid #f1f5f9;color:#1e293b">${esc(a.manufacturer)}</td>
+          <td style="padding:6px 9px;border-bottom:1px solid #f1f5f9;color:#1e293b">${esc(a.model)}</td>
+          <td style="padding:6px 9px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-family:'Courier New',monospace;font-size:9px">${esc(a.serialNumber)}</td>
+          <td style="padding:6px 9px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-family:'Courier New',monospace;font-size:9px">${esc(a.assetNumber)}</td>
           <td style="padding:6px 9px;border-bottom:1px solid #f1f5f9;color:#0f172a;text-align:center;font-weight:700">${esc(a.quantity)}</td>
         </tr>`).join('')}
       </tbody>
     </table>`
-    : `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:10px 12px;font-size:10px;color:#94a3b8;font-style:italic">No assets or equipment recorded.</div>`;
+    : `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:10px 12px;font-size:10px;color:#475569;font-style:italic">No assets or equipment recorded.</div>`;
 
   /* ── Checklist ── */
   const checklistHtml = checklist.length ? `
@@ -1673,7 +1673,7 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
             ? 'background:#16a34a;color:#fff;border:1px solid #15803d'
             : isFailed
             ? 'background:#dc2626;color:#fff;border:1px solid #b91c1c'
-            : 'background:#e2e8f0;color:#475569;border:1px solid #cbd5e1';
+            : 'background:#e2e8f0;color:#1e293b;border:1px solid #cbd5e1';
           const rowBg = isPassed ? 'background:#f0fdf4' : isFailed ? 'background:#fef2f2' : (i % 2 !== 0 ? 'background:#f8fafc' : '');
           return `<tr style="${rowBg}">
             <td style="padding:7px 9px;border-bottom:1px solid #f1f5f9;color:#1e293b">${esc(c.description)}</td>
@@ -1684,7 +1684,7 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
         }).join('')}
       </tbody>
     </table>`
-    : `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:10px 12px;font-size:10px;color:#94a3b8;font-style:italic">No checklist items recorded.</div>`;
+    : `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:10px 12px;font-size:10px;color:#475569;font-style:italic">No checklist items recorded.</div>`;
 
   /* ── Status badge ── */
   const statusBadge = anyFail
@@ -1715,7 +1715,7 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
   const partyBlock = (label: string, name: string, position: string, company: string, date: string) => `
     <div style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden">
       <div style="background:#f8fafc;border-bottom:1px solid #e2e8f0;padding:7px 14px">
-        <span style="font-size:7px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#64748b">${label}</span>
+        <span style="font-size:7px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#334155">${label}</span>
       </div>
       <div style="padding:12px 14px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
@@ -1724,9 +1724,9 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
           ${company ? `<div><div style="${lbl}">Company</div><div style="${val}">${company}</div></div>` : '<div></div>'}
           ${date ? `<div><div style="${lbl}">Date</div><div style="${val}">${date}</div></div>` : '<div></div>'}
         </div>
-        <div style="font-size:7px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Signature</div>
+        <div style="font-size:7px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Signature</div>
         <div style="height:40px;border-bottom:1.5px solid #cbd5e1;margin-bottom:6px"></div>
-        <div style="font-size:9px;color:#94a3b8">${name}${position ? ` — ${position}` : ''}${company ? `, ${company}` : ''}</div>
+        <div style="font-size:9px;color:#475569">${name}${position ? ` — ${position}` : ''}${company ? `, ${company}` : ''}</div>
       </div>
     </div>`;
 
@@ -1740,7 +1740,7 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
     .evidence-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
     .evidence-item { border:1px solid #e2e8f0; border-radius:5px; overflow:hidden; page-break-inside:avoid; }
     .evidence-img { width:100%; height:110px; object-fit:cover; display:block; background:#f8fafc; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .evidence-caption { padding:3px 6px; font-size:7.5px; color:#64748b; background:#f8fafc; border-top:1px solid #e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .evidence-caption { padding:3px 6px; font-size:7.5px; color:#334155; background:#f8fafc; border-top:1px solid #e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   `;
 
   return `<!DOCTYPE html>
@@ -1771,7 +1771,7 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
   <!-- ══ DOCUMENT IDENTITY ════════════════════════════════════════ -->
   <div style="padding:14px 0 12px;border-bottom:1px solid #e2e8f0">
     <div style="font-size:21px;font-weight:900;color:#0f172a;line-height:1.15;margin-bottom:4px;letter-spacing:0">${esc(title)}</div>
-    ${safeStr(f.projectName) ? `<div style="font-size:11.5px;color:#64748b;font-weight:500;margin-bottom:9px">${esc(safeStr(f.projectName))}</div>` : `<div style="margin-bottom:9px"></div>`}
+    ${safeStr(f.projectName) ? `<div style="font-size:11.5px;color:#334155;font-weight:500;margin-bottom:9px">${esc(safeStr(f.projectName))}</div>` : `<div style="margin-bottom:9px"></div>`}
     ${statusBadge}
   </div>
 
@@ -1787,7 +1787,7 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
   <!-- ══ DESCRIPTION OF WORKS ════════════════════════════════════ -->
   <div style="${sec}">
     <div style="${sh}">Description of Works</div>
-    <div style="font-size:11px;color:#1e293b;line-height:1.85;background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #94a3b8;border-radius:0 4px 4px 0;padding:12px 15px;white-space:pre-wrap;min-height:48px">${esc(safeStr(f.pccDescriptionOfWorks)) || '<em style="color:#94a3b8">No description provided.</em>'}</div>
+    <div style="font-size:11px;color:#1e293b;line-height:1.85;background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #475569;border-radius:0 4px 4px 0;padding:12px 15px;white-space:pre-wrap;min-height:48px">${esc(safeStr(f.pccDescriptionOfWorks)) || '<em style="color:#475569">No description provided.</em>'}</div>
   </div>
 
   <!-- ══ ASSETS / EQUIPMENT ══════════════════════════════════════ -->
@@ -1807,13 +1807,13 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
     <div style="${sh}">Outstanding Items / Observations</div>
     ${safeStr(f.pccOutstandingItems)
       ? `<div style="font-size:11px;color:#1e293b;line-height:1.75;background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f97316;border-radius:0 4px 4px 0;padding:12px 15px;white-space:pre-wrap">${esc(safeStr(f.pccOutstandingItems))}</div>`
-      : `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:10px 12px;font-size:10px;color:#94a3b8;font-style:italic">No outstanding items recorded at time of issue.</div>`}
+      : `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:10px 12px;font-size:10px;color:#475569;font-style:italic">No outstanding items recorded at time of issue.</div>`}
   </div>
 
   <!-- ══ CERTIFICATE STATEMENT ════════════════════════════════════ -->
   <div style="margin-top:18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:14px 16px;page-break-inside:avoid">
-    <div style="font-size:7px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Certificate Statement</div>
-    <p style="font-size:11px;color:#334155;line-height:1.85;font-style:italic">We certify that the works described within this certificate have been completed, installed, tested and commissioned where applicable and are hereby certified as Practically Complete, subject only to any outstanding items recorded within this certificate and the provisions of the applicable Defects Liability Period.</p>
+    <div style="font-size:7px;font-weight:800;color:#1e293b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Certificate Statement</div>
+    <p style="font-size:11px;color:#1e293b;line-height:1.85;font-style:italic">We certify that the works described within this certificate have been completed, installed, tested and commissioned where applicable and are hereby certified as Practically Complete, subject only to any outstanding items recorded within this certificate and the provisions of the applicable Defects Liability Period.</p>
   </div>
 
   <!-- ══ ACCEPTANCE ══════════════════════════════════════════════ -->
@@ -1829,8 +1829,8 @@ function buildPCCPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSettings | nu
 
   <!-- ══ FOOTER ══════════════════════════════════════════════════ -->
   <div style="margin-top:24px;padding-top:8px;border-top:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
-    <div style="font-size:7px;color:#94a3b8;letter-spacing:.01em">${esc(orgName)} &nbsp;&middot;&nbsp; Practical Completion Certificate &nbsp;&middot;&nbsp; ${esc(safeStr(f.pccRef))}</div>
-    <div style="font-size:7px;color:#94a3b8">Generated ${today}</div>
+    <div style="font-size:7px;color:#475569;letter-spacing:.01em">${esc(orgName)} &nbsp;&middot;&nbsp; Practical Completion Certificate &nbsp;&middot;&nbsp; ${esc(safeStr(f.pccRef))}</div>
+    <div style="font-size:7px;color:#475569">Generated ${today}</div>
   </div>
 
 </div>

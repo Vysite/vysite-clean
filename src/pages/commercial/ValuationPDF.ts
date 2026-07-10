@@ -89,8 +89,8 @@ const CB    = FTR_H;
 // White-document palette — no heavy dark backgrounds
 const C_INK    = rgb(0.055, 0.086, 0.161);   // near-black text
 const C_BODY   = rgb(0.118, 0.176, 0.298);   // mid-dark text
-const C_MID    = rgb(0.380, 0.439, 0.537);   // secondary text
-const C_MUTED  = rgb(0.565, 0.620, 0.710);   // labels / placeholders
+const C_MID    = rgb(0.200, 0.255, 0.350);   // secondary text
+const C_MUTED  = rgb(0.380, 0.439, 0.537);   // labels / placeholders
 const C_FAINT  = rgb(0.882, 0.906, 0.929);   // hairlines / dividers
 const C_LIGHT  = rgb(0.949, 0.961, 0.973);   // table stripe (very light grey)
 const C_RULE   = rgb(0.910, 0.925, 0.941);   // slightly stronger rule

@@ -143,8 +143,8 @@ const CARD_V      = 14;   // vertical padding inside panels / cards
 
 const C_INK    = rgb(0.055, 0.086, 0.161);
 const C_BODY   = rgb(0.118, 0.176, 0.298);
-const C_MID    = rgb(0.271, 0.329, 0.427);
-const C_MUTED  = rgb(0.580, 0.635, 0.725);
+const C_MID    = rgb(0.118, 0.176, 0.298);
+const C_MUTED  = rgb(0.271, 0.329, 0.427);
 const C_FAINT  = rgb(0.882, 0.906, 0.929);
 const C_ORANGE = rgb(0.976, 0.451, 0.086);
 const C_SKY    = rgb(0.055, 0.647, 0.914);

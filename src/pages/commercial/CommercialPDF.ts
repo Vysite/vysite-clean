@@ -52,9 +52,9 @@ html, body {
   padding-bottom: 14px; border-bottom: 1.5px solid #0f172a; margin-bottom: 28px;
 }
 .exec-brand { font-size: 10pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; line-height: 1; }
-.exec-brand-sub { font-size: 6.5pt; color: #94a3b8; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
+.exec-brand-sub { font-size: 6.5pt; color: #475569; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
 .exec-head-right { text-align: right; }
-.exec-doc-type { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8; margin-bottom: 3px; }
+.exec-doc-type { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #475569; margin-bottom: 3px; }
 .exec-doc-title { font-size: 11pt; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
 
 /* ── Project band ── */
@@ -63,20 +63,20 @@ html, body {
   padding-bottom: 20px; border-bottom: 0.5px solid #e2e8f0; margin-bottom: 28px;
 }
 .exec-project-name { font-size: 17pt; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; line-height: 1.1; }
-.exec-client { font-size: 9.5pt; color: #64748b; margin-top: 4px; }
-.exec-report-date { font-size: 7.5pt; color: #94a3b8; text-align: right; line-height: 1.6; }
+.exec-client { font-size: 9.5pt; color: #334155; margin-top: 4px; }
+.exec-report-date { font-size: 7.5pt; color: #475569; text-align: right; line-height: 1.6; }
 
 /* ── Section label ── */
 .exec-section-label {
   font-size: 6.5pt; font-weight: 800; letter-spacing: 0.18em;
-  text-transform: uppercase; color: #94a3b8; margin-bottom: 16px;
+  text-transform: uppercase; color: #475569; margin-bottom: 16px;
 }
 
 /* ── Primary 2-col financial figures ── */
 .fin-primary-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-bottom: 0; }
 .fin-primary-fig { padding: 0 36px 20px 0; }
 .fin-primary-fig + .fin-primary-fig { border-left: 0.5px solid #e2e8f0; padding-left: 36px; padding-right: 0; }
-.fin-fig-label { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #64748b; margin-bottom: 7px; }
+.fin-fig-label { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #334155; margin-bottom: 7px; }
 .fin-fig-xl { font-size: 26pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; line-height: 1; }
 .fin-fig-xl.accent { color: #ea6c00; }
 
@@ -101,7 +101,7 @@ html, body {
 .fin-sec-fig { padding-right: 24px; }
 .fin-sec-fig + .fin-sec-fig { border-left: 0.5px solid #e2e8f0; padding-left: 24px; }
 .fin-sec-fig:last-child { padding-right: 0; }
-.fin-sec-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; }
+.fin-sec-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #475569; margin-bottom: 6px; }
 .fin-sec-value { font-size: 15pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .fin-sec-value.warn { color: #b45309; }
 
@@ -117,8 +117,8 @@ html, body {
 .fin-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
 .fin-row td { padding: 7px 0; vertical-align: baseline; }
 .fin-row td:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.fin-label { font-size: 9pt; color: #334155; padding-right: 16px; }
-.fin-sub { font-size: 7.5pt; color: #94a3b8; display: block; margin-top: 1px; }
+.fin-label { font-size: 9pt; color: #1e293b; padding-right: 16px; }
+.fin-sub { font-size: 7.5pt; color: #475569; display: block; margin-top: 1px; }
 .fin-value { font-size: 9.5pt; font-weight: 600; color: #0f172a; }
 .fin-rule td { border-top: 0.5px solid #e2e8f0; padding-top: 0; height: 8px; }
 .fin-total td { padding: 9px 0 11px; border-top: 0.75px solid #0f172a; }
@@ -130,17 +130,17 @@ html, body {
 /* ── Project meta strip ── */
 .proj-meta { display: flex; flex-wrap: wrap; gap: 0 32px; padding: 14px 0; border-top: 0.5px solid #e2e8f0; border-bottom: 0.5px solid #e2e8f0; margin-bottom: 24px; }
 .proj-meta-item { min-width: 120px; margin-bottom: 8px; }
-.proj-meta-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 2px; }
-.proj-meta-value { font-size: 8.5pt; font-weight: 600; color: #334155; }
+.proj-meta-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #475569; margin-bottom: 2px; }
+.proj-meta-value { font-size: 8.5pt; font-weight: 600; color: #1e293b; }
 
 /* ── Data table (VA schedule, compact register) ── */
 .data-table { width: 100%; border-collapse: collapse; }
 .data-table thead th {
-  font-size: 6.5pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #64748b;
+  font-size: 6.5pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #334155;
   padding: 0 12px 12px 0; text-align: left; border-bottom: 1.5px solid #0f172a; white-space: nowrap; vertical-align: bottom;
 }
 .data-table thead th.r { text-align: right; padding-right: 0; padding-left: 12px; }
-.data-table thead th.muted { color: #94a3b8; }
+.data-table thead th.muted { color: #475569; }
 .data-table tbody td {
   font-size: 8.5pt; color: #1e293b; padding: 12px 12px 11px 0; border-bottom: 0.5px solid #f1f5f9; vertical-align: top;
 }
@@ -150,7 +150,7 @@ html, body {
 .data-table tfoot td.r { text-align: right; padding-right: 0; padding-left: 12px; font-variant-numeric: tabular-nums; }
 .dt-ref { font-size: 9pt; font-weight: 800; color: #ea6c00; letter-spacing: -0.01em; }
 .dt-title { font-weight: 700; color: #0f172a; line-height: 1.3; }
-.dt-muted { color: #64748b; font-size: 8pt; }
+.dt-muted { color: #334155; font-size: 8pt; }
 .dt-val-pos { color: #166534; font-weight: 700; font-variant-numeric: tabular-nums; }
 .dt-val-neg { color: #991b1b; font-weight: 700; font-variant-numeric: tabular-nums; }
 
@@ -161,13 +161,13 @@ html, body {
 .record-ref { font-size: 9pt; font-weight: 800; color: #ea6c00; margin-right: 10px; letter-spacing: -0.01em; }
 .record-title { font-size: 10pt; font-weight: 700; color: #0f172a; line-height: 1.3; }
 .record-badges { display: flex; gap: 6px; align-items: center; flex-shrink: 0; margin-left: 12px; }
-.record-meta { font-size: 7.5pt; color: #64748b; margin-top: 6px; display: flex; gap: 20px; flex-wrap: wrap; line-height: 1.4; }
-.record-meta-key { color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 6.5pt; margin-right: 4px; }
-.record-notes { font-size: 8.5pt; color: #475569; margin-top: 8px; padding-top: 8px; border-top: 0.5px solid #f1f5f9; line-height: 1.5; white-space: pre-wrap; }
+.record-meta { font-size: 7.5pt; color: #334155; margin-top: 6px; display: flex; gap: 20px; flex-wrap: wrap; line-height: 1.4; }
+.record-meta-key { color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 6.5pt; margin-right: 4px; }
+.record-notes { font-size: 8.5pt; color: #1e293b; margin-top: 8px; padding-top: 8px; border-top: 0.5px solid #f1f5f9; line-height: 1.5; white-space: pre-wrap; }
 
 /* ── Register summary bar ── */
 .register-summary { display: flex; gap: 28px; padding: 14px 0; border-top: 0.5px solid #e2e8f0; border-bottom: 0.5px solid #e2e8f0; margin-bottom: 24px; }
-.reg-sum-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 3px; }
+.reg-sum-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #475569; margin-bottom: 3px; }
 .reg-sum-value { font-size: 13pt; font-weight: 700; color: #0f172a; }
 .reg-sum-value.accent { color: #ea6c00; }
 
@@ -175,32 +175,32 @@ html, body {
 .tl-wrap { padding-left: 8px; }
 .tl-entry { display: flex; gap: 20px; margin-bottom: 0; page-break-inside: avoid; }
 .tl-left { text-align: right; min-width: 90px; padding-top: 2px; flex-shrink: 0; }
-.tl-date { font-size: 8.5pt; color: #64748b; font-weight: 500; }
+.tl-date { font-size: 8.5pt; color: #334155; font-weight: 500; }
 .tl-right { flex: 1; padding-bottom: 18px; border-left: 1px solid #e2e8f0; padding-left: 20px; position: relative; }
-.tl-right::before { content: ''; position: absolute; left: -4.5px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--dot-color, #94a3b8); }
-.tl-kind { font-size: 6.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #94a3b8; margin-bottom: 3px; }
+.tl-right::before { content: ''; position: absolute; left: -4.5px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--dot-color, #475569); }
+.tl-kind { font-size: 6.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #475569; margin-bottom: 3px; }
 .tl-title { font-size: 9.5pt; font-weight: 600; color: #0f172a; margin-bottom: 3px; line-height: 1.3; }
 .tl-ref { font-size: 8.5pt; color: #ea6c00; margin-right: 6px; font-weight: 700; }
 .tl-val { font-size: 8.5pt; font-weight: 700; margin-left: 8px; font-variant-numeric: tabular-nums; }
-.tl-sub { font-size: 8pt; color: #94a3b8; }
+.tl-sub { font-size: 8pt; color: #475569; }
 .tl-entry:last-child .tl-right { border-left-color: transparent; }
 .tl-summary-item { flex: 1; padding-right: 20px; }
 .tl-summary-value { font-size: 18pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
-.tl-summary-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-top: 2px; }
+.tl-summary-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #475569; margin-top: 2px; }
 
 /* ── Key dates ── */
 .kd-table { width: 100%; border-collapse: collapse; }
 .kd-table th {
-  font-size: 6.5pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #64748b;
+  font-size: 6.5pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #334155;
   padding: 0 12px 10px 0; text-align: left; border-bottom: 1.5px solid #0f172a; white-space: nowrap;
 }
 .kd-table td { padding: 10px 12px 9px 0; border-bottom: 0.5px solid #f1f5f9; font-size: 8.5pt; vertical-align: top; }
 .kd-table tr:last-child td { border-bottom: none; }
-.kd-date { color: #64748b; width: 80px; white-space: nowrap; font-size: 8pt; }
+.kd-date { color: #334155; width: 80px; white-space: nowrap; font-size: 8pt; }
 .kd-title { font-weight: 700; color: #0f172a; }
-.kd-desc { color: #64748b; padding-left: 12px; font-size: 8pt; }
+.kd-desc { color: #334155; padding-left: 12px; font-size: 8pt; }
 .kd-status { width: 70px; text-align: right; }
-.kd-days { width: 90px; text-align: right; color: #94a3b8; font-size: 8pt; }
+.kd-days { width: 90px; text-align: right; color: #475569; font-size: 8pt; }
 
 /* ── Status tags / pills ── */
 .tag { font-size: 6.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 7px 3px; border-radius: 3px; white-space: nowrap; display: inline-block; }
@@ -209,12 +209,12 @@ html, body {
 .tag-orange { background: #fff7ed; color: #c2410c; }
 .tag-blue   { background: #eff6ff; color: #1e40af; }
 .tag-red    { background: #fef2f2; color: #991b1b; }
-.tag-slate  { background: #f8fafc; color: #475569; }
+.tag-slate  { background: #f8fafc; color: #1e293b; }
 
 /* ── Footer ── */
 .doc-footer { margin-top: 44px; padding-top: 10px; border-top: 0.5px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
-.doc-footer-l { font-size: 7pt; color: #94a3b8; }
-.doc-footer-r { font-size: 7pt; color: #94a3b8; text-align: right; }
+.doc-footer-l { font-size: 7pt; color: #475569; }
+.doc-footer-r { font-size: 7pt; color: #475569; text-align: right; }
 
 /* ── Page break ── */
 .page-break { page-break-before: always; padding-top: 40px; }
@@ -222,21 +222,21 @@ html, body {
 /* ── Full report cover ── */
 .fr-cover { padding-bottom: 28px; border-bottom: 1.5px solid #0f172a; margin-bottom: 28px; }
 .fr-cover-brand { font-size: 10pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; margin-bottom: 48px; }
-.fr-cover-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: #94a3b8; margin-bottom: 12px; }
+.fr-cover-label { font-size: 6.5pt; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: #475569; margin-bottom: 12px; }
 .fr-cover-title { font-size: 28pt; font-weight: 700; color: #0f172a; line-height: 1.1; letter-spacing: -0.02em; margin-bottom: 24px; }
 .fr-cover-project { font-size: 15pt; font-weight: 700; color: #0f172a; margin-bottom: 4px; letter-spacing: -0.01em; }
-.fr-cover-client { font-size: 10pt; color: #64748b; margin-bottom: 36px; }
+.fr-cover-client { font-size: 10pt; color: #334155; margin-bottom: 36px; }
 .fr-cover-figures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 0.5px solid #e2e8f0; border-bottom: 0.5px solid #e2e8f0; padding: 18px 0; margin-bottom: 24px; }
 .fr-cover-fig { padding-right: 24px; }
 .fr-cover-fig + .fr-cover-fig { border-left: 0.5px solid #e2e8f0; padding-left: 24px; }
 .fr-cover-fig:last-child { padding-right: 0; }
-.fr-cover-fig-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; }
+.fr-cover-fig-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #475569; margin-bottom: 6px; }
 .fr-cover-fig-value { font-size: 16pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .fr-cover-fig-value.accent { color: #ea6c00; }
-.fr-cover-date { font-size: 7.5pt; color: #94a3b8; }
+.fr-cover-date { font-size: 7.5pt; color: #475569; }
 
 /* ── Empty notice ── */
-.empty-notice { padding: 20px 0; text-align: center; color: #94a3b8; font-size: 9pt; border-top: 0.5px solid #f1f5f9; }
+.empty-notice { padding: 20px 0; text-align: center; color: #475569; font-size: 9pt; border-top: 0.5px solid #f1f5f9; }
 `;
 
 // ─── Shared page shell ────────────────────────────────────────────────────────
@@ -675,9 +675,9 @@ const APPLICATIONS_PDF_CSS = `
     margin-bottom: 28px;
   }
   .exec-brand { font-size: 10pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; line-height: 1; }
-  .exec-brand-sub { font-size: 6.5pt; color: #94a3b8; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
+  .exec-brand-sub { font-size: 6.5pt; color: #475569; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
   .exec-head-right { text-align: right; }
-  .exec-doc-type { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #94a3b8; margin-bottom: 3px; }
+  .exec-doc-type { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #475569; margin-bottom: 3px; }
   .exec-doc-title { font-size: 11pt; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
   .exec-project-band {
     display: flex;
@@ -688,21 +688,21 @@ const APPLICATIONS_PDF_CSS = `
     margin-bottom: 28px;
   }
   .exec-project-name { font-size: 17pt; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; line-height: 1.1; }
-  .exec-client { font-size: 9.5pt; color: #64748b; margin-top: 4px; }
-  .exec-report-date { font-size: 7.5pt; color: #94a3b8; text-align: right; line-height: 1.6; }
+  .exec-client { font-size: 9.5pt; color: #334155; margin-top: 4px; }
+  .exec-report-date { font-size: 7.5pt; color: #475569; text-align: right; line-height: 1.6; }
   .exec-section-label {
     font-size: 6.5pt;
     font-weight: 800;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: #94a3b8;
+    color: #475569;
     margin-bottom: 16px;
   }
   /* Applied + Certified: primary 2-col figures */
   .primary-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-bottom: 0; }
   .primary-fig { padding: 0 36px 20px 0; }
   .primary-fig + .primary-fig { border-left: 0.5px solid #e2e8f0; padding-left: 36px; padding-right: 0; }
-  .fig-label { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #64748b; margin-bottom: 7px; }
+  .fig-label { font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #334155; margin-bottom: 7px; }
   .fig-value { font-size: 26pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; line-height: 1; }
   .fig-value.accent { color: #ea6c00; }
   /* Certification Shortfall: hero highlighted band */
@@ -736,7 +736,7 @@ const APPLICATIONS_PDF_CSS = `
   .sec-fig { padding-right: 24px; }
   .sec-fig + .sec-fig { border-left: 0.5px solid #e2e8f0; padding-left: 24px; }
   .sec-fig:last-child { padding-right: 0; }
-  .sec-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; }
+  .sec-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #475569; margin-bottom: 6px; }
   .sec-value { font-size: 15pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
   .sec-value.warn { color: #b45309; }
   /* Remaining Contract Value: strong bottom total */
@@ -753,8 +753,8 @@ const APPLICATIONS_PDF_CSS = `
   /* Application metadata strip */
   .app-meta-strip { display: flex; gap: 32px; padding: 10px 0 0; }
   .app-meta-item {}
-  .app-meta-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 2px; }
-  .app-meta-value { font-size: 8.5pt; font-weight: 600; color: #334155; }
+  .app-meta-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #475569; margin-bottom: 2px; }
+  .app-meta-value { font-size: 8.5pt; font-weight: 600; color: #1e293b; }
 
   /* ── Body page ───────────────────────────────────────────────────────────── */
   .body-page {
@@ -794,7 +794,7 @@ const APPLICATIONS_PDF_CSS = `
   }
   .page-head-client {
     font-size: 8pt;
-    color: #64748b;
+    color: #334155;
     margin-top: 2px;
   }
 
@@ -813,7 +813,7 @@ const APPLICATIONS_PDF_CSS = `
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: #94a3b8;
+    color: #475569;
     flex-shrink: 0;
   }
   .section-title {
@@ -852,7 +852,7 @@ const APPLICATIONS_PDF_CSS = `
   }
   .summary-label {
     font-size: 9pt;
-    color: #334155;
+    color: #1e293b;
     padding-right: 16px;
   }
   .summary-value {
@@ -913,7 +913,7 @@ const APPLICATIONS_PDF_CSS = `
     font-weight: 800;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: #64748b;
+    color: #334155;
     padding: 0 12px 12px 0;
     text-align: left;
     border-bottom: 1.5px solid #0f172a;
@@ -921,7 +921,7 @@ const APPLICATIONS_PDF_CSS = `
     vertical-align: bottom;
   }
   .sched-table thead th.r { text-align: right; padding-right: 0; padding-left: 12px; }
-  .sched-table thead th.secondary { color: #94a3b8; }
+  .sched-table thead th.secondary { color: #475569; }
   .sched-table tbody td {
     font-size: 8.5pt;
     color: #1e293b;
@@ -948,13 +948,13 @@ const APPLICATIONS_PDF_CSS = `
   }
   /* Period cell */
   .sched-period { font-size: 9pt; font-weight: 700; color: #0f172a; line-height: 1.3; }
-  .sched-date { font-size: 7.5pt; color: #94a3b8; margin-top: 2px; }
+  .sched-date { font-size: 7.5pt; color: #475569; margin-top: 2px; }
   /* Value cells — primary (applied/certified) vs secondary (paid/retention) */
   .val-primary { color: #0f172a; font-size: 8.5pt; }
-  .val-secondary { color: #64748b; font-size: 8.5pt; font-weight: 400; }
+  .val-secondary { color: #334155; font-size: 8.5pt; font-weight: 400; }
   .val-outstanding { color: #b45309; font-weight: 700; font-size: 8.5pt; }
   /* Date cells */
-  .sched-date-cell { font-size: 7.5pt; color: #94a3b8; padding-left: 12px; }
+  .sched-date-cell { font-size: 7.5pt; color: #475569; padding-left: 12px; }
 
   /* Totals footer */
   .sched-table tfoot td {
@@ -973,7 +973,7 @@ const APPLICATIONS_PDF_CSS = `
     font-variant-numeric: tabular-nums;
   }
   .tfoot-total { font-size: 10pt; font-weight: 700; color: #ea6c00; }
-  .tfoot-label { font-size: 7.5pt; color: #64748b; font-weight: 400; margin-top: 2px; }
+  .tfoot-label { font-size: 7.5pt; color: #334155; font-weight: 400; margin-top: 2px; }
 
   /* ── Status pill ─────────────────────────────────────────────────────────── */
   .pill {
@@ -991,7 +991,7 @@ const APPLICATIONS_PDF_CSS = `
   .pill-amber  { background: #fffbeb; color: #92400e; }
   .pill-orange { background: #fff7ed; color: #c2410c; }
   .pill-red    { background: #fef2f2; color: #991b1b; }
-  .pill-slate  { background: #f8fafc; color: #475569; }
+  .pill-slate  { background: #f8fafc; color: #1e293b; }
 
   /* ── Footer ──────────────────────────────────────────────────────────────── */
   .doc-footer {
@@ -1002,12 +1002,12 @@ const APPLICATIONS_PDF_CSS = `
     align-items: center;
     justify-content: space-between;
   }
-  .doc-footer-l { font-size: 7.5pt; color: #94a3b8; }
-  .doc-footer-r { font-size: 7.5pt; color: #94a3b8; text-align: right; }
+  .doc-footer-l { font-size: 7.5pt; color: #475569; }
+  .doc-footer-r { font-size: 7.5pt; color: #475569; text-align: right; }
 
   .empty-state {
     padding: 28px 0;
-    color: #94a3b8;
+    color: #475569;
     font-size: 9pt;
     text-align: center;
   }
@@ -1213,8 +1213,8 @@ function applicationsBody(d: ApplicationsData): string {
     </td>
     <td class="r"><span class="tfoot-total">${fv(appliedToDate)}</span></td>
     <td class="r"><span class="tfoot-total">${fv(certifiedToDate)}</span></td>
-    <td class="r"><span style="font-size:8.5pt;color:#64748b;">${fv(paidToDate)}</span></td>
-    <td class="r"><span style="font-size:8.5pt;color:#64748b;">${fv(totalRetention)}</span></td>
+    <td class="r"><span style="font-size:8.5pt;color:#334155;">${fv(paidToDate)}</span></td>
+    <td class="r"><span style="font-size:8.5pt;color:#334155;">${fv(totalRetention)}</span></td>
     <td class="r"><span class="${totalOut > 0 ? 'tfoot-total" style="color:#b45309;' : 'tfoot-total'}">${fv(totalOut)}</span></td>
     <td colspan="3"></td>
   </tr></tfoot>` : '';
@@ -1317,7 +1317,7 @@ function timelineBody(d: TimelineData): string {
       </div>`).join('');
 
   const eventRows = d.events.map(e => {
-    const dot  = KIND_DOT[e.kind]  || '#94a3b8';
+    const dot  = KIND_DOT[e.kind]  || '#475569';
     const klbl = KIND_LABEL[e.kind] || e.kind;
     const val  = e.value != null
       ? `<span class="tl-val" style="color:${e.isPositive ? '#16a34a' : '#991b1b'};">${e.isPositive ? '+' : ''}${fv(e.isPositive ? e.value : -e.value)}</span>`
@@ -1341,7 +1341,7 @@ function timelineBody(d: TimelineData): string {
   <div class="exec-project-band">
     <div>
       <div class="exec-project-name">${esc(projName)}</div>
-      ${d.project?.client ? `<div style="font-size:9pt;color:#64748b;margin-top:2px;">${esc(d.project.client)}</div>` : ''}
+      ${d.project?.client ? `<div style="font-size:9pt;color:#334155;margin-top:2px;">${esc(d.project.client)}</div>` : ''}
     </div>
     <div style="text-align:right;">
       <div style="font-size:22pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${d.events.length}</div>
@@ -1356,7 +1356,7 @@ function timelineBody(d: TimelineData): string {
 
   <div class="exec-section-label">Chronological Events — ${d.events.length} event${d.events.length !== 1 ? 's' : ''}</div>
   ${d.events.length === 0
-    ? '<div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:24px 0;">No timeline events recorded for this project.</div>'
+    ? '<div style="font-size:9pt;color:#475569;font-style:italic;padding:24px 0;">No timeline events recorded for this project.</div>'
     : `<div class="tl-wrap">${eventRows}</div>`}
   ${docFooter(d.currentUserName, today)}`;
 }
@@ -1398,7 +1398,7 @@ function valuationsSectionHtml(d: FullReportData): string {
   if (!wb) {
     return `
   <div class="exec-section-label">7. Valuations</div>
-  <div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:16px 0;">No valuation workbook has been set up for this project.</div>`;
+  <div style="font-size:9pt;color:#475569;font-style:italic;padding:16px 0;">No valuation workbook has been set up for this project.</div>`;
   }
 
   const wbLines       = d.wbLines ?? [];
@@ -1420,26 +1420,26 @@ function valuationsSectionHtml(d: FullReportData): string {
   // ── Workbook summary ──
   const deductionCols = hasDeductions ? `
     <div style="padding:0 28px;border-left:0.5px solid #e2e8f0;">
-      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Retention</div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Retention</div>
       <div style="font-size:13pt;font-weight:700;color:#d97706;font-variant-numeric:tabular-nums;">${retentionPct.toFixed(2)}%</div>
     </div>
     <div style="padding:0 0 0 28px;border-left:0.5px solid #e2e8f0;">
-      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">MCD</div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">MCD</div>
       <div style="font-size:13pt;font-weight:700;color:#d97706;font-variant-numeric:tabular-nums;">${mcdPct.toFixed(2)}%</div>
     </div>` : '';
 
   const wbSummary = `
   <div style="display:flex;gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:14px 0;margin-bottom:16px;">
     <div style="flex:1;padding-right:28px;">
-      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Workbook</div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Workbook</div>
       <div style="font-size:13pt;font-weight:700;color:#0f172a;">${esc(wb.title)}</div>
     </div>
     <div style="padding:0 28px;border-left:0.5px solid #e2e8f0;">
-      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Contract Works</div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Contract Works</div>
       <div style="font-size:13pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fv(contractTotal)}</div>
     </div>
     <div style="padding:0 28px;border-left:0.5px solid #e2e8f0;">
-      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Extras / Variations</div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Extras / Variations</div>
       <div style="font-size:13pt;font-weight:700;color:#ea6c00;font-variant-numeric:tabular-nums;">${fv(extrasTotal)}</div>
     </div>
     ${deductionCols}
@@ -1449,7 +1449,7 @@ function valuationsSectionHtml(d: FullReportData): string {
     return `
   <div class="exec-section-label">7. Valuations — ${esc(wb.title)}</div>
   ${wbSummary}
-  <div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:8px 0;">No valuations recorded yet.</div>`;
+  <div style="font-size:9pt;color:#475569;font-style:italic;padding:8px 0;">No valuations recorded yet.</div>`;
   }
 
   // Helper: compute deduction amounts for a given amountDue
@@ -1504,10 +1504,10 @@ function valuationsSectionHtml(d: FullReportData): string {
 
     return `<tr style="${rowStyle}">
       <td class="dt-ref">${esc(v.ref)}${isLatest ? ' <span style="font-size:6.5pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#ea6c00;">LATEST</span>' : ''}</td>
-      <td style="font-size:8.5pt;color:#64748b;">${fmtD(v.valuation_date)}</td>
+      <td style="font-size:8.5pt;color:#334155;">${fmtD(v.valuation_date)}</td>
       <td>${statusTag(v.status, statusLabel)}</td>
       <td class="num" style="font-size:9pt;font-weight:600;">${fv(grossToDate)}</td>
-      <td class="num" style="font-size:9pt;color:#64748b;">${fv(prevGross)}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${fv(prevGross)}</td>
       <td class="num" style="font-size:9pt;font-weight:700;color:${amountDue >= 0 ? '#16a34a' : '#991b1b'};">${amountDue >= 0 ? '+' : ''}${fv(amountDue)}</td>
       ${retCol}${mcdCol}${netCol}
     </tr>`;
@@ -1547,12 +1547,12 @@ function valuationsSectionHtml(d: FullReportData): string {
       return `<tr>
         <td class="dt-ref" style="width:40px;">${esc(l.item_number)}</td>
         <td style="font-size:9pt;color:#0f172a;">${esc(l.description)}</td>
-        <td class="num" style="font-size:8.5pt;color:#64748b;">${fv(l.contract_value)}</td>
-        <td class="num" style="font-size:8.5pt;color:#64748b;">${prevPct.toFixed(1)}%</td>
-        <td class="num" style="font-size:8.5pt;color:#64748b;">${fv(prevVal)}</td>
+        <td class="num" style="font-size:8.5pt;color:#334155;">${fv(l.contract_value)}</td>
+        <td class="num" style="font-size:8.5pt;color:#334155;">${prevPct.toFixed(1)}%</td>
+        <td class="num" style="font-size:8.5pt;color:#334155;">${fv(prevVal)}</td>
         <td class="num" style="font-size:8.5pt;">${currPct.toFixed(1)}%</td>
         <td class="num" style="font-size:9pt;font-weight:600;">${fv(currVal)}</td>
-        <td class="num" style="font-size:9pt;font-weight:700;color:${thisVal > 0 ? '#16a34a' : thisVal < 0 ? '#991b1b' : '#64748b'};">${thisVal > 0 ? '+' : ''}${fv(thisVal)}</td>
+        <td class="num" style="font-size:9pt;font-weight:700;color:${thisVal > 0 ? '#16a34a' : thisVal < 0 ? '#991b1b' : '#334155'};">${thisVal > 0 ? '+' : ''}${fv(thisVal)}</td>
       </tr>`;
     }).join('');
 
@@ -1564,14 +1564,14 @@ function valuationsSectionHtml(d: FullReportData): string {
       const currVal = ex.agreed_value * currPct / 100;
       const thisVal = currVal - prevVal;
       return `<tr style="background:#f8fafc;">
-        <td class="dt-ref" style="width:40px;color:#64748b;">${esc(ex.ref)}</td>
-        <td style="font-size:9pt;color:#64748b;font-style:italic;">${esc(ex.description)}</td>
-        <td class="num" style="font-size:8.5pt;color:#64748b;">${fv(ex.agreed_value)}</td>
-        <td class="num" style="font-size:8.5pt;color:#94a3b8;">${prevPct.toFixed(1)}%</td>
-        <td class="num" style="font-size:8.5pt;color:#94a3b8;">${fv(prevVal)}</td>
-        <td class="num" style="font-size:8.5pt;color:#64748b;">${currPct.toFixed(1)}%</td>
-        <td class="num" style="font-size:9pt;font-weight:600;color:#64748b;">${fv(currVal)}</td>
-        <td class="num" style="font-size:9pt;font-weight:700;color:${thisVal > 0 ? '#16a34a' : thisVal < 0 ? '#991b1b' : '#64748b'};">${thisVal > 0 ? '+' : ''}${fv(thisVal)}</td>
+        <td class="dt-ref" style="width:40px;color:#334155;">${esc(ex.ref)}</td>
+        <td style="font-size:9pt;color:#334155;font-style:italic;">${esc(ex.description)}</td>
+        <td class="num" style="font-size:8.5pt;color:#334155;">${fv(ex.agreed_value)}</td>
+        <td class="num" style="font-size:8.5pt;color:#475569;">${prevPct.toFixed(1)}%</td>
+        <td class="num" style="font-size:8.5pt;color:#475569;">${fv(prevVal)}</td>
+        <td class="num" style="font-size:8.5pt;color:#334155;">${currPct.toFixed(1)}%</td>
+        <td class="num" style="font-size:9pt;font-weight:600;color:#334155;">${fv(currVal)}</td>
+        <td class="num" style="font-size:9pt;font-weight:700;color:${thisVal > 0 ? '#16a34a' : thisVal < 0 ? '#991b1b' : '#334155'};">${thisVal > 0 ? '+' : ''}${fv(thisVal)}</td>
       </tr>`;
     }).join('');
 
@@ -1604,18 +1604,18 @@ function valuationsSectionHtml(d: FullReportData): string {
 
     const totalsRow = `<tr style="background:#0f172a;color:#fff;">
       <td colspan="2" style="font-size:8.5pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:8px 10px;color:#fff;">Total</td>
-      <td class="num" style="font-size:8.5pt;color:#94a3b8;">${fv(contractTotal + extrasTotal)}</td>
-      <td class="num" style="font-size:8.5pt;color:#94a3b8;"></td>
+      <td class="num" style="font-size:8.5pt;color:#475569;">${fv(contractTotal + extrasTotal)}</td>
+      <td class="num" style="font-size:8.5pt;color:#475569;"></td>
       <td class="num" style="font-size:9pt;font-weight:600;color:#cbd5e1;">${fv(prevGross)}</td>
-      <td class="num" style="font-size:8.5pt;color:#94a3b8;"></td>
+      <td class="num" style="font-size:8.5pt;color:#475569;"></td>
       <td class="num" style="font-size:9pt;font-weight:700;color:#f97316;">${fv(grossToDate)}</td>
       <td class="num" style="font-size:10pt;font-weight:800;color:${amountDue >= 0 ? '#4ade80' : '#f87171'};">${amountDue >= 0 ? '+' : ''}${fv(amountDue)}</td>
       ${deductionTotals}
     </tr>`;
 
     const heading = isLatest
-      ? `<div style="font-size:9pt;font-weight:800;color:#ea6c00;margin-bottom:8px;">${esc(v.ref)} — ${fmtD(v.valuation_date)} <span style="font-size:6.5pt;letter-spacing:0.12em;text-transform:uppercase;background:#fff7ed;color:#ea6c00;border:1px solid #fed7aa;padding:2px 6px;border-radius:3px;margin-left:6px;">Latest</span> <span style="font-size:8pt;color:#94a3b8;font-weight:400;">${VAL_STATUS_LABELS[v.status] ?? v.status}</span></div>`
-      : `<div style="font-size:9pt;font-weight:700;color:#0f172a;margin-bottom:8px;">${esc(v.ref)} — ${fmtD(v.valuation_date)} <span style="font-size:8pt;color:#94a3b8;font-weight:400;">${VAL_STATUS_LABELS[v.status] ?? v.status}</span></div>`;
+      ? `<div style="font-size:9pt;font-weight:800;color:#ea6c00;margin-bottom:8px;">${esc(v.ref)} — ${fmtD(v.valuation_date)} <span style="font-size:6.5pt;letter-spacing:0.12em;text-transform:uppercase;background:#fff7ed;color:#ea6c00;border:1px solid #fed7aa;padding:2px 6px;border-radius:3px;margin-left:6px;">Latest</span> <span style="font-size:8pt;color:#475569;font-weight:400;">${VAL_STATUS_LABELS[v.status] ?? v.status}</span></div>`
+      : `<div style="font-size:9pt;font-weight:700;color:#0f172a;margin-bottom:8px;">${esc(v.ref)} — ${fmtD(v.valuation_date)} <span style="font-size:8pt;color:#475569;font-weight:400;">${VAL_STATUS_LABELS[v.status] ?? v.status}</span></div>`;
 
     const hasExtras = wbExtras.length > 0;
     const deductionHeaders2 = hasDeductions
@@ -1639,7 +1639,7 @@ function valuationsSectionHtml(d: FullReportData): string {
       </tr></thead>
       <tbody>
         ${lineRows}
-        ${hasExtras ? `<tr><td colspan="${8 + (hasDeductions ? 3 : 0)}" style="font-size:7pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;padding:8px 10px 4px;border-bottom:0.5px solid #e2e8f0;">Extras / Variations</td></tr>${extraRows}` : ''}
+        ${hasExtras ? `<tr><td colspan="${8 + (hasDeductions ? 3 : 0)}" style="font-size:7pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;padding:8px 10px 4px;border-bottom:0.5px solid #e2e8f0;">Extras / Variations</td></tr>${extraRows}` : ''}
         ${totalsRow}
       </tbody>
     </table>
@@ -1649,9 +1649,9 @@ function valuationsSectionHtml(d: FullReportData): string {
   return `
   <div class="exec-section-label">7. Valuations — ${esc(wb.title)}</div>
   ${wbSummary}
-  <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;">Valuation History — ${valuations.length} valuation${valuations.length !== 1 ? 's' : ''}</div>
+  <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:8px;">Valuation History — ${valuations.length} valuation${valuations.length !== 1 ? 's' : ''}</div>
   ${historyTable}
-  <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;margin-top:20px;margin-bottom:8px;">Line Breakdown</div>
+  <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-top:20px;margin-bottom:8px;">Line Breakdown</div>
   ${valDetailSections}`;
 }
 
@@ -1706,11 +1706,11 @@ function fullReportBody(d: FullReportData): string {
   <div class="exec-section-label">1. Commercial Position</div>
   <div class="fin-primary-row" style="gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:16px 0;margin-bottom:16px;">
     <div>
-      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Original Contract Sum</div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Original Contract Sum</div>
       <div class="fin-fig-xl">${ocs}</div>
     </div>
     <div>
-      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Forecast Contract Sum</div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Forecast Contract Sum</div>
       <div class="fin-fig-xl accent">${fcs}</div>
     </div>
   </div>
@@ -1742,14 +1742,14 @@ function fullReportBody(d: FullReportData): string {
       <td style="font-size:9pt;font-weight:600;color:#0f172a;">${esc(r.title || 'Untitled')}</td>
       <td>${typeTag(r.recordType, ti.label)}</td>
       <td>${statusTag(r.status, si.label)}</td>
-      <td style="font-size:8pt;color:#64748b;">${fmtD(r.dateRaised)}</td>
+      <td style="font-size:8pt;color:#334155;">${fmtD(r.dateRaised)}</td>
     </tr>`;
   }).join('');
 
   const registerSection = `
   <div class="exec-section-label">3. Commercial Register — ${d.records.length} record${d.records.length !== 1 ? 's' : ''}</div>
   ${d.records.length === 0
-    ? '<div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:16px 0;">No commercial register records for this project.</div>'
+    ? '<div style="font-size:9pt;color:#475569;font-style:italic;padding:16px 0;">No commercial register records for this project.</div>'
     : `<table class="data-table" style="width:100%;font-size:9pt;"><thead><tr>
         <th style="width:56px;">Ref</th><th>Title</th><th>Type</th><th>Status</th><th style="width:72px;">Raised</th>
       </tr></thead><tbody>${regRows}</tbody></table>`}`;
@@ -1763,14 +1763,14 @@ function fullReportBody(d: FullReportData): string {
       <td style="font-size:9pt;font-weight:600;color:#0f172a;">${esc(item.title)}</td>
       <td class="${val >= 0 ? 'dt-val-pos' : 'dt-val-neg'}">${val >= 0 ? '+' : ''}${fv(val)}</td>
       <td>${statusTag(item.status, vaStatusLabels[item.status] || item.status)}</td>
-      <td style="font-size:8pt;color:#64748b;">${fmtD(item.date_raised)}</td>
+      <td style="font-size:8pt;color:#334155;">${fmtD(item.date_raised)}</td>
     </tr>`;
   }).join('');
 
   const vaSection = `
   <div class="exec-section-label" style="margin-top:20px;">4. Variation Account — ${d.vaItems.length} item${d.vaItems.length !== 1 ? 's' : ''}</div>
   ${d.vaItems.length === 0
-    ? '<div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:16px 0;">No variation account items for this project.</div>'
+    ? '<div style="font-size:9pt;color:#475569;font-style:italic;padding:16px 0;">No variation account items for this project.</div>'
     : `<table class="data-table" style="width:100%;font-size:9pt;"><thead><tr>
         <th style="width:56px;">Ref</th><th>Title</th><th class="num" style="width:90px;">Value</th><th>Status</th><th style="width:72px;">Raised</th>
       </tr></thead><tbody>${vaRows}</tbody></table>`}`;
@@ -1789,11 +1789,11 @@ function fullReportBody(d: FullReportData): string {
   <div class="exec-section-label">5. Valuation Applications — ${d.apps.length} application${d.apps.length !== 1 ? 's' : ''}</div>
   <div class="fin-primary-row" style="gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:14px 0;margin-bottom:14px;">
     <div>
-      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Applied To Date</div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Applied To Date</div>
       <div class="fin-fig-xl">${fv(appliedToDate)}</div>
     </div>
     <div>
-      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">Certified To Date</div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Certified To Date</div>
       <div class="fin-fig-xl accent">${fv(certifiedToDate)}</div>
     </div>
   </div>
@@ -1804,27 +1804,27 @@ function fullReportBody(d: FullReportData): string {
   </div>` : ''}
   <div class="fin-secondary-row" style="gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:12px 0;margin-bottom:16px;">
     <div>
-      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:3px;">Paid To Date</div>
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:3px;">Paid To Date</div>
       <div style="font-size:15pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fv(paidToDate)}</div>
     </div>
     <div>
-      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:3px;">Outstanding</div>
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:3px;">Outstanding</div>
       <div style="font-size:15pt;font-weight:700;color:${outstanding > 0 ? '#b45309' : '#0f172a'};font-variant-numeric:tabular-nums;">${fv(outstanding)}</div>
     </div>
     <div>
-      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:3px;">Retention</div>
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:3px;">Retention</div>
       <div style="font-size:15pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fv(totalRetention)}</div>
     </div>
   </div>
   ${d.apps.length === 0
-    ? '<div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:16px 0;">No applications recorded for this project.</div>'
+    ? '<div style="font-size:9pt;color:#475569;font-style:italic;padding:16px 0;">No applications recorded for this project.</div>'
     : `<table class="data-table" style="width:100%;font-size:9pt;"><thead><tr>
         <th style="width:32px;">No.</th><th>Period</th><th class="num">Applied</th><th class="num">Certified</th><th class="num">Paid</th><th>Status</th>
       </tr></thead><tbody>${appRows}</tbody></table>`}`;
 
   // ── Section 6: Timeline ──
   const tlRows = d.events.map(e => {
-    const dot  = KIND_DOT[e.kind]  || '#94a3b8';
+    const dot  = KIND_DOT[e.kind]  || '#475569';
     const klbl = KIND_LABEL[e.kind] || e.kind;
     const val  = e.value != null ? `<span class="tl-val" style="color:${e.isPositive ? '#16a34a' : '#991b1b'};">${e.isPositive ? '+' : ''}${fv(e.isPositive ? e.value : -e.value)}</span>` : '';
     return `<div class="tl-entry">
@@ -1840,18 +1840,18 @@ function fullReportBody(d: FullReportData): string {
   const tlSection = `
   <div class="exec-section-label">6. Commercial Timeline — ${d.events.length} event${d.events.length !== 1 ? 's' : ''}</div>
   ${d.events.length === 0
-    ? '<div style="font-size:9pt;color:#94a3b8;font-style:italic;padding:16px 0;">No timeline events for this project.</div>'
+    ? '<div style="font-size:9pt;color:#475569;font-style:italic;padding:16px 0;">No timeline events for this project.</div>'
     : `<div class="tl-wrap">${tlRows}</div>`}`;
 
   return `
   ${cover}
 
   <div class="exec-section-label" style="margin-bottom:6px;margin-top:0;">Project Details</div>
-  <div style="font-size:8.5pt;color:#64748b;line-height:2;margin-bottom:28px;display:flex;flex-wrap:wrap;gap:0 28px;">
-    <span><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Project Manager&ensp;</span>${esc(p.projectManager || '—')}</span>
-    <span><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Location&ensp;</span>${esc(p.location || '—')}</span>
-    <span><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Start&ensp;</span>${fmtD(p.startDate)}</span>
-    <span><span style="font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Completion&ensp;</span>${fmtD(p.completionDate)}</span>
+  <div style="font-size:8.5pt;color:#334155;line-height:2;margin-bottom:28px;display:flex;flex-wrap:wrap;gap:0 28px;">
+    <span><span style="font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Project Manager&ensp;</span>${esc(p.projectManager || '—')}</span>
+    <span><span style="font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Location&ensp;</span>${esc(p.location || '—')}</span>
+    <span><span style="font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Start&ensp;</span>${fmtD(p.startDate)}</span>
+    <span><span style="font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.1em;font-size:7pt;">Completion&ensp;</span>${fmtD(p.completionDate)}</span>
   </div>
 
   ${positionSection}
@@ -1919,10 +1919,10 @@ html, body {
 }
 .va-header-logo img { height: 32px; max-width: 140px; object-fit: contain; display: block; }
 .va-header-logo-text { font-size: 13pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; line-height: 1; }
-.va-header-logo-sub { font-size: 6pt; color: #94a3b8; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
+.va-header-logo-sub { font-size: 6pt; color: #475569; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
 .va-header-center { text-align: center; flex: 1; padding: 0 24px; }
 .va-header-doc { font-size: 14pt; font-weight: 700; color: #fff; letter-spacing: 0.04em; text-transform: uppercase; }
-.va-header-ref { font-size: 9pt; color: #94a3b8; margin-top: 4px; letter-spacing: 0.06em; }
+.va-header-ref { font-size: 9pt; color: #475569; margin-top: 4px; letter-spacing: 0.06em; }
 .va-header-right { text-align: right; min-width: 130px; }
 .va-copy-badge {
   display: inline-block; font-size: 7.5pt; font-weight: 800; letter-spacing: 0.12em;
@@ -1930,7 +1930,7 @@ html, body {
 }
 .va-copy-badge.internal { border: 1.5px solid #ea6c00; color: #ea6c00; }
 .va-copy-badge.client   { border: 1.5px solid #38bdf8; color: #38bdf8; }
-.va-header-date { font-size: 7pt; color: #64748b; margin-top: 6px; }
+.va-header-date { font-size: 7pt; color: #334155; margin-top: 6px; }
 
 /* ── Project info band ──────────────────────────────────────────────────────── */
 .va-info-band {
@@ -1946,7 +1946,7 @@ html, body {
   border-right: 1px solid #e2e8f0;
 }
 .va-info-col:last-child { border-right: none; }
-.va-info-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #94a3b8; margin-bottom: 2px; }
+.va-info-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #475569; margin-bottom: 2px; }
 .va-info-value { font-size: 9pt; font-weight: 600; color: #0f172a; line-height: 1.3; }
 .va-info-meta-row { margin-bottom: 10px; }
 .va-info-meta-row:last-child { margin-bottom: 0; }
@@ -1955,12 +1955,12 @@ html, body {
 .va-summary-box { border: 1px solid #e2e8f0; border-radius: 0; }
 .va-summary-header {
   background: #f1f5f9; padding: 7px 14px;
-  font-size: 7pt; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #334155;
+  font-size: 7pt; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #1e293b;
   border-bottom: 1px solid #e2e8f0; text-align: center;
 }
 .va-summary-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 14px; border-bottom: 1px solid #f1f5f9; }
 .va-summary-row:last-child { border-bottom: none; padding: 9px 14px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
-.va-summary-label { font-size: 8pt; color: #475569; }
+.va-summary-label { font-size: 8pt; color: #1e293b; }
 .va-summary-value { font-size: 8.5pt; font-weight: 600; font-variant-numeric: tabular-nums; color: #0f172a; }
 .va-summary-value.pos { color: #16a34a; }
 .va-summary-value.neg { color: #dc2626; }
@@ -1987,7 +1987,7 @@ html, body {
 .va-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
 .va-detail-row { padding: 7px 0; border-bottom: 1px solid #f1f5f9; display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: baseline; }
 .va-detail-row:last-child { border-bottom: none; }
-.va-detail-label { font-size: 7pt; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
+.va-detail-label { font-size: 7pt; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; }
 .va-detail-value { font-size: 8.5pt; color: #0f172a; font-weight: 500; line-height: 1.5; word-break: break-word; }
 .va-detail-value.bold { font-weight: 700; }
 .va-direction-badge {
@@ -2000,26 +2000,26 @@ html, body {
   display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 7pt; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.06em;
 }
-.va-text-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px 12px; font-size: 8.5pt; color: #334155; line-height: 1.7; white-space: pre-wrap; word-break: break-word; margin-top: 6px; }
+.va-text-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px 12px; font-size: 8.5pt; color: #1e293b; line-height: 1.7; white-space: pre-wrap; word-break: break-word; margin-top: 6px; }
 
 /* ── Build-up table ─────────────────────────────────────────────────────────── */
 .bu-table { width: 100%; border-collapse: collapse; font-size: 8pt; }
 .bu-table thead th {
   padding: 7px 10px; text-align: left; font-size: 6.5pt; font-weight: 800;
-  letter-spacing: 0.1em; text-transform: uppercase; color: #64748b;
+  letter-spacing: 0.1em; text-transform: uppercase; color: #334155;
   background: #f8fafc; border-bottom: 1.5px solid #0f172a;
 }
 .bu-table thead th.r { text-align: right; }
-.bu-table tbody td { padding: 8px 10px; border-bottom: 0.5px solid #f1f5f9; color: #334155; vertical-align: top; }
+.bu-table tbody td { padding: 8px 10px; border-bottom: 0.5px solid #f1f5f9; color: #1e293b; vertical-align: top; }
 .bu-table tbody td.r { text-align: right; font-variant-numeric: tabular-nums; }
 .bu-table tbody tr:nth-child(even) td { background: #fafafa; }
 .bu-table tbody tr:last-child td { border-bottom: none; }
 .bu-table tfoot td { padding: 8px 10px; border-top: 1px solid #e2e8f0; font-size: 8pt; }
 .bu-table tfoot td.r { text-align: right; font-variant-numeric: tabular-nums; }
 .bu-table tfoot tr.bu-total-row td { border-top: 1.5px solid #0f172a; padding-top: 10px; font-weight: 700; }
-.bu-ref { color: #94a3b8; font-size: 7.5pt; }
+.bu-ref { color: #475569; font-size: 7.5pt; }
 .bu-desc { font-weight: 600; color: #0f172a; }
-.bu-type { display: inline-block; padding: 1px 6px; background: #f1f5f9; border-radius: 3px; color: #64748b; font-size: 6.5pt; font-weight: 700; text-transform: uppercase; }
+.bu-type { display: inline-block; padding: 1px 6px; background: #f1f5f9; border-radius: 3px; color: #334155; font-size: 6.5pt; font-weight: 700; text-transform: uppercase; }
 .bu-grand { font-size: 10pt; font-weight: 700; color: #ea6c00; }
 
 /* ── Bottom 3-col section ───────────────────────────────────────────────────── */
@@ -2029,7 +2029,7 @@ html, body {
   display: flex; align-items: center; gap: 6px;
   background: #f8fafc; padding: 8px 12px;
   border-bottom: 1px solid #e2e8f0;
-  font-size: 7pt; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #334155;
+  font-size: 7pt; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #1e293b;
 }
 .va-bottom-body { padding: 10px 12px; }
 
@@ -2038,24 +2038,24 @@ html, body {
 .att-item:last-child { border-bottom: none; }
 .att-name { font-size: 8pt; font-weight: 600; color: #0f172a; word-break: break-all; }
 .att-name a { color: #0f172a; text-decoration: none; }
-.att-meta { font-size: 7pt; color: #94a3b8; margin-top: 2px; }
+.att-meta { font-size: 7pt; color: #475569; margin-top: 2px; }
 .att-dl { font-size: 7pt; color: #ea6c00; text-decoration: none; font-weight: 700; }
 
 /* Comments */
 .comment-item { padding: 6px 0; border-bottom: 0.5px solid #f1f5f9; }
 .comment-item:last-child { border-bottom: none; }
 .comment-meta { font-size: 7.5pt; font-weight: 700; color: #0f172a; }
-.comment-ts { color: #94a3b8; font-weight: 400; font-size: 7pt; margin-left: 6px; }
-.comment-body { font-size: 8pt; color: #334155; margin-top: 4px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.comment-ts { color: #475569; font-weight: 400; font-size: 7pt; margin-left: 6px; }
+.comment-body { font-size: 8pt; color: #1e293b; margin-top: 4px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
 
 /* Approval */
 .approval-row { display: grid; grid-template-columns: 80px 1fr 70px; gap: 4px; padding: 6px 0; border-bottom: 0.5px solid #f1f5f9; align-items: baseline; }
 .approval-row:last-child { border-bottom: none; }
-.approval-label { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #94a3b8; }
+.approval-label { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #475569; }
 .approval-value { font-size: 8pt; color: #0f172a; font-weight: 500; }
-.approval-date { font-size: 7.5pt; color: #64748b; text-align: right; }
+.approval-date { font-size: 7.5pt; color: #334155; text-align: right; }
 .sig-line { border-bottom: 1px solid #cbd5e1; margin-top: 8px; height: 18px; }
-.sig-label { font-size: 6pt; color: #94a3b8; margin-top: 2px; }
+.sig-label { font-size: 6pt; color: #475569; margin-top: 2px; }
 
 /* ── Contractual notice ─────────────────────────────────────────────────────── */
 .va-notice { border: 1px solid #fed7aa; border-left: 3px solid #ea6c00; background: #fffbf5; border-radius: 4px; padding: 10px 14px; margin-bottom: 18px; }
@@ -2064,7 +2064,7 @@ html, body {
 .va-notice-sign-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
 .va-notice-sign-box { }
 .va-notice-sign-field { border-bottom: 1px solid #cbd5e1; height: 20px; margin-top: 10px; }
-.va-notice-sign-label { font-size: 6.5pt; color: #94a3b8; margin-top: 3px; }
+.va-notice-sign-label { font-size: 6.5pt; color: #475569; margin-top: 3px; }
 
 /* ── Footer ─────────────────────────────────────────────────────────────────── */
 .va-footer {
@@ -2073,8 +2073,8 @@ html, body {
 }
 .va-footer-logo img { height: 22px; max-width: 100px; object-fit: contain; display: block; }
 .va-footer-logo-text { font-size: 10pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; }
-.va-footer-center { font-size: 7pt; color: #94a3b8; }
-.va-footer-right { font-size: 7pt; color: #94a3b8; text-align: right; }
+.va-footer-center { font-size: 7pt; color: #475569; }
+.va-footer-right { font-size: 7pt; color: #475569; text-align: right; }
 `;
 
 // ─── Status badge HTML ────────────────────────────────────────────────────────
@@ -2087,7 +2087,7 @@ function statusBadgeHtml(status: string): string {
     agreed:       'background:#065f46;color:#6ee7b7;',
     rejected:     'background:#7f1d1d;color:#fca5a5;',
     paid:         'background:#14532d;color:#86efac;',
-    withdrawn:    'background:#1e293b;color:#64748b;',
+    withdrawn:    'background:#1e293b;color:#334155;',
   };
   const labels: Record<string, string> = {
     draft: 'Draft', submitted: 'Submitted', under_review: 'Under Review',
@@ -2101,7 +2101,7 @@ function statusBadgeHtml(status: string): string {
 
 function buildUpTableHtml(lines: DBVABuildUpLine[], total: number, showCost: boolean): string {
   if (lines.length === 0) {
-    return '<p style="font-size:8pt;color:#94a3b8;font-style:italic;padding:8px 0;">No cost build-up lines recorded.</p>';
+    return '<p style="font-size:8pt;color:#475569;font-style:italic;padding:8px 0;">No cost build-up lines recorded.</p>';
   }
 
   const costColsHead = showCost
@@ -2139,11 +2139,11 @@ function buildUpTableHtml(lines: DBVABuildUpLine[], total: number, showCost: boo
     const markupVal = `£${markupAmt.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     tfootRows = `
       <tr>
-        <td colspan="${colSpanLabel}" class="r" style="font-size:7.5pt;color:#64748b;font-weight:600;border-top:1px solid #e2e8f0;padding-top:8px;">Total Cost (Excl. Markup)</td>
+        <td colspan="${colSpanLabel}" class="r" style="font-size:7.5pt;color:#334155;font-weight:600;border-top:1px solid #e2e8f0;padding-top:8px;">Total Cost (Excl. Markup)</td>
         <td class="r" style="font-size:8pt;font-weight:600;color:#0f172a;border-top:1px solid #e2e8f0;padding-top:8px;">${costVal}</td>
       </tr>
       <tr>
-        <td colspan="${colSpanLabel}" class="r" style="font-size:7.5pt;color:#64748b;font-weight:600;">Markup (${totalMarkup.toFixed(0)}%)</td>
+        <td colspan="${colSpanLabel}" class="r" style="font-size:7.5pt;color:#334155;font-weight:600;">Markup (${totalMarkup.toFixed(0)}%)</td>
         <td class="r" style="font-size:8pt;font-weight:600;color:#0f172a;">${markupVal}</td>
       </tr>
       <tr class="bu-total-row">
@@ -2179,7 +2179,7 @@ function buildUpTableHtml(lines: DBVABuildUpLine[], total: number, showCost: boo
 // ─── Attachment list ──────────────────────────────────────────────────────────
 
 function vaAttachmentHtml(attachments: DBAttachment[]): string {
-  if (!attachments?.length) return '<p style="font-size:8pt;color:#94a3b8;font-style:italic;">No attachments.</p>';
+  if (!attachments?.length) return '<p style="font-size:8pt;color:#475569;font-style:italic;">No attachments.</p>';
 
   return attachments.map(a => {
     const sz = a.size
@@ -2234,7 +2234,7 @@ function fmtText(raw: string): string {
     }
   }
   closeList();
-  return `<div style="font-size:8.5pt;color:#334155;line-height:1.7;">${out.join('')}</div>`;
+  return `<div style="font-size:8.5pt;color:#1e293b;line-height:1.7;">${out.join('')}</div>`;
 }
 
 // ─── Shared VA page layout ────────────────────────────────────────────────────
@@ -2449,7 +2449,7 @@ function vaInternalBody(d: VABuildUpData): string {
       </div>`
     : `<div class="va-bottom-box">
         <div class="va-bottom-head">Attachments</div>
-        <div class="va-bottom-body"><p style="font-size:8pt;color:#94a3b8;font-style:italic;">No attachments.</p></div>
+        <div class="va-bottom-body"><p style="font-size:8pt;color:#475569;font-style:italic;">No attachments.</p></div>
       </div>`;
 
   const commHtml = `<div class="va-bottom-box no-break">
@@ -2460,7 +2460,7 @@ function vaInternalBody(d: VABuildUpData): string {
             <div class="comment-meta">${esc(c.author_name)}<span class="comment-ts">${c.created_at ? new Date(c.created_at).toLocaleDateString('en-GB') + ' ' + new Date(c.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''} by ${esc(c.author_name)}</span></div>
             <div class="comment-body">${esc(c.body)}</div>
           </div>`).join('')
-        : '<p style="font-size:8pt;color:#94a3b8;font-style:italic;">No comments.</p>'}
+        : '<p style="font-size:8pt;color:#475569;font-style:italic;">No comments.</p>'}
     </div>
   </div>`;
 
@@ -2474,7 +2474,7 @@ function vaInternalBody(d: VABuildUpData): string {
       </div>
       <div class="approval-row">
         <div class="approval-label">Agreed By</div>
-        <div class="approval-value" style="color:#94a3b8;">—</div>
+        <div class="approval-value" style="color:#475569;">—</div>
         <div class="approval-date"></div>
       </div>
       <div class="approval-row">
@@ -2520,7 +2520,7 @@ function vaClientBody(d: VABuildUpData): string {
       </div>`
     : `<div class="va-bottom-box">
         <div class="va-bottom-head">Attachments</div>
-        <div class="va-bottom-body"><p style="font-size:8pt;color:#94a3b8;font-style:italic;">No attachments.</p></div>
+        <div class="va-bottom-body"><p style="font-size:8pt;color:#475569;font-style:italic;">No attachments.</p></div>
       </div>`;
 
   const approvalHtml = `<div class="va-bottom-box no-break">
@@ -2533,7 +2533,7 @@ function vaClientBody(d: VABuildUpData): string {
       </div>
       <div class="approval-row">
         <div class="approval-label">Agreed By</div>
-        <div class="approval-value" style="color:#94a3b8;">—</div>
+        <div class="approval-value" style="color:#475569;">—</div>
         <div class="approval-date"></div>
       </div>
       <div class="approval-row">
