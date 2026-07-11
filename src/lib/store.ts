@@ -1529,32 +1529,40 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       // These tables are only needed when the user navigates to specific modules.
       // Loading them here (rather than on-demand) keeps state management simple
       // while still avoiding blocking the initial render.
+      // TIMING: log Phase 2 start and per-query durations to identify the slowest query
+      const _p2Start = performance.now();
+      const _timed = <T,>(name: string, promise: Promise<T>): Promise<T> => {
+        const t0 = performance.now();
+        return promise.then(r => { console.debug(`[VYSITE perf] ${name}: ${(performance.now() - t0).toFixed(0)}ms`); return r; });
+      };
+
       const [docRes, attRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes, valRes, wbRes, wblRes, wbeRes, vleRes, veeRes, supRes, scTRes, scSpRes, scLRTRes] = await Promise.all([
-        supabase.from('vy_project_documents').select(DOC_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_snagging_reports').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_site_forms').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_tenders').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_tc_records').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_maintenance_jobs').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_programmes').select('*').eq('org_id', orgId).order('created_at', { ascending: true }),
-        supabase.from('vy_programme_tasks').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
-        supabase.from('vy_variation_account').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_commercial_applications').select('*').eq('org_id', orgId).order('app_number', { ascending: true }),
-        supabase.from('vy_o_and_m_manuals').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_o_and_m_sections').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
-        supabase.from('vy_o_and_m_items').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
-        supabase.from('vy_valuations').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_valuation_workbooks').select('*').eq('org_id', orgId),
-        supabase.from('vy_workbook_lines').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
-        supabase.from('vy_workbook_extras').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
-        supabase.from('vy_valuation_line_entries').select('*').eq('org_id', orgId),
-        supabase.from('vy_valuation_extra_entries').select('*').eq('org_id', orgId),
-        supabase.from('vy_suppliers').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('vy_supplier_trades').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
-        supabase.from('vy_supplier_specialisms').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
-        supabase.from('vy_supplier_labour_rate_types').select('*').eq('org_id', orgId).order('sort_order', { ascending: true }),
+        _timed('vy_project_documents', supabase.from('vy_project_documents').select(DOC_COLS).eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_attachments', supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_snagging_reports', supabase.from('vy_snagging_reports').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_site_forms', supabase.from('vy_site_forms').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_tenders', supabase.from('vy_tenders').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_tc_records', supabase.from('vy_tc_records').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_maintenance_jobs', supabase.from('vy_maintenance_jobs').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_programmes', supabase.from('vy_programmes').select('*').eq('org_id', orgId).order('created_at', { ascending: true })),
+        _timed('vy_programme_tasks', supabase.from('vy_programme_tasks').select('*').eq('org_id', orgId).order('sort_order', { ascending: true })),
+        _timed('vy_variation_account', supabase.from('vy_variation_account').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_commercial_applications', supabase.from('vy_commercial_applications').select('*').eq('org_id', orgId).order('app_number', { ascending: true })),
+        _timed('vy_o_and_m_manuals', supabase.from('vy_o_and_m_manuals').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_o_and_m_sections', supabase.from('vy_o_and_m_sections').select('*').eq('org_id', orgId).order('sort_order', { ascending: true })),
+        _timed('vy_o_and_m_items', supabase.from('vy_o_and_m_items').select('*').eq('org_id', orgId).order('sort_order', { ascending: true })),
+        _timed('vy_valuations', supabase.from('vy_valuations').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_valuation_workbooks', supabase.from('vy_valuation_workbooks').select('*').eq('org_id', orgId)),
+        _timed('vy_workbook_lines', supabase.from('vy_workbook_lines').select('*').eq('org_id', orgId).order('sort_order', { ascending: true })),
+        _timed('vy_workbook_extras', supabase.from('vy_workbook_extras').select('*').eq('org_id', orgId).order('sort_order', { ascending: true })),
+        _timed('vy_valuation_line_entries', supabase.from('vy_valuation_line_entries').select('*').eq('org_id', orgId)),
+        _timed('vy_valuation_extra_entries', supabase.from('vy_valuation_extra_entries').select('*').eq('org_id', orgId)),
+        _timed('vy_suppliers', supabase.from('vy_suppliers').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_supplier_trades', supabase.from('vy_supplier_trades').select('*').eq('org_id', orgId).order('sort_order', { ascending: true })),
+        _timed('vy_supplier_specialisms', supabase.from('vy_supplier_specialisms').select('*').eq('org_id', orgId).order('sort_order', { ascending: true })),
+        _timed('vy_supplier_labour_rate_types', supabase.from('vy_supplier_labour_rate_types').select('*').eq('org_id', orgId).order('sort_order', { ascending: true })),
       ]);
+      console.debug(`[VYSITE perf] Phase 2 total: ${(performance.now() - _p2Start).toFixed(0)}ms`);
 
       if (cancelled) return;
 
