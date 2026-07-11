@@ -3,7 +3,7 @@ import {
   FileText, Search, Calendar, Wrench, Zap, CheckSquare, Award,
   HardHat, Users, Pencil, Trash2, ChevronDown, X,
   Plus, Clock, CheckCircle, AlertCircle, TrendingUp, Download,
-  Eye, Copy, MoreVertical,
+  Eye, Copy, MoreVertical, RefreshCw,
 } from 'lucide-react';
 import { openPrintTab } from '../lib/printTab';
 import { buildFormPageHTML, FORM_PDF_CSS, renderFormPDF } from '../forms/PDFRenderer';
@@ -812,8 +812,8 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
         </div>
 
         {/* Records list */}
-        {store.modulesLoading && forms.length === 0 ? (
-          // Phase 2 still loading — show skeleton rows, never an empty state
+        {store.siteFormsStatus === 'loading' ? (
+          // Site Forms query still in flight — show skeleton rows, never an empty state
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
               <div key={i} className="bg-[#1a2236] border border-[#1e2d4a] border-l-[3px] border-l-slate-700 rounded-xl px-4 py-3.5 animate-pulse">
@@ -829,6 +829,18 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
                 </div>
               </div>
             ))}
+          </div>
+        ) : store.siteFormsStatus === 'error' ? (
+          <div className="text-center py-14">
+            <AlertCircle size={28} className="mx-auto mb-3 text-red-500/60" />
+            <p className="text-sm font-medium text-slate-400 mb-4">Site Forms could not be loaded.</p>
+            <button
+              onClick={() => store.reloadSiteForms()}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-[#1a2236] border border-[#1e2d4a] rounded-lg text-xs font-semibold text-slate-300 hover:bg-[#1e2840] hover:text-white transition-colors"
+            >
+              <RefreshCw size={13} />
+              Retry
+            </button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-14 text-slate-600">

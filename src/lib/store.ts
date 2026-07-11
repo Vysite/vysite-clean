@@ -1176,6 +1176,8 @@ export interface AppStore {
   snags: Snag[];
   snaggingReports: DBSnaggingReport[];
   siteForms: DBSiteForm[];
+  siteFormsStatus: 'loading' | 'success' | 'error';
+  reloadSiteForms: () => Promise<void>;
   tenders: Tender[];
   tcRecords: DBTCRecord[];
   maintenanceJobs: DBMaintenanceJob[];
@@ -1433,6 +1435,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   // Module pages whose data comes from Phase 2 should show a loading state
   // when this is true rather than rendering "no records" against empty arrays.
   const [modulesLoading, setModulesLoading] = useState(true);
+  const [siteFormsStatus, setSiteFormsStatus] = useState<'loading' | 'success' | 'error'>('loading');
 
   // Keep a stable ref to orgId so callbacks always read the latest value
   // without needing to be re-created (avoids cascading re-renders).
@@ -1472,11 +1475,13 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       // Keep platformUsers/settings as-is — they load below with org filter
       setLoading(false);
       setModulesLoading(false);
+      setSiteFormsStatus('loading');
       return;
     }
 
     setLoading(true);
     setModulesLoading(true);
+    setSiteFormsStatus('loading');
 
     let cancelled = false;
 
@@ -1536,11 +1541,32 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
         return promise.then(r => { console.debug(`[VYSITE perf] ${name}: ${(performance.now() - t0).toFixed(0)}ms`); return r; });
       };
 
-      const [docRes, attRes, snrRes, frmRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes, valRes, wbRes, wblRes, wbeRes, vleRes, veeRes, supRes, scTRes, scSpRes, scLRTRes] = await Promise.all([
+      // vy_site_forms runs independently — its result is committed to the store
+      // immediately on resolve so Site Forms never waits on unrelated queries.
+      _timed('vy_site_forms', supabase.from('vy_site_forms').select('*').eq('org_id', orgId).order('created_at', { ascending: false }))
+        .then(frmRes => {
+          if (cancelled) return;
+          if (frmRes.error) {
+            console.error('[VYSITE] vy_site_forms error:', frmRes.error);
+            setSiteFormsStatus('error');
+          } else {
+            setSiteForms((frmRes.data ?? []).map(f => ({
+              ...(((f as unknown) as DBSiteForm).extra_data as Record<string, unknown> ?? {}),
+              ...(f as unknown as DBSiteForm),
+              form_comments: (f as unknown as DBSiteForm).form_comments ?? [],
+              projectName: (f as unknown as DBSiteForm).project_name,
+              projectId: (f as unknown as DBSiteForm).project_id,
+              completedBy: (f as unknown as DBSiteForm).completed_by,
+              submittedDate: (f as unknown as DBSiteForm).submitted_date,
+            })));
+            setSiteFormsStatus('success');
+          }
+        });
+
+      const [docRes, attRes, snrRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes, valRes, wbRes, wblRes, wbeRes, vleRes, veeRes, supRes, scTRes, scSpRes, scLRTRes] = await Promise.all([
         _timed('vy_project_documents', supabase.from('vy_project_documents').select(DOC_COLS).eq('org_id', orgId).order('created_at', { ascending: false })),
         _timed('vy_attachments', supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false })),
         _timed('vy_snagging_reports', supabase.from('vy_snagging_reports').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
-        _timed('vy_site_forms', supabase.from('vy_site_forms').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
         _timed('vy_tenders', supabase.from('vy_tenders').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
         _timed('vy_tc_records', supabase.from('vy_tc_records').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
         _timed('vy_maintenance_jobs', supabase.from('vy_maintenance_jobs').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
@@ -1569,15 +1595,6 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setProjectDocuments((docRes.data ?? []) as DBProjectDocument[]);
       setAttachments((attRes.data ?? []) as DBAttachment[]);
       setSnaggingReports((snrRes.data ?? []) as DBSnaggingReport[]);
-      setSiteForms(((frmRes.data ?? []) as DBSiteForm[]).map(f => ({
-        ...(f.extra_data as Record<string, unknown> ?? {}),
-        ...f,
-        form_comments: f.form_comments ?? [],
-        projectName: f.project_name,
-        projectId: f.project_id,
-        completedBy: f.completed_by,
-        submittedDate: f.submitted_date,
-      })));
       setTenders((tenRes.data ?? []).map(r => dbToTender(r as DBTender)));
       setTCRecords((tcRes.data ?? []) as DBTCRecord[]);
       setMaintenanceJobs((mjRes.data ?? []) as DBMaintenanceJob[]);
@@ -1741,6 +1758,28 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   }, []);
 
   // ── Site Forms ────────────────────────────────────────────────────────────────
+
+  const reloadSiteForms = useCallback(async () => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setSiteFormsStatus('loading');
+    const { data, error } = await supabase.from('vy_site_forms').select('*').eq('org_id', oid).order('created_at', { ascending: false });
+    if (error) {
+      console.error('[VYSITE] reloadSiteForms error:', error);
+      setSiteFormsStatus('error');
+    } else {
+      setSiteForms((data ?? []).map(f => ({
+        ...(((f as unknown) as DBSiteForm).extra_data as Record<string, unknown> ?? {}),
+        ...(f as unknown as DBSiteForm),
+        form_comments: (f as unknown as DBSiteForm).form_comments ?? [],
+        projectName: (f as unknown as DBSiteForm).project_name,
+        projectId: (f as unknown as DBSiteForm).project_id,
+        completedBy: (f as unknown as DBSiteForm).completed_by,
+        submittedDate: (f as unknown as DBSiteForm).submitted_date,
+      })));
+      setSiteFormsStatus('success');
+    }
+  }, []);
 
   const addSiteForm = useCallback(async (f: DBSiteForm) => {
     const oid = getOrgId(orgIdRef.current);
@@ -2545,7 +2584,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addAction, updateAction, removeAction,
     addSnag, updateSnag, removeSnag,
     addSnaggingReport, updateSnaggingReport, removeSnaggingReport,
-    addSiteForm, updateSiteForm, removeSiteForm,
+    addSiteForm, updateSiteForm, removeSiteForm, siteFormsStatus, reloadSiteForms,
     addTender, updateTender, removeTender,
     addTCRecord, updateTCRecord, removeTCRecord,
     addMaintenanceJob, updateMaintenanceJob, removeMaintenanceJob,
