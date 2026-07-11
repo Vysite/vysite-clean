@@ -1230,6 +1230,7 @@ export interface AppStore {
   addSiteForm: (f: DBSiteForm) => Promise<void>;
   updateSiteForm: (f: DBSiteForm) => Promise<void>;
   removeSiteForm: (id: string) => Promise<void>;
+  fetchSiteFormDetail: (id: string) => Promise<DBSiteForm | null>;
 
   // Tenders
   addTender: (t: Tender) => Promise<string | null>;
@@ -1543,7 +1544,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
 
       // vy_site_forms runs independently — its result is committed to the store
       // immediately on resolve so Site Forms never waits on unrelated queries.
-      _timed('vy_site_forms', supabase.from('vy_site_forms').select('*').eq('org_id', orgId).order('created_at', { ascending: false }))
+      // extra_data and form_comments are omitted — they can be multi-MB JSONB blobs
+      // (base64 image attachments stored inline). Full detail is fetched on demand.
+      _timed('vy_site_forms', supabase.from('vy_site_forms').select(SITE_FORM_LIST_COLS).eq('org_id', orgId).order('created_at', { ascending: false }))
         .then(frmRes => {
           if (cancelled) return;
           if (frmRes.error) {
@@ -1551,9 +1554,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
             setSiteFormsStatus('error');
           } else {
             setSiteForms((frmRes.data ?? []).map(f => ({
-              ...(((f as unknown) as DBSiteForm).extra_data as Record<string, unknown> ?? {}),
               ...(f as unknown as DBSiteForm),
-              form_comments: (f as unknown as DBSiteForm).form_comments ?? [],
+              extra_data: {},
+              form_comments: [],
               projectName: (f as unknown as DBSiteForm).project_name,
               projectId: (f as unknown as DBSiteForm).project_id,
               completedBy: (f as unknown as DBSiteForm).completed_by,
@@ -1759,19 +1762,21 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
 
   // ── Site Forms ────────────────────────────────────────────────────────────────
 
+  const SITE_FORM_LIST_COLS = 'id,type,project_id,project_name,date,completed_by,description,comments,status,submitted_date,notes,created_at,org_id';
+
   const reloadSiteForms = useCallback(async () => {
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
     setSiteFormsStatus('loading');
-    const { data, error } = await supabase.from('vy_site_forms').select('*').eq('org_id', oid).order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('vy_site_forms').select(SITE_FORM_LIST_COLS).eq('org_id', oid).order('created_at', { ascending: false });
     if (error) {
       console.error('[VYSITE] reloadSiteForms error:', error);
       setSiteFormsStatus('error');
     } else {
       setSiteForms((data ?? []).map(f => ({
-        ...(((f as unknown) as DBSiteForm).extra_data as Record<string, unknown> ?? {}),
         ...(f as unknown as DBSiteForm),
-        form_comments: (f as unknown as DBSiteForm).form_comments ?? [],
+        extra_data: {},
+        form_comments: [],
         projectName: (f as unknown as DBSiteForm).project_name,
         projectId: (f as unknown as DBSiteForm).project_id,
         completedBy: (f as unknown as DBSiteForm).completed_by,
@@ -1779,6 +1784,15 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       })));
       setSiteFormsStatus('success');
     }
+  }, []);
+
+  const fetchSiteFormDetail = useCallback(async (id: string): Promise<DBSiteForm | null> => {
+    const { data, error } = await supabase.from('vy_site_forms').select('*').eq('id', id).maybeSingle();
+    if (error) {
+      console.error('[VYSITE] fetchSiteFormDetail error:', error);
+      return null;
+    }
+    return data as DBSiteForm | null;
   }, []);
 
   const addSiteForm = useCallback(async (f: DBSiteForm) => {
@@ -2584,7 +2598,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addAction, updateAction, removeAction,
     addSnag, updateSnag, removeSnag,
     addSnaggingReport, updateSnaggingReport, removeSnaggingReport,
-    addSiteForm, updateSiteForm, removeSiteForm, siteFormsStatus, reloadSiteForms,
+    addSiteForm, updateSiteForm, removeSiteForm, siteFormsStatus, reloadSiteForms, fetchSiteFormDetail,
     addTender, updateTender, removeTender,
     addTCRecord, updateTCRecord, removeTCRecord,
     addMaintenanceJob, updateMaintenanceJob, removeMaintenanceJob,

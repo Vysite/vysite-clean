@@ -343,6 +343,8 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const [deletingId, setDeletingId]               = useState<string | null>(null);
   const [selectMode, setSelectMode]               = useState(false);
   const [selectedIds, setSelectedIds]             = useState<Set<string>>(new Set());
+  // ID of a form currently being loaded for view/edit — shows inline spinner
+  const [loadingDetailId, setLoadingDetailId]     = useState<string | null>(null);
 
   const forms = useMemo(() => {
     const all = (store.siteForms ?? []) as unknown as ExtendedSiteForm[];
@@ -526,14 +528,22 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   };
 
   // ── Create Similar ──
-  const handleCreateSimilar = (source: ExtendedSiteForm) => {
+  const handleCreateSimilar = async (source: ExtendedSiteForm) => {
     if (!isFormAccessible(source)) return;
+    // Fetch full detail so all form fields (including extra_data) are available to copy
+    setLoadingDetailId(source.id);
+    const detail = await store.fetchSiteFormDetail(source.id);
+    setLoadingDetailId(null);
+    const fullSource: ExtendedSiteForm = detail
+      ? { ...source, ...(detail.extra_data as Record<string, unknown> ?? {}), form_comments: detail.form_comments ?? [], extra_data: detail.extra_data }
+      : source;
+
     const newId = `f${Date.now()}`;
     const now = new Date().toISOString().split('T')[0];
 
     // Copy all fields except those that must be fresh on the new form
     const copied = Object.fromEntries(
-      Object.entries(source as unknown as Record<string, unknown>).filter(([k]) => !SKIP_COPY_FIELDS.has(k))
+      Object.entries(fullSource as unknown as Record<string, unknown>).filter(([k]) => !SKIP_COPY_FIELDS.has(k))
     ) as unknown as ExtendedSiteForm;
 
     const newForm: ExtendedSiteForm = {
@@ -544,9 +554,6 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
       completedBy: userName,
     };
 
-    // Open the new form as a fresh create (not edit) — editingForm must stay null
-    // so handleSave calls addSiteForm (INSERT) not updateSiteForm (UPDATE).
-    // similarTemplate holds the pre-fill data passed to FormBuilder.
     setBuilderType(source.type as ExtendedFormType);
     setEditingForm(null);
     setSimilarTemplate(newForm);
@@ -575,12 +582,29 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     setShowBuilder(true);
     setOpenCategory(null);
   };
-  const openEdit = (form: ExtendedSiteForm) => {
+  const openEdit = async (form: ExtendedSiteForm) => {
     if (!isFormAccessible(form)) return;
-    setBuilderType(form.type as ExtendedFormType);
-    setEditingForm(form);
+    setLoadingDetailId(form.id);
+    const detail = await store.fetchSiteFormDetail(form.id);
+    setLoadingDetailId(null);
+    const full: ExtendedSiteForm = detail
+      ? { ...form, ...(detail.extra_data as Record<string, unknown> ?? {}), form_comments: detail.form_comments ?? [], extra_data: detail.extra_data }
+      : form;
+    setBuilderType(full.type as ExtendedFormType);
+    setEditingForm(full);
     setViewingForm(null);
     setShowBuilder(true);
+  };
+
+  const openView = async (form: ExtendedSiteForm) => {
+    if (!isFormAccessible(form)) return;
+    setLoadingDetailId(form.id);
+    const detail = await store.fetchSiteFormDetail(form.id);
+    setLoadingDetailId(null);
+    const full: ExtendedSiteForm = detail
+      ? { ...form, ...(detail.extra_data as Record<string, unknown> ?? {}), form_comments: detail.form_comments ?? [], extra_data: detail.extra_data }
+      : form;
+    setViewingForm(full);
   };
 
   const handleSingleExportPDF = (form: ExtendedSiteForm) => {
@@ -857,14 +881,16 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
               const te = TYPE_MAP[f.type] ?? { bg: 'bg-slate-700', text: 'text-slate-300', label: f.type, border: 'border-l-slate-600' };
               const catId  = typeToCatId[f.type];
               const catDef = FORM_CATEGORIES.find(c => c.id === catId);
+              const isLoadingDetail = loadingDetailId === f.id;
               return (
                 <div
                   key={f.id}
-                  onClick={() => selectMode ? toggleId(f.id) : (isFormAccessible(f) && setViewingForm(f))}
+                  onClick={() => selectMode ? toggleId(f.id) : openView(f)}
                   className={`bg-[#1a2236] border ${
+                    isLoadingDetail ? 'border-slate-500/60 opacity-70' :
                     selectMode && selectedIds.has(f.id) ? 'border-orange-500/60' :
                     f.status === 'Action Required' ? 'border-red-900/40' : 'border-[#1e2d4a]'
-                  } border-l-[3px] ${te.border} rounded-xl px-4 py-3.5 hover:border-slate-500/50 hover:bg-[#1e2840] transition-all duration-100 group cursor-pointer`}
+                  } border-l-[3px] ${te.border} rounded-xl px-4 py-3.5 hover:border-slate-500/50 hover:bg-[#1e2840] transition-all duration-100 group ${isLoadingDetail ? 'cursor-wait' : 'cursor-pointer'}`}
                 >
                   <div className="flex items-start gap-3">
                     {selectMode && (
@@ -919,7 +945,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
                             canEdit={canEdit}
                             canDelete={canDelete}
                             canExport={canExport}
-                            onView={() => isFormAccessible(f) && setViewingForm(f)}
+                            onView={() => openView(f)}
                             onEdit={() => openEdit(f)}
                             onCreateSimilar={() => handleCreateSimilar(f)}
                             onExportPDF={() => handleSingleExportPDF(f)}
@@ -949,7 +975,13 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
         <ViewModal
           form={viewingForm}
           onClose={() => setViewingForm(null)}
-          onEdit={() => openEdit(viewingForm)}
+          onEdit={() => {
+            // viewingForm already has full detail from openView — open edit directly
+            setBuilderType(viewingForm.type as ExtendedFormType);
+            setEditingForm(viewingForm);
+            setViewingForm(null);
+            setShowBuilder(true);
+          }}
           onDelete={() => handleDelete(viewingForm.id)}
         />
       )}
