@@ -6,6 +6,7 @@ import { useAppStore } from '../../lib/StoreContext';import type {
 } from '../../lib/store';
 import type { Project } from '../../data/types';
 import { buildValuationPdf } from './ValuationPDF';
+import { buildValuationXlsx } from './ValuationXLSX';
 import { logActivity } from '../../lib/activityLog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -252,8 +253,10 @@ export default function ValuationDetail({
   const [showEditHeader, setShowEditHeader] = useState(false);
   const [linesExpanded, setLinesExpanded]   = useState(true);
   const [extrasExpanded, setExtrasExpanded] = useState(true);
-  const [pdfLoading, setPdfLoading]         = useState(false);
-  const [pdfError, setPdfError]             = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading]           = useState(false);
+  const [pdfError, setPdfError]               = useState<string | null>(null);
+  const [xlsxLoading, setXlsxLoading]         = useState(false);
+  const [xlsxError, setXlsxError]             = useState<string | null>(null);
   const { state: saveState, lastSaved, onSaveStart, onSaveDone } = useSaveIndicator();
 
   const isLocked = valuation.status === 'locked';
@@ -392,6 +395,27 @@ export default function ValuationDetail({
     }
   };
 
+  const handleExportXlsx = async () => {
+    setXlsxLoading(true);
+    setXlsxError(null);
+    try {
+      const lineData  = wbLines.map(l  => ({ line: l,  entry: getLineEntry(l.id) }));
+      const extraData = wbExtras.map(e => ({ extra: e, entry: getExtraEntry(e.id) }));
+      await buildValuationXlsx(
+        valuation, project, lineData, extraData, totals,
+        store.settings?.company_name || undefined,
+      );
+      valLog('pdf_exported', `${valuation.ref} — Valuation exported as Excel: ${valuation.title}`);
+    } catch (err) {
+      console.error('[ValuationXLSX] Export failed:', err);
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setXlsxError(`Excel generation failed: ${msg}`);
+      setTimeout(() => setXlsxError(null), 6000);
+    } finally {
+      setXlsxLoading(false);
+    }
+  };
+
   const statusStyle = STATUS_STYLES[valuation.status as ValuationStatus] ?? STATUS_STYLES.draft;
 
   return (
@@ -442,6 +466,13 @@ export default function ValuationDetail({
               <Edit2 size={11} /> Edit Details
             </button>
           )}
+          <button onClick={handleExportXlsx} disabled={xlsxLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-colors disabled:opacity-50"
+            style={{ background: '#16a34a' }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#15803d')}
+            onMouseLeave={e => (e.currentTarget.style.background = '#16a34a')}>
+            <Download size={11} /> {xlsxLoading ? 'Generating…' : 'Export Excel'}
+          </button>
           <button onClick={handleExportPdf} disabled={pdfLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-colors disabled:opacity-50"
             style={{ background: '#f97316' }}
@@ -451,6 +482,18 @@ export default function ValuationDetail({
           </button>
         </div>
       </div>
+
+      {/* Excel error toast */}
+      {xlsxError && (
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl mb-4"
+          style={{ background: 'rgba(22,163,74,0.10)', border: '1px solid rgba(22,163,74,0.25)' }}>
+          <X size={13} className="text-red-400 shrink-0" />
+          <p className="text-xs text-red-400">{xlsxError}</p>
+          <button onClick={() => setXlsxError(null)} className="ml-auto text-red-400/60 hover:text-red-400 transition-colors">
+            <X size={11} />
+          </button>
+        </div>
+      )}
 
       {/* PDF error toast */}
       {pdfError && (
