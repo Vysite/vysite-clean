@@ -362,6 +362,65 @@ function addContractLinesPage(ctx: Ctx, lineData: LineData[]) {
 
 // ─── Extras page ──────────────────────────────────────────────────────────────
 
+// Column widths for the extras table — description is narrower so financial
+// columns have breathing room and can never be crowded by long text.
+const ECOL = {
+  ref:     36,
+  desc:    148,  // reduced so financial columns always have fixed space
+  agreed:  68,
+  ppct:    36,
+  pval:    66,
+  cpct:    36,
+  cval:    66,
+  thisval: 66,
+  // remaining width absorbs any rounding
+  pad:     0,
+};
+ECOL.pad = Math.max(0, CW - Object.values(ECOL).reduce((s, v) => s + v, 0));
+
+const EXTRAS_DESC_MAX_W = ECOL.desc - 6;   // inner text width for description wrap
+const EXTRAS_LINE_H     = 11;              // base line-height for wrapped text
+const EXTRAS_ROW_PAD    = 5;              // vertical padding top+bottom per row
+
+function extrasDrawHeader(ctx: Ctx, p: PDFPage, hy: number) {
+  p.drawRectangle({ x: ML, y: hy - LINE_H + 2, width: CW, height: LINE_H, color: C_LIGHT });
+  p.drawLine({ start: { x: ML, y: hy - LINE_H + 2 }, end: { x: ML + CW, y: hy - LINE_H + 2 }, thickness: 0.5, color: C_RULE });
+
+  const cols: [string, number, 'left' | 'right'][] = [
+    ['Ref',          ECOL.ref,     'left'],
+    ['Description',  ECOL.desc,    'left'],
+    ['Value',        ECOL.agreed,  'right'],
+    ['Prev %',       ECOL.ppct,    'right'],
+    ['Prev Value',   ECOL.pval,    'right'],
+    ['Curr %',       ECOL.cpct,    'right'],
+    ['Curr Value',   ECOL.cval,    'right'],
+    ['This Val',     ECOL.thisval + ECOL.pad, 'right'],
+  ];
+
+  let hx = ML;
+  for (const [label, w, align] of cols) {
+    const lw = ctx.bold.widthOfTextAtSize(label, 6.5);
+    dt(p, ctx.bold, label, align === 'right' ? hx + w - lw - 2 : hx + 2, hy - 5, 6.5, C_MUTED);
+    hx += w;
+  }
+}
+
+// Returns the wrapped description lines for a given string.
+function wrapDescLines(font: PDFFont, text: string, maxW: number, size: number): string[] {
+  const s = san(text).replace(/[\r\n]+/g, ' ');
+  if (!s) return [];
+  const words = s.split(' ');
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    const test = cur ? `${cur} ${w}` : w;
+    if (font.widthOfTextAtSize(test, size) > maxW && cur) { lines.push(cur); cur = w; }
+    else cur = test;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
 function addExtrasPage(ctx: Ctx, extraData: ExtraData[]) {
   const { page: firstPage, y: startY } = newPage(ctx);
   let page = firstPage;
@@ -370,81 +429,105 @@ function addExtrasPage(ctx: Ctx, extraData: ExtraData[]) {
   dt(page, ctx.bold, 'EXTRAS / AGREED VARIATIONS', ML, y, 7.5, C_MUTED, { ls: 1.5 });
   y -= 18;
 
-  const COL = { ref: 40, desc: 196, agreed: 78, ppct: 38, pval: 78, cpct: 38, cval: 78, thisval: 78, notes: 0 };
-  const fixedW = Object.values(COL).reduce((s, v) => s + v, 0);
-  COL.notes = Math.max(0, CW - fixedW);
-
-  page.drawRectangle({ x: ML, y: y - LINE_H + 2, width: CW, height: LINE_H, color: C_LIGHT });
-  page.drawLine({ start: { x: ML, y: y - LINE_H + 2 }, end: { x: ML + CW, y: y - LINE_H + 2 }, thickness: 0.5, color: C_RULE });
-  let hx = ML;
-  for (const [label, w] of [
-    ['Ref', COL.ref], ['Description', COL.desc], ['Agreed Value', COL.agreed],
-    ['Prev %', COL.ppct], ['Prev Value', COL.pval], ['Curr %', COL.cpct],
-    ['Curr Value', COL.cval], ['This Val', COL.thisval + COL.notes],
-  ] as [string, number][]) {
-    dt(page, ctx.bold, label, hx + 2, y - 5, 6.5, C_MUTED);
-    hx += w;
-  }
+  extrasDrawHeader(ctx, page, y);
   y -= LINE_H;
 
   for (let i = 0; i < extraData.length; i++) {
     const { extra, entry } = extraData[i];
-    if (y - LINE_H < CB + 16) {
-      const np = newPage(ctx);
-      page = np.page;
-      y    = np.y;
-    }
 
     const prevVal = extra.agreed_value * entry.previous_pct / 100;
     const currVal = extra.agreed_value * entry.current_pct  / 100;
     const thisVal = currVal - prevVal;
 
-    if (i % 2 === 0) page.drawRectangle({ x: ML, y: y - LINE_H + 2, width: CW, height: LINE_H, color: rgb(0.980, 0.984, 0.992) });
-    page.drawLine({ start: { x: ML, y: y - LINE_H + 2 }, end: { x: ML + CW, y: y - LINE_H + 2 }, thickness: 0.2, color: C_FAINT });
+    // Calculate row height from wrapped description
+    const descLines = wrapDescLines(ctx.regular, extra.description, EXTRAS_DESC_MAX_W, LINE_FONT);
+    const descLineCount = Math.max(1, descLines.length);
+    const rowH = descLineCount * EXTRAS_LINE_H + EXTRAS_ROW_PAD * 2;
 
-    let tx = ML;
-    const ec = (text: string, w: number, align: 'left' | 'right' = 'left', font: PDFFont = ctx.regular, color: ReturnType<typeof rgb> = C_BODY) => {
+    // Page break if row won't fit
+    if (y - rowH < CB + 16) {
+      const np = newPage(ctx);
+      page = np.page;
+      y    = np.y;
+      dt(page, ctx.bold, 'EXTRAS / AGREED VARIATIONS  —  continued', ML, y, 7.5, C_MUTED, { ls: 1.5 });
+      y -= 18;
+      extrasDrawHeader(ctx, page, y);
+      y -= LINE_H;
+    }
+
+    const rowTop    = y;
+    const rowBottom = y - rowH;
+
+    // Alternating row shading
+    if (i % 2 === 0) page.drawRectangle({ x: ML, y: rowBottom + 2, width: CW, height: rowH, color: rgb(0.980, 0.984, 0.992) });
+    // Row divider
+    page.drawLine({ start: { x: ML, y: rowBottom + 2 }, end: { x: ML + CW, y: rowBottom + 2 }, thickness: 0.2, color: C_FAINT });
+
+    // Top-aligned y for text in this row
+    const textY = rowTop - EXTRAS_ROW_PAD - LINE_FONT;
+
+    // Ref (top-aligned, left)
+    dt(page, ctx.regular, san(extra.ref ?? ''), ML + 2, textY, LINE_FONT, C_MUTED);
+
+    // Description — wrapped, strictly within its column
+    const descX = ML + ECOL.ref;
+    let lineY = textY;
+    for (const line of descLines) {
+      page.drawText(line, { x: descX + 2, y: lineY, size: LINE_FONT, font: ctx.regular, color: C_BODY });
+      lineY -= EXTRAS_LINE_H;
+    }
+
+    // Financial columns — all top-aligned, right-aligned within their column
+    // Starting x is after ref + desc columns
+    const finStartX = ML + ECOL.ref + ECOL.desc;
+
+    const drawRight = (text: string, colX: number, colW: number, font: PDFFont, color: ReturnType<typeof rgb>) => {
       const s = san(text);
-      if (s) {
-        const sw = font.widthOfTextAtSize(s, LINE_FONT);
-        dt(page, font, s, align === 'right' ? tx + w - sw - 2 : tx + 2, y - LINE_H + 4, LINE_FONT, color);
-      }
-      tx += w;
+      if (!s) return;
+      const sw = font.widthOfTextAtSize(s, LINE_FONT);
+      dt(page, font, s, colX + colW - sw - 2, textY, LINE_FONT, color);
     };
 
-    ec(extra.ref ?? '', COL.ref, 'left', ctx.regular, C_MUTED);
-    ec(extra.description, COL.desc);
-    ec(fmtNum(extra.agreed_value), COL.agreed, 'right', ctx.bold, C_BODY);
-    ec(fmtPct(entry.previous_pct), COL.ppct, 'right', ctx.regular, C_MUTED);
-    ec(fmtNum(prevVal), COL.pval, 'right', ctx.regular, C_MUTED);
-    ec(fmtPct(entry.current_pct), COL.cpct, 'right', ctx.bold, C_ORANGE);
-    ec(fmtNum(currVal), COL.cval, 'right', ctx.bold, C_BODY);
-    ec(fmtNum(thisVal), COL.thisval + COL.notes, 'right', ctx.bold, thisVal > 0 ? C_GREEN : (thisVal < 0 ? rgb(0.8, 0.2, 0.2) : C_BODY));
+    let fx = finStartX;
+    drawRight(fmtNum(extra.agreed_value), fx, ECOL.agreed, ctx.bold, C_BODY);    fx += ECOL.agreed;
+    drawRight(fmtPct(entry.previous_pct), fx, ECOL.ppct,   ctx.regular, C_MUTED); fx += ECOL.ppct;
+    drawRight(fmtNum(prevVal),            fx, ECOL.pval,   ctx.regular, C_MUTED); fx += ECOL.pval;
+    drawRight(fmtPct(entry.current_pct),  fx, ECOL.cpct,   ctx.bold, C_ORANGE);   fx += ECOL.cpct;
+    drawRight(fmtNum(currVal),            fx, ECOL.cval,   ctx.bold, C_BODY);     fx += ECOL.cval;
+    drawRight(fmtNum(thisVal),            fx, ECOL.thisval + ECOL.pad,
+      ctx.bold, thisVal > 0 ? C_GREEN : (thisVal < 0 ? rgb(0.8, 0.2, 0.2) : C_BODY));
 
-    y -= LINE_H;
+    y = rowBottom;
   }
 
+  // Subtotal row
   const agreedTotal = extraData.reduce((s, d) => s + d.extra.agreed_value, 0);
   const prevTotal   = extraData.reduce((s, d) => s + d.extra.agreed_value * d.entry.previous_pct / 100, 0);
   const currTotal   = extraData.reduce((s, d) => s + d.extra.agreed_value * d.entry.current_pct  / 100, 0);
   const thisTotal   = currTotal - prevTotal;
+
+  if (y - LINE_H < CB + 16) {
+    const np = newPage(ctx);
+    page = np.page;
+    y    = np.y;
+  }
 
   page.drawRectangle({ x: ML, y: y - LINE_H + 2, width: CW, height: LINE_H, color: C_LIGHT });
   page.drawLine({ start: { x: ML, y: y - LINE_H + 2 }, end: { x: ML + CW, y: y - LINE_H + 2 }, thickness: 0.5, color: C_RULE });
   page.drawLine({ start: { x: ML, y: y + 2 }, end: { x: ML + CW, y: y + 2 }, thickness: 0.5, color: C_RULE });
   dt(page, ctx.bold, 'Subtotal — Extras / Agreed Variations', ML + 2, y - LINE_H + 4, 8, C_BODY);
 
-  const baseX = ML + COL.ref + COL.desc;
+  const stBaseX = ML + ECOL.ref + ECOL.desc;
   const stotals: [number, number][] = [
-    [agreedTotal, COL.agreed], [0, COL.ppct], [prevTotal, COL.pval],
-    [0, COL.cpct], [currTotal, COL.cval], [thisTotal, COL.thisval + COL.notes],
+    [agreedTotal, ECOL.agreed], [0, ECOL.ppct], [prevTotal, ECOL.pval],
+    [0, ECOL.cpct], [currTotal, ECOL.cval], [thisTotal, ECOL.thisval + ECOL.pad],
   ];
-  let stx = baseX;
-  stotals.forEach(([v, w], i) => {
-    if (i !== 1 && i !== 3) {
+  let stx = stBaseX;
+  stotals.forEach(([v, w], idx) => {
+    if (idx !== 1 && idx !== 3) {
       const s  = fmtNum(v);
       const sw = ctx.bold.widthOfTextAtSize(s, 8);
-      dt(page, ctx.bold, s, stx + w - sw - 2, y - LINE_H + 4, 8, i === 5 && v > 0 ? C_GREEN : C_INK);
+      dt(page, ctx.bold, s, stx + w - sw - 2, y - LINE_H + 4, 8, idx === 5 && v > 0 ? C_GREEN : C_INK);
     }
     stx += w;
   });
