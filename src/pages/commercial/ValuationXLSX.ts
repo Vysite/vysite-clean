@@ -591,9 +591,11 @@ export async function buildValuationXlsx(
   XLSX.utils.book_append_sheet(wb, buildSummarySheet(valuation, totals), 'Valuation Summary');
 
   const xlsxBytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
-  // SheetJS CE 0.18.x emits xl/metadata.xml with cellMetadata count="1" but no
-  // worksheet cell references it — an invalid state Excel repairs. Strip it.
-  const patched = await patchXlsxMetadata(new Uint8Array(xlsxBytes));
+  // Synchronously replace xl/metadata.xml with an empty valid document.
+  // SheetJS CE 0.18.x always emits cellMetadata count="1" with no cell references —
+  // an inconsistency Excel repairs. patchXlsxMetadata is fully synchronous
+  // (stored/method-0, no CompressionStream) so it never hangs.
+  const patched = patchXlsxMetadata(new Uint8Array(xlsxBytes));
   const blob = new Blob([patched], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
