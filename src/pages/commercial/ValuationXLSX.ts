@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import type { DBValuation } from '../../lib/store';
 import type { Project } from '../../data/types';
 import type { LineData, ExtraData, ValuationTotals } from './ValuationPDF';
+import { patchXlsxMetadata } from './patchXlsx';
 
 // ─── Brand palette (hex, no #) ────────────────────────────────────────────────
 const ORANGE  = 'F97316';
@@ -590,7 +591,10 @@ export async function buildValuationXlsx(
   XLSX.utils.book_append_sheet(wb, buildSummarySheet(valuation, totals), 'Valuation Summary');
 
   const xlsxBytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
-  const blob = new Blob([xlsxBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  // SheetJS CE 0.18.x emits xl/metadata.xml with cellMetadata count="1" but no
+  // worksheet cell references it — an invalid state Excel repairs. Strip it.
+  const patched = await patchXlsxMetadata(new Uint8Array(xlsxBytes));
+  const blob = new Blob([patched], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
