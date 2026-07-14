@@ -8,23 +8,29 @@ const ORANGE  = 'F97316';
 const INK     = '0E1729';
 const BODY    = '1E3050';
 const MUTED   = '617090';
-const LIGHT   = 'EFF2F6';   // header fill (light grey)
-const STRIPE  = 'F8F9FB';   // alternating row fill
+const LIGHT   = 'EFF2F6';
+const STRIPE  = 'F8F9FB';
 const GREEN   = '0FA56F';
 const RED_    = 'CC3333';
 const WHITE   = 'FFFFFF';
-const RULE    = 'DDE2EA';   // border colour
+const RULE    = 'DDE2EA';
+
+// ─── Number formats ───────────────────────────────────────────────────────────
+const CURR_FMT = '"£"#,##0.00';
+const PCT_FMT  = '0.00"%"';   // values stored as 0-100, not 0-1
 
 // ─── Style primitives ─────────────────────────────────────────────────────────
 
 type Align = 'left' | 'right' | 'center';
 
+// NOTE: numFmt is intentionally ABSENT from CellStyle.
+// It is set on the cell via the `z` property to avoid undefined keys polluting
+// styles.xml (which causes Excel repair dialogs).
 interface CellStyle {
   font?:      object;
   fill?:      object;
   alignment?: object;
   border?:    object;
-  numFmt?:    string;
 }
 
 function solidFill(hex: string) {
@@ -44,7 +50,7 @@ function sectionHeaderStyle(): CellStyle {
   return {
     font:      { name: 'Calibri', sz: 10, bold: true, color: { rgb: WHITE } },
     fill:      solidFill(ORANGE),
-    alignment: { horizontal: 'left', vertical: 'middle', wrapText: false },
+    alignment: { horizontal: 'left', vertical: 'middle' },
     border:    thinBorder(ORANGE),
   };
 }
@@ -53,48 +59,44 @@ function tableHeaderStyle(align: Align = 'left'): CellStyle {
   return {
     font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: MUTED } },
     fill:      solidFill(LIGHT),
-    alignment: { horizontal: align, vertical: 'middle', wrapText: false },
+    alignment: { horizontal: align, vertical: 'middle' },
     border:    { bottom: { style: 'medium', color: { rgb: RULE } } },
   };
 }
 
-function cellStyle(align: Align = 'left', stripe = false, numFmt?: string): CellStyle {
+function cellStyle(align: Align = 'left', stripe = false): CellStyle {
   return {
     font:      { name: 'Calibri', sz: 9, color: { rgb: BODY } },
     fill:      solidFill(stripe ? STRIPE : WHITE),
     alignment: { horizontal: align, vertical: 'top', wrapText: align === 'left' },
     border:    bottomBorder(),
-    numFmt,
   };
 }
 
-function boldCellStyle(align: Align = 'left', stripe = false, numFmt?: string): CellStyle {
+function boldCellStyle(align: Align = 'left', stripe = false): CellStyle {
   return {
     font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: INK } },
     fill:      solidFill(stripe ? STRIPE : WHITE),
     alignment: { horizontal: align, vertical: 'top', wrapText: align === 'left' },
     border:    bottomBorder(),
-    numFmt,
   };
 }
 
-function mutedCellStyle(align: Align = 'left', stripe = false, numFmt?: string): CellStyle {
+function mutedCellStyle(align: Align = 'left', stripe = false): CellStyle {
   return {
     font:      { name: 'Calibri', sz: 9, color: { rgb: MUTED } },
     fill:      solidFill(stripe ? STRIPE : WHITE),
     alignment: { horizontal: align, vertical: 'top' },
     border:    bottomBorder(),
-    numFmt,
   };
 }
 
-function totalStyle(align: Align = 'left', numFmt?: string, colorHex?: string): CellStyle {
+function totalStyle(align: Align = 'left', colorHex?: string): CellStyle {
   return {
     font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: colorHex ?? INK } },
     fill:      solidFill(LIGHT),
     alignment: { horizontal: align, vertical: 'middle' },
     border:    { top: { style: 'medium', color: { rgb: RULE } }, bottom: { style: 'medium', color: { rgb: RULE } } },
-    numFmt,
   };
 }
 
@@ -129,29 +131,29 @@ function summaryValueStyle(bold = false, colorHex?: string): CellStyle {
     fill:      solidFill(WHITE),
     alignment: { horizontal: 'right', vertical: 'middle' },
     border:    bottomBorder(),
-    numFmt:    CURR_FMT,
   };
 }
 
-// ─── Number formats ───────────────────────────────────────────────────────────
+// ─── Worksheet cell builder ───────────────────────────────────────────────────
 
-const CURR_FMT = '"£"#,##0.00';
-const PCT_FMT  = '0.00"%"';    // stored as raw 0-100 value, display with % sign
-
-// ─── Worksheet builder helpers ────────────────────────────────────────────────
-
+// z is the SheetJS cell number-format string — separate from the style object.
+// This avoids corrupt styles.xml entries from undefined numFmt keys.
 type WsCell = { v: string | number; t: 's' | 'n'; s?: CellStyle; z?: string };
 
-function mkCell(v: string | number | null, s?: CellStyle): WsCell {
-  if (v === null || v === undefined) return { v: '', t: 's', s };
-  return { v, t: typeof v === 'number' ? 'n' : 's', s };
+function mkCell(v: string | number | null, s?: CellStyle, z?: string): WsCell {
+  const base: WsCell = (v === null || v === undefined)
+    ? { v: '', t: 's' }
+    : { v, t: typeof v === 'number' ? 'n' : 's' };
+  if (s) base.s = s;
+  if (z) base.z = z;
+  return base;
 }
 
 function colLetter(n: number): string {
-  let s = '';
+  let out = '';
   let idx = n + 1;
-  while (idx > 0) { s = String.fromCharCode(65 + ((idx - 1) % 26)) + s; idx = Math.floor((idx - 1) / 26); }
-  return s;
+  while (idx > 0) { out = String.fromCharCode(65 + ((idx - 1) % 26)) + out; idx = Math.floor((idx - 1) / 26); }
+  return out;
 }
 
 function cellRef(r: number, c: number): string { return `${colLetter(c)}${r + 1}`; }
@@ -164,7 +166,14 @@ function setRange(ws: XLSX.WorkSheet, rows: number, cols: number) {
   ws['!ref'] = `A1:${colLetter(cols - 1)}${rows}`;
 }
 
-// ─── Dates & formatting ───────────────────────────────────────────────────────
+// ─── FIX: frozen panes use !views, NOT the non-existent !freeze property ──────
+// !freeze does not exist in SheetJS; it writes garbage XML that triggers repair.
+function freezeRows(ws: XLSX.WorkSheet, ySplit: number) {
+  const topLeftCell = `A${ySplit + 1}`;
+  ws['!views'] = [{ state: 'frozen', ySplit, topLeftCell }];
+}
+
+// ─── Dates ────────────────────────────────────────────────────────────────────
 
 function fmtDate(iso?: string | null): string {
   if (!iso) return '';
@@ -187,31 +196,29 @@ function buildCoverSheet(
 
   const issueDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 
-  // Orange accent header bar
+  // Orange brand bar (row 0) — merged A:D
   writeCell(ws, 0, 0, mkCell(companyName || 'VYSITE', {
     font:      { name: 'Calibri', sz: 16, bold: true, color: { rgb: WHITE } },
     fill:      solidFill(ORANGE),
     alignment: { horizontal: 'left', vertical: 'middle' },
   }));
-  for (let c = 1; c <= 3; c++) {
-    writeCell(ws, 0, c, mkCell('', { fill: solidFill(ORANGE) }));
-  }
+  for (let c = 1; c <= 3; c++) writeCell(ws, 0, c, mkCell('', { fill: solidFill(ORANGE) }));
 
-  // Eyebrow
+  // Eyebrow (row 1)
   writeCell(ws, 1, 0, mkCell('COMMERCIAL VALUATION', {
     font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: MUTED } },
     fill:      solidFill(WHITE),
     alignment: { horizontal: 'left', vertical: 'middle' },
   }));
 
-  // Main title
+  // Main title (row 2)
   writeCell(ws, 2, 0, mkCell(valuation.title, {
     font:      { name: 'Calibri', sz: 20, bold: true, color: { rgb: INK } },
     fill:      solidFill(WHITE),
     alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
   }));
 
-  // Reference pill
+  // Reference (row 3)
   writeCell(ws, 3, 0, mkCell(valuation.ref, {
     font:      { name: 'Calibri', sz: 12, bold: true, color: { rgb: ORANGE } },
     fill:      { patternType: 'solid', fgColor: { rgb: 'FFF4EC' }, bgColor: { rgb: 'FFF4EC' } },
@@ -219,14 +226,12 @@ function buildCoverSheet(
     border:    thinBorder(ORANGE),
   }));
 
-  // Spacer
+  // Spacer (row 4)
   writeCell(ws, 4, 0, mkCell('', { fill: solidFill(WHITE) }));
 
-  // Metadata section header
+  // Section header (row 5) — merged A:D
   writeCell(ws, 5, 0, mkCell('VALUATION DETAILS', sectionHeaderStyle()));
-  for (let c = 1; c <= 3; c++) {
-    writeCell(ws, 5, c, mkCell('', { fill: solidFill(ORANGE) }));
-  }
+  for (let c = 1; c <= 3; c++) writeCell(ws, 5, c, mkCell('', { fill: solidFill(ORANGE) }));
 
   const meta: [string, string][] = [
     ['Project',        project.name || ''],
@@ -239,24 +244,28 @@ function buildCoverSheet(
   ];
 
   let row = 6;
+  const notesMerges: XLSX.Range[] = [];
+
   for (const [label, value] of meta) {
-    writeCell(ws, row, 0, mkCell(label.toUpperCase(), coverLabelStyle()));
-    writeCell(ws, row + 1, 0, mkCell(value || '—', coverValueStyle()));
-    // Thin separator below value
+    writeCell(ws, row,     0, mkCell(label.toUpperCase(), coverLabelStyle()));
+    writeCell(ws, row + 1, 0, mkCell(value || '\u2014', coverValueStyle()));
     writeCell(ws, row + 2, 0, mkCell('', { fill: solidFill(WHITE), border: bottomBorder() }));
     row += 3;
   }
 
-  // Notes
   if (valuation.notes) {
     writeCell(ws, row, 0, mkCell('NOTES', sectionHeaderStyle()));
     for (let c = 1; c <= 3; c++) writeCell(ws, row, c, mkCell('', { fill: solidFill(ORANGE) }));
+    const notesRow = row;
     row++;
     writeCell(ws, row, 0, mkCell(valuation.notes, {
       font:      { name: 'Calibri', sz: 10, color: { rgb: BODY } },
       fill:      solidFill(LIGHT),
       alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
     }));
+    // Only push a merge if it spans more than one column (never degenerate)
+    notesMerges.push({ s: { r: notesRow, c: 0 }, e: { r: notesRow, c: 3 } });
+    notesMerges.push({ s: { r: row, c: 0 }, e: { r: row, c: 3 } });
     row++;
   }
 
@@ -268,23 +277,20 @@ function buildCoverSheet(
     { s: { r: 2, c: 0 }, e: { r: 2, c: 3 } },
     { s: { r: 3, c: 0 }, e: { r: 3, c: 3 } },
     { s: { r: 5, c: 0 }, e: { r: 5, c: 3 } },
-    ...(valuation.notes ? [{ s: { r: row - 1, c: 0 }, e: { r: row - 1, c: 3 } }] : []),
+    ...notesMerges,
   ];
 
-  ws['!cols'] = [
-    { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 22 },
-  ];
-
+  ws['!cols'] = [{ wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 22 }];
   ws['!rows'] = [
-    { hpt: 36 }, // row 1: brand bar
-    { hpt: 18 }, // row 2: eyebrow
-    { hpt: 40 }, // row 3: title
-    { hpt: 24 }, // row 4: ref
+    { hpt: 36 },
+    { hpt: 18 },
+    { hpt: 40 },
+    { hpt: 24 },
   ];
 
-  // Page setup — portrait
-  ws['!pageSetup'] = { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
-  ws['!printSetup'] = { paperSize: 9, orientation: 'portrait' };
+  // FIX: no !printSetup (non-existent property), no fitToPage+fitToWidth combo.
+  // paperSize 9 = A4; orientation only, no conflicting scale attributes.
+  ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait' };
 
   return ws;
 }
@@ -293,13 +299,11 @@ function buildCoverSheet(
 
 function buildContractWorksSheet(lineData: LineData[]): XLSX.WorkSheet {
   const ws: XLSX.WorkSheet = {};
-
-  // Section header (row 0)
   const HDR_COLS = 13;
+
   writeCell(ws, 0, 0, mkCell('CONTRACT WORKS', sectionHeaderStyle()));
   for (let c = 1; c < HDR_COLS; c++) writeCell(ws, 0, c, mkCell('', { fill: solidFill(ORANGE) }));
 
-  // Column headers (row 1)
   const headers: [string, Align][] = [
     ['#',              'right'],
     ['Item',           'left'],
@@ -315,92 +319,73 @@ function buildContractWorksSheet(lineData: LineData[]): XLSX.WorkSheet {
     ['Curr Value',     'right'],
     ['This Valuation', 'right'],
   ];
+  headers.forEach(([label, align], c) => writeCell(ws, 1, c, mkCell(label, tableHeaderStyle(align))));
 
-  headers.forEach(([label, align], c) => {
-    writeCell(ws, 1, c, mkCell(label, tableHeaderStyle(align)));
-  });
-
-  // Data rows (start row 2)
   let maxRow = 2;
   lineData.forEach(({ line, entry }, idx) => {
-    const r      = idx + 2;
-    const stripe = idx % 2 === 1;
+    const r       = idx + 2;
+    const stripe  = idx % 2 === 1;
     const prevVal = line.contract_value * entry.previous_pct / 100;
     const currVal = line.contract_value * entry.current_pct  / 100;
     const thisVal = currVal - prevVal;
 
-    writeCell(ws, r, 0,  mkCell(idx + 1,                         mutedCellStyle('right', stripe)));
-    writeCell(ws, r, 1,  mkCell(line.item_number ?? '',           mutedCellStyle('left',  stripe)));
-    writeCell(ws, r, 2,  mkCell(line.description,                 cellStyle('left',  stripe)));
-    writeCell(ws, r, 3,  mkCell(line.section ?? '',               mutedCellStyle('left',  stripe)));
-    writeCell(ws, r, 4,  mkCell(line.unit ?? '',                  mutedCellStyle('left',  stripe)));
-    writeCell(ws, r, 5,  mkCell(line.quantity ?? '',              mutedCellStyle('right', stripe)));
-    writeCell(ws, r, 6,  mkCell(line.rate    != null ? line.rate    : '', mutedCellStyle('right', stripe, CURR_FMT)));
-    writeCell(ws, r, 7,  mkCell(line.contract_value,              boldCellStyle('right', stripe, CURR_FMT)));
-    writeCell(ws, r, 8,  mkCell(entry.previous_pct,               mutedCellStyle('right', stripe, PCT_FMT)));
-    writeCell(ws, r, 9,  mkCell(prevVal,                          mutedCellStyle('right', stripe, CURR_FMT)));
-    writeCell(ws, r, 10, mkCell(entry.current_pct,                boldCellStyle('right', stripe, PCT_FMT)));
-    writeCell(ws, r, 11, mkCell(currVal,                          boldCellStyle('right', stripe, CURR_FMT)));
+    writeCell(ws, r, 0,  mkCell(idx + 1,                           mutedCellStyle('right', stripe)));
+    writeCell(ws, r, 1,  mkCell(line.item_number ?? '',             mutedCellStyle('left',  stripe)));
+    writeCell(ws, r, 2,  mkCell(line.description,                   cellStyle('left',  stripe)));
+    writeCell(ws, r, 3,  mkCell(line.section ?? '',                 mutedCellStyle('left',  stripe)));
+    writeCell(ws, r, 4,  mkCell(line.unit ?? '',                    mutedCellStyle('left',  stripe)));
+    writeCell(ws, r, 5,  mkCell(line.quantity != null ? line.quantity : '', mutedCellStyle('right', stripe)));
+    writeCell(ws, r, 6,  mkCell(line.rate     != null ? line.rate     : '', mutedCellStyle('right', stripe), CURR_FMT));
+    writeCell(ws, r, 7,  mkCell(line.contract_value,                boldCellStyle('right', stripe), CURR_FMT));
+    writeCell(ws, r, 8,  mkCell(entry.previous_pct,                 mutedCellStyle('right', stripe), PCT_FMT));
+    writeCell(ws, r, 9,  mkCell(prevVal,                            mutedCellStyle('right', stripe), CURR_FMT));
+    writeCell(ws, r, 10, mkCell(entry.current_pct,                  boldCellStyle('right', stripe), PCT_FMT));
+    writeCell(ws, r, 11, mkCell(currVal,                            boldCellStyle('right', stripe), CURR_FMT));
     writeCell(ws, r, 12, mkCell(thisVal, {
       font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: thisVal > 0 ? GREEN : (thisVal < 0 ? RED_ : INK) } },
       fill:      solidFill(stripe ? STRIPE : WHITE),
       alignment: { horizontal: 'right', vertical: 'top' },
       border:    bottomBorder(),
-      numFmt:    CURR_FMT,
-    }));
+    }, CURR_FMT));
 
     maxRow = r + 1;
   });
 
-  // Totals row
   const totalRow = maxRow;
   const total     = lineData.reduce((s, d) => s + d.line.contract_value, 0);
   const prevTotal = lineData.reduce((s, d) => s + d.line.contract_value * d.entry.previous_pct / 100, 0);
   const currTotal = lineData.reduce((s, d) => s + d.line.contract_value * d.entry.current_pct  / 100, 0);
   const thisTotal = currTotal - prevTotal;
 
-  writeCell(ws, totalRow, 0,  mkCell('SUBTOTAL',  totalStyle('left')));
-  writeCell(ws, totalRow, 1,  mkCell('',          totalStyle()));
+  writeCell(ws, totalRow, 0,  mkCell('SUBTOTAL',       totalStyle('left')));
+  writeCell(ws, totalRow, 1,  mkCell('',               totalStyle()));
   writeCell(ws, totalRow, 2,  mkCell('Contract Works', totalStyle('left')));
-  writeCell(ws, totalRow, 3,  mkCell('',          totalStyle()));
-  writeCell(ws, totalRow, 4,  mkCell('',          totalStyle()));
-  writeCell(ws, totalRow, 5,  mkCell('',          totalStyle()));
-  writeCell(ws, totalRow, 6,  mkCell('',          totalStyle()));
-  writeCell(ws, totalRow, 7,  mkCell(total,       totalStyle('right', CURR_FMT)));
-  writeCell(ws, totalRow, 8,  mkCell('',          totalStyle()));
-  writeCell(ws, totalRow, 9,  mkCell(prevTotal,   totalStyle('right', CURR_FMT)));
-  writeCell(ws, totalRow, 10, mkCell('',          totalStyle()));
-  writeCell(ws, totalRow, 11, mkCell(currTotal,   totalStyle('right', CURR_FMT)));
-  writeCell(ws, totalRow, 12, mkCell(thisTotal,   totalStyle('right', CURR_FMT, thisTotal > 0 ? GREEN : INK)));
+  writeCell(ws, totalRow, 3,  mkCell('',               totalStyle()));
+  writeCell(ws, totalRow, 4,  mkCell('',               totalStyle()));
+  writeCell(ws, totalRow, 5,  mkCell('',               totalStyle()));
+  writeCell(ws, totalRow, 6,  mkCell('',               totalStyle()));
+  writeCell(ws, totalRow, 7,  mkCell(total,            totalStyle('right'), CURR_FMT));
+  writeCell(ws, totalRow, 8,  mkCell('',               totalStyle()));
+  writeCell(ws, totalRow, 9,  mkCell(prevTotal,        totalStyle('right'), CURR_FMT));
+  writeCell(ws, totalRow, 10, mkCell('',               totalStyle()));
+  writeCell(ws, totalRow, 11, mkCell(currTotal,        totalStyle('right'), CURR_FMT));
+  writeCell(ws, totalRow, 12, mkCell(thisTotal,        totalStyle('right', thisTotal > 0 ? GREEN : INK), CURR_FMT));
 
   setRange(ws, totalRow + 1, HDR_COLS);
 
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: HDR_COLS - 1 } }];
 
   ws['!cols'] = [
-    { wch: 5  },  // #
-    { wch: 8  },  // Item
-    { wch: 38 },  // Description
-    { wch: 14 },  // Section
-    { wch: 6  },  // Unit
-    { wch: 8  },  // Qty
-    { wch: 12 },  // Rate
-    { wch: 14 },  // Contract Value
-    { wch: 9  },  // Prev %
-    { wch: 14 },  // Prev Value
-    { wch: 9  },  // Curr %
-    { wch: 14 },  // Curr Value
-    { wch: 14 },  // This Valuation
+    { wch: 5  }, { wch: 8  }, { wch: 38 }, { wch: 14 }, { wch: 6  },
+    { wch: 8  }, { wch: 12 }, { wch: 14 }, { wch: 9  }, { wch: 14 },
+    { wch: 9  }, { wch: 14 }, { wch: 14 },
   ];
 
-  // Freeze header rows (orange bar + column headers)
-  ws['!freeze'] = { xSplit: 0, ySplit: 2, topLeftCell: 'A3', activePane: 'bottomLeft' };
-
-  // Autofilter on header row (row index 1)
+  // FIX: use !views for frozen panes — !freeze is not a SheetJS property
+  freezeRows(ws, 2);
   ws['!autofilter'] = { ref: `A2:${colLetter(HDR_COLS - 1)}2` };
-
-  // Page setup — landscape
-  ws['!pageSetup'] = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+  // FIX: paperSize + orientation only — no fitToPage/fitToWidth/fitToHeight
+  ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape' };
 
   return ws;
 }
@@ -409,27 +394,22 @@ function buildContractWorksSheet(lineData: LineData[]): XLSX.WorkSheet {
 
 function buildVariationsSheet(extraData: ExtraData[]): XLSX.WorkSheet {
   const ws: XLSX.WorkSheet = {};
-
   const HDR_COLS = 8;
 
-  // Section header (row 0)
   writeCell(ws, 0, 0, mkCell('EXTRAS / AGREED VARIATIONS', sectionHeaderStyle()));
   for (let c = 1; c < HDR_COLS; c++) writeCell(ws, 0, c, mkCell('', { fill: solidFill(ORANGE) }));
 
-  // Column headers (row 1)
   const headers: [string, Align][] = [
-    ['Ref',           'left'],
-    ['Description',   'left'],
-    ['Agreed Value',  'right'],
-    ['Prev %',        'right'],
-    ['Prev Value',    'right'],
-    ['Curr %',        'right'],
-    ['Curr Value',    'right'],
-    ['This Valuation','right'],
+    ['Ref',            'left'],
+    ['Description',    'left'],
+    ['Agreed Value',   'right'],
+    ['Prev %',         'right'],
+    ['Prev Value',     'right'],
+    ['Curr %',         'right'],
+    ['Curr Value',     'right'],
+    ['This Valuation', 'right'],
   ];
-  headers.forEach(([label, align], c) => {
-    writeCell(ws, 1, c, mkCell(label, tableHeaderStyle(align)));
-  });
+  headers.forEach(([label, align], c) => writeCell(ws, 1, c, mkCell(label, tableHeaderStyle(align))));
 
   let maxRow = 2;
   extraData.forEach(({ extra, entry }, idx) => {
@@ -439,25 +419,23 @@ function buildVariationsSheet(extraData: ExtraData[]): XLSX.WorkSheet {
     const currVal = extra.agreed_value * entry.current_pct  / 100;
     const thisVal = currVal - prevVal;
 
-    writeCell(ws, r, 0, mkCell(extra.ref ?? '',       mutedCellStyle('left',  stripe)));
-    writeCell(ws, r, 1, mkCell(extra.description,     cellStyle('left',  stripe)));
-    writeCell(ws, r, 2, mkCell(extra.agreed_value,    boldCellStyle('right', stripe, CURR_FMT)));
-    writeCell(ws, r, 3, mkCell(entry.previous_pct,    mutedCellStyle('right', stripe, PCT_FMT)));
-    writeCell(ws, r, 4, mkCell(prevVal,               mutedCellStyle('right', stripe, CURR_FMT)));
-    writeCell(ws, r, 5, mkCell(entry.current_pct,     boldCellStyle('right', stripe, PCT_FMT)));
-    writeCell(ws, r, 6, mkCell(currVal,               boldCellStyle('right', stripe, CURR_FMT)));
+    writeCell(ws, r, 0, mkCell(extra.ref ?? '',    mutedCellStyle('left',  stripe)));
+    writeCell(ws, r, 1, mkCell(extra.description,  cellStyle('left',  stripe)));
+    writeCell(ws, r, 2, mkCell(extra.agreed_value, boldCellStyle('right', stripe), CURR_FMT));
+    writeCell(ws, r, 3, mkCell(entry.previous_pct, mutedCellStyle('right', stripe), PCT_FMT));
+    writeCell(ws, r, 4, mkCell(prevVal,            mutedCellStyle('right', stripe), CURR_FMT));
+    writeCell(ws, r, 5, mkCell(entry.current_pct,  boldCellStyle('right', stripe), PCT_FMT));
+    writeCell(ws, r, 6, mkCell(currVal,            boldCellStyle('right', stripe), CURR_FMT));
     writeCell(ws, r, 7, mkCell(thisVal, {
       font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: thisVal > 0 ? GREEN : (thisVal < 0 ? RED_ : INK) } },
       fill:      solidFill(stripe ? STRIPE : WHITE),
       alignment: { horizontal: 'right', vertical: 'top' },
       border:    bottomBorder(),
-      numFmt:    CURR_FMT,
-    }));
+    }, CURR_FMT));
 
     maxRow = r + 1;
   });
 
-  // Totals row
   const totalRow    = maxRow;
   const agreedTotal = extraData.reduce((s, d) => s + d.extra.agreed_value, 0);
   const prevTotal   = extraData.reduce((s, d) => s + d.extra.agreed_value * d.entry.previous_pct / 100, 0);
@@ -466,31 +444,25 @@ function buildVariationsSheet(extraData: ExtraData[]): XLSX.WorkSheet {
 
   writeCell(ws, totalRow, 0, mkCell('SUBTOTAL',                   totalStyle('left')));
   writeCell(ws, totalRow, 1, mkCell('Extras / Agreed Variations', totalStyle('left')));
-  writeCell(ws, totalRow, 2, mkCell(agreedTotal,                  totalStyle('right', CURR_FMT)));
+  writeCell(ws, totalRow, 2, mkCell(agreedTotal,                  totalStyle('right'), CURR_FMT));
   writeCell(ws, totalRow, 3, mkCell('',                           totalStyle()));
-  writeCell(ws, totalRow, 4, mkCell(prevTotal,                    totalStyle('right', CURR_FMT)));
+  writeCell(ws, totalRow, 4, mkCell(prevTotal,                    totalStyle('right'), CURR_FMT));
   writeCell(ws, totalRow, 5, mkCell('',                           totalStyle()));
-  writeCell(ws, totalRow, 6, mkCell(currTotal,                    totalStyle('right', CURR_FMT)));
-  writeCell(ws, totalRow, 7, mkCell(thisTotal,                    totalStyle('right', CURR_FMT, thisTotal > 0 ? GREEN : INK)));
+  writeCell(ws, totalRow, 6, mkCell(currTotal,                    totalStyle('right'), CURR_FMT));
+  writeCell(ws, totalRow, 7, mkCell(thisTotal,                    totalStyle('right', thisTotal > 0 ? GREEN : INK), CURR_FMT));
 
   setRange(ws, totalRow + 1, HDR_COLS);
 
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: HDR_COLS - 1 } }];
 
   ws['!cols'] = [
-    { wch: 10 },  // Ref
-    { wch: 40 },  // Description
-    { wch: 14 },  // Agreed Value
-    { wch: 9  },  // Prev %
-    { wch: 14 },  // Prev Value
-    { wch: 9  },  // Curr %
-    { wch: 14 },  // Curr Value
-    { wch: 14 },  // This Valuation
+    { wch: 10 }, { wch: 40 }, { wch: 14 }, { wch: 9 },
+    { wch: 14 }, { wch: 9  }, { wch: 14 }, { wch: 14 },
   ];
 
-  ws['!freeze']     = { xSplit: 0, ySplit: 2, topLeftCell: 'A3', activePane: 'bottomLeft' };
+  freezeRows(ws, 2);
   ws['!autofilter'] = { ref: `A2:${colLetter(HDR_COLS - 1)}2` };
-  ws['!pageSetup']  = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+  ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape' };
 
   return ws;
 }
@@ -507,13 +479,13 @@ function buildSummarySheet(
 
   let row = 0;
 
-  // Section header
+  // Section header — spans A:B
   writeCell(ws, row, 0, mkCell('VALUATION SUMMARY', sectionHeaderStyle()));
   writeCell(ws, row, 1, mkCell('', { fill: solidFill(ORANGE) }));
   row++;
 
-  // Sub-header: valuation ref + title
-  writeCell(ws, row, 0, mkCell(`${valuation.ref}  —  ${valuation.title}`, {
+  // Sub-header — A and B are separate cells (no single-cell merge)
+  writeCell(ws, row, 0, mkCell(`${valuation.ref}  \u2014  ${valuation.title}`, {
     font:      { name: 'Calibri', sz: 11, bold: true, color: { rgb: INK } },
     fill:      solidFill(LIGHT),
     alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
@@ -527,37 +499,37 @@ function buildSummarySheet(
 
   // Spacer
   writeCell(ws, row, 0, mkCell('', { fill: solidFill(WHITE) }));
+  writeCell(ws, row, 1, mkCell('', { fill: solidFill(WHITE) }));
   row++;
 
-  // Summary rows
   const retPct = totals.retentionPct ?? 0;
   const mcdPct = totals.mcdPct ?? 0;
   const retAmt = totals.retentionAmt ?? 0;
   const mcdAmt = totals.mcdAmt ?? 0;
   const netVal = totals.netValuation ?? totals.amountDue;
 
-  const summaryRows: [string, number, boolean, string?][] = [
-    ['Original Contract Value',          totals.contractOriginal,  false],
-    ['Extras / Agreed Variations Total', totals.extrasOriginal,    false],
-    ['Gross Valuation to Date',          totals.grossToDate,       true],
-    ['Less: Previous Valuation Total',   -totals.previousTotal,    false],
-    ['Current Amount Due',               totals.amountDue,         false],
+  const summaryRows: [string, number, boolean][] = [
+    ['Original Contract Value',          totals.contractOriginal, false],
+    ['Extras / Agreed Variations Total', totals.extrasOriginal,   false],
+    ['Gross Valuation to Date',          totals.grossToDate,      true],
+    ['Less: Previous Valuation Total',   -totals.previousTotal,   false],
+    ['Current Amount Due',               totals.amountDue,        false],
   ];
-
   if (retPct > 0) summaryRows.push([`Less: Retention (${retPct.toFixed(2)}%)`, -retAmt, false]);
   if (mcdPct > 0) summaryRows.push([`Less: MCD (${mcdPct.toFixed(2)}%)`,       -mcdAmt, false]);
 
   for (const [label, value, bold] of summaryRows) {
     writeCell(ws, row, 0, mkCell(label,  summaryLabelStyle(bold)));
-    writeCell(ws, row, 1, mkCell(value,  summaryValueStyle(bold)));
+    writeCell(ws, row, 1, mkCell(value,  summaryValueStyle(bold), CURR_FMT));
     row++;
   }
 
   // Spacer
   writeCell(ws, row, 0, mkCell('', { fill: solidFill(WHITE) }));
+  writeCell(ws, row, 1, mkCell('', { fill: solidFill(WHITE) }));
   row++;
 
-  // Net valuation due — prominent box
+  // Net valuation due — prominent highlight row
   const netLabel = (retPct > 0 || mcdPct > 0) ? 'NET VALUATION DUE' : 'AMOUNT DUE THIS VALUATION';
   writeCell(ws, row, 0, mkCell(netLabel, {
     font:      { name: 'Calibri', sz: 13, bold: true, color: { rgb: GREEN } },
@@ -570,25 +542,21 @@ function buildSummarySheet(
     fill:      { patternType: 'solid', fgColor: { rgb: 'EAF9F3' }, bgColor: { rgb: 'EAF9F3' } },
     alignment: { horizontal: 'right', vertical: 'middle' },
     border:    thinBorder(GREEN),
-    numFmt:    CURR_FMT,
-  }));
+  }, CURR_FMT));
   row++;
 
   setRange(ws, row + 1, 2);
 
+  // FIX: only merge cells that span more than one column.
+  // The old code had { s:{r:1,c:0}, e:{r:1,c:0} } — a degenerate single-cell
+  // merge that is invalid in OpenXML and triggers Excel repair.
   ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 0 } },
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } },   // section header A:B
   ];
 
   ws['!cols'] = [{ wch: 38 }, { wch: 18 }];
-
-  ws['!rows'] = [
-    { hpt: 28 },  // section header
-    { hpt: 24 },  // valuation ref
-  ];
-
-  ws['!pageSetup'] = { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+  ws['!rows'] = [{ hpt: 28 }, { hpt: 24 }];
+  ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait' };
 
   return ws;
 }
@@ -612,14 +580,14 @@ export async function buildValuationXlsx(
     Company: companyName || 'VYSITE',
   };
 
-  XLSX.utils.book_append_sheet(wb, buildCoverSheet(valuation, project, companyName),    'Cover');
+  XLSX.utils.book_append_sheet(wb, buildCoverSheet(valuation, project, companyName), 'Cover');
   if (lineData.length > 0) {
-    XLSX.utils.book_append_sheet(wb, buildContractWorksSheet(lineData),                 'Contract Works');
+    XLSX.utils.book_append_sheet(wb, buildContractWorksSheet(lineData), 'Contract Works');
   }
   if (extraData.length > 0) {
-    XLSX.utils.book_append_sheet(wb, buildVariationsSheet(extraData),                   'Variations');
+    XLSX.utils.book_append_sheet(wb, buildVariationsSheet(extraData), 'Variations');
   }
-  XLSX.utils.book_append_sheet(wb, buildSummarySheet(valuation, totals),               'Valuation Summary');
+  XLSX.utils.book_append_sheet(wb, buildSummarySheet(valuation, totals), 'Valuation Summary');
 
   const xlsxBytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
   const blob = new Blob([xlsxBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
