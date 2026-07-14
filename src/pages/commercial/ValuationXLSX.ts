@@ -1,507 +1,535 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import type { DBValuation } from '../../lib/store';
 import type { Project } from '../../data/types';
 import type { LineData, ExtraData, ValuationTotals } from './ValuationPDF';
-import { patchXlsxMetadata } from './patchXlsx';
 
-// ─── Brand palette (hex, no #) ────────────────────────────────────────────────
-const ORANGE  = 'F97316';
-const INK     = '0E1729';
-const BODY    = '1E3050';
-const MUTED   = '617090';
-const LIGHT   = 'EFF2F6';
-const STRIPE  = 'F8F9FB';
-const GREEN   = '0FA56F';
-const RED_    = 'CC3333';
-const WHITE   = 'FFFFFF';
-const RULE    = 'DDE2EA';
+// ─── Palette (ExcelJS uses ARGB hex: FF = fully opaque) ──────────────────────
+const C = {
+  ORANGE: 'FFF97316',
+  INK:    'FF0E1729',
+  BODY:   'FF1E3050',
+  MUTED:  'FF617090',
+  LIGHT:  'FFEFF2F6',
+  STRIPE: 'FFF8F9FB',
+  GREEN:  'FF0FA56F',
+  RED:    'FFCC3333',
+  WHITE:  'FFFFFFFF',
+  RULE:   'FFDDE2EA',
+} as const;
 
-// ─── Number formats ───────────────────────────────────────────────────────────
 const CURR_FMT = '"£"#,##0.00';
-const PCT_FMT  = '0.00"%"';   // values stored as 0-100, not 0-1
+const PCT_FMT  = '0.00"%"';  // values are 0-100, not 0-1
 
-// ─── Style primitives ─────────────────────────────────────────────────────────
+// ─── Style helpers ────────────────────────────────────────────────────────────
 
-type Align = 'left' | 'right' | 'center';
+type Align  = 'left' | 'right' | 'center';
+type VAlign = 'top'  | 'middle' | 'bottom';
 
-// NOTE: numFmt is intentionally ABSENT from CellStyle.
-// It is set on the cell via the `z` property to avoid undefined keys polluting
-// styles.xml (which causes Excel repair dialogs).
-interface CellStyle {
-  font?:      object;
-  fill?:      object;
-  alignment?: object;
-  border?:    object;
+function fill(argb: string): ExcelJS.Fill {
+  return { type: 'pattern', pattern: 'solid', fgColor: { argb } };
 }
 
-function solidFill(hex: string) {
-  return { patternType: 'solid', fgColor: { rgb: hex }, bgColor: { rgb: hex } };
+function font(
+  size: number, bold = false, argb = C.INK,
+  name = 'Calibri',
+): Partial<ExcelJS.Font> {
+  return { name, size, bold, color: { argb } };
 }
 
-function thinBorder(color = RULE) {
-  const side = { style: 'thin', color: { rgb: color } };
-  return { top: side, bottom: side, left: side, right: side };
+function align(
+  horizontal: Align, vertical: VAlign = 'middle', wrapText = false,
+): Partial<ExcelJS.Alignment> {
+  return { horizontal, vertical, wrapText };
 }
 
-function bottomBorder(color = RULE) {
-  return { bottom: { style: 'thin', color: { rgb: color } } };
+function thinSide(argb: string): Partial<ExcelJS.BorderLine> {
+  return { style: 'thin', color: { argb } };
+}
+function medSide(argb: string): Partial<ExcelJS.BorderLine> {
+  return { style: 'medium', color: { argb } };
 }
 
-function sectionHeaderStyle(): CellStyle {
-  return {
-    font:      { name: 'Calibri', sz: 10, bold: true, color: { rgb: WHITE } },
-    fill:      solidFill(ORANGE),
-    alignment: { horizontal: 'left', vertical: 'middle' },
-    border:    thinBorder(ORANGE),
-  };
+function box(argb = C.RULE): Partial<ExcelJS.Borders> {
+  const s = thinSide(argb);
+  return { top: s, bottom: s, left: s, right: s };
 }
 
-function tableHeaderStyle(align: Align = 'left'): CellStyle {
-  return {
-    font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: MUTED } },
-    fill:      solidFill(LIGHT),
-    alignment: { horizontal: align, vertical: 'middle' },
-    border:    { bottom: { style: 'medium', color: { rgb: RULE } } },
-  };
+function bottomOnly(argb = C.RULE): Partial<ExcelJS.Borders> {
+  return { bottom: thinSide(argb) };
 }
 
-function cellStyle(align: Align = 'left', stripe = false): CellStyle {
-  return {
-    font:      { name: 'Calibri', sz: 9, color: { rgb: BODY } },
-    fill:      solidFill(stripe ? STRIPE : WHITE),
-    alignment: { horizontal: align, vertical: 'top', wrapText: align === 'left' },
-    border:    bottomBorder(),
-  };
+function topBottom(argb = C.RULE): Partial<ExcelJS.Borders> {
+  return { top: medSide(argb), bottom: medSide(argb) };
 }
 
-function boldCellStyle(align: Align = 'left', stripe = false): CellStyle {
-  return {
-    font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: INK } },
-    fill:      solidFill(stripe ? STRIPE : WHITE),
-    alignment: { horizontal: align, vertical: 'top', wrapText: align === 'left' },
-    border:    bottomBorder(),
-  };
+// Apply a style object to a cell in one call
+function style(
+  cell: ExcelJS.Cell,
+  opts: {
+    font?:      Partial<ExcelJS.Font>;
+    fill?:      ExcelJS.Fill;
+    alignment?: Partial<ExcelJS.Alignment>;
+    border?:    Partial<ExcelJS.Borders>;
+    numFmt?:    string;
+  },
+) {
+  if (opts.font)      cell.font      = opts.font;
+  if (opts.fill)      cell.fill      = opts.fill;
+  if (opts.alignment) cell.alignment = opts.alignment;
+  if (opts.border)    cell.border    = opts.border;
+  if (opts.numFmt)    cell.numFmt    = opts.numFmt;
 }
 
-function mutedCellStyle(align: Align = 'left', stripe = false): CellStyle {
-  return {
-    font:      { name: 'Calibri', sz: 9, color: { rgb: MUTED } },
-    fill:      solidFill(stripe ? STRIPE : WHITE),
-    alignment: { horizontal: align, vertical: 'top' },
-    border:    bottomBorder(),
-  };
+// ─── Reusable cell styles ─────────────────────────────────────────────────────
+
+function applyOrangeHeader(cell: ExcelJS.Cell) {
+  style(cell, {
+    font:      font(10, true, C.WHITE),
+    fill:      fill(C.ORANGE),
+    alignment: align('left', 'middle'),
+    border:    box(C.ORANGE),
+  });
 }
 
-function totalStyle(align: Align = 'left', colorHex?: string): CellStyle {
-  return {
-    font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: colorHex ?? INK } },
-    fill:      solidFill(LIGHT),
-    alignment: { horizontal: align, vertical: 'middle' },
-    border:    { top: { style: 'medium', color: { rgb: RULE } }, bottom: { style: 'medium', color: { rgb: RULE } } },
-  };
+function applyColHeader(cell: ExcelJS.Cell, h: Align = 'left') {
+  style(cell, {
+    font:      font(9, true, C.MUTED),
+    fill:      fill(C.LIGHT),
+    alignment: align(h, 'middle'),
+    border:    { bottom: medSide(C.RULE) },
+  });
 }
 
-function coverLabelStyle(): CellStyle {
-  return {
-    font:      { name: 'Calibri', sz: 8, bold: true, color: { rgb: MUTED } },
-    fill:      solidFill(WHITE),
-    alignment: { horizontal: 'left', vertical: 'bottom' },
-  };
+function applyDataCell(
+  cell: ExcelJS.Cell,
+  h: Align, stripe: boolean,
+  bold = false, argb?: string, wrap = false, vAlign: VAlign = 'top',
+) {
+  style(cell, {
+    font:      font(9, bold, argb ?? (bold ? C.INK : C.BODY)),
+    fill:      fill(stripe ? C.STRIPE : C.WHITE),
+    alignment: align(h, vAlign, wrap),
+    border:    bottomOnly(),
+  });
 }
 
-function coverValueStyle(): CellStyle {
-  return {
-    font:      { name: 'Calibri', sz: 11, bold: true, color: { rgb: INK } },
-    fill:      solidFill(WHITE),
-    alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
-  };
+function applyTotalCell(cell: ExcelJS.Cell, h: Align, argb?: string) {
+  style(cell, {
+    font:      font(9, true, argb ?? C.INK),
+    fill:      fill(C.LIGHT),
+    alignment: align(h, 'middle'),
+    border:    topBottom(),
+  });
 }
 
-function summaryLabelStyle(bold = false): CellStyle {
-  return {
-    font:      { name: 'Calibri', sz: 11, bold, color: { rgb: bold ? INK : BODY } },
-    fill:      solidFill(WHITE),
-    alignment: { horizontal: 'left', vertical: 'middle' },
-    border:    bottomBorder(),
-  };
-}
-
-function summaryValueStyle(bold = false, colorHex?: string): CellStyle {
-  return {
-    font:      { name: 'Calibri', sz: 11, bold, color: { rgb: colorHex ?? (bold ? INK : BODY) } },
-    fill:      solidFill(WHITE),
-    alignment: { horizontal: 'right', vertical: 'middle' },
-    border:    bottomBorder(),
-  };
-}
-
-// ─── Worksheet cell builder ───────────────────────────────────────────────────
-
-// z is the SheetJS cell number-format string — separate from the style object.
-// This avoids corrupt styles.xml entries from undefined numFmt keys.
-type WsCell = { v: string | number; t: 's' | 'n'; s?: CellStyle; z?: string };
-
-function mkCell(v: string | number | null, s?: CellStyle, z?: string): WsCell {
-  const base: WsCell = (v === null || v === undefined)
-    ? { v: '', t: 's' }
-    : { v, t: typeof v === 'number' ? 'n' : 's' };
-  if (s) base.s = s;
-  if (z) base.z = z;
-  return base;
-}
-
-function colLetter(n: number): string {
-  let out = '';
-  let idx = n + 1;
-  while (idx > 0) { out = String.fromCharCode(65 + ((idx - 1) % 26)) + out; idx = Math.floor((idx - 1) / 26); }
-  return out;
-}
-
-function cellRef(r: number, c: number): string { return `${colLetter(c)}${r + 1}`; }
-
-function writeCell(ws: XLSX.WorkSheet, r: number, c: number, cell: WsCell) {
-  ws[cellRef(r, c)] = cell;
-}
-
-function setRange(ws: XLSX.WorkSheet, rows: number, cols: number) {
-  ws['!ref'] = `A1:${colLetter(cols - 1)}${rows}`;
-}
-
-// ─── FIX: frozen panes use !views, NOT the non-existent !freeze property ──────
-// !freeze does not exist in SheetJS; it writes garbage XML that triggers repair.
-function freezeRows(ws: XLSX.WorkSheet, ySplit: number) {
-  const topLeftCell = `A${ySplit + 1}`;
-  ws['!views'] = [{ state: 'frozen', ySplit, topLeftCell }];
-}
-
-// ─── Dates ────────────────────────────────────────────────────────────────────
+// ─── Utility ──────────────────────────────────────────────────────────────────
 
 function fmtDate(iso?: string | null): string {
   if (!iso) return '';
-  try { return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }); }
-  catch { return iso; }
+  try {
+    return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  } catch { return iso; }
 }
 
-function capitalize(s: string): string {
+function cap(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+function issueDate(): string {
+  return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
 // ─── Sheet 1: Cover ───────────────────────────────────────────────────────────
 
 function buildCoverSheet(
+  wb: ExcelJS.Workbook,
   valuation: DBValuation,
   project: Project,
-  companyName?: string,
-): XLSX.WorkSheet {
-  const ws: XLSX.WorkSheet = {};
+  companyName: string,
+) {
+  const ws = wb.addWorksheet('Commercial Valuation', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
 
-  const issueDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-
-  // Orange brand bar (row 0) — merged A:D
-  writeCell(ws, 0, 0, mkCell(companyName || 'VYSITE', {
-    font:      { name: 'Calibri', sz: 16, bold: true, color: { rgb: WHITE } },
-    fill:      solidFill(ORANGE),
-    alignment: { horizontal: 'left', vertical: 'middle' },
-  }));
-  for (let c = 1; c <= 3; c++) writeCell(ws, 0, c, mkCell('', { fill: solidFill(ORANGE) }));
-
-  // Eyebrow (row 1)
-  writeCell(ws, 1, 0, mkCell('COMMERCIAL VALUATION', {
-    font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: MUTED } },
-    fill:      solidFill(WHITE),
-    alignment: { horizontal: 'left', vertical: 'middle' },
-  }));
-
-  // Main title (row 2)
-  writeCell(ws, 2, 0, mkCell(valuation.title, {
-    font:      { name: 'Calibri', sz: 20, bold: true, color: { rgb: INK } },
-    fill:      solidFill(WHITE),
-    alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
-  }));
-
-  // Reference (row 3)
-  writeCell(ws, 3, 0, mkCell(valuation.ref, {
-    font:      { name: 'Calibri', sz: 12, bold: true, color: { rgb: ORANGE } },
-    fill:      { patternType: 'solid', fgColor: { rgb: 'FFF4EC' }, bgColor: { rgb: 'FFF4EC' } },
-    alignment: { horizontal: 'left', vertical: 'middle' },
-    border:    thinBorder(ORANGE),
-  }));
-
-  // Spacer (row 4)
-  writeCell(ws, 4, 0, mkCell('', { fill: solidFill(WHITE) }));
-
-  // Section header (row 5) — merged A:D
-  writeCell(ws, 5, 0, mkCell('VALUATION DETAILS', sectionHeaderStyle()));
-  for (let c = 1; c <= 3; c++) writeCell(ws, 5, c, mkCell('', { fill: solidFill(ORANGE) }));
-
-  const meta: [string, string][] = [
-    ['Project',        project.name || ''],
-    ['Client',         valuation.client || ''],
-    ['Contractor',     valuation.contractor || ''],
-    ['Valuation Date', fmtDate(valuation.valuation_date)],
-    ['Issue Date',     issueDate],
-    ['Period',         valuation.period || ''],
-    ['Status',         capitalize(valuation.status)],
+  ws.columns = [
+    { width: 22 }, { width: 22 }, { width: 22 }, { width: 22 },
   ];
 
-  let row = 6;
-  const notesMerges: XLSX.Range[] = [];
+  // Row 1 — Company name / brand bar
+  ws.mergeCells('A1:D1');
+  const r1 = ws.getRow(1);
+  r1.height = 36;
+  const c1 = ws.getCell('A1');
+  c1.value = companyName || 'VYSITE';
+  style(c1, {
+    font:      font(16, true, C.WHITE),
+    fill:      fill(C.ORANGE),
+    alignment: align('left', 'middle'),
+    border:    box(C.ORANGE),
+  });
 
+  // Row 2 — Eyebrow label
+  ws.mergeCells('A2:D2');
+  ws.getRow(2).height = 18;
+  const c2 = ws.getCell('A2');
+  c2.value = 'COMMERCIAL VALUATION';
+  style(c2, {
+    font:      font(8, true, C.MUTED),
+    fill:      fill(C.WHITE),
+    alignment: align('left', 'middle'),
+  });
+
+  // Row 3 — Valuation title
+  ws.mergeCells('A3:D3');
+  ws.getRow(3).height = 40;
+  const c3 = ws.getCell('A3');
+  c3.value = valuation.title;
+  style(c3, {
+    font:      font(20, true, C.INK),
+    fill:      fill(C.WHITE),
+    alignment: align('left', 'middle', true),
+  });
+
+  // Row 4 — Reference badge
+  ws.mergeCells('A4:D4');
+  ws.getRow(4).height = 24;
+  const c4 = ws.getCell('A4');
+  c4.value = valuation.ref;
+  style(c4, {
+    font:      font(12, true, C.ORANGE),
+    fill:      fill('FFFFF4EC'),
+    alignment: align('left', 'middle'),
+    border:    box(C.ORANGE),
+  });
+
+  // Row 5 — Spacer
+  ws.mergeCells('A5:D5');
+  ws.getCell('A5').fill = fill(C.WHITE);
+
+  // Row 6 — Section header
+  ws.mergeCells('A6:D6');
+  ws.getRow(6).height = 22;
+  const c6 = ws.getCell('A6');
+  c6.value = 'VALUATION DETAILS';
+  applyOrangeHeader(c6);
+
+  const meta: [string, string][] = [
+    ['PROJECT',        project.name || ''],
+    ['CLIENT',         valuation.client || ''],
+    ['CONTRACTOR',     valuation.contractor || ''],
+    ['VALUATION DATE', fmtDate(valuation.valuation_date)],
+    ['ISSUE DATE',     issueDate()],
+    ['PERIOD',         valuation.period || ''],
+    ['STATUS',         cap(valuation.status)],
+  ];
+
+  let row = 7;
   for (const [label, value] of meta) {
-    writeCell(ws, row,     0, mkCell(label.toUpperCase(), coverLabelStyle()));
-    writeCell(ws, row + 1, 0, mkCell(value || '\u2014', coverValueStyle()));
-    writeCell(ws, row + 2, 0, mkCell('', { fill: solidFill(WHITE), border: bottomBorder() }));
-    row += 3;
+    ws.mergeCells(`A${row}:D${row}`);
+    const labelCell = ws.getCell(`A${row}`);
+    labelCell.value = label;
+    style(labelCell, {
+      font:      font(8, true, C.MUTED),
+      fill:      fill(C.WHITE),
+      alignment: align('left', 'bottom'),
+    });
+    ws.getRow(row).height = 14;
+    row++;
+
+    ws.mergeCells(`A${row}:D${row}`);
+    const valCell = ws.getCell(`A${row}`);
+    valCell.value = value || '—';
+    style(valCell, {
+      font:      font(11, true, C.INK),
+      fill:      fill(C.WHITE),
+      alignment: align('left', 'top', true),
+    });
+    ws.getRow(row).height = 18;
+    row++;
+
+    // Thin divider
+    ws.mergeCells(`A${row}:D${row}`);
+    const div = ws.getCell(`A${row}`);
+    div.fill   = fill(C.WHITE);
+    div.border = { bottom: thinSide(C.RULE) };
+    ws.getRow(row).height = 4;
+    row++;
   }
 
   if (valuation.notes) {
-    writeCell(ws, row, 0, mkCell('NOTES', sectionHeaderStyle()));
-    for (let c = 1; c <= 3; c++) writeCell(ws, row, c, mkCell('', { fill: solidFill(ORANGE) }));
-    const notesRow = row;
+    ws.mergeCells(`A${row}:D${row}`);
+    const hdr = ws.getCell(`A${row}`);
+    hdr.value = 'NOTES';
+    applyOrangeHeader(hdr);
+    ws.getRow(row).height = 22;
     row++;
-    writeCell(ws, row, 0, mkCell(valuation.notes, {
-      font:      { name: 'Calibri', sz: 10, color: { rgb: BODY } },
-      fill:      solidFill(LIGHT),
-      alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
-    }));
-    // Only push a merge if it spans more than one column (never degenerate)
-    notesMerges.push({ s: { r: notesRow, c: 0 }, e: { r: notesRow, c: 3 } });
-    notesMerges.push({ s: { r: row, c: 0 }, e: { r: row, c: 3 } });
-    row++;
+
+    ws.mergeCells(`A${row}:D${row}`);
+    const notes = ws.getCell(`A${row}`);
+    notes.value = valuation.notes;
+    style(notes, {
+      font:      font(10, false, C.BODY),
+      fill:      fill(C.LIGHT),
+      alignment: align('left', 'top', true),
+    });
+    ws.getRow(row).height = 60;
   }
-
-  setRange(ws, row + 1, 4);
-
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 3 } },
-    { s: { r: 3, c: 0 }, e: { r: 3, c: 3 } },
-    { s: { r: 5, c: 0 }, e: { r: 5, c: 3 } },
-    ...notesMerges,
-  ];
-
-  ws['!cols'] = [{ wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 22 }];
-  ws['!rows'] = [
-    { hpt: 36 },
-    { hpt: 18 },
-    { hpt: 40 },
-    { hpt: 24 },
-  ];
-
-  // FIX: no !printSetup (non-existent property), no fitToPage+fitToWidth combo.
-  // paperSize 9 = A4; orientation only, no conflicting scale attributes.
-  ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait' };
-
-  return ws;
 }
 
 // ─── Sheet 2: Contract Works ──────────────────────────────────────────────────
 
-function buildContractWorksSheet(lineData: LineData[]): XLSX.WorkSheet {
-  const ws: XLSX.WorkSheet = {};
-  const HDR_COLS = 13;
-
-  writeCell(ws, 0, 0, mkCell('CONTRACT WORKS', sectionHeaderStyle()));
-  for (let c = 1; c < HDR_COLS; c++) writeCell(ws, 0, c, mkCell('', { fill: solidFill(ORANGE) }));
-
-  const headers: [string, Align][] = [
-    ['#',              'right'],
-    ['Item',           'left'],
-    ['Description',    'left'],
-    ['Section',        'left'],
-    ['Unit',           'left'],
-    ['Qty',            'right'],
-    ['Rate',           'right'],
-    ['Contract Value', 'right'],
-    ['Prev %',         'right'],
-    ['Prev Value',     'right'],
-    ['Curr %',         'right'],
-    ['Curr Value',     'right'],
-    ['This Valuation', 'right'],
-  ];
-  headers.forEach(([label, align], c) => writeCell(ws, 1, c, mkCell(label, tableHeaderStyle(align))));
-
-  let maxRow = 2;
-  lineData.forEach(({ line, entry }, idx) => {
-    const r       = idx + 2;
-    const stripe  = idx % 2 === 1;
-    const prevVal = line.contract_value * entry.previous_pct / 100;
-    const currVal = line.contract_value * entry.current_pct  / 100;
-    const thisVal = currVal - prevVal;
-
-    writeCell(ws, r, 0,  mkCell(idx + 1,                           mutedCellStyle('right', stripe)));
-    writeCell(ws, r, 1,  mkCell(line.item_number ?? '',             mutedCellStyle('left',  stripe)));
-    writeCell(ws, r, 2,  mkCell(line.description,                   cellStyle('left',  stripe)));
-    writeCell(ws, r, 3,  mkCell(line.section ?? '',                 mutedCellStyle('left',  stripe)));
-    writeCell(ws, r, 4,  mkCell(line.unit ?? '',                    mutedCellStyle('left',  stripe)));
-    writeCell(ws, r, 5,  mkCell(line.quantity != null ? line.quantity : '', mutedCellStyle('right', stripe)));
-    writeCell(ws, r, 6,  mkCell(line.rate     != null ? line.rate     : '', mutedCellStyle('right', stripe), CURR_FMT));
-    writeCell(ws, r, 7,  mkCell(line.contract_value,                boldCellStyle('right', stripe), CURR_FMT));
-    writeCell(ws, r, 8,  mkCell(entry.previous_pct,                 mutedCellStyle('right', stripe), PCT_FMT));
-    writeCell(ws, r, 9,  mkCell(prevVal,                            mutedCellStyle('right', stripe), CURR_FMT));
-    writeCell(ws, r, 10, mkCell(entry.current_pct,                  boldCellStyle('right', stripe), PCT_FMT));
-    writeCell(ws, r, 11, mkCell(currVal,                            boldCellStyle('right', stripe), CURR_FMT));
-    writeCell(ws, r, 12, mkCell(thisVal, {
-      font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: thisVal > 0 ? GREEN : (thisVal < 0 ? RED_ : INK) } },
-      fill:      solidFill(stripe ? STRIPE : WHITE),
-      alignment: { horizontal: 'right', vertical: 'top' },
-      border:    bottomBorder(),
-    }, CURR_FMT));
-
-    maxRow = r + 1;
+function buildContractWorksSheet(
+  wb: ExcelJS.Workbook,
+  lineData: LineData[],
+) {
+  const ws = wb.addWorksheet('Contract Works', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+    views:     [{ state: 'frozen', ySplit: 2, xSplit: 0 }],
   });
 
-  const totalRow = maxRow;
-  const total     = lineData.reduce((s, d) => s + d.line.contract_value, 0);
-  const prevTotal = lineData.reduce((s, d) => s + d.line.contract_value * d.entry.previous_pct / 100, 0);
-  const currTotal = lineData.reduce((s, d) => s + d.line.contract_value * d.entry.current_pct  / 100, 0);
-  const thisTotal = currTotal - prevTotal;
-
-  writeCell(ws, totalRow, 0,  mkCell('SUBTOTAL',       totalStyle('left')));
-  writeCell(ws, totalRow, 1,  mkCell('',               totalStyle()));
-  writeCell(ws, totalRow, 2,  mkCell('Contract Works', totalStyle('left')));
-  writeCell(ws, totalRow, 3,  mkCell('',               totalStyle()));
-  writeCell(ws, totalRow, 4,  mkCell('',               totalStyle()));
-  writeCell(ws, totalRow, 5,  mkCell('',               totalStyle()));
-  writeCell(ws, totalRow, 6,  mkCell('',               totalStyle()));
-  writeCell(ws, totalRow, 7,  mkCell(total,            totalStyle('right'), CURR_FMT));
-  writeCell(ws, totalRow, 8,  mkCell('',               totalStyle()));
-  writeCell(ws, totalRow, 9,  mkCell(prevTotal,        totalStyle('right'), CURR_FMT));
-  writeCell(ws, totalRow, 10, mkCell('',               totalStyle()));
-  writeCell(ws, totalRow, 11, mkCell(currTotal,        totalStyle('right'), CURR_FMT));
-  writeCell(ws, totalRow, 12, mkCell(thisTotal,        totalStyle('right', thisTotal > 0 ? GREEN : INK), CURR_FMT));
-
-  setRange(ws, totalRow + 1, HDR_COLS);
-
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: HDR_COLS - 1 } }];
-
-  ws['!cols'] = [
-    { wch: 5  }, { wch: 8  }, { wch: 38 }, { wch: 14 }, { wch: 6  },
-    { wch: 8  }, { wch: 12 }, { wch: 14 }, { wch: 9  }, { wch: 14 },
-    { wch: 9  }, { wch: 14 }, { wch: 14 },
+  ws.columns = [
+    { width: 5  }, // A — #
+    { width: 9  }, // B — Item
+    { width: 40 }, // C — Description
+    { width: 14 }, // D — Section
+    { width: 6  }, // E — Unit
+    { width: 8  }, // F — Qty
+    { width: 13 }, // G — Rate
+    { width: 14 }, // H — Contract Value
+    { width: 9  }, // I — Prev %
+    { width: 14 }, // J — Prev Value
+    { width: 9  }, // K — Curr %
+    { width: 14 }, // L — Curr Value
+    { width: 14 }, // M — This Valuation
   ];
 
-  // FIX: use !views for frozen panes — !freeze is not a SheetJS property
-  freezeRows(ws, 2);
-  ws['!autofilter'] = { ref: `A2:${colLetter(HDR_COLS - 1)}2` };
-  // FIX: paperSize + orientation only — no fitToPage/fitToWidth/fitToHeight
-  ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape' };
+  // Row 1 — Section header
+  ws.mergeCells('A1:M1');
+  ws.getRow(1).height = 22;
+  const hdr = ws.getCell('A1');
+  hdr.value = 'CONTRACT WORKS';
+  applyOrangeHeader(hdr);
 
-  return ws;
+  // Row 2 — Column headers
+  const HEADERS: [string, Align][] = [
+    ['#', 'right'], ['Item', 'left'], ['Description', 'left'],
+    ['Section', 'left'], ['Unit', 'left'], ['Qty', 'right'],
+    ['Rate', 'right'], ['Contract Value', 'right'],
+    ['Prev %', 'right'], ['Prev Value', 'right'],
+    ['Curr %', 'right'], ['Curr Value', 'right'],
+    ['This Valuation', 'right'],
+  ];
+  const colRow = ws.getRow(2);
+  colRow.height = 18;
+  HEADERS.forEach(([label, h], i) => {
+    const cell = colRow.getCell(i + 1);
+    cell.value = label;
+    applyColHeader(cell, h);
+  });
+
+  // Data rows
+  lineData.forEach(({ line, entry }, idx) => {
+    const r      = ws.getRow(idx + 3);
+    r.height     = 18;
+    const stripe = idx % 2 === 1;
+    const prev   = line.contract_value * entry.previous_pct / 100;
+    const curr   = line.contract_value * entry.current_pct  / 100;
+    const thisV  = curr - prev;
+
+    const cells: [number, string | number | null, Align, boolean, string?, string?][] = [
+      [1,  idx + 1,                                            'right', false, undefined,  undefined],
+      [2,  line.item_number ?? '',                             'left',  false, C.MUTED,   undefined],
+      [3,  line.description,                                   'left',  false, undefined,  undefined],
+      [4,  line.section ?? '',                                 'left',  false, C.MUTED,   undefined],
+      [5,  line.unit ?? '',                                    'left',  false, C.MUTED,   undefined],
+      [6,  line.quantity ?? '',                                'right', false, C.MUTED,   undefined],
+      [7,  line.rate ?? '',                                    'right', false, C.MUTED,   CURR_FMT],
+      [8,  line.contract_value,                                'right', true,  undefined,  CURR_FMT],
+      [9,  entry.previous_pct,                                 'right', false, C.MUTED,   PCT_FMT],
+      [10, prev,                                               'right', false, C.MUTED,   CURR_FMT],
+      [11, entry.current_pct,                                  'right', true,  undefined,  PCT_FMT],
+      [12, curr,                                               'right', true,  undefined,  CURR_FMT],
+      [13, thisV,                                              'right', true,  thisV > 0 ? C.GREEN : (thisV < 0 ? C.RED : C.INK), CURR_FMT],
+    ];
+
+    cells.forEach(([col, val, h, bold, argb, numFmt]) => {
+      const cell = r.getCell(col);
+      // Description wraps; others don't
+      const wrap = col === 3;
+      applyDataCell(cell, h, stripe, bold, argb, wrap);
+      cell.value = (val === '' || val == null) ? null : val;
+      if (numFmt) cell.numFmt = numFmt;
+    });
+  });
+
+  // Totals row
+  const total    = lineData.reduce((s, d) => s + d.line.contract_value, 0);
+  const prevTot  = lineData.reduce((s, d) => s + d.line.contract_value * d.entry.previous_pct / 100, 0);
+  const currTot  = lineData.reduce((s, d) => s + d.line.contract_value * d.entry.current_pct  / 100, 0);
+  const thisTot  = currTot - prevTot;
+  const tRow     = ws.getRow(lineData.length + 3);
+  tRow.height    = 20;
+
+  const totVals: [number, string | number | null, Align, string?][] = [
+    [1,  'SUBTOTAL',       'left',  undefined],
+    [2,  '',               'left',  undefined],
+    [3,  'Contract Works', 'left',  undefined],
+    [4,  '',               'left',  undefined],
+    [5,  '',               'left',  undefined],
+    [6,  '',               'right', undefined],
+    [7,  '',               'right', undefined],
+    [8,  total,            'right', CURR_FMT],
+    [9,  '',               'right', undefined],
+    [10, prevTot,          'right', CURR_FMT],
+    [11, '',               'right', undefined],
+    [12, currTot,          'right', CURR_FMT],
+    [13, thisTot,          'right', CURR_FMT],
+  ];
+  totVals.forEach(([col, val, h, numFmt]) => {
+    const cell = tRow.getCell(col);
+    applyTotalCell(cell, h, col === 13 ? (thisTot >= 0 ? C.GREEN : C.RED) : undefined);
+    cell.value = (val === '') ? null : val;
+    if (numFmt) cell.numFmt = numFmt;
+  });
+
+  ws.autoFilter = { from: 'A2', to: 'M2' };
 }
 
 // ─── Sheet 3: Variations ─────────────────────────────────────────────────────
 
-function buildVariationsSheet(extraData: ExtraData[]): XLSX.WorkSheet {
-  const ws: XLSX.WorkSheet = {};
-  const HDR_COLS = 8;
-
-  writeCell(ws, 0, 0, mkCell('EXTRAS / AGREED VARIATIONS', sectionHeaderStyle()));
-  for (let c = 1; c < HDR_COLS; c++) writeCell(ws, 0, c, mkCell('', { fill: solidFill(ORANGE) }));
-
-  const headers: [string, Align][] = [
-    ['Ref',            'left'],
-    ['Description',    'left'],
-    ['Agreed Value',   'right'],
-    ['Prev %',         'right'],
-    ['Prev Value',     'right'],
-    ['Curr %',         'right'],
-    ['Curr Value',     'right'],
-    ['This Valuation', 'right'],
-  ];
-  headers.forEach(([label, align], c) => writeCell(ws, 1, c, mkCell(label, tableHeaderStyle(align))));
-
-  let maxRow = 2;
-  extraData.forEach(({ extra, entry }, idx) => {
-    const r       = idx + 2;
-    const stripe  = idx % 2 === 1;
-    const prevVal = extra.agreed_value * entry.previous_pct / 100;
-    const currVal = extra.agreed_value * entry.current_pct  / 100;
-    const thisVal = currVal - prevVal;
-
-    writeCell(ws, r, 0, mkCell(extra.ref ?? '',    mutedCellStyle('left',  stripe)));
-    writeCell(ws, r, 1, mkCell(extra.description,  cellStyle('left',  stripe)));
-    writeCell(ws, r, 2, mkCell(extra.agreed_value, boldCellStyle('right', stripe), CURR_FMT));
-    writeCell(ws, r, 3, mkCell(entry.previous_pct, mutedCellStyle('right', stripe), PCT_FMT));
-    writeCell(ws, r, 4, mkCell(prevVal,            mutedCellStyle('right', stripe), CURR_FMT));
-    writeCell(ws, r, 5, mkCell(entry.current_pct,  boldCellStyle('right', stripe), PCT_FMT));
-    writeCell(ws, r, 6, mkCell(currVal,            boldCellStyle('right', stripe), CURR_FMT));
-    writeCell(ws, r, 7, mkCell(thisVal, {
-      font:      { name: 'Calibri', sz: 9, bold: true, color: { rgb: thisVal > 0 ? GREEN : (thisVal < 0 ? RED_ : INK) } },
-      fill:      solidFill(stripe ? STRIPE : WHITE),
-      alignment: { horizontal: 'right', vertical: 'top' },
-      border:    bottomBorder(),
-    }, CURR_FMT));
-
-    maxRow = r + 1;
+function buildVariationsSheet(
+  wb: ExcelJS.Workbook,
+  extraData: ExtraData[],
+) {
+  const ws = wb.addWorksheet('Variations', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+    views:     [{ state: 'frozen', ySplit: 2, xSplit: 0 }],
   });
 
-  const totalRow    = maxRow;
-  const agreedTotal = extraData.reduce((s, d) => s + d.extra.agreed_value, 0);
-  const prevTotal   = extraData.reduce((s, d) => s + d.extra.agreed_value * d.entry.previous_pct / 100, 0);
-  const currTotal   = extraData.reduce((s, d) => s + d.extra.agreed_value * d.entry.current_pct  / 100, 0);
-  const thisTotal   = currTotal - prevTotal;
-
-  writeCell(ws, totalRow, 0, mkCell('SUBTOTAL',                   totalStyle('left')));
-  writeCell(ws, totalRow, 1, mkCell('Extras / Agreed Variations', totalStyle('left')));
-  writeCell(ws, totalRow, 2, mkCell(agreedTotal,                  totalStyle('right'), CURR_FMT));
-  writeCell(ws, totalRow, 3, mkCell('',                           totalStyle()));
-  writeCell(ws, totalRow, 4, mkCell(prevTotal,                    totalStyle('right'), CURR_FMT));
-  writeCell(ws, totalRow, 5, mkCell('',                           totalStyle()));
-  writeCell(ws, totalRow, 6, mkCell(currTotal,                    totalStyle('right'), CURR_FMT));
-  writeCell(ws, totalRow, 7, mkCell(thisTotal,                    totalStyle('right', thisTotal > 0 ? GREEN : INK), CURR_FMT));
-
-  setRange(ws, totalRow + 1, HDR_COLS);
-
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: HDR_COLS - 1 } }];
-
-  ws['!cols'] = [
-    { wch: 10 }, { wch: 40 }, { wch: 14 }, { wch: 9 },
-    { wch: 14 }, { wch: 9  }, { wch: 14 }, { wch: 14 },
+  ws.columns = [
+    { width: 11 }, // A — Ref
+    { width: 42 }, // B — Description
+    { width: 14 }, // C — Agreed Value
+    { width: 9  }, // D — Prev %
+    { width: 14 }, // E — Prev Value
+    { width: 9  }, // F — Curr %
+    { width: 14 }, // G — Curr Value
+    { width: 14 }, // H — This Valuation
   ];
 
-  freezeRows(ws, 2);
-  ws['!autofilter'] = { ref: `A2:${colLetter(HDR_COLS - 1)}2` };
-  ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape' };
+  ws.mergeCells('A1:H1');
+  ws.getRow(1).height = 22;
+  const hdr = ws.getCell('A1');
+  hdr.value = 'EXTRAS / AGREED VARIATIONS';
+  applyOrangeHeader(hdr);
 
-  return ws;
+  const HEADERS: [string, Align][] = [
+    ['Ref', 'left'], ['Description', 'left'], ['Agreed Value', 'right'],
+    ['Prev %', 'right'], ['Prev Value', 'right'],
+    ['Curr %', 'right'], ['Curr Value', 'right'], ['This Valuation', 'right'],
+  ];
+  const colRow = ws.getRow(2);
+  colRow.height = 18;
+  HEADERS.forEach(([label, h], i) => {
+    const cell = colRow.getCell(i + 1);
+    cell.value = label;
+    applyColHeader(cell, h);
+  });
+
+  extraData.forEach(({ extra, entry }, idx) => {
+    const r      = ws.getRow(idx + 3);
+    r.height     = 18;
+    const stripe = idx % 2 === 1;
+    const prev   = extra.agreed_value * entry.previous_pct / 100;
+    const curr   = extra.agreed_value * entry.current_pct  / 100;
+    const thisV  = curr - prev;
+
+    const cells: [number, string | number | null, Align, boolean, string?, string?][] = [
+      [1, extra.ref ?? '',     'left',  false, C.MUTED,  undefined],
+      [2, extra.description,   'left',  false, undefined, undefined],
+      [3, extra.agreed_value,  'right', true,  undefined, CURR_FMT],
+      [4, entry.previous_pct,  'right', false, C.MUTED,  PCT_FMT],
+      [5, prev,                'right', false, C.MUTED,  CURR_FMT],
+      [6, entry.current_pct,   'right', true,  undefined, PCT_FMT],
+      [7, curr,                'right', true,  undefined, CURR_FMT],
+      [8, thisV,               'right', true,  thisV > 0 ? C.GREEN : (thisV < 0 ? C.RED : C.INK), CURR_FMT],
+    ];
+
+    cells.forEach(([col, val, h, bold, argb, numFmt]) => {
+      const cell = r.getCell(col);
+      const wrap = col === 2;
+      applyDataCell(cell, h, stripe, bold, argb, wrap);
+      cell.value = (val === '' || val == null) ? null : val;
+      if (numFmt) cell.numFmt = numFmt;
+    });
+  });
+
+  const agreedTot = extraData.reduce((s, d) => s + d.extra.agreed_value, 0);
+  const prevTot   = extraData.reduce((s, d) => s + d.extra.agreed_value * d.entry.previous_pct / 100, 0);
+  const currTot   = extraData.reduce((s, d) => s + d.extra.agreed_value * d.entry.current_pct  / 100, 0);
+  const thisTot   = currTot - prevTot;
+  const tRow      = ws.getRow(extraData.length + 3);
+  tRow.height     = 20;
+
+  const totVals: [number, string | number | null, Align, string?][] = [
+    [1, 'SUBTOTAL',                   'left',  undefined],
+    [2, 'Extras / Agreed Variations', 'left',  undefined],
+    [3, agreedTot,                    'right', CURR_FMT],
+    [4, '',                           'right', undefined],
+    [5, prevTot,                      'right', CURR_FMT],
+    [6, '',                           'right', undefined],
+    [7, currTot,                      'right', CURR_FMT],
+    [8, thisTot,                      'right', CURR_FMT],
+  ];
+  totVals.forEach(([col, val, h, numFmt]) => {
+    const cell = tRow.getCell(col);
+    applyTotalCell(cell, h, col === 8 ? (thisTot >= 0 ? C.GREEN : C.RED) : undefined);
+    cell.value = (val === '') ? null : val;
+    if (numFmt) cell.numFmt = numFmt;
+  });
+
+  ws.autoFilter = { from: 'A2', to: 'H2' };
 }
 
 // ─── Sheet 4: Valuation Summary ───────────────────────────────────────────────
 
 function buildSummarySheet(
+  wb: ExcelJS.Workbook,
   valuation: DBValuation,
   totals: ValuationTotals,
-): XLSX.WorkSheet {
-  const ws: XLSX.WorkSheet = {};
+) {
+  const ws = wb.addWorksheet('Valuation Summary', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
 
-  const issueDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  ws.columns = [{ width: 40 }, { width: 20 }];
 
-  let row = 0;
+  // Row 1 — section header
+  ws.mergeCells('A1:B1');
+  ws.getRow(1).height = 28;
+  const hdr = ws.getCell('A1');
+  hdr.value = 'VALUATION SUMMARY';
+  applyOrangeHeader(hdr);
 
-  // Section header — spans A:B
-  writeCell(ws, row, 0, mkCell('VALUATION SUMMARY', sectionHeaderStyle()));
-  writeCell(ws, row, 1, mkCell('', { fill: solidFill(ORANGE) }));
-  row++;
+  // Row 2 — ref / date sub-header
+  ws.getRow(2).height = 24;
+  const refCell = ws.getCell('A2');
+  refCell.value = `${valuation.ref}  —  ${valuation.title}`;
+  style(refCell, {
+    font:      font(11, true, C.INK),
+    fill:      fill(C.LIGHT),
+    alignment: align('left', 'middle', true),
+  });
+  const dateCell = ws.getCell('B2');
+  dateCell.value = issueDate();
+  style(dateCell, {
+    font:      font(9, false, C.MUTED),
+    fill:      fill(C.LIGHT),
+    alignment: align('right', 'middle'),
+  });
 
-  // Sub-header — A and B are separate cells (no single-cell merge)
-  writeCell(ws, row, 0, mkCell(`${valuation.ref}  \u2014  ${valuation.title}`, {
-    font:      { name: 'Calibri', sz: 11, bold: true, color: { rgb: INK } },
-    fill:      solidFill(LIGHT),
-    alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
-  }));
-  writeCell(ws, row, 1, mkCell(issueDate, {
-    font:      { name: 'Calibri', sz: 9, color: { rgb: MUTED } },
-    fill:      solidFill(LIGHT),
-    alignment: { horizontal: 'right', vertical: 'middle' },
-  }));
-  row++;
-
-  // Spacer
-  writeCell(ws, row, 0, mkCell('', { fill: solidFill(WHITE) }));
-  writeCell(ws, row, 1, mkCell('', { fill: solidFill(WHITE) }));
-  row++;
+  // Row 3 — spacer
+  ws.getRow(3).height = 8;
 
   const retPct = totals.retentionPct ?? 0;
   const mcdPct = totals.mcdPct ?? 0;
@@ -512,54 +540,68 @@ function buildSummarySheet(
   const summaryRows: [string, number, boolean][] = [
     ['Original Contract Value',          totals.contractOriginal, false],
     ['Extras / Agreed Variations Total', totals.extrasOriginal,   false],
-    ['Gross Valuation to Date',          totals.grossToDate,      true],
-    ['Less: Previous Valuation Total',   -totals.previousTotal,   false],
+    ['Gross Valuation to Date',          totals.grossToDate,      true ],
+    ['Less: Previous Valuation Total',  -totals.previousTotal,    false],
     ['Current Amount Due',               totals.amountDue,        false],
   ];
   if (retPct > 0) summaryRows.push([`Less: Retention (${retPct.toFixed(2)}%)`, -retAmt, false]);
   if (mcdPct > 0) summaryRows.push([`Less: MCD (${mcdPct.toFixed(2)}%)`,       -mcdAmt, false]);
 
+  let rowNum = 4;
   for (const [label, value, bold] of summaryRows) {
-    writeCell(ws, row, 0, mkCell(label,  summaryLabelStyle(bold)));
-    writeCell(ws, row, 1, mkCell(value,  summaryValueStyle(bold), CURR_FMT));
-    row++;
+    const r = ws.getRow(rowNum);
+    r.height = 22;
+
+    const lc = r.getCell(1);
+    lc.value = label;
+    style(lc, {
+      font:      font(11, bold, bold ? C.INK : C.BODY),
+      fill:      fill(C.WHITE),
+      alignment: align('left', 'middle'),
+      border:    bottomOnly(),
+    });
+
+    const vc = r.getCell(2);
+    vc.value  = value;
+    vc.numFmt = CURR_FMT;
+    style(vc, {
+      font:      font(11, bold, bold ? C.INK : C.BODY),
+      fill:      fill(C.WHITE),
+      alignment: align('right', 'middle'),
+      border:    bottomOnly(),
+    });
+
+    rowNum++;
   }
 
   // Spacer
-  writeCell(ws, row, 0, mkCell('', { fill: solidFill(WHITE) }));
-  writeCell(ws, row, 1, mkCell('', { fill: solidFill(WHITE) }));
-  row++;
+  ws.getRow(rowNum).height = 10;
+  rowNum++;
 
-  // Net valuation due — prominent highlight row
+  // Net / Amount due — prominent highlight
+  ws.mergeCells(`A${rowNum}:A${rowNum}`); // single (no merge needed)
   const netLabel = (retPct > 0 || mcdPct > 0) ? 'NET VALUATION DUE' : 'AMOUNT DUE THIS VALUATION';
-  writeCell(ws, row, 0, mkCell(netLabel, {
-    font:      { name: 'Calibri', sz: 13, bold: true, color: { rgb: GREEN } },
-    fill:      { patternType: 'solid', fgColor: { rgb: 'EAF9F3' }, bgColor: { rgb: 'EAF9F3' } },
-    alignment: { horizontal: 'left', vertical: 'middle' },
-    border:    thinBorder(GREEN),
-  }));
-  writeCell(ws, row, 1, mkCell(netVal, {
-    font:      { name: 'Calibri', sz: 16, bold: true, color: { rgb: GREEN } },
-    fill:      { patternType: 'solid', fgColor: { rgb: 'EAF9F3' }, bgColor: { rgb: 'EAF9F3' } },
-    alignment: { horizontal: 'right', vertical: 'middle' },
-    border:    thinBorder(GREEN),
-  }, CURR_FMT));
-  row++;
+  const nlRow    = ws.getRow(rowNum);
+  nlRow.height   = 36;
 
-  setRange(ws, row + 1, 2);
+  const nlLabel  = nlRow.getCell(1);
+  nlLabel.value  = netLabel;
+  style(nlLabel, {
+    font:      font(13, true, C.GREEN),
+    fill:      fill('FFEAF9F3'),
+    alignment: align('left', 'middle'),
+    border:    box(C.GREEN),
+  });
 
-  // FIX: only merge cells that span more than one column.
-  // The old code had { s:{r:1,c:0}, e:{r:1,c:0} } — a degenerate single-cell
-  // merge that is invalid in OpenXML and triggers Excel repair.
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } },   // section header A:B
-  ];
-
-  ws['!cols'] = [{ wch: 38 }, { wch: 18 }];
-  ws['!rows'] = [{ hpt: 28 }, { hpt: 24 }];
-  ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait' };
-
-  return ws;
+  const nlValue  = nlRow.getCell(2);
+  nlValue.value  = netVal;
+  nlValue.numFmt = CURR_FMT;
+  style(nlValue, {
+    font:      font(16, true, C.GREEN),
+    fill:      fill('FFEAF9F3'),
+    alignment: align('right', 'middle'),
+    border:    box(C.GREEN),
+  });
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -572,35 +614,30 @@ export async function buildValuationXlsx(
   totals: ValuationTotals,
   companyName?: string,
 ): Promise<void> {
-  const wb = XLSX.utils.book_new();
+  const wb = new ExcelJS.Workbook();
+  wb.creator   = companyName || 'VYSITE';
+  wb.company   = companyName || 'VYSITE';
+  wb.title     = valuation.title;
+  wb.subject   = 'Commercial Valuation';
+  wb.created   = new Date();
+  wb.modified  = new Date();
 
-  wb.Props = {
-    Title:   valuation.title,
-    Subject: 'Commercial Valuation',
-    Author:  companyName || 'VYSITE',
-    Company: companyName || 'VYSITE',
-  };
+  buildCoverSheet(wb, valuation, project, companyName || 'VYSITE');
+  if (lineData.length > 0)  buildContractWorksSheet(wb, lineData);
+  if (extraData.length > 0) buildVariationsSheet(wb, extraData);
+  buildSummarySheet(wb, valuation, totals);
 
-  XLSX.utils.book_append_sheet(wb, buildCoverSheet(valuation, project, companyName), 'Cover');
-  if (lineData.length > 0) {
-    XLSX.utils.book_append_sheet(wb, buildContractWorksSheet(lineData), 'Contract Works');
-  }
-  if (extraData.length > 0) {
-    XLSX.utils.book_append_sheet(wb, buildVariationsSheet(extraData), 'Variations');
-  }
-  XLSX.utils.book_append_sheet(wb, buildSummarySheet(valuation, totals), 'Valuation Summary');
-
-  const xlsxBytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
-  // Synchronously replace xl/metadata.xml with an empty valid document.
-  // SheetJS CE 0.18.x always emits cellMetadata count="1" with no cell references —
-  // an inconsistency Excel repairs. patchXlsxMetadata is fully synchronous
-  // (stored/method-0, no CompressionStream) so it never hangs.
-  const patched = patchXlsxMetadata(new Uint8Array(xlsxBytes));
-  const blob = new Blob([patched], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `${valuation.ref}-${valuation.title.replace(/\s+/g, '-')}.xlsx`;
+  const buffer  = await wb.xlsx.writeBuffer();
+  const blob    = new Blob(
+    [buffer],
+    { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+  );
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href        = url;
+  a.download    = `${valuation.ref}-${valuation.title.replace(/\s+/g, '-')}.xlsx`;
+  document.body.appendChild(a);
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
