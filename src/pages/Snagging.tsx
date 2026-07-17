@@ -12,6 +12,7 @@ import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 import MentionTextarea, { renderWithMentions } from '../components/MentionTextarea';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { RowActionsMenu } from '../components/RowActionsMenu';
+import { nextRef as getNextRef } from '../lib/refSequence';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -743,6 +744,7 @@ function ReportView({ report, onClose, onEdit, onDelete, canEdit, canDelete, can
 
   const [showSnagModal, setShowSnagModal] = useState(false);
   const [editingSnag, setEditingSnag] = useState<ExtendedSnag | null>(null);
+  const [nextSnagNum, setNextSnagNum] = useState<string>('');
   const [selectedSnag, setSelectedSnag] = useState<ExtendedSnag | null>(null);
   const [deleteSnagId, setDeleteSnagId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState('All');
@@ -763,17 +765,11 @@ function ReportView({ report, onClose, onEdit, onDelete, canEdit, canDelete, can
     return true;
   }), [snags, filterStatus, filterPriority]);
 
-  const nextSnagNumber = useCallback(() => {
-    const nums = snags.map(s => {
-      const m = s.snagNumber?.match(/SN-(\d+)/);
-      return m ? parseInt(m[1], 10) : 0;
-    });
-    const max = nums.length ? Math.max(...nums) : 0;
-    return `SN-${String(max + 1).padStart(3, '0')}`;
-  }, [snags]);
+  // No longer needed — numbers come from the DB sequence
+  // const nextSnagNumber = ...
 
   const handleSaveSnag = async (data: SnagFormData, files: UploadedFile[]) => {
-    const snagNum = editingSnag?.snagNumber ?? nextSnagNumber();
+    const snagNum = editingSnag?.snagNumber ?? nextSnagNum;
     const id = editingSnag?.id ?? `snag-${Date.now()}`;
     const snag: ExtendedSnag = {
       id,
@@ -939,7 +935,7 @@ function ReportView({ report, onClose, onEdit, onDelete, canEdit, canDelete, can
                 ))}
               </div>
               {canCreate && (
-                <button onClick={() => { setEditingSnag(null); setShowSnagModal(true); }}
+                <button onClick={async () => { const ref = await getNextRef(report.id, 'SN', 3); setNextSnagNum(ref); setEditingSnag(null); setShowSnagModal(true); }}
                   className="ml-auto flex items-center gap-1.5 px-3 py-2 bg-[#f97316] text-white rounded-lg text-xs font-semibold hover:bg-orange-600">
                   <Plus size={14} />Add Snag
                 </button>
@@ -1005,7 +1001,7 @@ function ReportView({ report, onClose, onEdit, onDelete, canEdit, canDelete, can
           reportId={report.id}
           projectId={report.project_id}
           projectName={report.project_name}
-          snagNumber={editingSnag?.snagNumber ?? nextSnagNumber()}
+          snagNumber={editingSnag?.snagNumber ?? nextSnagNum}
           initial={editingSnag}
           onClose={() => { setShowSnagModal(false); setEditingSnag(null); }}
           onSave={handleSaveSnag}

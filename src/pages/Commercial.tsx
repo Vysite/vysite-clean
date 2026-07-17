@@ -25,6 +25,7 @@ import type { CommercialTab } from './commercial/types';
 import { RECORD_TYPES, STATUSES, typeInfo, statusInfo, parseRawValue, fmtCurrency as fmtC } from './commercial/types';
 import { exportFullCommercialReport } from './commercial/CommercialPDF';
 import { openPrintTab } from '../lib/printTab';
+import { nextRef as getNextRef } from '../lib/refSequence';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -1061,12 +1062,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
       newId = genUUID();
 
       // ── Step 1: Generate next DN reference ──────────────────────────────────
-      const existingDns = allRecords.filter(r => r.recordType === 'delay_notice');
-      const maxDn = existingDns.reduce((max, r) => {
-        const m = r.reference?.match(/^DN[-–]?(\d+)$/i);
-        return m ? Math.max(max, parseInt(m[1], 10)) : max;
-      }, 0);
-      const nextDnRef = `DN-${String(maxDn + 1).padStart(3, '0')}`;
+      const nextDnRef = await getNextRef(orgId, 'DN', 3);
 
       // ── Step 2: Insert the Delay Notice record ───────────────────────────────
       const dnRow = {
@@ -1264,22 +1260,10 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
       newId = genUUID();
 
       // ── Step 1: Generate next Variation reference (Commercial Register) ──────
-      const existingVars = allRecords.filter(r => r.recordType === 'variation');
-      const maxVar = existingVars.reduce((max, r) => {
-        const m = r.reference?.match(/^V[-–]?(\d+)$/i);
-        return m ? Math.max(max, parseInt(m[1], 10)) : max;
-      }, 0);
-      const nextVarRef = `V-${String(maxVar + 1).padStart(3, '0')}`;
+      const nextVarRef = await getNextRef(orgId, 'V', 3);
 
       // ── Step 1b: Generate next Variation Account reference (VAR-001 style) ───
-      const projectVAItems = store.variationAccountItems.filter(
-        v => v.project_id === record.projectId
-      );
-      const maxVarNum = projectVAItems.reduce((max, v) => {
-        const n = parseInt(v.reference.replace(/[^0-9]/g, ''), 10);
-        return isNaN(n) ? max : Math.max(max, n);
-      }, 0);
-      const nextVARef = `VAR-${String(maxVarNum + 1).padStart(3, '0')}`;
+      const nextVARef  = await getNextRef(record.projectId, 'VAR', 3);
       const vaItemId = genUUID();
 
       // ── Step 2: Insert the Variation record (Commercial Register) ────────────

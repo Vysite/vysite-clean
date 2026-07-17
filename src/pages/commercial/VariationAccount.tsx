@@ -10,6 +10,7 @@ import { fmtCurrency, fmtDate, parseRawValue } from './types';
 import { exportVariationAccountPDF, buildVAInternalHTML, buildVAClientHTML } from './CommercialPDF';
 import { openPrintTab } from '../../lib/printTab';
 import { RowActionsMenu } from '../../components/RowActionsMenu';
+import { nextRef as getNextRef } from '../../lib/refSequence';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1044,18 +1045,15 @@ export function VariationAccount({ project, orgId, canEdit, canDelete }: Variati
 
   const items = (store.variationAccountItems ?? []).filter(i => i.project_id === project.id);
 
-  const nextRef = useMemo(() => {
-    const nums = items.map(i => {
-      const m = i.reference?.match(/(\d+)$/);
-      return m ? parseInt(m[1], 10) : 0;
-    });
-    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-    return `VAR-${String(next).padStart(3, '0')}`;
-  }, [items]);
+  const [pendingRef, setPendingRef] = useState<string>('');
+
+  const nextRef = pendingRef; // set before drawer opens via openCreate
 
   const { exposure, agreed, rejected } = calcVAMetrics(items);
 
-  function openCreate() {
+  async function openCreate() {
+    const ref = await getNextRef(project.id, 'VAR', 3);
+    setPendingRef(ref);
     setDrawerMode('create');
     setSelectedItem(null);
     setTemplateData(null);

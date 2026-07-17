@@ -6,6 +6,7 @@ import type { Project } from '../../data/types';
 import ValuationDetail from './ValuationDetail';
 import ValuationWorkbookEditor from './ValuationWorkbookEditor';
 import { logActivity } from '../../lib/activityLog';
+import { nextRef as getNextRef } from '../../lib/refSequence';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -168,6 +169,9 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
   const [view, setView] = useState<ActiveView>('list');
   const [openId, setOpenId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  // nextRef is fetched from the DB sequence when the modal opens, ensuring
+  // uniqueness across concurrent users and surviving deletions/refreshes.
+  const [pendingRef, setPendingRef] = useState<string>('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showWbMenu, setShowWbMenu] = useState(false);
   const [showRenameWb, setShowRenameWb] = useState(false);
@@ -209,13 +213,8 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
     [store.valuations, project?.id]
   );
 
-  const nextRef = useMemo(() => {
-    const existing = store.valuations.filter(v => v.project_id === project?.id);
-    const nums = existing.map(v => parseInt(v.ref.replace(/\D/g, ''), 10)).filter(n => !isNaN(n));
-    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-    return `VAL-${String(next).padStart(3, '0')}`;
-  }, [store.valuations, project?.id]);
-
+  // nextRef is fetched from the DB sequence the moment the create modal opens,
+  // ensuring uniqueness across concurrent users and surviving deletions.
   const latestValuation = useMemo(() => {
     if (projectValuations.length === 0) return null;
     return projectValuations[0];
@@ -371,7 +370,7 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
           )}
           {canCreate && project && workbook && (
             <button
-              onClick={() => setShowCreate(true)}
+              onClick={async () => { if (!project) return; const ref = await getNextRef(project.id, 'VAL', 3); setPendingRef(ref); setShowCreate(true); }}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white transition-colors"
               style={{ background: '#f97316' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#ea6c0a')}
@@ -551,7 +550,7 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                 </p>
                 {canCreate && (
                   <button
-                    onClick={() => setShowCreate(true)}
+                    onClick={async () => { if (!project) return; const ref = await getNextRef(project.id, 'VAL', 3); setPendingRef(ref); setShowCreate(true); }}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors"
                     style={{ background: '#f97316' }}
                     onMouseEnter={e => (e.currentTarget.style.background = '#ea6c0a')}
@@ -686,7 +685,7 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
       {showCreate && project && workbook && (
         <CreateModal
           project={project}
-          nextRef={nextRef}
+          nextRef={pendingRef}
           currentUserName={currentUserName}
           onSave={handleCreate}
           onClose={() => setShowCreate(false)}

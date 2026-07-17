@@ -23,6 +23,7 @@ import type { DBNotification, DBAttachment } from '../lib/store';
 import FileUpload from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
 import { Paperclip, Eye, Download, Sparkles } from 'lucide-react';
+import { nextRef as getNextRef } from '../lib/refSequence';
 import AITenderAssistant from '../components/AITenderAssistant';
 import AIContractReview from '../components/AIContractReview';
 import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
@@ -1013,7 +1014,6 @@ function TenderRFIRegister({ rfis, attachments, canCreate, canEdit, canDelete, o
 // ─── Add RFI Modal ────────────────────────────────────────────────────────────
 
 interface AddRFIModalProps {
-  rfiRef: string;
   tenderId: string;
   tenderName: string;
   onClose: () => void;
@@ -1021,9 +1021,21 @@ interface AddRFIModalProps {
   initial?: TenderRFI;
 }
 
-function AddRFIModal({ rfiRef, tenderId: _tenderId, tenderName: _tenderName, onClose, onSave, initial }: AddRFIModalProps) {
+function AddRFIModal({ tenderId, tenderName: _tenderName, onClose, onSave, initial }: AddRFIModalProps) {
   const today = new Date().toISOString().slice(0, 10);
   const [rfiId] = useState(() => initial?.id ?? `rfi${Date.now()}`);
+  // For new RFIs: fetch the ref from the DB sequence so it is unique, concurrent-safe,
+  // and survives deletions (DB sequence only moves forward, never resets).
+  const [resolvedRef, setResolvedRef] = useState<string>(initial?.ref ?? '');
+  const [refLoading, setRefLoading] = useState(!initial?.ref);
+  useEffect(() => {
+    if (initial?.ref) return;
+    let cancelled = false;
+    getNextRef(tenderId, 'RFI', 3)
+      .then(ref => { if (!cancelled) { setResolvedRef(ref); setRefLoading(false); } })
+      .catch(() => { if (!cancelled) setRefLoading(false); });
+    return () => { cancelled = true; };
+  }, [tenderId, initial?.ref]);
   const [showSource, setShowSource] = useState(!!(initial?.sourceDocument || initial?.pageReference || initial?.sectionClause));
 
   const [form, setForm] = useState({
@@ -1054,7 +1066,7 @@ function AddRFIModal({ rfiRef, tenderId: _tenderId, tenderName: _tenderName, onC
       : form.section || form.clause || undefined;
     const rfi: TenderRFI & { drawingNumber?: string; specification?: string; revision?: string } = {
       id: rfiId,
-      ref: initial?.ref ?? rfiRef,
+      ref: initial?.ref ?? resolvedRef,
       subject: form.subject || undefined,
       question: form.question,
       dateRaised: form.dateRaised,
@@ -1085,7 +1097,7 @@ function AddRFIModal({ rfiRef, tenderId: _tenderId, tenderName: _tenderName, onC
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>RFI Reference</label>
-              <input readOnly value={initial?.ref ?? rfiRef} className={`${inputCls} opacity-60 cursor-not-allowed`} />
+              <input readOnly value={refLoading ? 'Generating…' : (initial?.ref ?? resolvedRef)} className={`${inputCls} opacity-60 cursor-not-allowed`} />
             </div>
             <div>
               <label className={labelCls}>Status</label>
@@ -3297,7 +3309,6 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
       )}
       {(showAddRFI || editingRFI) && (
         <AddRFIModal
-          rfiRef={`RFI-00${tender.rfis.length + 1}`}
           tenderId={tender.id}
           tenderName={tender.name}
           onClose={() => {

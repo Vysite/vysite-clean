@@ -6,6 +6,7 @@ import type { DBCommercialApplication } from '../../lib/store';
 import { useAppStore } from '../../lib/StoreContext';
 import { exportApplicationsPDF } from './CommercialPDF';
 import { RowActionsMenu } from '../../components/RowActionsMenu';
+import { nextSeqVal } from '../../lib/refSequence';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -411,10 +412,8 @@ export default function CommercialApplications({
   const [similarTemplate, setSimilarTemplate] = useState<DBCommercialApplication | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const nextAppNumber = useMemo(
-    () => items.length > 0 ? Math.max(...items.map(a => a.app_number)) + 1 : 1,
-    [items]
-  );
+  const [pendingAppNumber, setPendingAppNumber] = useState<number>(0);
+  const nextAppNumber = pendingAppNumber; // set before drawer opens
 
   // Summary metrics
   const appliedToDate    = items.reduce((s, a) => s + a.applied_value, 0);
@@ -425,7 +424,9 @@ export default function CommercialApplications({
   const outstanding      = certifiedToDate - paidToDate;
   const remainingContract = forecastContractSum > 0 ? forecastContractSum - appliedToDate : null;
 
-  function openNew() {
+  async function openNew() {
+    const num = await nextSeqVal(project.id, 'APP');
+    setPendingAppNumber(num);
     setSelected(null);
     setSimilarTemplate(null);
     setDrawerOpen(true);
@@ -435,9 +436,10 @@ export default function CommercialApplications({
     setSimilarTemplate(null);
     setDrawerOpen(true);
   }
-  function handleCreateSimilar(source: DBCommercialApplication) {
+  async function handleCreateSimilar(source: DBCommercialApplication) {
+    const num = await nextSeqVal(project.id, 'APP');
     setSelected(null);
-    setSimilarTemplate({ ...source, id: generateId(), app_number: nextAppNumber, app_date: new Date().toISOString().slice(0, 10), payment_due: null, payment_recd: null, status: 'draft', notes: '' });
+    setSimilarTemplate({ ...source, id: generateId(), app_number: num, app_date: new Date().toISOString().slice(0, 10), payment_due: null, payment_recd: null, status: 'draft', notes: '' });
     setDrawerOpen(true);
   }
   async function handleQuickStatus(app: DBCommercialApplication, newStatus: string) {
