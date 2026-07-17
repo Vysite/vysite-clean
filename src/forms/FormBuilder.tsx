@@ -1,13 +1,13 @@
-import { useState, type ChangeEvent, type Dispatch, type SetStateAction } from 'react';
+import { useState, useEffect, type ChangeEvent, type Dispatch, type SetStateAction } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import FileUploadComponent, { type UploadedFile } from '../components/FileUpload';
+import { nextRef as getNextRef } from '../lib/refSequence';
 import { useAppStore } from '../lib/StoreContext';
 import {
   type ExtendedFormType, type ExtendedSiteForm, type ExtendedFormStatus,
   inputCls, labelCls,
 } from './types';
 import {
-  type ChecklistEntry, SWA_DEFAULT_ENTRY, SWASection,
   type OperativeRecord, OperativeRows,
   type DelayRecord, DelayRows,
   type HazardRecord, HazardRows,
@@ -18,24 +18,20 @@ import {
   type PCCAssetRecord, PCCAssetRows,
   type PCCChecklistItem, PCCChecklistRows,
   type FlushingRegisterRow, FlushingRegisterRows,
+  type ChecklistEntry, SWA_DEFAULT_ENTRY, SWASection,
 } from './SubComponents';
-
-// counter lives in module scope — resets on full page reload, which is fine
-let rfiCounter = 1;
-function nextRfiRef() { return `RFI-${String(rfiCounter++).padStart(3, '0')}`; }
-
-let snCounter = 1;
-function nextSnRef() { return `SN-${String(snCounter++).padStart(4, '0')}`; }
-
 export interface FormBuilderProps {
   type: ExtendedFormType;
+  orgId?: string;
   onClose: () => void;
   onSave: (form: ExtendedSiteForm, files: UploadedFile[]) => void;
   initialData?: ExtendedSiteForm | null;
 }
 
-export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderProps) {
+export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialData }: FormBuilderProps) {
   const store = useAppStore();
+  // Resolve orgId from prop (preferred) or store
+  const orgId = orgIdProp || store.currentOrgId || '';
   const visibleProjects = store.visibleProjectIds === null
     ? store.projects
     : store.projects.filter(p => store.visibleProjectIds!.includes(p.id));
@@ -59,7 +55,8 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
       if (['Early Warning Notice', 'Site Instruction'].includes(type) && raw === 'Draft') return 'Open';
       return raw;
     })(),
-    rfiRef:      sv('rfiRef', nextRfiRef()),
+    rfiRef:      sv('rfiRef', ''),
+    // rfiRef is fetched async from the DB sequence below (useEffect after mount)
     subject:     sv('subject'),
     question:    sv('question'),
     response:    sv('response'),
@@ -444,7 +441,8 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
     scrProgrammeImpact:  sv('scrProgrammeImpact'),
     scrCommercialImpact: sv('scrCommercialImpact'),
     // Site Note
-    snRef:               sv('snRef', nextSnRef()),
+    snRef:               sv('snRef', ''),
+    // snRef is fetched async from the DB sequence below (useEffect after mount)
     snCategory:          sv('snCategory', ''),
     snSubject:           sv('snSubject'),
     snBody:              sv('snBody'),
@@ -651,6 +649,27 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
 
   const set = (key: string) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [key]: e.target.value }));
+
+  // Fetch DB-sequence refs for RFI and Site Note forms when opening a NEW form.
+  // - orgId is the scope so refs are unique across the whole organisation.
+  // - useEffect runs once on mount; skipped entirely for edit mode (sv already
+  //   populated rfiRef/snRef from initialData).
+  useEffect(() => {
+    if (!orgId) return;
+    let cancelled = false;
+    if (type === 'RFI' && !init?.rfiRef) {
+      getNextRef(orgId, 'RFI', 3).then(ref => {
+        if (!cancelled) setForm(f => ({ ...f, rfiRef: ref }));
+      }).catch(console.error);
+    }
+    if (type === 'Site Note' && !init?.snRef) {
+      getNextRef(orgId, 'SN', 4).then(ref => {
+        if (!cancelled) setForm(f => ({ ...f, snRef: ref }));
+      }).catch(console.error);
+    }
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally runs once on mount
 
   const handleAction = (status: string) => {
     const base: ExtendedSiteForm = {
@@ -1304,7 +1323,7 @@ export function FormBuilder({ type, onClose, onSave, initialData }: FormBuilderP
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>RFI Reference</label>
-                  <input value={form.rfiRef} readOnly className={`${inputCls} opacity-60 cursor-not-allowed`} />
+                  <input value={form.rfiRef || 'Generating\u2026'} readOnly className={`${inputCls} opacity-60 cursor-not-allowed`} />
                 </div>
                 <div>
                   <label className={labelCls}>Status</label>

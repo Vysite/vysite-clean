@@ -966,6 +966,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
       {showBuilder && (
         <FormBuilder
           type={builderType}
+          orgId={orgId}
           onSave={handleSave}
           onClose={() => { setShowBuilder(false); setEditingForm(null); setSimilarTemplate(null); }}
           initialData={editingForm ?? similarTemplate}
