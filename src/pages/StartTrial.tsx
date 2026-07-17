@@ -34,7 +34,11 @@ export default function StartTrial() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            // Authorization is required by Supabase when verify_jwt is true.
+            // The anon key is a valid public JWT — safe to send from the browser.
+            // Apikey is kept as a belt-and-suspenders fallback for older requests.
+            'Authorization': `Bearer ${env.supabaseAnonKey}`,
+            'Apikey': env.supabaseAnonKey,
           },
           body: JSON.stringify({
             companyName: companyName.trim(),
