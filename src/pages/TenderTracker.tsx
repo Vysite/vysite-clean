@@ -66,12 +66,12 @@ const rfiColors: Record<RFIStatus, string> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function daysRemaining(returnDate: string): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+function daysRemaining(returnDate: string, fromDate?: string): number {
+  const ref = new Date(fromDate ?? new Date().toISOString());
+  ref.setHours(0, 0, 0, 0);
   const due = new Date(returnDate);
   due.setHours(0, 0, 0, 0);
-  return Math.round((due.getTime() - today.getTime()) / 86400000);
+  return Math.round((due.getTime() - ref.getTime()) / 86400000);
 }
 
 function formatValue(v: number): string {
@@ -1364,8 +1364,7 @@ function EditTenderModal({ tender, onClose, onSave, onDelete, canDelete }: EditT
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
-      ...tender,
+    const patch: Partial<Tender> = {
       name: form.name,
       client: form.client,
       location: form.location,
@@ -1377,8 +1376,12 @@ function EditTenderModal({ tender, onClose, onSave, onDelete, canDelete }: EditT
       status: form.status as TenderStatus,
       nextAction: form.nextAction,
       internalNotes: form.internalNotes,
-      lastUpdated: '2026-05-19',
-    });
+      lastUpdated: new Date().toISOString().slice(0, 10),
+    };
+    if (form.status === 'Submitted' && !tender.submittedDate) {
+      patch.submittedDate = new Date().toISOString().slice(0, 10);
+    }
+    onSave({ ...tender, ...patch });
     onClose();
   };
 
@@ -1835,7 +1838,6 @@ function TenderExportModal({ tender, companyName, logoUrl, onClose }: TenderExpo
                 rfi.sectionClause ? `§ ${rfi.sectionClause}` : '',
                 rfi.pageReference ? `pp.${rfi.pageReference}` : '',
                 (rfi as TenderRFI & { revision?: string }).revision ? `Rev: ${(rfi as TenderRFI & { revision?: string }).revision}` : '',
-                rfi.importSource ? `Source: ${rfi.importSource}` : '',
               ].filter(Boolean).join(' · ');
               const srcRow = srcParts ? `<tr><td colspan="6" style="padding:1px 10px 8px 10px;color:#64748b;font-size:9px;letter-spacing:0.03em">${srcParts}</td></tr>` : '';
               return `<tr>
@@ -1861,7 +1863,6 @@ function TenderExportModal({ tender, companyName, logoUrl, onClose }: TenderExpo
                 e.sectionClause ? `§ ${e.sectionClause}` : '',
                 e.pageReference ? `pp.${e.pageReference}` : '',
                 (e as TenderScopeEntry & { revision?: string }).revision ? `Rev: ${(e as TenderScopeEntry & { revision?: string }).revision}` : '',
-                e.importSource ? `Source: ${e.importSource}` : '',
               ].filter(Boolean).join(' · ');
               const srcRow = srcParts ? `<tr><td></td><td colspan="2" style="padding:1px 10px 8px 10px;color:#64748b;font-size:9px;letter-spacing:0.03em">${srcParts}</td></tr>` : '';
               return `<tr>
@@ -2532,7 +2533,10 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<{ type: 'rfi' | 'scopeEntry' | 'comment'; id: string } | null>(null);
 
   const days = daysRemaining(tender.returnDate);
-  const isActive = !['Won', 'Lost', 'No Bid'].includes(tender.status);
+  const isActive = !['Won', 'Lost', 'No Bid', 'Submitted'].includes(tender.status);
+  const submittedLateDays = tender.submittedDate
+    ? Math.max(0, -daysRemaining(tender.returnDate, tender.submittedDate))
+    : 0;
 
   const activeUsers = store.platformUsers.filter(u => u.status === 'Active');
   const filteredMentions = activeUsers.filter(u => u.name.toLowerCase().includes(mentionSearch.toLowerCase())).slice(0, 6);
@@ -2594,7 +2598,13 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
     setTimeout(() => setNoteSaved(false), 2000);
   };
 
-  const setStatus = (status: TenderStatus) => onUpdate({ ...tender, status, lastUpdated: '2026-05-19' });
+  const setStatus = (status: TenderStatus) => {
+    const patch: Partial<Tender> = { status, lastUpdated: new Date().toISOString().slice(0, 10) };
+    if (status === 'Submitted' && !tender.submittedDate) {
+      patch.submittedDate = new Date().toISOString().slice(0, 10);
+    }
+    onUpdate({ ...tender, ...patch });
+  };
 
   const handleSaveDocument = (doc: TenderDocument) => {
     if (editingDoc) {
@@ -2670,6 +2680,16 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
               'bg-[#1a2236] text-slate-300 border-[#1e2d4a]'
             }`}>
               {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d remaining`}
+            </div>
+          )}
+          {tender.status === 'Submitted' && tender.submittedDate && submittedLateDays > 0 && (
+            <div className="text-sm font-bold px-4 py-2 rounded-lg border bg-[#1a2236] text-slate-400 border-[#1e2d4a]">
+              Submitted {submittedLateDays}d late
+            </div>
+          )}
+          {tender.status === 'Submitted' && tender.submittedDate && submittedLateDays === 0 && (
+            <div className="text-sm font-bold px-4 py-2 rounded-lg border bg-emerald-900/30 text-emerald-400 border-emerald-800">
+              Submitted on time
             </div>
           )}
           {canExport && (
@@ -2868,10 +2888,24 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
 
             <div className={sectionCls}>
               <p className="text-sm font-bold text-white mb-1">Return Date</p>
-              <p className={`text-2xl font-bold ${days < 0 ? 'text-red-400' : days <= 7 ? 'text-amber-400' : 'text-white'}`}>
-                {days < 0 ? `${Math.abs(days)}` : days}
-              </p>
-              <p className="text-xs text-slate-500">{days < 0 ? 'days overdue' : 'days remaining'}</p>
+              {isActive ? (
+                <>
+                  <p className={`text-2xl font-bold ${days < 0 ? 'text-red-400' : days <= 7 ? 'text-amber-400' : 'text-white'}`}>
+                    {days < 0 ? `${Math.abs(days)}` : days}
+                  </p>
+                  <p className="text-xs text-slate-500">{days < 0 ? 'days overdue' : 'days remaining'}</p>
+                </>
+              ) : tender.status === 'Submitted' && tender.submittedDate ? (
+                <>
+                  <p className={`text-2xl font-bold ${submittedLateDays > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                    {submittedLateDays > 0 ? `${submittedLateDays}d` : 'On time'}
+                  </p>
+                  <p className="text-xs text-slate-500">{submittedLateDays > 0 ? 'late at submission' : 'submitted'}</p>
+                  <p className="text-xs text-slate-500 mt-1">Submitted {new Date(tender.submittedDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                </>
+              ) : (
+                <p className="text-2xl font-bold text-slate-600">—</p>
+              )}
               <p className="text-xs text-slate-500 mt-2">
                 Due {new Date(tender.returnDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
@@ -3820,7 +3854,8 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
           )}
           {filtered.map(tender => {
             const days = daysRemaining(tender.returnDate);
-            const isActive = !['Won', 'Lost', 'No Bid'].includes(tender.status);
+            const isActive = !['Won', 'Lost', 'No Bid', 'Submitted'].includes(tender.status);
+            const submittedLate = tender.submittedDate ? Math.max(0, -daysRemaining(tender.returnDate, tender.submittedDate)) : 0;
             const tenderAttCount = store.attachments.filter(a => a.linked_type === 'tender' && a.linked_id === tender.id).length;
             const tenderCommentCount = tender.comments?.length ?? 0;
             return (
@@ -3841,6 +3876,10 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
                       <Clock size={11} />
                       {days < 0 ? `${Math.abs(days)}d late` : `${days}d`}
                     </span>
+                  ) : tender.status === 'Submitted' && tender.submittedDate ? (
+                    <span className={`text-xs font-bold ${submittedLate > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                      {submittedLate > 0 ? `${submittedLate}d late` : 'On time'}
+                    </span>
                   ) : <span className="text-xs text-slate-600">—</span>}
                 </div>
                 {canViewPricingList
@@ -3851,6 +3890,7 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
                   <StatusBadge status={tender.status} />
                   {canViewPricingList && <span className="text-xs text-slate-500">{formatValue(tender.estimatedValue)}</span>}
                   {isActive && <span className={`text-xs font-bold ${days < 0 ? 'text-red-400' : days <= 7 ? 'text-amber-400' : 'text-slate-500'}`}>{days < 0 ? `${Math.abs(days)}d late` : `${days}d`}</span>}
+                  {tender.status === 'Submitted' && tender.submittedDate && <span className={`text-xs font-bold ${submittedLate > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{submittedLate > 0 ? `${submittedLate}d late` : 'On time'}</span>}
                 </div>
                 <div className="hidden xl:block"><StatusBadge status={tender.status} /></div>
                 <div className="hidden xl:block"><PriorityBadge priority={tender.priority} /></div>

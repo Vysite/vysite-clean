@@ -539,6 +539,7 @@ export interface Tender {
   estimateItems?: EstimateItem[];
   aiReview?: StoredAIReview;
   contractReviews?: ContractReviewRecord[];
+  submittedDate?: string;
 }
 
 export const tenders: Tender[] = [];

@@ -560,6 +560,7 @@ export interface DBTender {
   ai_review?: unknown;
   contract_review?: unknown;  // legacy — kept for backward compat read
   contract_reviews?: unknown;
+  submitted_date?: string;
 }
 
 export interface DBTCRecord {
@@ -730,6 +731,7 @@ function dbToTender(r: DBTender): Tender {
     estimateItems: (r.estimate_items ?? []) as Tender['estimateItems'],
     aiReview: r.ai_review as Tender['aiReview'] ?? undefined,
     contractReviews: migrateContractReviews(r),
+    submittedDate: r.submitted_date || undefined,
   };
 }
 
@@ -789,6 +791,7 @@ function tenderToDB(t: Tender): DBTender {
     estimate_items: t.estimateItems ?? [],
     ai_review: t.aiReview ?? null,
     contract_reviews: t.contractReviews ?? null,
+    submitted_date: t.submittedDate ?? '',
   };
 }
 
