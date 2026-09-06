@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   MapPin, User, Calendar, Save, TrendingUp, Info,
   FileText, Printer, Clock, CheckCircle2, ChevronRight,
-  AlertCircle, PoundSterling, TrendingDown, Wallet,
+  AlertCircle, TrendingDown, Wallet,
 } from 'lucide-react';
 import KeyDatesPanel from '../../components/KeyDatesPanel';
 import { fmtCurrency, parseRawValue, typeInfo, statusInfo } from './types';
@@ -388,48 +388,56 @@ export default function CommercialOverview({
             </div>
           </div>
 
-          {/* Progress bar */}
-          {contractNum > 0 && (
-            <div className="mt-4 pt-3 border-t border-[#1e2d4a]/50">
-              <div className="flex justify-between text-xs mb-1.5">
-                <span className="text-slate-500">Overall Progress</span>
-                <span className="font-bold text-[#f97316]">{progress}%</span>
-              </div>
-              <div className="w-full bg-[#0d1628] rounded-full h-1.5">
-                <div className="h-1.5 rounded-full bg-[#f97316] transition-all" style={{ width: `${progress}%` }} />
-              </div>
-            </div>
-          )}
-
-          {/* Headline Project Profitability — visible at a glance */}
-          {canViewCosts && contractNum > 0 && (() => {
+          {/* Project Health — at-a-glance summary integrated into Commercial Position */}
+          {contractNum > 0 && (() => {
             const actualCost = costSummary.actual ?? 0;
             const committedCost = costSummary.committed ?? 0;
             const forecastCost = costSummary.forecast ?? 0;
             const forecastFinalCost = actualCost + committedCost + forecastCost;
-            const forecastRevenue = forecastContractSum;
-            const forecastProfit = forecastRevenue - forecastFinalCost;
-            const forecastMargin = forecastRevenue > 0 ? (forecastProfit / forecastRevenue) * 100 : 0;
+            const forecastProfit = forecastContractSum - forecastFinalCost;
+            const forecastMargin = forecastContractSum > 0 ? (forecastProfit / forecastContractSum) * 100 : 0;
             const profitPositive = forecastProfit >= 0;
+            const hasCostData = canViewCosts && (actualCost > 0 || committedCost > 0 || forecastCost > 0);
             return (
-              <div className="mt-4 pt-3 border-t border-[#1e2d4a]/50 grid grid-cols-2 gap-3">
-                <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <PoundSterling size={12} className={profitPositive ? 'text-emerald-400' : 'text-red-400'} />
+              <div className="mt-4 pt-3 border-t border-[#1e2d4a]/50">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {/* Overall Progress */}
+                  <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Overall Progress</span>
+                    <p className="text-lg font-bold text-[#f97316] tabular-nums mt-1">{progress}%</p>
+                    <div className="w-full bg-[#1e2d4a] rounded-full h-1 mt-2">
+                      <div className="h-1 rounded-full bg-[#f97316] transition-all" style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+                  {/* Actual Spend */}
+                  <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Actual Spend</span>
+                    <p className="text-lg font-bold text-emerald-400 tabular-nums mt-1">
+                      {canViewCosts ? (costSummaryLoading ? '…' : fmtCurrency(actualCost)) : '—'}
+                    </p>
+                  </div>
+                  {/* Forecast Profit */}
+                  <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
                     <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Forecast Profit</span>
+                    <p className={`text-lg font-bold tabular-nums mt-1 ${
+                      !canViewCosts ? 'text-slate-600'
+                      : !hasCostData ? 'text-slate-500'
+                      : profitPositive ? 'text-emerald-400' : 'text-red-400'
+                    }`}>
+                      {!canViewCosts ? '—' : costSummaryLoading ? '…' : hasCostData ? fmtCurrency(forecastProfit) : '—'}
+                    </p>
                   </div>
-                  <p className={`text-xl font-bold tabular-nums ${profitPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {costSummaryLoading ? '…' : fmtCurrency(forecastProfit)}
-                  </p>
-                </div>
-                <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <TrendingUp size={12} className={profitPositive ? 'text-emerald-400' : 'text-red-400'} />
+                  {/* Forecast Margin */}
+                  <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
                     <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Forecast Margin</span>
+                    <p className={`text-lg font-bold tabular-nums mt-1 ${
+                      !canViewCosts ? 'text-slate-600'
+                      : !hasCostData ? 'text-slate-500'
+                      : profitPositive ? 'text-emerald-400' : 'text-red-400'
+                    }`}>
+                      {!canViewCosts ? '—' : costSummaryLoading ? '…' : hasCostData ? `${forecastMargin.toFixed(1)}%` : '—'}
+                    </p>
                   </div>
-                  <p className={`text-xl font-bold tabular-nums ${profitPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {costSummaryLoading ? '…' : `${forecastMargin.toFixed(1)}%`}
-                  </p>
                 </div>
               </div>
             );
@@ -457,12 +465,13 @@ export default function CommercialOverview({
         const forecastCost = costSummary.forecast ?? 0;
         const forecastFinalCost = actualCost + committedCost + forecastCost;
         const budgetCost = project.budgetCost ?? 0;
-        const originalForecastProfit = contractNum - budgetCost;
-        const originalMargin = contractNum > 0 ? (originalForecastProfit / contractNum) * 100 : 0;
+        const hasBudget = budgetCost != null && budgetCost > 0;
+        const originalForecastProfit = hasBudget ? contractNum - budgetCost : null;
+        const originalMargin = hasBudget && contractNum > 0 ? ((contractNum - budgetCost) / contractNum) * 100 : null;
         const currentForecastProfit = forecastContractSum - forecastFinalCost;
         const currentMargin = forecastContractSum > 0 ? (currentForecastProfit / forecastContractSum) * 100 : 0;
-        const marginMovement = currentMargin - originalMargin;
-        const marginImproving = marginMovement >= 0;
+        const marginMovement = hasBudget && originalMargin != null ? currentMargin - originalMargin : null;
+        const marginImproving = marginMovement != null && marginMovement >= 0;
 
         return (
           <div className="bg-[#111827] border border-[#1e2d4a] rounded-xl overflow-hidden">
@@ -525,9 +534,13 @@ export default function CommercialOverview({
               <div className="space-y-0">
                 <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
                   <span className="text-sm text-slate-300">Original Forecast Profit</span>
-                  <span className={`text-sm font-semibold tabular-nums ${originalForecastProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {fmtCurrency(originalForecastProfit)}
-                  </span>
+                  {originalForecastProfit != null ? (
+                    <span className={`text-sm font-semibold tabular-nums ${originalForecastProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {fmtCurrency(originalForecastProfit)}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-slate-600 italic">Budget required</span>
+                  )}
                 </div>
                 <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
                   <span className="text-sm text-slate-300">Current Forecast Profit</span>
@@ -537,9 +550,13 @@ export default function CommercialOverview({
                 </div>
                 <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
                   <span className="text-sm text-slate-300">Original Margin %</span>
-                  <span className="text-sm font-medium text-slate-200 tabular-nums">
-                    {originalMargin.toFixed(1)}%
-                  </span>
+                  {originalMargin != null ? (
+                    <span className="text-sm font-medium text-slate-200 tabular-nums">
+                      {originalMargin.toFixed(1)}%
+                    </span>
+                  ) : (
+                    <span className="text-sm text-slate-600 italic">Budget required</span>
+                  )}
                 </div>
                 <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
                   <span className="text-sm text-slate-300">Current Forecast Margin %</span>
@@ -549,10 +566,14 @@ export default function CommercialOverview({
                 </div>
                 <div className="flex items-center justify-between py-1.5">
                   <span className="text-sm text-slate-300">Margin Movement</span>
-                  <span className={`text-sm font-semibold tabular-nums flex items-center gap-1 ${marginImproving ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marginImproving ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                    {marginMovement >= 0 ? '+' : ''}{marginMovement.toFixed(1)}%
-                  </span>
+                  {marginMovement != null ? (
+                    <span className={`text-sm font-semibold tabular-nums flex items-center gap-1 ${marginImproving ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {marginImproving ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                      {marginMovement >= 0 ? '+' : ''}{marginMovement.toFixed(1)}%
+                    </span>
+                  ) : (
+                    <span className="text-sm text-slate-600 italic">Budget required</span>
+                  )}
                 </div>
               </div>
             </div>
