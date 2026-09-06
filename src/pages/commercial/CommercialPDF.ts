@@ -1378,6 +1378,8 @@ interface FullReportData {
   vaAgreed: number;
   currentUserName: string;
   logoUrl?: string;
+  // Project cost data (optional — omitted if user lacks permission or no costs)
+  costSummary?: { actual: number; committed: number; forecast: number };
   // Valuation data (optional — omitted if project has no workbook)
   valuationWorkbook?: DBValuationWorkbook;
   wbLines?: DBWorkbookLine[];
@@ -1855,6 +1857,48 @@ function fullReportBody(d: FullReportData): string {
   </div>
 
   ${positionSection}
+
+  ${(() => {
+    const cs = d.costSummary;
+    if (!cs) return '';
+    const actualCost = cs.actual ?? 0;
+    const committedCost = cs.committed ?? 0;
+    const forecastCost = cs.forecast ?? 0;
+    const forecastFinalCost = actualCost + committedCost + forecastCost;
+    const forecastProfit = forecastContractSum - forecastFinalCost;
+    const forecastMargin = forecastContractSum > 0 ? (forecastProfit / forecastContractSum) * 100 : 0;
+    const profitPositive = forecastProfit >= 0;
+    const hasCostData = actualCost > 0 || committedCost > 0 || forecastCost > 0;
+    const progress = d.contractNum > 0 && d.completedNum != null
+      ? Math.min(100, Math.round((d.completedNum / d.contractNum) * 100)) : 0;
+    const profitColor = profitPositive ? '#16a34a' : '#991b1b';
+
+    return `
+  <div class="exec-section-label" style="margin-top:20px;">Project Health</div>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:14px 0;margin-bottom:16px;">
+    <div style="padding-right:16px;">
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Overall Progress</div>
+      <div style="font-size:15pt;font-weight:700;color:#ea6c00;font-variant-numeric:tabular-nums;">${progress}%</div>
+    </div>
+    <div style="padding:0 16px;border-left:0.5px solid #e2e8f0;">
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Actual Spend</div>
+      <div style="font-size:15pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fv(actualCost)}</div>
+    </div>
+    <div style="padding:0 16px;border-left:0.5px solid #e2e8f0;">
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Forecast Final Cost</div>
+      <div style="font-size:15pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${hasCostData ? fv(forecastFinalCost) : '—'}</div>
+    </div>
+    <div style="padding:0 16px;border-left:0.5px solid #e2e8f0;">
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Forecast Profit</div>
+      <div style="font-size:15pt;font-weight:700;color:${hasCostData ? profitColor : '#475569'};font-variant-numeric:tabular-nums;">${hasCostData ? fv(forecastProfit) : '—'}</div>
+    </div>
+    <div style="padding-left:16px;border-left:0.5px solid #e2e8f0;">
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Forecast Margin</div>
+      <div style="font-size:15pt;font-weight:700;color:${hasCostData ? profitColor : '#475569'};font-variant-numeric:tabular-nums;">${hasCostData ? forecastMargin.toFixed(1) + '%' : '—'}</div>
+    </div>
+  </div>`;
+  })()}
+
   ${keyDatesSection}
 
   <div class="page-break">
@@ -1869,6 +1913,46 @@ function fullReportBody(d: FullReportData): string {
   <div class="page-break">
   ${tlSection}
   </div>
+
+  ${(() => {
+    const cs = d.costSummary;
+    if (!cs) return '';
+    const actualCost = cs.actual ?? 0;
+    const committedCost = cs.committed ?? 0;
+    const forecastCost = cs.forecast ?? 0;
+    const forecastFinalCost = actualCost + committedCost + forecastCost;
+    const currentForecastProfit = forecastContractSum - forecastFinalCost;
+    const currentMargin = forecastContractSum > 0 ? (currentForecastProfit / forecastContractSum) * 100 : 0;
+    const budgetCost = (d.project as { budgetCost?: number | null }).budgetCost ?? null;
+    const hasBudget = budgetCost != null && budgetCost > 0;
+    const originalForecastProfit = hasBudget ? d.contractNum - budgetCost : null;
+    const originalMargin = hasBudget && d.contractNum > 0 ? ((d.contractNum - budgetCost!) / d.contractNum) * 100 : null;
+    const marginMovement = hasBudget && originalMargin != null ? currentMargin - originalMargin : null;
+    const profitPos = currentForecastProfit >= 0;
+
+    const costRows: StatRow[] = [
+      { label: 'Original Budget Cost', value: hasBudget ? fv(budgetCost!) : 'Budget required' },
+      { label: 'Actual Cost to Date', value: fv(actualCost) },
+      { label: 'Committed Costs', value: fv(committedCost) },
+      { label: 'Forecast Cost to Complete', value: fv(forecastCost) },
+      { label: 'Forecast Final Cost', value: fv(forecastFinalCost), style: 'total' },
+      { label: 'Current Forecast Profit', value: fv(currentForecastProfit) },
+      { label: 'Current Forecast Margin', value: currentMargin.toFixed(1) + '%' },
+    ];
+    if (hasBudget && originalForecastProfit != null && originalMargin != null) {
+      costRows.push({ label: 'Original Forecast Profit', value: fv(originalForecastProfit) });
+      costRows.push({ label: 'Original Margin', value: originalMargin.toFixed(1) + '%' });
+      if (marginMovement != null) {
+        costRows.push({ label: 'Margin Movement', value: (marginMovement >= 0 ? '+' : '') + marginMovement.toFixed(1) + '%' });
+      }
+    }
+
+    return `
+  <div class="page-break">
+  <div class="exec-section-label">Project Cost Position</div>
+  ${finStatement(costRows)}
+  </div>`;
+  })()}
 
   <div class="page-break">
   ${valuationsSectionHtml(d)}

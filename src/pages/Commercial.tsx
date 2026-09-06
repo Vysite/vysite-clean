@@ -2450,7 +2450,7 @@ export default function Commercial() {
           )}
           {bannerProject && (
             <button
-              onClick={() => {
+              onClick={async () => {
                 const contractNum = bannerProject.value ? parseRawValue(bannerProject.value) : 0;
                 const variationExposure = vaHasItems ? vaMetrics.exposure : (bannerProject.variationsValue ?? 0);
                 const agreedVariations = vaHasItems ? vaMetrics.agreed : 0;
@@ -2482,6 +2482,23 @@ export default function Commercial() {
                 const _valWb = store.valuationWorkbooks.find(w => w.project_id === bannerProject.id);
                 const _projVals = store.valuations.filter(v => v.project_id === bannerProject.id);
                 const _projValIds = new Set(_projVals.map(v => v.id));
+                const _canViewCosts = canViewCosts;
+                let _costSummary: { actual: number; committed: number; forecast: number } | undefined;
+                if (_canViewCosts && orgId) {
+                  const { data: _costRows } = await supabase
+                    .from('vy_project_costs')
+                    .select('cost_type,net_cost')
+                    .eq('org_id', orgId)
+                    .eq('project_id', bannerProject.id)
+                    .neq('status', 'draft');
+                  const _cs = { actual: 0, committed: 0, forecast: 0 };
+                  for (const _r of (_costRows ?? [])) {
+                    const _ct = (_r as { cost_type: string }).cost_type;
+                    const _nc = Number((_r as { net_cost: number }).net_cost) || 0;
+                    if (_ct in _cs) (_cs as Record<string, number>)[_ct] += _nc;
+                  }
+                  _costSummary = _cs;
+                }
                 exportFullCommercialReport({
                   project: bannerProject,
                   keyDates: projectKeyDates,
@@ -2499,6 +2516,7 @@ export default function Commercial() {
                   vaAgreed: vaMetrics.agreed,
                   currentUserName: store.currentUser?.name ?? '',
                   logoUrl: store.settings?.logo_data_url,
+                  costSummary: _costSummary,
                   valuationWorkbook: _valWb,
                   wbLines: _valWb ? store.workbookLines.filter(l => l.workbook_id === _valWb.id) : [],
                   wbExtras: _valWb ? store.workbookExtras.filter(e => e.workbook_id === _valWb.id) : [],
