@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   MapPin, User, Calendar, Save, TrendingUp, Info,
   FileText, Printer, Clock, CheckCircle2, ChevronRight,
-  AlertCircle,
+  AlertCircle, PoundSterling, TrendingDown, Wallet,
 } from 'lucide-react';
 import KeyDatesPanel from '../../components/KeyDatesPanel';
 import { fmtCurrency, parseRawValue, typeInfo, statusInfo } from './types';
@@ -10,6 +10,7 @@ import type { CommercialRecord, Project } from './types';
 import type { DBKeyDate } from '../../lib/store';
 import { exportPositionStatementPDF } from './CommercialPDF';
 import { useAppStore } from '../../lib/StoreContext';
+import { supabase } from '../../lib/supabase';
 
 interface CommercialOverviewProps {
   project: Project | null;
@@ -23,6 +24,7 @@ interface CommercialOverviewProps {
   vaExposure: number;
   vaAgreed: number;
   vaHasItems: boolean;
+  canViewCosts: boolean;
   onProjectChange: (id: string) => void;
   onAddKeyDate: (d: DBKeyDate) => Promise<void>;
   onUpdateKeyDate: (d: DBKeyDate) => Promise<void>;
@@ -76,7 +78,7 @@ function activityIcon(label: string) {
 
 export default function CommercialOverview({
   project, projects, records, keyDates, canEdit, canCreate,
-  currentUserName, vaExposure, vaAgreed, vaHasItems,
+  currentUserName, vaExposure, vaAgreed, vaHasItems, canViewCosts,
   onProjectChange, onAddKeyDate, onUpdateKeyDate,
   onRemoveKeyDate, onUpdateProject, onNewRecord,
 }: CommercialOverviewProps) {
@@ -87,13 +89,42 @@ export default function CommercialOverview({
   const [contractFocused, setContractFocused] = useState(false);
   const [completedFocused, setCompletedFocused] = useState(false);
   const [showVariationsInfo, setShowVariationsInfo] = useState(false);
+  const [budgetEdit, setBudgetEdit] = useState('');
+  const [budgetFocused, setBudgetFocused] = useState(false);
+  const [costSummary, setCostSummary] = useState<Record<string, number>>({});
+  const [costSummaryLoading, setCostSummaryLoading] = useState(false);
 
   useEffect(() => {
     if (!project) return;
     const raw = project.value ? parseRawValue(project.value) : 0;
     setContractEdit(raw > 0 ? String(raw) : '');
     setCompletedEdit(project.committed != null ? String(project.committed) : '');
+    setBudgetEdit(project.budgetCost != null ? String(project.budgetCost) : '');
   }, [project?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadCostSummary = useCallback(async () => {
+    if (!project || !canViewCosts) { setCostSummary({}); return; }
+    setCostSummaryLoading(true);
+    const oid = store.currentOrgId;
+    if (!oid) { setCostSummaryLoading(false); return; }
+    const { data, error } = await supabase
+      .from('vy_project_costs')
+      .select('cost_type,net_cost')
+      .eq('org_id', oid)
+      .eq('project_id', project.id)
+      .neq('status', 'draft');
+    if (error) { console.error('[Overview] cost summary error:', error); }
+    const summary: Record<string, number> = { actual: 0, committed: 0, forecast: 0 };
+    for (const row of (data ?? [])) {
+      const ct = (row as { cost_type: string }).cost_type;
+      const nc = Number((row as { net_cost: number }).net_cost) || 0;
+      if (ct in summary) summary[ct] += nc;
+    }
+    setCostSummary(summary);
+    setCostSummaryLoading(false);
+  }, [project?.id, canViewCosts, store.currentOrgId]);
+
+  useEffect(() => { loadCostSummary(); }, [loadCostSummary]);
 
   if (!project) {
     return (
@@ -120,12 +151,14 @@ export default function CommercialOverview({
 
   const contractDirty  = contractEdit !== '' && parseFloat(contractEdit) !== (project.value ? parseRawValue(project.value) : 0);
   const completedDirty = completedEdit !== '' && parseFloat(completedEdit) !== (project.committed ?? NaN);
-  const isDirty = contractDirty || completedDirty;
+  const budgetDirty = canViewCosts && budgetEdit !== '' && parseFloat(budgetEdit) !== (project.budgetCost ?? NaN);
+  const isDirty = contractDirty || completedDirty || budgetDirty;
 
   async function handleSave() {
     if (!project) return;
     const newContract  = parseFloat(contractEdit) || 0;
     const newCompleted = completedEdit.trim() !== '' ? parseFloat(completedEdit) : null;
+    const newBudget    = canViewCosts && budgetEdit.trim() !== '' ? parseFloat(budgetEdit) : null;
     const newProgress  = newContract > 0 && newCompleted != null
       ? Math.min(100, Math.round((newCompleted / newContract) * 100))
       : project.progress;
@@ -135,6 +168,7 @@ export default function CommercialOverview({
       value: newContract > 0 ? fmtCurrency(newContract) : project.value,
       committed: newCompleted,
       progress: newProgress,
+      ...(canViewCosts ? { budgetCost: newBudget } : {}),
     });
     setSaving(false);
   }
@@ -367,6 +401,40 @@ export default function CommercialOverview({
             </div>
           )}
 
+          {/* Headline Project Profitability — visible at a glance */}
+          {canViewCosts && contractNum > 0 && (() => {
+            const actualCost = costSummary.actual ?? 0;
+            const committedCost = costSummary.committed ?? 0;
+            const forecastCost = costSummary.forecast ?? 0;
+            const forecastFinalCost = actualCost + committedCost + forecastCost;
+            const forecastRevenue = forecastContractSum;
+            const forecastProfit = forecastRevenue - forecastFinalCost;
+            const forecastMargin = forecastRevenue > 0 ? (forecastProfit / forecastRevenue) * 100 : 0;
+            const profitPositive = forecastProfit >= 0;
+            return (
+              <div className="mt-4 pt-3 border-t border-[#1e2d4a]/50 grid grid-cols-2 gap-3">
+                <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <PoundSterling size={12} className={profitPositive ? 'text-emerald-400' : 'text-red-400'} />
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Forecast Profit</span>
+                  </div>
+                  <p className={`text-xl font-bold tabular-nums ${profitPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {costSummaryLoading ? '…' : fmtCurrency(forecastProfit)}
+                  </p>
+                </div>
+                <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <TrendingUp size={12} className={profitPositive ? 'text-emerald-400' : 'text-red-400'} />
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Forecast Margin</span>
+                  </div>
+                  <p className={`text-xl font-bold tabular-nums ${profitPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {costSummaryLoading ? '…' : `${forecastMargin.toFixed(1)}%`}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Save row */}
           {isDirty && canEdit && (
             <div className="mt-3 flex justify-end">
@@ -381,6 +449,116 @@ export default function CommercialOverview({
           )}
         </div>
       </div>
+
+      {/* Project Cost Position + Project Profitability — below Commercial Position */}
+      {canViewCosts && (() => {
+        const actualCost = costSummary.actual ?? 0;
+        const committedCost = costSummary.committed ?? 0;
+        const forecastCost = costSummary.forecast ?? 0;
+        const forecastFinalCost = actualCost + committedCost + forecastCost;
+        const budgetCost = project.budgetCost ?? 0;
+        const originalForecastProfit = contractNum - budgetCost;
+        const originalMargin = contractNum > 0 ? (originalForecastProfit / contractNum) * 100 : 0;
+        const currentForecastProfit = forecastContractSum - forecastFinalCost;
+        const currentMargin = forecastContractSum > 0 ? (currentForecastProfit / forecastContractSum) * 100 : 0;
+        const marginMovement = currentMargin - originalMargin;
+        const marginImproving = marginMovement >= 0;
+
+        return (
+          <div className="bg-[#111827] border border-[#1e2d4a] rounded-xl overflow-hidden">
+            <div className="border-b border-[#1e2d4a] px-5 py-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Wallet size={16} className="text-[#f97316]" />
+                <h3 className="text-sm font-bold text-white">Project Cost Position</h3>
+              </div>
+              <p className="text-xs text-slate-500">Net costs only — draft costs excluded from live position</p>
+            </div>
+            <div className="px-5 py-4">
+              {/* Original Budget Cost — editable */}
+              <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
+                <span className="text-sm text-slate-300">Original Budget Cost</span>
+                {canEdit ? (
+                  <div className="bg-[#0d1628] border border-[#1e2d4a] focus-within:border-[#f97316] rounded px-2.5 py-1 min-w-[160px] transition-colors">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={budgetFocused ? budgetEdit : (budgetEdit && parseFloat(budgetEdit) ? fmtEditDisplay(budgetEdit) : '')}
+                      onFocus={() => setBudgetFocused(true)}
+                      onBlur={() => { setBudgetFocused(false); setBudgetEdit(normaliseInput(budgetEdit)); }}
+                      onChange={e => setBudgetEdit(normaliseInput(e.target.value))}
+                      placeholder="Enter budget"
+                      className={`${inputCls} text-right w-full`}
+                    />
+                  </div>
+                ) : (
+                  <span className="text-sm font-semibold text-white tabular-nums">
+                    {budgetCost > 0 ? fmtCurrency(budgetCost) : '—'}
+                  </span>
+                )}
+              </div>
+              {[
+                { label: 'Actual Cost to Date', value: actualCost, color: 'text-emerald-400' },
+                { label: 'Committed Costs', value: committedCost, color: 'text-amber-400' },
+                { label: 'Forecast Cost to Complete', value: forecastCost, color: 'text-sky-400' },
+              ].map(row => (
+                <div key={row.label} className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
+                  <span className="text-sm text-slate-300">{row.label}</span>
+                  <span className={`text-sm font-semibold tabular-nums ${row.color}`}>
+                    {costSummaryLoading ? '…' : fmtCurrency(row.value)}
+                  </span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between py-2 border-t border-[#1e2d4a] mt-1">
+                <span className="text-sm font-bold text-white">Forecast Final Cost</span>
+                <span className="text-base font-bold text-[#f97316] tabular-nums">
+                  {costSummaryLoading ? '…' : fmtCurrency(forecastFinalCost)}
+                </span>
+              </div>
+            </div>
+
+            {/* Project Profitability section */}
+            <div className="border-t border-[#1e2d4a] px-5 py-4">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp size={16} className="text-[#f97316]" />
+                <h3 className="text-sm font-bold text-white">Project Profitability</h3>
+              </div>
+              <div className="space-y-0">
+                <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
+                  <span className="text-sm text-slate-300">Original Forecast Profit</span>
+                  <span className={`text-sm font-semibold tabular-nums ${originalForecastProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {fmtCurrency(originalForecastProfit)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
+                  <span className="text-sm text-slate-300">Current Forecast Profit</span>
+                  <span className={`text-sm font-semibold tabular-nums ${currentForecastProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {costSummaryLoading ? '…' : fmtCurrency(currentForecastProfit)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
+                  <span className="text-sm text-slate-300">Original Margin %</span>
+                  <span className="text-sm font-medium text-slate-200 tabular-nums">
+                    {originalMargin.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
+                  <span className="text-sm text-slate-300">Current Forecast Margin %</span>
+                  <span className={`text-sm font-semibold tabular-nums ${currentMargin >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {costSummaryLoading ? '…' : `${currentMargin.toFixed(1)}%`}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1.5">
+                  <span className="text-sm text-slate-300">Margin Movement</span>
+                  <span className={`text-sm font-semibold tabular-nums flex items-center gap-1 ${marginImproving ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marginImproving ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                    {marginMovement >= 0 ? '+' : ''}{marginMovement.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Two column layout: Key Dates + Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

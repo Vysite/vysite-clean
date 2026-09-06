@@ -5,6 +5,7 @@ import {
   Banknote, HardHat, Calculator,
   ChevronRight, AlertCircle, CheckCircle2, Clock, CircleDot,
   GitBranch, GitMerge, MessageSquare, Send, ArrowRight,
+  PoundSterling,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/AuthContext';
@@ -21,6 +22,7 @@ import VariationAccount, { calcVAMetrics } from './commercial/VariationAccount';
 import CommercialApplications from './commercial/CommercialApplications';
 import CommercialTimeline from './commercial/CommercialTimeline';
 import CommercialValuations from './commercial/CommercialValuations';
+import ProjectCosts from './commercial/ProjectCosts';
 import type { CommercialTab } from './commercial/types';
 import { RECORD_TYPES, STATUSES, typeInfo, statusInfo, parseRawValue, fmtCurrency as fmtC } from './commercial/types';
 import { exportFullCommercialReport } from './commercial/CommercialPDF';
@@ -2159,6 +2161,7 @@ const TABS: { key: CommercialTab; label: string; icon: React.ReactNode; comingSo
   { key: 'applications',      label: 'Applications',        icon: <div className="text-current"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div> },
   { key: 'timeline',          label: 'Commercial Timeline', icon: <Clock size={13} /> },
   { key: 'valuations',        label: 'Valuations',          icon: <Calculator size={13} /> },
+  { key: 'project-costs',     label: 'Project Costs',        icon: <PoundSterling size={13} /> },
 ];
 
 // ─── Main Commercial page ──────────────────────────────────────────────────────
@@ -2173,6 +2176,7 @@ export default function Commercial() {
   const canCreate  = perms['commercial.create']  ?? false;
   const canDelete  = perms['commercial.delete']  ?? false;
   const canViewPricing = perms['commercial.view_pricing'] ?? false;
+  const canViewCosts = perms['commercial.view_costs'] ?? false;
 
   const [activeTab, setActiveTab]   = useState<CommercialTab>('overview');
   const [records, setRecords]       = useState<CommercialRecord[]>([]);
@@ -2554,6 +2558,7 @@ export default function Commercial() {
           vaExposure={vaMetrics.exposure}
           vaAgreed={vaMetrics.agreed}
           vaHasItems={vaHasItems}
+          canViewCosts={canViewCosts}
           onProjectChange={(id) => setBannerProjectId(id)}
           onAddKeyDate={store.addKeyDate}
           onUpdateKeyDate={store.updateKeyDate}
@@ -2654,6 +2659,18 @@ export default function Commercial() {
       )}
       {activeTab === 'valuations' && (
         <CommercialValuations
+          project={bannerProject}
+          projects={projects}
+          orgId={orgId}
+          canCreate={canCreate}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          currentUserName={store.currentUser?.name ?? ''}
+          onProjectChange={(id) => setBannerProjectId(id)}
+        />
+      )}
+      {activeTab === 'project-costs' && (
+        <ProjectCosts
           project={bannerProject}
           projects={projects}
           orgId={orgId}

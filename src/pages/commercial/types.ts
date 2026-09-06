@@ -6,7 +6,7 @@ export type { CommercialRecord, CommercialLineItem, CommercialRecordType, Commer
 export type { DBAttachment, DBKeyDate };
 export type { Project };
 
-export type CommercialTab = 'overview' | 'register' | 'variation-account' | 'applications' | 'timeline' | 'valuations';
+export type CommercialTab = 'overview' | 'register' | 'variation-account' | 'applications' | 'timeline' | 'valuations' | 'project-costs';
 
 export interface BannerValues {
   contractEdit: string;

@@ -50,6 +50,7 @@ export type PermissionKey =
   | 'tender.view_financials'
   // Commercial
   | 'commercial.view_pricing'
+  | 'commercial.view_costs'
   | 'commercial.edit_pricing'
   | 'commercial.view_rates'
   | 'commercial.view_values'
@@ -161,7 +162,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
     'tender.risks.edit': true, 'tender.reclassify': true, 'tender.reconcile': true,
     'projects.view_financials': true, 'tender.view_financials': true,
-    'commercial.view_pricing': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
+    'commercial.view_pricing': true, 'commercial.view_costs': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
     'commercial.view_values': true, 'commercial.view_reports': true, 'commercial.export_reports': true,
     'commercial.edit_project_finance_progress': true,
     'ai.upload_docs': true, 'ai.run_review': true, 'ai.approve_findings': true, 'ai.reconcile': true,
@@ -187,7 +188,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
     'tender.risks.edit': true, 'tender.reclassify': true, 'tender.reconcile': true,
     'projects.view_financials': true, 'tender.view_financials': true,
-    'commercial.view_pricing': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
+    'commercial.view_pricing': true, 'commercial.view_costs': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
     'commercial.view_values': true, 'commercial.view_reports': true, 'commercial.export_reports': true,
     'commercial.edit_project_finance_progress': true,
     'ai.upload_docs': true, 'ai.run_review': true, 'ai.approve_findings': true, 'ai.reconcile': true,
@@ -256,7 +257,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
     'tender.risks.edit': true, 'tender.reclassify': true, 'tender.reconcile': true,
     'projects.view_financials': true, 'tender.view_financials': true,
-    'commercial.view_pricing': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
+    'commercial.view_pricing': true, 'commercial.view_costs': true, 'commercial.edit_pricing': true, 'commercial.view_rates': true,
     'commercial.view_values': true, 'commercial.view_reports': true, 'commercial.export_reports': true,
     'ai.upload_docs': true, 'ai.run_review': true, 'ai.approve_findings': true, 'ai.reconcile': true,
     'ai.import': true, 'ai.export': true,
@@ -310,7 +311,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'tender.assumptions.edit': true, 'tender.exclusions.edit': true, 'tender.scope_notes.edit': true,
     'tender.risks.edit': true,
     'projects.view_financials': true, 'tender.view_financials': true,
-    'commercial.view_pricing': true, 'commercial.view_values': true,
+    'commercial.view_pricing': true, 'commercial.view_values': true, 'commercial.view_costs': true,
     'docs.view': true, 'docs.upload': true, 'docs.download': true,
     'modules.projects': true, 'modules.snagging': true, 'modules.site_forms': true, 'modules.testing': true,
     'modules.actions': true, 'modules.comments': true, 'modules.reports': true,
@@ -363,7 +364,7 @@ export function resolvePermissions(user: DBPlatformUser): Record<PermissionKey, 
     'tender.view','tender.rfi.create','tender.rfi.edit','tender.rfi.delete',
     'tender.assumptions.edit','tender.exclusions.edit','tender.scope_notes.edit','tender.risks.edit',
     'tender.reclassify','tender.reconcile','tender.view_financials',
-    'commercial.view_pricing','commercial.edit_pricing','commercial.view_rates','commercial.view_values',
+    'commercial.view_pricing','commercial.view_costs','commercial.edit_pricing','commercial.view_rates','commercial.view_values',
     'commercial.view_reports','commercial.export_reports','commercial.edit_project_finance_progress',
     'ai.upload_docs','ai.run_review','ai.approve_findings','ai.reconcile','ai.import','ai.export',
     'docs.view','docs.upload','docs.download','docs.delete','docs.view_confidential',
@@ -416,6 +417,27 @@ export interface DBProject {
   open_snags: number;
   committed?: number | null;
   variations_value?: number | null;
+  budget_cost?: number | null;
+}
+
+export interface DBProjectCost {
+  id: string;
+  org_id: string;
+  project_id: string;
+  cost_date: string;
+  supplier: string;
+  reference: string;
+  description: string;
+  cost_category: string;
+  net_cost: number;
+  vat_amount: number;
+  gross_cost: number;
+  cost_type: 'actual' | 'committed' | 'forecast';
+  status: 'draft' | 'confirmed' | 'invoiced' | 'paid';
+  notes: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DBProjectDocument {
@@ -598,6 +620,7 @@ function dbToProject(r: DBProject): Project {
     openSnags: r.open_snags,
     committed: r.committed ?? null,
     variationsValue: r.variations_value ?? null,
+    budgetCost: r.budget_cost ?? null,
   };
 }
 
@@ -617,6 +640,7 @@ function projectToDB(p: Project): DBProject {
     open_snags: p.openSnags,
     committed: p.committed ?? null,
     variations_value: p.variationsValue ?? null,
+    budget_cost: p.budgetCost ?? null,
   };
 }
 
@@ -1364,6 +1388,14 @@ export interface AppStore {
   addSupplierLabourRateType: (rt: DBSupplierLabourRateType) => Promise<void>;
   updateSupplierLabourRateType: (rt: DBSupplierLabourRateType) => Promise<void>;
   removeSupplierLabourRateType: (id: string) => Promise<void>;
+
+  // Project Costs (on-demand, per-project)
+  loadProjectCosts: (projectId: string) => Promise<void>;
+  loadProjectCostSummary: (projectId: string) => Promise<Record<string, number>>;
+  addProjectCost: (c: DBProjectCost) => Promise<string | null>;
+  updateProjectCost: (c: DBProjectCost) => Promise<void>;
+  removeProjectCost: (id: string) => Promise<void>;
+  batchAddProjectCosts: (costs: DBProjectCost[]) => Promise<string | null>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -2584,6 +2616,74 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('removeSupplierLabourRateType', 'vy_supplier_labour_rate_types', error);
   }, []);
 
+  // ── Project Costs (on-demand, per-project) ───────────────────────────────────
+  const [projectCosts, setProjectCosts] = useState<DBProjectCost[]>([]);
+
+  const loadProjectCosts = useCallback(async (projectId: string) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const { data, error } = await supabase
+      .from('vy_project_costs')
+      .select('*')
+      .eq('org_id', oid)
+      .eq('project_id', projectId)
+      .order('cost_date', { ascending: false });
+    if (error) { logWrite('loadProjectCosts', 'vy_project_costs', error); return; }
+    setProjectCosts((data ?? []) as DBProjectCost[]);
+  }, []);
+
+  const loadProjectCostSummary = useCallback(async (projectId: string): Promise<Record<string, number>> => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return {};
+    const { data, error } = await supabase
+      .from('vy_project_costs')
+      .select('cost_type,status,net_cost')
+      .eq('org_id', oid)
+      .eq('project_id', projectId)
+      .neq('status', 'draft');
+    if (error) { logWrite('loadProjectCostSummary', 'vy_project_costs', error); return {}; }
+    const summary: Record<string, number> = { actual: 0, committed: 0, forecast: 0, total: 0 };
+    for (const row of (data ?? [])) {
+      const ct = (row as { cost_type: string }).cost_type;
+      const nc = Number((row as { net_cost: number }).net_cost) || 0;
+      if (ct in summary) summary[ct] += nc;
+      summary.total += nc;
+    }
+    return summary;
+  }, []);
+
+  const addProjectCost = useCallback(async (c: DBProjectCost): Promise<string | null> => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return 'No organisation context.';
+    setProjectCosts(prev => [c, ...prev]);
+    const { error } = await supabase.from('vy_project_costs').insert({ ...c, org_id: oid });
+    logWrite('addProjectCost', 'vy_project_costs', error);
+    return error ? error.message : null;
+  }, []);
+
+  const updateProjectCost = useCallback(async (c: DBProjectCost) => {
+    setProjectCosts(prev => prev.map(x => x.id === c.id ? c : x));
+    const { error } = await supabase.from('vy_project_costs').update(c).eq('id', c.id);
+    logWrite('updateProjectCost', 'vy_project_costs', error);
+  }, []);
+
+  const removeProjectCost = useCallback(async (id: string) => {
+    setProjectCosts(prev => prev.filter(x => x.id !== id));
+    const { error } = await supabase.from('vy_project_costs').delete().eq('id', id);
+    logWrite('removeProjectCost', 'vy_project_costs', error);
+  }, []);
+
+  const batchAddProjectCosts = useCallback(async (costs: DBProjectCost[]): Promise<string | null> => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return 'No organisation context.';
+    const rows = costs.map(c => ({ ...c, org_id: oid }));
+    const { error } = await supabase.from('vy_project_costs').insert(rows);
+    logWrite('batchAddProjectCosts', 'vy_project_costs', error);
+    if (error) return error.message;
+    setProjectCosts(prev => [...costs, ...prev]);
+    return null;
+  }, []);
+
   return {
     projects, projectDocuments, attachments,
     actions, snags, snaggingReports, siteForms, tenders, tcRecords, maintenanceJobs, programmes, programmeTasks, keyDates,
@@ -2639,5 +2739,8 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addSupplierTrade, updateSupplierTrade, removeSupplierTrade,
     addSupplierSpecialism, updateSupplierSpecialism, removeSupplierSpecialism,
     addSupplierLabourRateType, updateSupplierLabourRateType, removeSupplierLabourRateType,
+    projectCosts,
+    loadProjectCosts, loadProjectCostSummary,
+    addProjectCost, updateProjectCost, removeProjectCost, batchAddProjectCosts,
   };
 }

@@ -20,6 +20,7 @@ export interface Project {
   value: string;
   committed?: number | null;
   variationsValue?: number | null;
+  budgetCost?: number | null;
 }
 
 export type SnagPriority = 'Critical' | 'High' | 'Medium' | 'Low';
