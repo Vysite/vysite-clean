@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Plus, X, Save, Trash2, Paperclip, Eye, Download, FileText, AlertCircle, TrendingUp, TrendingDown, Info, Printer, MessageSquare, HardHat, ChevronDown, Calculator, Copy, CreditCard as Edit2 } from 'lucide-react';
+import { Plus, X, Save, Trash2, Paperclip, Eye, Download, FileText, AlertCircle, TrendingUp, TrendingDown, Info, Printer, MessageSquare, HardHat, ChevronDown, Calculator, Copy, CreditCard as Edit2, Layers } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAppStore } from '../../lib/StoreContext';
 import FileUploadComponent from '../../components/FileUpload';
@@ -7,7 +7,7 @@ import type { UploadedFile } from '../../components/FileUpload';
 import type { DBVariationAccountItem, DBAttachment, DBVABuildUpLine, DBVAComment, DBNotification } from '../../lib/store';
 import type { Project } from '../../data/types';
 import { fmtCurrency, fmtDate, parseRawValue } from './types';
-import { exportVariationAccountPDF, buildVAInternalHTML, buildVAClientHTML } from './CommercialPDF';
+import { exportVariationAccountPDF, buildVAInternalHTML, buildVAClientHTML, buildVAPackHTML } from './CommercialPDF';
 import { openPrintTab } from '../../lib/printTab';
 import { RowActionsMenu } from '../../components/RowActionsMenu';
 import { nextRef as getNextRef } from '../../lib/refSequence';
@@ -1033,15 +1033,20 @@ interface VariationAccountProps {
   orgId: string;
   canEdit: boolean;
   canDelete: boolean;
+  canViewPricing?: boolean;
 }
 
-export function VariationAccount({ project, orgId, canEdit, canDelete }: VariationAccountProps) {
+export function VariationAccount({ project, orgId, canEdit, canDelete, canViewPricing }: VariationAccountProps) {
   const store = useAppStore();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>('create');
   const [selectedItem, setSelectedItem] = useState<DBVariationAccountItem | null>(null);
   const [templateData, setTemplateData] = useState<DBVariationAccountItem | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showPackMenu, setShowPackMenu] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const packMenuRef = useRef<HTMLDivElement>(null);
 
   const items = (store.variationAccountItems ?? []).filter(i => i.project_id === project.id);
 
@@ -1050,6 +1055,52 @@ export function VariationAccount({ project, orgId, canEdit, canDelete }: Variati
   const nextRef = pendingRef; // set before drawer opens via openCreate
 
   const { exposure, agreed, rejected } = calcVAMetrics(items);
+
+  // Close pack menu on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (packMenuRef.current && !packMenuRef.current.contains(e.target as Node)) {
+        setShowPackMenu(false);
+      }
+    }
+    if (showPackMenu) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showPackMenu]);
+
+  const selectedCount = selectedIds.size;
+  const allSelected = items.length > 0 && selectedIds.size === items.length;
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleSelectAll() {
+    setSelectedIds(prev => prev.size === items.length ? new Set() : new Set(items.map(i => i.id)));
+  }
+  function clearSelection() { setSelectedIds(new Set()); }
+
+  async function generatePack(mode: 'client' | 'internal') {
+    setShowPackMenu(false);
+    if (selectedCount === 0) return;
+    setGenerating(true);
+    try {
+      const selectedItems = items.filter(i => selectedIds.has(i.id));
+      const proj = { name: project.name, client: project.client, projectManager: project.projectManager, startDate: project.startDate };
+      const logoUrl = store.settings?.logo_data_url;
+      const currentUserName = store.currentUser?.name;
+      const packData = await Promise.all(selectedItems.map(async item => {
+        const lines = (store.vaBuildUpLines ?? []).filter(l => l.va_item_id === item.id);
+        const comments = (store.vaComments ?? []).filter(c => c.va_item_id === item.id);
+        const attachments = (store.attachments ?? []).filter(a => a.linked_type === 'variation_account' && a.linked_id === item.id);
+        const attsWithData = attachments.map(a => ({ ...a, data_url: a.data_url ?? '' }));
+        const buildUpTotal = lines.reduce((s, l) => s + (l.line_total ?? 0), 0);
+        return { item, lines, comments: mode === 'internal' ? comments : [], attachments: attsWithData, buildUpTotal, logoUrl, currentUserName, project: proj };
+      }));
+      const html = buildVAPackHTML(packData, mode);
+      openPrintTab(html);
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function openCreate() {
     const ref = await getNextRef(project.id, 'VAR', 3);
@@ -1110,15 +1161,48 @@ export function VariationAccount({ project, orgId, canEdit, canDelete }: Variati
 
       {/* Toolbar */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">{items.length} variation{items.length !== 1 ? 's' : ''}</p>
-        {canEdit && (
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#f97316] text-white text-xs font-semibold hover:bg-[#ea6c0a] transition-colors"
-          >
-            <Plus size={13} /> Add Variation
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-slate-500">{items.length} variation{items.length !== 1 ? 's' : ''}</p>
+          {selectedCount > 0 && (
+            <span className="text-xs text-[#f97316] font-semibold">{selectedCount} selected</span>
+          )}
+          {selectedCount > 0 && (
+            <button onClick={clearSelection} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Clear</button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {selectedCount > 0 && (
+            <div className="relative" ref={packMenuRef}>
+              <button
+                onClick={() => setShowPackMenu(v => !v)}
+                disabled={generating}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#1e2d4a] text-xs font-semibold text-slate-300 hover:border-slate-600 transition-colors disabled:opacity-50"
+              >
+                {generating ? <><Layers size={13} className="animate-pulse" /> Generating…</> : <><Printer size={13} /> Print Selected <ChevronDown size={11} /></>}
+              </button>
+              {showPackMenu && (
+                <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-[#1e2d4a] bg-[#0d1628] shadow-xl z-10 overflow-hidden">
+                  <button onClick={() => generatePack('client')} className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-[#1a2236] transition-colors flex items-center gap-2">
+                    <Copy size={12} /> Client Pack
+                  </button>
+                  {canViewPricing && (
+                    <button onClick={() => generatePack('internal')} className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-[#1a2236] transition-colors flex items-center gap-2">
+                      <Info size={12} /> Internal Pack
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {canEdit && (
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#f97316] text-white text-xs font-semibold hover:bg-[#ea6c0a] transition-colors"
+            >
+              <Plus size={13} /> Add Variation
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -1133,6 +1217,9 @@ export function VariationAccount({ project, orgId, canEdit, canDelete }: Variati
           <table className="w-full text-xs">
             <thead className="bg-[#0d1628]">
               <tr>
+                <th className={`${thCls} w-8`}>
+                  <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="w-3.5 h-3.5 rounded border-slate-600 bg-[#0d1628] accent-[#f97316] cursor-pointer" title="Select all project variations" />
+                </th>
                 <th className={thCls}>Ref</th>
                 <th className={thCls}>Title</th>
                 <th className={thCls}>Status</th>
@@ -1149,6 +1236,9 @@ export function VariationAccount({ project, orgId, canEdit, canDelete }: Variati
                   className={`border-t border-[#1e2d4a]/50 hover:bg-[#1a2236]/40 cursor-pointer transition-colors ${idx % 2 === 0 ? '' : 'bg-[#0a0f1e]/20'}`}
                   onClick={() => openEdit(item)}
                 >
+                  <td className={`${tdCls}`} onClick={e => e.stopPropagation()}>
+                    <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} className="w-3.5 h-3.5 rounded border-slate-600 bg-[#0d1628] accent-[#f97316] cursor-pointer" />
+                  </td>
                   <td className={`${tdCls} font-mono text-slate-400`}>{item.reference}</td>
                   <td className={`${tdCls} text-slate-200 max-w-[200px] truncate`}>{item.title}</td>
                   <td className={tdCls}><StatusBadge status={item.status} /></td>

@@ -2614,6 +2614,7 @@ export default function Commercial() {
           canCreate={canCreate}
           canEdit={canEdit}
           canDelete={canDelete}
+          canViewPricing={canViewPricing}
           currentUserName={store.currentUser?.name ?? ''}
           openItemId={openVariationId}
           onItemOpened={() => setOpenVariationId(null)}

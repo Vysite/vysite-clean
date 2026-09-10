@@ -2665,6 +2665,28 @@ export function buildVAClientHTML(data: VABuildUpData): string {
   return vaBuildUpShell(`${ref} — Client Copy`, vaClientBody(data));
 }
 
+export function buildVAPackHTML(items: VABuildUpData[], mode: 'client' | 'internal'): string {
+  const title = mode === 'internal' ? 'Variation Pack — Internal' : 'Variation Pack — Client';
+  const bodies = items.map((d, i) => {
+    const body = mode === 'internal' ? vaInternalBody(d) : vaClientBody(d);
+    const breakClass = i > 0 ? ' pb-before' : '';
+    return `<div class="va-pack-item${breakClass}">${body}</div>`;
+  }).join('\n');
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${esc(title)}</title>
+<style>${VA_BUILD_UP_CSS}
+.va-pack-item { page-break-after: always; }
+.va-pack-item:last-child { page-break-after: auto; }
+</style>
+<script>window.onload=function(){window.print();};<\/script>
+</head>
+<body>${bodies}</body>
+</html>`;
+}
+
 export function exportVAInternalPDF(data: VABuildUpData): void {
   openPrintTab(buildVAInternalHTML(data));
 }
