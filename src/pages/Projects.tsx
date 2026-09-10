@@ -2207,13 +2207,45 @@ function EditProjectModal({ project, onClose, onSave }: EditProjectModalProps) {
           <div><label className={labelCls}>Client *</label><input required value={form.client} onChange={e => setForm(f => ({ ...f, client: e.target.value }))} className={inputCls} /></div>
           <div><label className={labelCls}>Location</label><input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className={inputCls} /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={labelCls}>Project Manager</label><input value={form.projectManager} onChange={e => setForm(f => ({ ...f, projectManager: e.target.value }))} className={inputCls} /></div>
+            <div><label className={labelCls}>Project Manager</label>
+              <select value={orgUsers.find(u => u.name === form.projectManager)?.id ?? (form.projectManager ? '__custom__' : '')} onChange={e => { const u = orgUsers.find(u => u.id === e.target.value); setForm(f => ({ ...f, projectManager: u ? u.name : f.projectManager })); }} className={inputCls}>
+                <option value="">— Unassigned —</option>
+                {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {form.projectManager && !orgUsers.find(u => u.name === form.projectManager) && <option value="__custom__">{form.projectManager}</option>}
+              </select>
+            </div>
             <div><label className={labelCls}>Status</label>
               <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as ProjectStatus }))} className={inputCls}>
                 <option>Active</option><option>On Hold</option><option>Tender</option><option>Completed</option>
               </select>
             </div>
           </div>
+
+          {/* Management Team */}
+          <div className="border-t border-[#1e2d4a] pt-4">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Project Management Team</p>
+            <div className="grid grid-cols-1 gap-3">
+              <div><label className={labelCls}>Commercial Lead</label>
+                <select value={form.commercialLeadId} onChange={e => setForm(f => ({ ...f, commercialLeadId: e.target.value }))} className={inputCls}>
+                  <option value="">— Unassigned —</option>
+                  {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div><label className={labelCls}>Technical Lead</label>
+                <select value={form.technicalLeadId} onChange={e => setForm(f => ({ ...f, technicalLeadId: e.target.value }))} className={inputCls}>
+                  <option value="">— Unassigned —</option>
+                  {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div><label className={labelCls}>Site Manager</label>
+                <select value={form.siteManagerId} onChange={e => setForm(f => ({ ...f, siteManagerId: e.target.value }))} className={inputCls}>
+                  <option value="">— Unassigned —</option>
+                  {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Start Date</label><input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className={inputCls} /></div>
             <div><label className={labelCls}>Completion Date</label><input type="date" value={form.completionDate} onChange={e => setForm(f => ({ ...f, completionDate: e.target.value }))} className={inputCls} /></div>
