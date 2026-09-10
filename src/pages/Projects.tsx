@@ -1469,6 +1469,31 @@ function ProjectDetail({ project, onBack, onNavigate, onEdit, onDelete }: Projec
             </div>
           ))}
         </div>
+
+        {/* Management Team */}
+        {(() => {
+          const team = [
+            { label: 'Commercial Lead', name: project.commercialLeadId ? (store.platformUsers.find(u => u.id === project.commercialLeadId)?.name ?? '') : '' },
+            { label: 'Project Manager', name: project.projectManager || '' },
+            { label: 'Technical Lead', name: project.technicalLeadId ? (store.platformUsers.find(u => u.id === project.technicalLeadId)?.name ?? '') : '' },
+            { label: 'Site Manager', name: project.siteManagerId ? (store.platformUsers.find(u => u.id === project.siteManagerId)?.name ?? '') : '' },
+          ].filter(t => t.name);
+          if (team.length === 0) return null;
+          return (
+            <div className="mt-4 pt-4 border-t border-[#1e2d4a]">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2.5">Management Team</p>
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                {team.map(t => (
+                  <div key={t.label} className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-600 uppercase tracking-wide font-semibold">{t.label}</span>
+                    <span className="text-xs font-medium text-slate-300">{t.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="mt-5">
           <div className="flex justify-between text-sm mb-2">
             <span className="font-medium text-slate-400">Overall Progress</span>
@@ -2134,6 +2159,8 @@ interface EditProjectModalProps {
 }
 
 function EditProjectModal({ project, onClose, onSave }: EditProjectModalProps) {
+  const store = useAppStore();
+  const orgUsers = (store.platformUsers ?? []).filter(u => u.status === 'Active').sort((a, b) => a.name.localeCompare(b.name));
   const [form, setForm] = useState({
     name: project.name,
     client: project.client,
@@ -2144,12 +2171,24 @@ function EditProjectModal({ project, onClose, onSave }: EditProjectModalProps) {
     completionDate: project.completionDate,
     value: project.value,
     committed: project.committed != null ? String(project.committed) : '',
+    commercialLeadId: project.commercialLeadId ?? '',
+    technicalLeadId: project.technicalLeadId ?? '',
+    siteManagerId: project.siteManagerId ?? '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const committedNum = form.committed.trim() ? parseFloat(form.committed.replace(/[£,\s]/g, '')) : null;
-    onSave({ ...project, ...form, value: formatProjectValue(form.value), committed: isNaN(committedNum as number) ? null : committedNum });
+    onSave({
+      ...project,
+      name: form.name, client: form.client, location: form.location,
+      projectManager: form.projectManager, status: form.status,
+      startDate: form.startDate, completionDate: form.completionDate,
+      value: formatProjectValue(form.value), committed: isNaN(committedNum as number) ? null : committedNum,
+      commercialLeadId: form.commercialLeadId || null,
+      technicalLeadId: form.technicalLeadId || null,
+      siteManagerId: form.siteManagerId || null,
+    });
     onClose();
   };
 
@@ -2201,9 +2240,12 @@ interface CreateProjectModalProps {
 }
 
 function CreateProjectModal({ onClose, onSave }: CreateProjectModalProps) {
+  const store = useAppStore();
+  const orgUsers = (store.platformUsers ?? []).filter(u => u.status === 'Active').sort((a, b) => a.name.localeCompare(b.name));
   const [form, setForm] = useState({
     name: '', client: '', location: '', projectManager: '',
     status: 'Active' as ProjectStatus, startDate: '', completionDate: '', value: '', committed: '',
+    commercialLeadId: '', technicalLeadId: '', siteManagerId: '',
   });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -2217,6 +2259,9 @@ function CreateProjectModal({ onClose, onSave }: CreateProjectModalProps) {
       ...form,
       value: formatProjectValue(form.value),
       committed: committedNum && !isNaN(committedNum) ? committedNum : null,
+      commercialLeadId: form.commercialLeadId || null,
+      technicalLeadId: form.technicalLeadId || null,
+      siteManagerId: form.siteManagerId || null,
       id: `p${Date.now()}`,
       openActions: 0,
       openSnags: 0,
@@ -2247,13 +2292,44 @@ function CreateProjectModal({ onClose, onSave }: CreateProjectModalProps) {
           <div><label className={labelCls}>Client *</label><input required value={form.client} onChange={e => setForm(f => ({ ...f, client: e.target.value }))} className={inputCls} placeholder="Client name" /></div>
           <div><label className={labelCls}>Location</label><input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className={inputCls} placeholder="Site address" /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={labelCls}>Project Manager</label><input value={form.projectManager} onChange={e => setForm(f => ({ ...f, projectManager: e.target.value }))} className={inputCls} /></div>
+            <div><label className={labelCls}>Project Manager</label>
+              <select value={form.projectManager} onChange={e => { const u = orgUsers.find(u => u.id === e.target.value); setForm(f => ({ ...f, projectManager: u ? u.name : '' })); }} className={inputCls}>
+                <option value="">— Unassigned —</option>
+                {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
             <div><label className={labelCls}>Status</label>
               <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as ProjectStatus }))} className={inputCls}>
                 <option>Active</option><option>On Hold</option><option>Tender</option><option>Completed</option>
               </select>
             </div>
           </div>
+
+          {/* Management Team */}
+          <div className="border-t border-[#1e2d4a] pt-4">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Project Management Team</p>
+            <div className="grid grid-cols-1 gap-3">
+              <div><label className={labelCls}>Commercial Lead</label>
+                <select value={form.commercialLeadId} onChange={e => setForm(f => ({ ...f, commercialLeadId: e.target.value }))} className={inputCls}>
+                  <option value="">— Unassigned —</option>
+                  {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div><label className={labelCls}>Technical Lead</label>
+                <select value={form.technicalLeadId} onChange={e => setForm(f => ({ ...f, technicalLeadId: e.target.value }))} className={inputCls}>
+                  <option value="">— Unassigned —</option>
+                  {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div><label className={labelCls}>Site Manager</label>
+                <select value={form.siteManagerId} onChange={e => setForm(f => ({ ...f, siteManagerId: e.target.value }))} className={inputCls}>
+                  <option value="">— Unassigned —</option>
+                  {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Start Date</label><input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className={inputCls} /></div>
             <div><label className={labelCls}>Completion Date</label><input type="date" value={form.completionDate} onChange={e => setForm(f => ({ ...f, completionDate: e.target.value }))} className={inputCls} /></div>

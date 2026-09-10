@@ -418,6 +418,9 @@ export interface DBProject {
   committed?: number | null;
   variations_value?: number | null;
   budget_cost?: number | null;
+  commercial_lead_id?: string | null;
+  technical_lead_id?: string | null;
+  site_manager_id?: string | null;
 }
 
 export interface DBProjectCost {
@@ -621,6 +624,9 @@ function dbToProject(r: DBProject): Project {
     committed: r.committed ?? null,
     variationsValue: r.variations_value ?? null,
     budgetCost: r.budget_cost ?? null,
+    commercialLeadId: r.commercial_lead_id ?? null,
+    technicalLeadId: r.technical_lead_id ?? null,
+    siteManagerId: r.site_manager_id ?? null,
   };
 }
 
@@ -641,6 +647,9 @@ function projectToDB(p: Project): DBProject {
     committed: p.committed ?? null,
     variations_value: p.variationsValue ?? null,
     budget_cost: p.budgetCost ?? null,
+    commercial_lead_id: p.commercialLeadId ?? null,
+    technical_lead_id: p.technicalLeadId ?? null,
+    site_manager_id: p.siteManagerId ?? null,
   };
 }
 

@@ -2473,6 +2473,7 @@ export default function Commercial() {
                   </div>
                   <div className="space-y-1.5 mb-4">
                     <p className="text-xs text-slate-400">Client: <span className="text-slate-300">{p.client || '—'}</span></p>
+                    <p className="text-xs text-slate-400">Commercial Lead: <span className="text-slate-300">{p.commercialLeadId ? (store.platformUsers.find(u => u.id === p.commercialLeadId)?.name ?? '—') : '—'}</span></p>
                     <p className="text-xs text-slate-400">Project Manager: <span className="text-slate-300">{p.projectManager || '—'}</span></p>
                     <p className="text-xs text-slate-400">Start: <span className="text-slate-300">{fmtDate(p.startDate)}</span></p>
                     <p className="text-xs text-slate-400">Completion: <span className="text-slate-300">{fmtDate(p.completionDate)}</span></p>

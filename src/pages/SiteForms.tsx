@@ -3,7 +3,7 @@ import {
   FileText, Search, Calendar, Wrench, Zap, CheckSquare, Award,
   HardHat, Users, Pencil, Trash2, ChevronDown, X,
   Plus, Clock, CheckCircle, AlertCircle, TrendingUp, Download,
-  Eye, Copy, MoreVertical, RefreshCw,
+  Eye, Copy, MoreVertical, RefreshCw, ArrowLeft, FolderOpen,
 } from 'lucide-react';
 import { openPrintTab } from '../lib/printTab';
 import { buildFormPageHTML, FORM_PDF_CSS, renderFormPDF } from '../forms/PDFRenderer';
@@ -345,6 +345,12 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const [selectedIds, setSelectedIds]             = useState<Set<string>>(new Set());
   // ID of a form currently being loaded for view/edit — shows inline spinner
   const [loadingDetailId, setLoadingDetailId]     = useState<string | null>(null);
+  // Project-first navigation: null = landing page, string = project workspace
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  // All Forms mode: shows organisation-wide forms from the landing page
+  const [allFormsMode, setAllFormsMode]           = useState(false);
+  // Pre-set project for new forms created inside a project workspace
+  const [presetProjectName, setPresetProjectName] = useState<string | null>(null);
 
   const forms = useMemo(() => {
     const all = (store.siteForms ?? []) as unknown as ExtendedSiteForm[];
@@ -579,6 +585,8 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const openNewForm = (type: ExtendedFormType) => {
     setBuilderType(type);
     setEditingForm(null);
+    setSimilarTemplate(selectedProjectId ? { type, id: `f${Date.now()}`, status: 'Draft', projectName: store.projects.find(p => p.id === selectedProjectId)?.name ?? '' } as unknown as ExtendedSiteForm : null);
+    setPresetProjectName(selectedProjectId ? (store.projects.find(p => p.id === selectedProjectId)?.name ?? null) : null);
     setShowBuilder(true);
     setOpenCategory(null);
   };
@@ -638,14 +646,214 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     logActivity({ orgId, userName, module: 'site_forms', actionType: 'pdf_exported', description: `${userName} exported ${selectedForms.length} site form${selectedForms.length !== 1 ? 's' : ''} to PDF.`, metadata: { count: selectedForms.length, refs: selectedForms.map(f => f.type) } });
   };
 
+  // ─── Landing page: project cards + All Forms ─────────────────────────────────
+  if (selectedProjectId === null && !allFormsMode) {
+    const visibleProjects = store.visibleProjectIds === null
+      ? store.projects
+      : store.projects.filter(p => store.visibleProjectIds.includes(p.id));
+    const statusColor = (s: string) =>
+      s === 'Active' ? 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50'
+      : s === 'On Hold' ? 'bg-amber-900/40 text-amber-300 border-amber-700/50'
+      : s === 'Completed' ? 'bg-sky-900/40 text-sky-300 border-sky-700/50'
+      : 'bg-slate-700/60 text-slate-300 border-slate-600/50';
+
+    const projectFormStats = (pid: string) => {
+      const pf = forms.filter(f => {
+        const fpid = store.projects.find(p => p.name === f.projectName)?.id ?? f.projectId;
+        return fpid === pid;
+      });
+      return {
+        total: pf.length,
+        drafts: pf.filter(f => f.status === 'Draft').length,
+        submitted: pf.filter(f => f.status === 'Submitted' || f.status === 'Approved' || f.status === 'Issued').length,
+      };
+    };
+
+    return (
+      <div className="p-4 lg:p-6 space-y-5">
+        {/* Page header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-white">Site Forms</h1>
+            <p className="text-sm text-slate-500 mt-0.5">Select a project to access its site forms</p>
+          </div>
+          <button
+            onClick={() => setAllFormsMode(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border border-[#1e2d4a] text-slate-400 hover:bg-[#1e2d4a] hover:text-slate-200 transition-colors shrink-0"
+          >
+            <FolderOpen size={15} /> All Forms
+          </button>
+        </div>
+
+        {/* Stats bar — org-wide totals */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Total Forms', value: forms.length, icon: FileText,     color: 'text-slate-300', bg: 'bg-slate-700/40' },
+            { label: 'Draft',       value: draftCount,   icon: Clock,        color: 'text-amber-400',  bg: 'bg-amber-900/30' },
+            { label: 'Submitted',   value: submittedCount,icon: CheckCircle, color: 'text-emerald-400',bg: 'bg-emerald-900/30' },
+            { label: 'This Week',   value: thisWeekCount, icon: TrendingUp,  color: 'text-sky-400',    bg: 'bg-sky-900/30' },
+          ].map(s => (
+            <div key={s.label} className="bg-[#1a2236] border border-[#1e2d4a] rounded-xl px-4 py-3 flex items-center gap-3">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${s.bg}`}>
+                <s.icon size={15} className={s.color} />
+              </div>
+              <div>
+                <div className={`text-lg font-bold leading-none ${s.color}`}>{s.value}</div>
+                <div className="text-[10px] text-slate-600 mt-0.5 font-medium uppercase tracking-wide">{s.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Category cards — retained on landing page */}
+        <div>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">New Form — Select Category</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+            {FORM_CATEGORIES.map(cat => {
+              const counts = catCounts[cat.id];
+              const isOpen = openCategory === cat.id;
+              const Icon = cat.icon;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setOpenCategory(isOpen ? null : cat.id)}
+                  className={`w-full text-left rounded-xl px-3 py-3.5 transition-all duration-150 group flex flex-col h-full ${
+                    isOpen
+                      ? 'bg-[#1e2840] border border-[#f97316]/70 shadow-[0_0_0_1px_rgba(249,115,22,0.15),0_0_16px_rgba(249,115,22,0.08)]'
+                      : 'bg-[#1a2236] border border-[#1e2d4a] hover:border-slate-600/60 hover:bg-[#1e2840]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all ${cat.iconBg} ${isOpen ? 'ring-1 ring-white/10' : ''}`}>
+                      <Icon size={15} className={cat.iconText} />
+                    </div>
+                    <ChevronDown
+                      size={12}
+                      className={`shrink-0 transition-all duration-150 ${isOpen ? 'rotate-180 text-[#f97316]' : 'text-slate-700 group-hover:text-slate-500'}`}
+                    />
+                  </div>
+                  <div className={`text-xs font-bold leading-snug mb-0.5 transition-colors ${isOpen ? 'text-white' : 'text-slate-200 group-hover:text-white'}`}>
+                    {cat.label}
+                  </div>
+                  <div className="text-[10px] text-slate-600 mb-3">
+                    {cat.templates.length} form type{cat.templates.length !== 1 ? 's' : ''}
+                  </div>
+                  <div className="mt-auto pt-2.5 border-t border-[#1e2d4a] grid grid-cols-2 gap-x-2 gap-y-1">
+                    <div>
+                      <div className="text-[9px] text-slate-600 uppercase tracking-wide font-semibold">Draft</div>
+                      <div className={`text-xs font-bold mt-0.5 ${counts.drafts > 0 ? 'text-amber-400' : 'text-slate-700'}`}>{counts.drafts}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-slate-600 uppercase tracking-wide font-semibold">Submitted</div>
+                      <div className={`text-xs font-bold mt-0.5 ${counts.submitted > 0 ? 'text-emerald-400' : 'text-slate-700'}`}>{counts.submitted}</div>
+                    </div>
+                  </div>
+                  {isOpen && (
+                    <div className="mt-2.5 flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#f97316] animate-pulse shrink-0" />
+                      <span className="text-[9px] font-bold text-[#f97316] uppercase tracking-wider">Viewing</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Category panel */}
+        {openCategory && (() => {
+          const cat = FORM_CATEGORIES.find(c => c.id === openCategory);
+          if (!cat) return null;
+          const Icon = cat.icon;
+          return (
+            <div className="bg-[#1a2236] border border-[#f97316]/30 rounded-xl overflow-hidden animate-in">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e2d4a]">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${cat.iconBg}`}>
+                    <Icon size={14} className={cat.iconText} />
+                  </div>
+                  <div>
+                    <span className="text-sm font-bold text-white">{cat.label}</span>
+                    <span className="text-xs text-slate-500 ml-2">{cat.templates.length} form type{cat.templates.length !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+                <button onClick={() => setOpenCategory(null)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-[#0d1628] transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+              <CategoryDrawer cat={cat} onSelect={(t) => { setSelectedProjectId(null); openNewForm(t); }} canCreate={canCreate} />
+            </div>
+          );
+        })()}
+
+        {/* Project cards */}
+        <div>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Projects</p>
+          {visibleProjects.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 rounded-lg border border-dashed border-[#1e2d4a] text-center">
+              <FileText size={24} className="text-slate-600 mb-2" />
+              <p className="text-sm text-slate-500">No projects available</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {visibleProjects.map(p => {
+                const stats = projectFormStats(p.id);
+                const pmName = p.projectManager || '—';
+                const smName = p.siteManagerId ? (store.platformUsers.find(u => u.id === p.siteManagerId)?.name ?? '—') : '—';
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => { setSelectedProjectId(p.id); setFilterProject(p.id); }}
+                    className="group rounded-xl bg-[#0d1628] border border-[#1e2d4a] p-4 hover:border-[#f97316]/40 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <h3 className="text-sm font-bold text-white leading-tight">{p.name}</h3>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border ${statusColor(p.status)}`}>{p.status}</span>
+                    </div>
+                    <div className="space-y-1.5 mb-4">
+                      <p className="text-xs text-slate-400">Client: <span className="text-slate-300">{p.client || '—'}</span></p>
+                      <p className="text-xs text-slate-400">Project Manager: <span className="text-slate-300">{pmName}</span></p>
+                      <p className="text-xs text-slate-400">Site Manager: <span className="text-slate-300">{smName}</span></p>
+                    </div>
+                    <div className="flex items-center gap-4 mb-4">
+                      <span className="text-xs text-slate-500">Total Forms: <span className="font-semibold text-slate-300">{stats.total}</span></span>
+                      <span className="text-xs text-slate-500">Draft: <span className="font-semibold text-amber-400">{stats.drafts}</span></span>
+                      <span className="text-xs text-slate-500">Submitted: <span className="font-semibold text-emerald-400">{stats.submitted}</span></span>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedProjectId(p.id); setFilterProject(p.id); }}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#1a2236] border border-[#1e2d4a] text-xs font-semibold text-slate-300 group-hover:bg-[#f97316] group-hover:text-white group-hover:border-[#f97316] transition-colors"
+                    >
+                      Open Site Forms
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 lg:p-6 space-y-5">
 
       {/* ── Page header ── */}
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white">Site Forms</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Manage, create and export site documentation</p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => { setSelectedProjectId(null); setAllFormsMode(false); setFilterProject('All'); }}
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+            title={allFormsMode ? 'Back to Site Form Projects' : 'Back to Site Form Projects'}
+          >
+            <ArrowLeft size={14} /> Site Form Projects
+          </button>
+          <div className="w-px h-5 bg-[#1e2d4a]" />
+          <div>
+            <h1 className="text-xl font-bold text-white">{allFormsMode ? 'All Site Forms' : (store.projects.find(p => p.id === selectedProjectId)?.name ?? 'Site Forms')}</h1>
+            <p className="text-sm text-slate-500 mt-0.5">{allFormsMode ? 'Organisation-wide site forms' : 'Project site forms'}</p>
+          </div>
         </div>
         {canExport && forms.length > 0 && (
           <button
@@ -796,6 +1004,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
           <select
               value={filterProject} onChange={e => setFilterProject(e.target.value)}
               className="bg-[#1a2236] border border-[#1e2d4a] rounded-lg px-3 py-2 text-xs text-slate-300 outline-none focus:border-slate-500 cursor-pointer"
+              style={selectedProjectId && !allFormsMode ? { display: 'none' } : undefined}
             >
               <option value="All">All Projects</option>
               {projectOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -968,7 +1177,7 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
           type={builderType}
           orgId={orgId}
           onSave={handleSave}
-          onClose={() => { setShowBuilder(false); setEditingForm(null); setSimilarTemplate(null); }}
+          onClose={() => { setShowBuilder(false); setEditingForm(null); setSimilarTemplate(null); setPresetProjectName(null); }}
           initialData={editingForm ?? similarTemplate}
         />
       )}

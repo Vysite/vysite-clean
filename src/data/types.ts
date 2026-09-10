@@ -21,6 +21,9 @@ export interface Project {
   committed?: number | null;
   variationsValue?: number | null;
   budgetCost?: number | null;
+  commercialLeadId?: string | null;
+  technicalLeadId?: string | null;
+  siteManagerId?: string | null;
 }
 
 export type SnagPriority = 'Critical' | 'High' | 'Medium' | 'Low';
