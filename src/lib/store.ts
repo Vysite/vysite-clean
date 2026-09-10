@@ -923,6 +923,26 @@ export interface DBMaintenanceJob {
   comments: MaintenanceComment[];
   target_date: string;
   completion_date: string;
+  site_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// ─── Maintenance Sites ───────────────────────────────────────────────────────
+
+export type MaintenanceLocationType = 'Building' | 'Site' | 'Project' | 'General';
+
+export interface DBMaintenanceSite {
+  id: string;
+  org_id?: string;
+  name: string;
+  location_type: MaintenanceLocationType;
+  client_name: string;
+  address: string;
+  contact_name: string;
+  contact_number: string;
+  notes: string;
+  sort_order: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -1274,6 +1294,13 @@ export interface AppStore {
   updateMaintenanceJob: (j: DBMaintenanceJob) => Promise<void>;
   removeMaintenanceJob: (id: string) => Promise<void>;
 
+  // Maintenance Sites
+  maintenanceSites: DBMaintenanceSite[];
+  maintenanceSitesLoading: boolean;
+  addMaintenanceSite: (s: DBMaintenanceSite) => Promise<string | null>;
+  updateMaintenanceSite: (s: DBMaintenanceSite) => Promise<void>;
+  removeMaintenanceSite: (id: string) => Promise<void>;
+
   // Programmes
   addProgramme: (p: DBProgramme) => Promise<void>;
   updateProgramme: (p: DBProgramme) => Promise<void>;
@@ -1442,6 +1469,8 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [tcRecords, setTCRecords] = useState<DBTCRecord[]>([]);
   const [maintenanceJobs, setMaintenanceJobs] = useState<DBMaintenanceJob[]>([]);
+  const [maintenanceSites, setMaintenanceSites] = useState<DBMaintenanceSite[]>([]);
+  const [maintenanceSitesLoading, setMaintenanceSitesLoading] = useState(false);
   const [programmes, setProgrammes] = useState<DBProgramme[]>([]);
   const [programmeTasks, setProgrammeTasks] = useState<DBProgrammeTask[]>([]);
   const [keyDates, setKeyDates] = useState<DBKeyDate[]>([]);
@@ -1492,6 +1521,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setTenders([]);
       setTCRecords([]);
       setMaintenanceJobs([]);
+      setMaintenanceSites([]);
       setProgrammes([]);
       setProgrammeTasks([]);
       setKeyDates([]);
@@ -1601,13 +1631,14 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
           }
         });
 
-      const [docRes, attRes, snrRes, tenRes, tcRes, mjRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes, valRes, wbRes, wblRes, wbeRes, vleRes, veeRes, supRes, scTRes, scSpRes, scLRTRes] = await Promise.all([
+      const [docRes, attRes, snrRes, tenRes, tcRes, mjRes, msRes, progRes, ptaskRes, vaRes, appRes, oomRes, ooSRes, ooIRes, valRes, wbRes, wblRes, wbeRes, vleRes, veeRes, supRes, scTRes, scSpRes, scLRTRes] = await Promise.all([
         _timed('vy_project_documents', supabase.from('vy_project_documents').select(DOC_COLS).eq('org_id', orgId).order('created_at', { ascending: false })),
         _timed('vy_attachments', supabase.from('vy_attachments').select(ATT_COLS).eq('org_id', orgId).order('created_at', { ascending: false })),
         _timed('vy_snagging_reports', supabase.from('vy_snagging_reports').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
         _timed('vy_tenders', supabase.from('vy_tenders').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
         _timed('vy_tc_records', supabase.from('vy_tc_records').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
         _timed('vy_maintenance_jobs', supabase.from('vy_maintenance_jobs').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
+        _timed('vy_maintenance_sites', supabase.from('vy_maintenance_sites').select('*').eq('org_id', orgId).order('sort_order', { ascending: true })),
         _timed('vy_programmes', supabase.from('vy_programmes').select('*').eq('org_id', orgId).order('created_at', { ascending: true })),
         _timed('vy_programme_tasks', supabase.from('vy_programme_tasks').select('*').eq('org_id', orgId).order('sort_order', { ascending: true })),
         _timed('vy_variation_account', supabase.from('vy_variation_account').select('*').eq('org_id', orgId).order('created_at', { ascending: false })),
@@ -1636,6 +1667,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setTenders((tenRes.data ?? []).map(r => dbToTender(r as DBTender)));
       setTCRecords((tcRes.data ?? []) as DBTCRecord[]);
       setMaintenanceJobs((mjRes.data ?? []) as DBMaintenanceJob[]);
+      setMaintenanceSites((msRes.data ?? []) as DBMaintenanceSite[]);
       setProgrammes((progRes.data ?? []) as DBProgramme[]);
       setProgrammeTasks((ptaskRes.data ?? []) as DBProgrammeTask[]);
       setVariationAccountItems((vaRes.data ?? []) as DBVariationAccountItem[]);
@@ -1942,6 +1974,31 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     setMaintenanceJobs(prev => prev.filter(j => j.id !== id));
     const { error } = await supabase.from('vy_maintenance_jobs').delete().eq('id', id);
     logWrite('removeMaintenanceJob', 'vy_maintenance_jobs', error);
+  }, []);
+
+  // ── Maintenance Sites ───────────────────────────────────────────────────────
+
+  const addMaintenanceSite = useCallback(async (s: DBMaintenanceSite): Promise<string | null> => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return 'No organisation context — cannot save maintenance location.';
+    setMaintenanceSites(prev => [...prev, s].sort((a, b) => a.sort_order - b.sort_order));
+    const { error } = await supabase.from('vy_maintenance_sites').upsert({ ...s, org_id: oid }, { onConflict: 'id' });
+    logWrite('addMaintenanceSite', 'vy_maintenance_sites', error);
+    return error ? `Save failed: ${error.message}` : null;
+  }, []);
+
+  const updateMaintenanceSite = useCallback(async (s: DBMaintenanceSite) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setMaintenanceSites(prev => prev.map(x => x.id === s.id ? s : x));
+    const { error } = await supabase.from('vy_maintenance_sites').upsert({ ...s, org_id: oid }, { onConflict: 'id' });
+    logWrite('updateMaintenanceSite', 'vy_maintenance_sites', error);
+  }, []);
+
+  const removeMaintenanceSite = useCallback(async (id: string) => {
+    setMaintenanceSites(prev => prev.filter(s => s.id !== id));
+    const { error } = await supabase.from('vy_maintenance_sites').delete().eq('id', id);
+    logWrite('removeMaintenanceSite', 'vy_maintenance_sites', error);
   }, []);
 
   // ── Programmes ────────────────────────────────────────────────────────────────
@@ -2705,6 +2762,8 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addTender, updateTender, removeTender,
     addTCRecord, updateTCRecord, removeTCRecord,
     addMaintenanceJob, updateMaintenanceJob, removeMaintenanceJob,
+    maintenanceSites, maintenanceSitesLoading,
+    addMaintenanceSite, updateMaintenanceSite, removeMaintenanceSite,
     addProgramme, updateProgramme, removeProgramme,
     addProgrammeTask, updateProgrammeTask, removeProgrammeTask,
     addKeyDate, updateKeyDate, removeKeyDate,

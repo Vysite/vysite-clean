@@ -3654,6 +3654,7 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'live' | 'submitted' | 'won' | 'lost' | 'all'>('live');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterOwner, setFilterOwner] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
@@ -3731,24 +3732,32 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
     );
   }
 
+  const LIVE_STATUSES = ['New Enquiry', 'Reviewing', 'Pricing', 'Awaiting Subcontractor Returns', 'Negotiation'];
+  const LOST_STATUSES = ['Lost', 'No Bid'];
+
+  const viewStatuses: Record<string, string[]> = {
+    live: LIVE_STATUSES,
+    submitted: ['Submitted'],
+    won: ['Won'],
+    lost: LOST_STATUSES,
+    all: [],
+  };
+
   const filtered = tenderList.filter(t => {
     const ms = t.name.toLowerCase().includes(search.toLowerCase()) || t.client.toLowerCase().includes(search.toLowerCase()) || t.ref.toLowerCase().includes(search.toLowerCase());
-    const matchStatus =
-      filterStatus === 'All' ? true
-      : filterStatus === '__open__' ? !['Won', 'Lost', 'No Bid'].includes(t.status)
-      : filterStatus === '__dueweek__' ? (() => { const d = daysRemaining(t.returnDate); return d >= 0 && d <= 7 && !['Won', 'Lost', 'No Bid'].includes(t.status); })()
-      : t.status === filterStatus;
-    return ms && matchStatus
+    const viewMatch = viewMode === 'all' ? true : viewStatuses[viewMode].includes(t.status);
+    const matchStatus = filterStatus === 'All' ? true : t.status === filterStatus;
+    return ms && viewMatch && matchStatus
       && (filterOwner === 'All' || t.owner === filterOwner)
       && (filterPriority === 'All' || t.priority === filterPriority);
   });
 
-  const open = tenderList.filter(t => !['Won', 'Lost', 'No Bid'].includes(t.status));
-  const dueThisWeek = tenderList.filter(t => { const d = daysRemaining(t.returnDate); return d >= 0 && d <= 7 && !['Won', 'Lost', 'No Bid'].includes(t.status); });
+  const live = tenderList.filter(t => LIVE_STATUSES.includes(t.status));
+  const dueThisWeek = tenderList.filter(t => { const d = daysRemaining(t.returnDate); return d >= 0 && d <= 7 && LIVE_STATUSES.includes(t.status); });
   const submitted = tenderList.filter(t => t.status === 'Submitted');
   const won = tenderList.filter(t => t.status === 'Won');
-  const lost = tenderList.filter(t => t.status === 'Lost');
-  const pipeline = open.reduce((sum, t) => sum + t.estimatedValue, 0);
+  const lost = tenderList.filter(t => LOST_STATUSES.includes(t.status));
+  const pipeline = live.reduce((sum, t) => sum + t.estimatedValue, 0);
 
   const owners = Array.from(new Set(tenderList.map(t => t.owner)));
 
@@ -3758,7 +3767,7 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h2 className="text-lg font-bold text-white">Tender & Estimating</h2>
-          <p className="text-sm text-slate-500">{open.length} active tenders · {formatValue(pipeline)} pipeline</p>
+          <p className="text-sm text-slate-500">{live.length} live tenders · {formatValue(pipeline)} pipeline</p>
         </div>
         <div className="flex items-center gap-2">
           {canExportPipeline && (
@@ -3778,23 +3787,40 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
         </div>
       </div>
 
+      {/* View tabs */}
+      <div className="flex gap-1 bg-[#1a2236] border border-[#1e2d4a] rounded-lg p-1 mb-5 overflow-x-auto">
+        {([
+          { key: 'live', label: 'Live', count: live.length },
+          { key: 'submitted', label: 'Submitted', count: submitted.length },
+          { key: 'won', label: 'Won', count: won.length },
+          { key: 'lost', label: 'Lost', count: lost.length },
+          { key: 'all', label: 'All Tenders', count: tenderList.length },
+        ] as const).map(tab => (
+          <button key={tab.key} onClick={() => { setViewMode(tab.key); setFilterStatus('All'); }}
+            className={`px-3 py-2 rounded-md text-sm font-semibold transition-colors whitespace-nowrap flex items-center gap-2 ${viewMode === tab.key ? 'bg-[#f97316] text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+            {tab.label}
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${viewMode === tab.key ? 'bg-white/20 text-white' : 'bg-[#0d1628] text-slate-500'}`}>{tab.count}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
         {([
-          { label: 'Open Tenders',  value: open.length,           color: 'text-white',          filter: '__open__' },
-          { label: 'Due This Week', value: dueThisWeek.length,    color: 'text-amber-400',      filter: '__dueweek__' },
-          { label: 'Submitted',     value: submitted.length,      color: 'text-teal-400',       filter: 'Submitted' },
-          { label: 'Won',           value: won.length,            color: 'text-emerald-400',    filter: 'Won' },
-          { label: 'Lost',          value: lost.length,           color: 'text-red-400',        filter: 'Lost' },
-          { label: 'Pipeline Value',value: canViewPricingList ? formatValue(pipeline) : '—', color: 'text-[#f97316]', filter: null },
+          { label: 'Live Tenders',   value: live.length,           color: 'text-white',          tab: 'live' },
+          { label: 'Due This Week',  value: dueThisWeek.length,    color: 'text-amber-400',      tab: 'live' },
+          { label: 'Submitted',      value: submitted.length,      color: 'text-teal-400',       tab: 'submitted' },
+          { label: 'Won',            value: won.length,            color: 'text-emerald-400',    tab: 'won' },
+          { label: 'Lost',           value: lost.length,           color: 'text-red-400',        tab: 'lost' },
+          { label: 'Pipeline Value', value: canViewPricingList ? formatValue(pipeline) : '—', color: 'text-[#f97316]', tab: null },
         ] as const).map(s => {
-          const isActive = s.filter !== null && filterStatus === s.filter;
-          const clickable = s.filter !== null;
+          const isActive = s.tab !== null && viewMode === s.tab;
+          const clickable = s.tab !== null;
           return (
             <div
               key={s.label}
               className={`bg-[#1a2236] rounded-xl border p-4 text-center transition-all${clickable ? ' cursor-pointer hover:border-[#2a3d5a]' : ''} ${isActive ? 'border-[#f97316] ring-1 ring-[#f97316]/20' : 'border-[#1e2d4a]'}`}
-              onClick={clickable ? () => setFilterStatus(filterStatus === s.filter ? 'All' : s.filter!) : undefined}
+              onClick={clickable ? () => { setViewMode(s.tab as 'live' | 'submitted' | 'won' | 'lost' | 'all'); setFilterStatus('All'); } : undefined}
             >
               <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
               <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{s.label}</p>
@@ -3811,14 +3837,19 @@ export default function TenderTracker({ onConvertToProject, pendingOpen, onPendi
             className="bg-transparent text-sm text-slate-300 outline-none flex-1 placeholder:text-slate-600" />
         </div>
 
+        {(viewMode === 'live' || viewMode === 'all') && (
         <div className="relative">
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
             className="bg-[#1a2236] border border-[#1e2d4a] rounded-lg px-3 py-2 pr-8 text-sm text-slate-300 outline-none focus:border-[#f97316] appearance-none">
             <option value="All">All Statuses</option>
-            {(['New Enquiry','Reviewing','Pricing','Awaiting Subcontractor Returns','Submitted','Negotiation','Won','Lost','No Bid'] as TenderStatus[]).map(s => <option key={s}>{s}</option>)}
+            {(viewMode === 'live'
+              ? ['New Enquiry','Reviewing','Pricing','Awaiting Subcontractor Returns','Negotiation']
+              : ['New Enquiry','Reviewing','Pricing','Awaiting Subcontractor Returns','Submitted','Negotiation','Won','Lost','No Bid']
+            ).map(s => <option key={s}>{s}</option>)}
           </select>
           <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
         </div>
+        )}
 
         <div className="relative">
           <select value={filterOwner} onChange={e => setFilterOwner(e.target.value)}

@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Plus, X, Search, ChevronDown, Wrench, AlertTriangle, Clock, CheckCircle2,
   Filter, Printer, Trash2, Eye, Download, Paperclip, MessageSquare,
   Package, FileText, User, MapPin, Phone, Calendar, ArrowRight, Archive,
+  Building2, MapPinned, FolderKanban, Layers, ArrowLeft, Edit3,
 } from 'lucide-react';
 import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
 import FileUploadComponent, { type UploadedFile } from '../components/FileUpload';
-import type { DBMaintenanceJob, MaintenanceStatus, MaintenancePriority, MaintenanceMaterial, MaintenanceComment } from '../lib/store';
+import type { DBMaintenanceJob, MaintenanceStatus, MaintenancePriority, MaintenanceMaterial, MaintenanceComment, DBMaintenanceSite, MaintenanceLocationType } from '../lib/store';
 import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
+import { nextRef } from '../lib/refSequence';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -77,17 +79,18 @@ const labelCls = 'text-xs font-semibold text-slate-500 uppercase tracking-wider'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function generateJobNumber(): string {
-  const now = new Date();
-  const yy = String(now.getFullYear()).slice(-2);
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const seq = String(Date.now()).slice(-4);
-  return `MNT-${yy}${mm}-${seq}`;
-}
-
 function isClosedJob(status: MaintenanceStatus): boolean {
   return CLOSED_STATUSES.includes(status);
 }
+
+const LOCATION_TYPE_ICONS: Record<MaintenanceLocationType, typeof Building2> = {
+  Building: Building2,
+  Site: MapPinned,
+  Project: FolderKanban,
+  General: Layers,
+};
+
+const LOCATION_TYPES: MaintenanceLocationType[] = ['Building', 'Site', 'Project', 'General'];
 
 // ─── Status/Priority badges ───────────────────────────────────────────────────
 
@@ -114,11 +117,14 @@ interface CreateJobModalProps {
   onClose: () => void;
   onSave: (job: DBMaintenanceJob) => void;
   engineers: string[];
+  sites: DBMaintenanceSite[];
+  preselectedSiteId?: string | null;
 }
 
-function CreateJobModal({ onClose, onSave, engineers }: CreateJobModalProps) {
+function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }: CreateJobModalProps) {
   const store = useAppStore();
   const [form, setForm] = useState({
+    site_id: preselectedSiteId ?? '',
     client_name: '',
     site_address: '',
     contact_name: '',
@@ -129,6 +135,16 @@ function CreateJobModal({ onClose, onSave, engineers }: CreateJobModalProps) {
     target_date: '',
     internal_notes: '',
   });
+  const [saving, setSaving] = useState(false);
+
+  const selectedSite = sites.find(s => s.id === form.site_id);
+
+  // Auto-inherit client/address from the selected site if the user hasn't typed anything
+  useEffect(() => {
+    if (selectedSite && !form.client_name) {
+      setForm(f => ({ ...f, client_name: selectedSite.client_name, site_address: selectedSite.address, contact_name: selectedSite.contact_name, contact_number: selectedSite.contact_number }));
+    }
+  }, [form.site_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
@@ -138,11 +154,19 @@ function CreateJobModal({ onClose, onSave, engineers }: CreateJobModalProps) {
     ...store.platformUsers.filter(u => u.role === 'Engineer' || u.role === 'Site Manager').map(u => u.name),
   ].filter((v, i, a) => a.indexOf(v) === i);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
+    const orgId = store.currentOrgId ?? '';
+    let jobNumber = `MNT-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+    try {
+      jobNumber = await nextRef(orgId, 'MNT');
+    } catch (err) {
+      console.error('[VYSITE] Maintenance job number generation failed, using fallback:', err);
+    }
     onSave({
       id: `mnt${Date.now()}`,
-      job_number: generateJobNumber(),
+      job_number: jobNumber,
       client_name: form.client_name,
       site_address: form.site_address,
       contact_name: form.contact_name,
@@ -157,7 +181,9 @@ function CreateJobModal({ onClose, onSave, engineers }: CreateJobModalProps) {
       comments: [],
       target_date: form.target_date,
       completion_date: '',
+      site_id: form.site_id || null,
     });
+    setSaving(false);
     onClose();
   };
 
@@ -169,6 +195,16 @@ function CreateJobModal({ onClose, onSave, engineers }: CreateJobModalProps) {
           <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a] transition-colors"><X size={18} /></button>
         </div>
         <form onSubmit={handleSave} className="p-6 space-y-4">
+          <div>
+            <label className={labelCls}>Maintenance Location *</label>
+            <div className="relative">
+              <select required value={form.site_id} onChange={set('site_id')} className={`${inputCls} appearance-none pr-8`}>
+                <option value="">Select a location...</option>
+                {sites.map(s => <option key={s.id} value={s.id}>{s.name} ({s.location_type})</option>)}
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Client Name *</label>
@@ -341,6 +377,17 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [filePreview, setFilePreview] = useState<UploadedFile | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  // Load persisted attachments for this job
+  useEffect(() => {
+    const jobAttachments = store.attachments.filter(a => a.linked_type === 'maintenance' && a.linked_id === job.id);
+    if (jobAttachments.length > 0) {
+      Promise.all(jobAttachments.map(async a => {
+        const dataUrl = await store.fetchAttachmentData(a.id);
+        return { id: a.id, name: a.name, type: a.type, size: a.size, dataUrl } as UploadedFile;
+      })).then(loaded => setFiles(loaded));
+    }
+  }, [job.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const isClosed = isClosedJob(job.status);
@@ -757,7 +804,23 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
               {canUpload && (
                 <FileUploadComponent files={[]} onChange={newFiles => {
                   const existingIds = new Set(files.map(f => f.id));
-                  setFiles(prev => [...prev, ...newFiles.filter(f => !existingIds.has(f.id))]);
+                  const fresh = newFiles.filter(f => !existingIds.has(f.id));
+                  setFiles(prev => [...prev, ...fresh]);
+                  fresh.forEach(f => {
+                    store.addAttachment({
+                      id: f.id,
+                      linked_type: 'maintenance',
+                      linked_id: job.id,
+                      project_id: '',
+                      project_name: '',
+                      name: f.name,
+                      type: f.type,
+                      size: f.size,
+                      category: 'maintenance',
+                      data_url: f.dataUrl ?? '',
+                      uploaded_by: store.currentUser?.name ?? '',
+                    });
+                  });
                 }} accept="image/*,.pdf,.doc,.docx" label="Upload photos, reports or documentation" />
               )}
             </div>
@@ -803,7 +866,300 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
   );
 }
 
-// ─── Job row card ─────────────────────────────────────────────────────────────
+// ─── Create / Edit Location Modal ─────────────────────────────────────────────
+
+interface CreateSiteModalProps {
+  onClose: () => void;
+  onSave: (site: DBMaintenanceSite) => void;
+  editSite?: DBMaintenanceSite | null;
+}
+
+function CreateSiteModal({ onClose, onSave, editSite }: CreateSiteModalProps) {
+  const [form, setForm] = useState({
+    name: editSite?.name ?? '',
+    location_type: editSite?.location_type ?? ('General' as MaintenanceLocationType),
+    client_name: editSite?.client_name ?? '',
+    address: editSite?.address ?? '',
+    contact_name: editSite?.contact_name ?? '',
+    contact_number: editSite?.contact_number ?? '',
+    notes: editSite?.notes ?? '',
+  });
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave({
+      id: editSite?.id ?? `msite${Date.now()}`,
+      name: form.name,
+      location_type: form.location_type,
+      client_name: form.client_name,
+      address: form.address,
+      contact_name: form.contact_name,
+      contact_number: form.contact_number,
+      notes: form.notes,
+      sort_order: editSite?.sort_order ?? 0,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center p-4 overflow-y-auto">
+      <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-2xl my-4">
+        <div className="flex items-center justify-between p-6 border-b border-[#1e2d4a]">
+          <h2 className="text-lg font-bold text-white">{editSite ? 'Edit Maintenance Location' : 'New Maintenance Location'}</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a] transition-colors"><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSave} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Location Name *</label>
+              <input required value={form.name} onChange={set('name')} className={inputCls} placeholder="e.g. SAGA Hastings, Office Portfolio" />
+            </div>
+            <div>
+              <label className={labelCls}>Type *</label>
+              <div className="relative">
+                <select value={form.location_type} onChange={set('location_type')} className={`${inputCls} appearance-none pr-8`}>
+                  {LOCATION_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Client</label>
+            <input value={form.client_name} onChange={set('client_name')} className={inputCls} placeholder="Client name (optional)" />
+          </div>
+          <div>
+            <label className={labelCls}>Address / Location</label>
+            <input value={form.address} onChange={set('address')} className={inputCls} placeholder="Site address (optional)" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Contact Name</label>
+              <input value={form.contact_name} onChange={set('contact_name')} className={inputCls} placeholder="On-site contact" />
+            </div>
+            <div>
+              <label className={labelCls}>Contact Number</label>
+              <input value={form.contact_number} onChange={set('contact_number')} className={inputCls} placeholder="Phone number" />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Notes</label>
+            <textarea value={form.notes} onChange={set('notes')} rows={2} className={`${inputCls} resize-none`} placeholder="Internal notes about this location..." />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors">Cancel</button>
+            <button type="submit" className="flex-1 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">{editSite ? 'Save Changes' : 'Create Location'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Portfolio View (default export) ──────────────────────────────────────────
+
+const GENERAL_SITE: DBMaintenanceSite = {
+  id: '__default__',
+  name: 'General / Unassigned Maintenance',
+  location_type: 'General',
+  client_name: '',
+  address: '',
+  contact_name: '',
+  contact_number: '',
+  notes: '',
+  sort_order: -1,
+};
+
+export default function MaintenanceServicing() {
+  const store = useAppStore();
+  const perms = usePermissions();
+  const isAdmin = store.currentUser?.role === 'Admin';
+  const canCreate = perms['maintenance.create'] || isAdmin;
+  const canDelete = perms['maintenance.delete'] || isAdmin;
+  const orgId = store.currentOrgId ?? '';
+  const userName = store.currentUser?.name ?? '';
+
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [showCreateSite, setShowCreateSite] = useState(false);
+  const [editSite, setEditSite] = useState<DBMaintenanceSite | null>(null);
+  const [deleteSiteConfirm, setDeleteSiteConfirm] = useState<string | null>(null);
+
+  const sites = store.maintenanceSites;
+  const allSites = [GENERAL_SITE, ...sites];
+  const allJobs = store.maintenanceJobs;
+
+  // Auto-create a default "General / Unassigned Maintenance" site for orgs that don't have one
+  useEffect(() => {
+    if (sites.length === 0 && orgId && !store.loading) {
+      const defaultSite: DBMaintenanceSite = {
+        id: `msite_default_${orgId.slice(-8)}`,
+        name: 'General / Unassigned Maintenance',
+        location_type: 'General',
+        client_name: '',
+        address: '',
+        contact_name: '',
+        contact_number: '',
+        notes: 'Default location for maintenance jobs not yet assigned to a specific site or building.',
+        sort_order: 0,
+      };
+      store.addMaintenanceSite(defaultSite);
+    }
+  }, [orgId, sites.length, store.loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectedSite = allSites.find(s => s.id === selectedSiteId);
+
+  if (selectedSite) {
+    return <MaintenanceWorkspace site={selectedSite} sites={allSites} onBack={() => setSelectedSiteId(null)} />;
+  }
+
+  const jobsForSite = (siteId: string) => {
+    if (siteId === '__default__') return allJobs.filter(j => !j.site_id);
+    return allJobs.filter(j => j.site_id === siteId);
+  };
+
+  const siteStats = (siteId: string) => {
+    const sj = jobsForSite(siteId);
+    return {
+      open: sj.filter(j => !isClosedJob(j.status)).length,
+      overdue: sj.filter(j => !isClosedJob(j.status) && j.target_date && j.target_date < new Date().toISOString().split('T')[0]).length,
+      closed: sj.filter(j => isClosedJob(j.status)).length,
+      critical: sj.filter(j => !isClosedJob(j.status) && j.priority === 'Critical').length,
+    };
+  };
+
+  const handleSaveSite = (s: DBMaintenanceSite) => {
+    if (editSite) {
+      store.updateMaintenanceSite(s);
+      logActivity({ orgId, userName, module: 'maintenance', recordId: s.id, recordRef: s.name, recordType: 'Maintenance Location', actionType: 'record_updated', description: `${userName} updated maintenance location ${s.name}.` });
+    } else {
+      store.addMaintenanceSite(s);
+      logActivity({ orgId, userName, module: 'maintenance', recordId: s.id, recordRef: s.name, recordType: 'Maintenance Location', actionType: 'record_created', description: `${userName} created maintenance location ${s.name}.` });
+    }
+    setEditSite(null);
+  };
+
+  const handleDeleteSite = (id: string) => {
+    const target = sites.find(s => s.id === id);
+    logActivity({ orgId, userName, module: 'maintenance', recordId: id, recordRef: target?.name ?? id, recordType: 'Maintenance Location', actionType: 'record_deleted', description: `${userName} deleted maintenance location ${target?.name ?? id}.` });
+    store.removeMaintenanceSite(id);
+    setDeleteSiteConfirm(null);
+  };
+
+  return (
+    <div className="p-4 lg:p-6">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h2 className="text-lg font-bold text-white">Maintenance &amp; Servicing</h2>
+          <p className="text-sm text-slate-500">{allSites.length} maintenance location{allSites.length !== 1 ? 's' : ''} · {allJobs.filter(j => !isClosedJob(j.status)).length} active job{allJobs.filter(j => !isClosedJob(j.status)).length !== 1 ? 's' : ''}</p>
+        </div>
+        {canCreate && (
+          <button onClick={() => { setEditSite(null); setShowCreateSite(true); }}
+            className="flex items-center gap-2 bg-[#f97316] text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">
+            <Plus size={16} />New Location
+          </button>
+        )}
+      </div>
+
+      {/* Location cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {allSites.map(site => {
+          const st = siteStats(site.id);
+          const Icon = LOCATION_TYPE_ICONS[site.location_type];
+          const isGeneral = site.id === '__default__';
+          return (
+            <div key={site.id}
+              onClick={() => setSelectedSiteId(site.id)}
+              className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5 cursor-pointer hover:border-[#2a3d5a] transition-all group">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-lg bg-[#f97316]/15 flex items-center justify-center shrink-0">
+                    <Icon size={18} className="text-[#f97316]" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-slate-200 text-sm truncate">{site.name}</h3>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider">{site.location_type}</span>
+                  </div>
+                </div>
+                {!isGeneral && (canDelete || canCreate) && (
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {canCreate && (
+                      <button onClick={e => { e.stopPropagation(); setEditSite(site); setShowCreateSite(true); }}
+                        className="p-1.5 rounded text-slate-600 hover:text-[#f97316] hover:bg-[#f97316]/10 transition-colors">
+                        <Edit3 size={13} />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button onClick={e => { e.stopPropagation(); setDeleteSiteConfirm(site.id); }}
+                        className="p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/30 transition-colors">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {site.client_name && <p className="text-xs text-slate-500 mb-1 truncate">{site.client_name}</p>}
+              {site.address && <p className="text-xs text-slate-600 mb-3 truncate">{site.address}</p>}
+
+              <div className="grid grid-cols-4 gap-2 pt-3 border-t border-[#1e2d4a]">
+                <div className="text-center">
+                  <p className="text-lg font-bold text-white">{st.open}</p>
+                  <p className="text-[9px] text-slate-500 uppercase">Open</p>
+                </div>
+                <div className="text-center">
+                  <p className={`text-lg font-bold ${st.overdue > 0 ? 'text-amber-400' : 'text-slate-600'}`}>{st.overdue}</p>
+                  <p className="text-[9px] text-slate-500 uppercase">Overdue</p>
+                </div>
+                <div className="text-center">
+                  <p className={`text-lg font-bold ${st.critical > 0 ? 'text-red-400' : 'text-slate-600'}`}>{st.critical}</p>
+                  <p className="text-[9px] text-slate-500 uppercase">Critical</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-emerald-400">{st.closed}</p>
+                  <p className="text-[9px] text-slate-500 uppercase">Closed</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {allSites.length === 0 && (
+        <div className="text-center py-14 bg-[#1a2236] rounded-xl border border-[#1e2d4a]">
+          <Wrench size={32} className="text-slate-700 mx-auto mb-2" />
+          <p className="text-sm text-slate-500">No maintenance locations yet</p>
+          {canCreate && (
+            <button onClick={() => setShowCreateSite(true)}
+              className="mt-3 flex items-center gap-2 bg-[#f97316] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors mx-auto">
+              <Plus size={15} />Create first location
+            </button>
+          )}
+        </div>
+      )}
+
+      {showCreateSite && (
+        <CreateSiteModal
+          onClose={() => { setShowCreateSite(false); setEditSite(null); }}
+          onSave={handleSaveSite}
+          editSite={editSite}
+        />
+      )}
+
+      {deleteSiteConfirm && (
+        <ConfirmDeleteModal
+          title="Delete Maintenance Location"
+          description="Jobs in this location will remain but become unassigned. The location will be permanently deleted."
+          onConfirm={() => handleDeleteSite(deleteSiteConfirm)}
+          onCancel={() => setDeleteSiteConfirm(null)}
+        />
+      )}
+    </div>
+  );
+}
 
 interface JobRowProps {
   job: DBMaintenanceJob;
@@ -899,7 +1255,7 @@ const MAINTENANCE_FIELDS: FieldSpec[] = [
   { label: 'Internal Notes',    key: 'internal_notes', isNarrative: true },
 ];
 
-export default function MaintenanceServicing() {
+function MaintenanceWorkspace({ site, sites, onBack }: { site: DBMaintenanceSite; sites: DBMaintenanceSite[]; onBack: () => void }) {
   const store = useAppStore();
   const perms = usePermissions();
   const isAdmin = store.currentUser?.role === 'Admin';
@@ -914,7 +1270,8 @@ export default function MaintenanceServicing() {
   const orgId = store.currentOrgId ?? '';
   const userName = store.currentUser?.name ?? '';
 
-  const jobs = store.maintenanceJobs;
+  const allJobs = store.maintenanceJobs;
+  const jobs = allJobs.filter(j => (j.site_id ?? null) === (site.id === '__default__' ? null : site.id));
 
   const [showCreate, setShowCreate] = useState(false);
   const [selectedJob, setSelectedJob] = useState<DBMaintenanceJob | null>(null);
@@ -1024,13 +1381,19 @@ export default function MaintenanceServicing() {
     <div className="p-4 lg:p-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div>
-          <h2 className="text-lg font-bold text-white">Maintenance &amp; Servicing</h2>
-          <p className="text-sm text-slate-500">
-            {stats.total} active job{stats.total !== 1 ? 's' : ''}
-            {stats.critical > 0 && <span className="text-red-400"> · {stats.critical} critical</span>}
-            {stats.unassigned > 0 && <span className="text-amber-400"> · {stats.unassigned} unassigned</span>}
-          </p>
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={onBack}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border bg-[#1a2236] text-slate-400 border-[#1e2d4a] hover:text-slate-200 hover:border-slate-600 transition-colors shrink-0">
+            <ArrowLeft size={14} />Locations
+          </button>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-white truncate">{site.name}</h2>
+            <p className="text-sm text-slate-500">
+              {stats.total} active job{stats.total !== 1 ? 's' : ''}
+              {stats.critical > 0 && <span className="text-red-400"> · {stats.critical} critical</span>}
+              {stats.unassigned > 0 && <span className="text-amber-400"> · {stats.unassigned} unassigned</span>}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {canExport && (
@@ -1234,6 +1597,8 @@ export default function MaintenanceServicing() {
           logActivity({ orgId, userName, module: 'maintenance', recordId: j.id, recordRef: j.job_number ?? j.id, recordType: 'Maintenance Job', actionType: 'record_created', description: `${userName} created maintenance job ${j.job_number ?? j.id} — ${j.description ?? j.client_name}.` });
         }}
         engineers={engineers}
+        sites={sites}
+        preselectedSiteId={site.id === '__default__' ? null : site.id}
       />
     )}
 
