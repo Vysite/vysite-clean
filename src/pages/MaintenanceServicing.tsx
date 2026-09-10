@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Plus, X, Search, ChevronDown, Wrench, AlertTriangle, Clock, CheckCircle2,
   Filter, Printer, Trash2, Eye, Download, Paperclip, MessageSquare,
@@ -961,17 +961,7 @@ function CreateSiteModal({ onClose, onSave, editSite }: CreateSiteModalProps) {
 
 // ─── Portfolio View (default export) ──────────────────────────────────────────
 
-const GENERAL_SITE: DBMaintenanceSite = {
-  id: '__default__',
-  name: 'General / Unassigned Maintenance',
-  location_type: 'General',
-  client_name: '',
-  address: '',
-  contact_name: '',
-  contact_number: '',
-  notes: '',
-  sort_order: -1,
-};
+const DEFAULT_SITE_NAME = 'General / Unassigned Maintenance';
 
 export default function MaintenanceServicing() {
   const store = useAppStore();
@@ -988,15 +978,19 @@ export default function MaintenanceServicing() {
   const [deleteSiteConfirm, setDeleteSiteConfirm] = useState<string | null>(null);
 
   const sites = store.maintenanceSites;
-  const allSites = [GENERAL_SITE, ...sites];
   const allJobs = store.maintenanceJobs;
+  const creatingDefault = useRef(false);
 
-  // Auto-create a default "General / Unassigned Maintenance" site for orgs that don't have one
+  // Auto-create a single default "General / Unassigned Maintenance" site for orgs that don't have one.
+  // The useRef guard prevents duplicate creation if the effect fires before the store state propagates.
+  // A DB-level unique partial index (uniq_default_maintenance_site_per_org) is the backstop.
   useEffect(() => {
-    if (sites.length === 0 && orgId && !store.loading) {
+    const hasDefault = sites.some(s => s.name === DEFAULT_SITE_NAME && s.location_type === 'General');
+    if (!hasDefault && !creatingDefault.current && orgId && !store.loading) {
+      creatingDefault.current = true;
       const defaultSite: DBMaintenanceSite = {
         id: `msite_default_${orgId.slice(-8)}`,
-        name: 'General / Unassigned Maintenance',
+        name: DEFAULT_SITE_NAME,
         location_type: 'General',
         client_name: '',
         address: '',
@@ -1007,16 +1001,18 @@ export default function MaintenanceServicing() {
       };
       store.addMaintenanceSite(defaultSite);
     }
-  }, [orgId, sites.length, store.loading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [orgId, sites, store.loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectedSite = allSites.find(s => s.id === selectedSiteId);
+  const selectedSite = sites.find(s => s.id === selectedSiteId);
 
   if (selectedSite) {
-    return <MaintenanceWorkspace site={selectedSite} sites={allSites} onBack={() => setSelectedSiteId(null)} />;
+    return <MaintenanceWorkspace site={selectedSite} sites={sites} onBack={() => setSelectedSiteId(null)} />;
   }
 
   const jobsForSite = (siteId: string) => {
-    if (siteId === '__default__') return allJobs.filter(j => !j.site_id);
+    const site = sites.find(s => s.id === siteId);
+    const isDefault = site?.name === DEFAULT_SITE_NAME && site?.location_type === 'General';
+    if (isDefault) return allJobs.filter(j => !j.site_id || j.site_id === siteId);
     return allJobs.filter(j => j.site_id === siteId);
   };
 
@@ -1054,7 +1050,7 @@ export default function MaintenanceServicing() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h2 className="text-lg font-bold text-white">Maintenance &amp; Servicing</h2>
-          <p className="text-sm text-slate-500">{allSites.length} maintenance location{allSites.length !== 1 ? 's' : ''} · {allJobs.filter(j => !isClosedJob(j.status)).length} active job{allJobs.filter(j => !isClosedJob(j.status)).length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-slate-500">{sites.length} maintenance location{sites.length !== 1 ? 's' : ''} · {allJobs.filter(j => !isClosedJob(j.status)).length} active job{allJobs.filter(j => !isClosedJob(j.status)).length !== 1 ? 's' : ''}</p>
         </div>
         {canCreate && (
           <button onClick={() => { setEditSite(null); setShowCreateSite(true); }}
@@ -1066,10 +1062,10 @@ export default function MaintenanceServicing() {
 
       {/* Location cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {allSites.map(site => {
+        {sites.map(site => {
           const st = siteStats(site.id);
           const Icon = LOCATION_TYPE_ICONS[site.location_type];
-          const isGeneral = site.id === '__default__';
+          const isGeneral = site.name === DEFAULT_SITE_NAME && site.location_type === 'General';
           return (
             <div key={site.id}
               onClick={() => setSelectedSiteId(site.id)}
@@ -1128,7 +1124,7 @@ export default function MaintenanceServicing() {
         })}
       </div>
 
-      {allSites.length === 0 && (
+      {sites.length === 0 && (
         <div className="text-center py-14 bg-[#1a2236] rounded-xl border border-[#1e2d4a]">
           <Wrench size={32} className="text-slate-700 mx-auto mb-2" />
           <p className="text-sm text-slate-500">No maintenance locations yet</p>
@@ -1271,7 +1267,8 @@ function MaintenanceWorkspace({ site, sites, onBack }: { site: DBMaintenanceSite
   const userName = store.currentUser?.name ?? '';
 
   const allJobs = store.maintenanceJobs;
-  const jobs = allJobs.filter(j => (j.site_id ?? null) === (site.id === '__default__' ? null : site.id));
+  const isDefaultSite = site.name === 'General / Unassigned Maintenance' && site.location_type === 'General';
+  const jobs = allJobs.filter(j => isDefaultSite ? (!j.site_id || j.site_id === site.id) : j.site_id === site.id);
 
   const [showCreate, setShowCreate] = useState(false);
   const [selectedJob, setSelectedJob] = useState<DBMaintenanceJob | null>(null);
@@ -1598,7 +1595,7 @@ function MaintenanceWorkspace({ site, sites, onBack }: { site: DBMaintenanceSite
         }}
         engineers={engineers}
         sites={sites}
-        preselectedSiteId={site.id === '__default__' ? null : site.id}
+        preselectedSiteId={site.id}
       />
     )}
 
