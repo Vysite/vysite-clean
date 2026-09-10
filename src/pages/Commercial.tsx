@@ -4,7 +4,7 @@ import {
   Paperclip, Trash2, Eye, Download, FileText,
   Banknote, HardHat, Calculator,
   ChevronRight, AlertCircle, CheckCircle2, Clock, CircleDot,
-  GitBranch, GitMerge, MessageSquare, Send, ArrowRight,
+  GitBranch, GitMerge, MessageSquare, Send, ArrowRight, ArrowLeft,
   PoundSterling,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -24,7 +24,7 @@ import CommercialTimeline from './commercial/CommercialTimeline';
 import CommercialValuations from './commercial/CommercialValuations';
 import ProjectCosts from './commercial/ProjectCosts';
 import type { CommercialTab } from './commercial/types';
-import { RECORD_TYPES, STATUSES, typeInfo, statusInfo, parseRawValue, fmtCurrency as fmtC } from './commercial/types';
+import { RECORD_TYPES, STATUSES, typeInfo, statusInfo, parseRawValue, fmtCurrency as fmtC, fmtDate } from './commercial/types';
 import { exportFullCommercialReport } from './commercial/CommercialPDF';
 import { openPrintTab } from '../lib/printTab';
 import { nextRef as getNextRef } from '../lib/refSequence';
@@ -2155,8 +2155,8 @@ function AttachmentRow({ att, onRemove, fetchData }: { att: DBAttachment; onRemo
 // ─── Tab definition ────────────────────────────────────────────────────────────
 
 const TABS: { key: CommercialTab; label: string; icon: React.ReactNode; comingSoon?: boolean }[] = [
-  { key: 'overview',          label: 'Overview',            icon: <TrendingUp size={13} /> },
   { key: 'register',          label: 'Register',            icon: <FileText size={13} /> },
+  { key: 'overview',          label: 'Overview',            icon: <TrendingUp size={13} /> },
   { key: 'variation-account', label: 'Variation Account',   icon: <GitBranch size={13} /> },
   { key: 'applications',      label: 'Applications',        icon: <div className="text-current"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div> },
   { key: 'timeline',          label: 'Commercial Timeline', icon: <Clock size={13} /> },
@@ -2178,7 +2178,7 @@ export default function Commercial() {
   const canViewPricing = perms['commercial.view_pricing'] ?? false;
   const canViewCosts = perms['commercial.view_costs'] ?? false;
 
-  const [activeTab, setActiveTab]   = useState<CommercialTab>('overview');
+  const [activeTab, setActiveTab]   = useState<CommercialTab>('register');
   const [records, setRecords]       = useState<CommercialRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState<CommercialRecord | null>(null);
@@ -2193,7 +2193,8 @@ export default function Commercial() {
 
   // Banner project — synced to register filter when user switches projects on Overview
   const [bannerProjectId, setBannerProjectId] = useState<string>('');
-  const effectiveBannerProjectId = bannerProjectId || projects[0]?.id || '';
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const effectiveBannerProjectId = bannerProjectId || '';
   const bannerProject = projects.find(p => p.id === effectiveBannerProjectId) ?? null;
 
   const projectsForModal = useMemo(() =>
@@ -2235,12 +2236,15 @@ export default function Commercial() {
   }, []);
 
   function openNew() { setSelectedRecord(null); setIsNewRecord(true); setModalOpen(true); }
+  function selectProject(id: string) {
+    setBannerProjectId(id);
+    setSelectedProjectId(id);
+    setActiveTab('register');
+  }
   function openRecord(r: CommercialRecord) {
     if (r.recordType === 'variation') {
-      // Route variations to the Variation Account drawer, not the generic modal
       const vaItemId = typeof r.extraData?.va_item_id === 'string' ? r.extraData.va_item_id : null;
-      // Sync the banner project so the VA shows the right project
-      if (r.projectId) setBannerProjectId(r.projectId);
+      if (r.projectId) { setBannerProjectId(r.projectId); setSelectedProjectId(r.projectId); }
       setActiveTab('variation-account');
       setOpenVariationId(vaItemId);
       return;
@@ -2369,7 +2373,7 @@ export default function Commercial() {
     if (newRecord.recordType === 'variation') {
       // Route converted variations to the VA drawer
       const vaItemId = typeof newRecord.extraData?.va_item_id === 'string' ? newRecord.extraData.va_item_id : null;
-      if (newRecord.projectId) setBannerProjectId(newRecord.projectId);
+      if (newRecord.projectId) { setBannerProjectId(newRecord.projectId); setSelectedProjectId(newRecord.projectId); }
       setModalOpen(false);
       setActiveTab('variation-account');
       setOpenVariationId(vaItemId);
@@ -2426,11 +2430,86 @@ export default function Commercial() {
   const vaMetrics = calcVAMetrics(projectVAItems);
   const vaHasItems = projectVAItems.length > 0;
 
+  // ─── Commercial Projects landing page ─────────────────────────────────────────
+  if (selectedProjectId === null) {
+    const statusColor = (s: string) =>
+      s === 'Active' ? 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50'
+      : s === 'On Hold' ? 'bg-amber-900/40 text-amber-300 border-amber-700/50'
+      : s === 'Completed' ? 'bg-sky-900/40 text-sky-300 border-sky-700/50'
+      : 'bg-slate-700/60 text-slate-300 border-slate-600/50';
+
+    return (
+      <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-9 h-9 rounded-xl bg-[#1a2236] border border-[#1e2d4a] flex items-center justify-center">
+            <TrendingUp size={18} className="text-[#f97316]" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-white leading-tight">Commercial Projects</h1>
+            <p className="text-[11px] text-slate-500">Select a project to access its commercial workspace</p>
+          </div>
+        </div>
+
+        {projects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 rounded-lg border border-dashed border-[#1e2d4a] text-center">
+            <FileText size={24} className="text-slate-600 mb-2" />
+            <p className="text-sm text-slate-500">No projects available</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projects.map(p => {
+              const projRecords = records.filter(r => r.projectId === p.id);
+              const openRecords = projRecords.filter(r => !['complete','paid','rejected'].includes(r.status)).length;
+              const openVariations = (store.variationAccountItems ?? []).filter(v => v.project_id === p.id && !['agreed','paid','rejected'].includes(v.status)).length;
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => selectProject(p.id)}
+                  className="group rounded-xl bg-[#0d1628] border border-[#1e2d4a] p-4 hover:border-[#f97316]/40 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="text-sm font-bold text-white leading-tight">{p.name}</h3>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border ${statusColor(p.status)}`}>{p.status}</span>
+                  </div>
+                  <div className="space-y-1.5 mb-4">
+                    <p className="text-xs text-slate-400">Client: <span className="text-slate-300">{p.client || '—'}</span></p>
+                    <p className="text-xs text-slate-400">Project Manager: <span className="text-slate-300">{p.projectManager || '—'}</span></p>
+                    <p className="text-xs text-slate-400">Start: <span className="text-slate-300">{fmtDate(p.startDate)}</span></p>
+                    <p className="text-xs text-slate-400">Completion: <span className="text-slate-300">{fmtDate(p.completionDate)}</span></p>
+                  </div>
+                  <div className="flex items-center gap-4 mb-4">
+                    <span className="text-xs text-slate-500">{openRecords} open record{openRecords !== 1 ? 's' : ''}</span>
+                    <span className="text-xs text-slate-500">{openVariations} open variation{openVariations !== 1 ? 's' : ''}</span>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); selectProject(p.id); }}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#1a2236] border border-[#1e2d4a] text-xs font-semibold text-slate-300 group-hover:bg-[#f97316] group-hover:text-white group-hover:border-[#f97316] transition-colors"
+                  >
+                    Open Commercial
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )
+      }
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
       {/* Page header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setSelectedProjectId(null)}
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+            title="Back to Commercial Projects"
+          >
+            <ArrowLeft size={14} /> Commercial Projects
+          </button>
+          <div className="w-px h-5 bg-[#1e2d4a]" />
           <div className="w-9 h-9 rounded-xl bg-[#1a2236] border border-[#1e2d4a] flex items-center justify-center">
             <TrendingUp size={18} className="text-[#f97316]" />
           </div>
@@ -2577,7 +2656,7 @@ export default function Commercial() {
           vaAgreed={vaMetrics.agreed}
           vaHasItems={vaHasItems}
           canViewCosts={canViewCosts}
-          onProjectChange={(id) => setBannerProjectId(id)}
+          onProjectChange={(id) => selectProject(id)}
           onAddKeyDate={store.addKeyDate}
           onUpdateKeyDate={store.updateKeyDate}
           onRemoveKeyDate={store.removeKeyDate}
@@ -2646,7 +2725,7 @@ export default function Commercial() {
           onCrRecordDeleted={(crId) => {
             setRecords(prev => prev.filter(r => r.id !== crId));
           }}
-          onProjectChange={(id) => setBannerProjectId(id)}
+          onProjectChange={(id) => selectProject(id)}
         />
       )}
       {activeTab === 'applications' && (() => {
@@ -2662,7 +2741,7 @@ export default function Commercial() {
             canDelete={canDelete}
             forecastContractSum={forecastContractSum}
             currentUserName={store.currentUser?.name ?? ''}
-            onProjectChange={(id) => setBannerProjectId(id)}
+            onProjectChange={(id) => selectProject(id)}
           />
         );
       })()}
@@ -2685,7 +2764,7 @@ export default function Commercial() {
           canEdit={canEdit}
           canDelete={canDelete}
           currentUserName={store.currentUser?.name ?? ''}
-          onProjectChange={(id) => setBannerProjectId(id)}
+          onProjectChange={(id) => selectProject(id)}
         />
       )}
       {activeTab === 'project-costs' && (
@@ -2697,7 +2776,7 @@ export default function Commercial() {
           canEdit={canEdit}
           canDelete={canDelete}
           currentUserName={store.currentUser?.name ?? ''}
-          onProjectChange={(id) => setBannerProjectId(id)}
+          onProjectChange={(id) => selectProject(id)}
         />
       )}
 
@@ -2721,6 +2800,7 @@ export default function Commercial() {
           onOpenRecord={r => {
             if (r.recordType === 'variation') {
               const vaItemId = typeof r.extraData?.va_item_id === 'string' ? r.extraData.va_item_id : null;
+              if (r.projectId) { setBannerProjectId(r.projectId); setSelectedProjectId(r.projectId); }
               setModalOpen(false);
               setActiveTab('variation-account');
               setOpenVariationId(vaItemId);
