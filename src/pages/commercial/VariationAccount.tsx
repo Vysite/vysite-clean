@@ -567,6 +567,13 @@ function VariationDrawer({
     : (store.vaBuildUpLines ?? []).filter(l => l.va_item_id === (item?.id ?? ''));
   const buildUpTotal = buildUpLines.reduce((s, l) => s + (l.line_total ?? 0), 0);
 
+  // Auto-sync Variation Value from Cost Build-Up total when lines exist
+  useEffect(() => {
+    if (buildUpLines.length > 0) {
+      setForm(f => ({ ...f, value: buildUpTotal.toFixed(2) }));
+    }
+  }, [buildUpTotal, buildUpLines.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Comments: local state for create mode, store for edit mode
   const comments = mode === 'create'
     ? localComments
@@ -596,7 +603,9 @@ function VariationDrawer({
 
   async function handleSave() {
     if (!form.title.trim()) { setError('Title is required'); return; }
-    const valueNum = parseFloat(form.value.replace(/[£,\s]/g, ''));
+    const valueNum = buildUpLines.length > 0
+      ? buildUpTotal
+      : parseFloat(form.value.replace(/[£,\s]/g, ''));
     if (isNaN(valueNum) || valueNum < 0) { setError('Enter a valid positive number for Value'); return; }
     setSaving(true); setError(null);
     const now = new Date().toISOString();
@@ -860,8 +869,20 @@ function VariationDrawer({
 
                 {/* Value + Direction */}
                 <div>
-                  <label className={labelCls}>Value (£)</label>
-                  <input type="text" inputMode="numeric" className={inputCls} value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value.replace(/[^0-9.]/g, '') }))} placeholder="0.00" disabled={!canEdit} />
+                  <label className={labelCls}>
+                    Value (£)
+                    {buildUpLines.length > 0 && <span className="ml-2 text-[10px] text-[#f97316] font-normal normal-case">Auto from build-up</span>}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className={`${inputCls} ${buildUpLines.length > 0 ? 'bg-[#0a0f1e] text-[#f97316] font-semibold cursor-not-allowed border-[#f97316]/30' : ''}`}
+                    value={buildUpLines.length > 0 ? (form.isPositive ? '' : '−') + form.value : form.value}
+                    onChange={e => setForm(f => ({ ...f, value: e.target.value.replace(/[^0-9.]/g, '') }))}
+                    placeholder="0.00"
+                    disabled={!canEdit || buildUpLines.length > 0}
+                    readOnly={buildUpLines.length > 0}
+                  />
                 </div>
                 <div>
                   <label className={labelCls}>Direction</label>
