@@ -686,7 +686,7 @@ export default function MyWork() {
 
       {/* Undo toast */}
       {undoItem && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-[#1a2236] border border-[#1e2d4a] rounded-xl shadow-2xl px-4 py-3 animate-in fade-in slide-in-from-bottom-2">
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-[#1a2236] border border-[#1e2d4a] rounded-xl shadow-2xl px-4 py-3">
           <CheckCircle size={15} className="text-emerald-400 shrink-0" />
           <span className="text-sm text-slate-300">Item completed</span>
           <button onClick={handleUndoComplete} className="flex items-center gap-1.5 text-sm font-semibold text-[#f97316] hover:text-orange-400 transition-colors">

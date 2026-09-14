@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Lock, Ban, AlertTriangle, CheckCircle, FlaskConical } from 'lucide-react';
 import Sidebar, { type Page } from './components/Sidebar';
 import Header from './components/Header';
@@ -9,7 +9,7 @@ import Projects from './pages/Projects';
 import SiteForms from './pages/SiteForms';
 import Snagging from './pages/Snagging';
 import Actions from './pages/Actions';
-import MyWork from './pages/MyWork';
+const MyWork = lazy(() => import('./pages/MyWork'));
 import Reports from './pages/Reports';
 import BetaFeedback from './pages/BetaFeedback';
 import Settings from './pages/Settings';
@@ -99,7 +99,7 @@ function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pending
         <Actions pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} pendingFilter={pendingFilter} onPendingFilterConsumed={() => setPendingFilter(null)} />,
         'Actions Tracker');
     case 'my-work':
-      return <MyWork />;
+      return <Suspense fallback={null}><MyWork /></Suspense>;
     case 'testing':
       return guard(perms['modules.testing'] && isModuleEnabled('testing'),
         <OAndMManual />,
