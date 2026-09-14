@@ -1,8 +1,8 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   Plus, Search, Calendar, CheckCircle, Circle, Trash2, Pencil,
   ChevronDown, ChevronUp, AlertTriangle, Clock, X, Download,
-  RotateCcw, RefreshCw,
+  RotateCcw, RefreshCw, Undo2,
 } from 'lucide-react';
 import { useAppStore } from '../lib/StoreContext';
 import type { DBMyWorkItem } from '../lib/store';
@@ -134,12 +134,10 @@ function ItemModal({ initial, mode, projects, onSave, onClose }: ItemModalProps)
             <label className={labelCls}>Due Date</label>
             <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} className={inputCls} />
           </div>
-          {mode === 'edit' && (
-            <div>
-              <label className={labelCls}>Notes</label>
-              <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className={inputCls} rows={3} placeholder="Personal notes (optional)" />
-            </div>
-          )}
+          <div>
+            <label className={labelCls}>Notes</label>
+            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className={inputCls} rows={3} placeholder="Personal running notes (optional)" />
+          </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors">Cancel</button>
             <button type="submit" className="flex-1 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">{mode === 'create' ? 'Add' : 'Save'}</button>
@@ -189,6 +187,10 @@ export default function MyWork() {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState<DBMyWorkItem | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [quickAdd, setQuickAdd] = useState('');
+  const [undoItem, setUndoItem] = useState<DBMyWorkItem | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quickAddRef = useRef<HTMLInputElement>(null);
 
   // Load on mount only — NOT part of global loadAllData
   useEffect(() => {
@@ -339,10 +341,44 @@ export default function MyWork() {
   const handleToggleComplete = useCallback(async (item: DBMyWorkItem) => {
     if (item.status === 'ACTIVE') {
       await store.updateMyWorkItem({ ...item, status: 'COMPLETED', completed_at: new Date().toISOString() });
+      setUndoItem(item);
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = setTimeout(() => setUndoItem(null), 5000);
     } else {
       await store.updateMyWorkItem({ ...item, status: 'ACTIVE', completed_at: null });
     }
   }, [store]);
+
+  const handleUndoComplete = useCallback(async () => {
+    if (!undoItem) return;
+    await store.updateMyWorkItem({ ...undoItem, status: 'ACTIVE', completed_at: null });
+    setUndoItem(null);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+  }, [undoItem, store]);
+
+  const handleQuickAdd = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = quickAdd.trim();
+    if (!title) return;
+    const item: DBMyWorkItem = {
+      id: crypto.randomUUID(),
+      org_id: orgId,
+      user_id: userId,
+      title,
+      description: null,
+      notes: null,
+      project_id: null,
+      urgency: 'NORMAL',
+      due_date: null,
+      status: 'ACTIVE',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      completed_at: null,
+    };
+    await store.addMyWorkItem(item);
+    setQuickAdd('');
+    quickAddRef.current?.focus();
+  }, [quickAdd, orgId, userId, store]);
 
   const handleDelete = useCallback(async (id: string) => {
     await store.removeMyWorkItem(id);
@@ -471,6 +507,23 @@ export default function MyWork() {
           </div>
         ))}
       </div>
+
+      {/* Quick add */}
+      {view !== 'COMPLETED' && (
+        <form onSubmit={handleQuickAdd} className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Plus size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" />
+            <input
+              ref={quickAddRef}
+              value={quickAdd}
+              onChange={e => setQuickAdd(e.target.value)}
+              placeholder="Add an item…"
+              className="w-full bg-[#1a2236] border border-[#1e2d4a] rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600 transition-colors"
+            />
+          </div>
+        </form>
+      )
+      }
 
       {/* View tabs */}
       <div className="flex items-center gap-1 flex-wrap">
@@ -629,6 +682,20 @@ export default function MyWork() {
         <p className="text-xs text-slate-600 text-center">
           Click the <CheckCircle size={11} className="inline" /> icon on any item to restore it to active.
         </p>
+      )}
+
+      {/* Undo toast */}
+      {undoItem && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-[#1a2236] border border-[#1e2d4a] rounded-xl shadow-2xl px-4 py-3 animate-in fade-in slide-in-from-bottom-2">
+          <CheckCircle size={15} className="text-emerald-400 shrink-0" />
+          <span className="text-sm text-slate-300">Item completed</span>
+          <button onClick={handleUndoComplete} className="flex items-center gap-1.5 text-sm font-semibold text-[#f97316] hover:text-orange-400 transition-colors">
+            <Undo2 size={13} /> Undo
+          </button>
+          <button onClick={() => { setUndoItem(null); if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }} className="p-1 rounded-lg text-slate-600 hover:text-slate-400 hover:bg-[#0d1628] transition-colors">
+            <X size={13} />
+          </button>
+        </div>
       )}
 
       {/* Modal */}
