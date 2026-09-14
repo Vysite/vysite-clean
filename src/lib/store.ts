@@ -1432,6 +1432,14 @@ export interface AppStore {
   updateProjectCost: (c: DBProjectCost) => Promise<void>;
   removeProjectCost: (id: string) => Promise<void>;
   batchAddProjectCosts: (costs: DBProjectCost[]) => Promise<string | null>;
+
+  // My Work — personal task organiser (on-demand, user-scoped)
+  myWorkItems: DBMyWorkItem[];
+  myWorkStatus: 'idle' | 'loading' | 'success' | 'error';
+  reloadMyWork: () => Promise<void>;
+  addMyWorkItem: (item: DBMyWorkItem) => Promise<string | null>;
+  updateMyWorkItem: (item: DBMyWorkItem) => Promise<void>;
+  removeMyWorkItem: (id: string) => Promise<void>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1444,6 +1452,23 @@ export function switchUser(name: string) {
   _activeUserName = name;
   try { localStorage.setItem('vysite_active_user', name); } catch { /* ignore */ }
   window.location.reload();
+}
+
+// ─── My Work types ────────────────────────────────────────────────────────────
+export interface DBMyWorkItem {
+  id: string;
+  org_id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  notes: string | null;
+  project_id: string | null;
+  urgency: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  due_date: string | null;
+  status: 'ACTIVE' | 'COMPLETED';
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
 }
 
 const DEV = import.meta.env.DEV;
@@ -1510,11 +1535,15 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   // when this is true rather than rendering "no records" against empty arrays.
   const [modulesLoading, setModulesLoading] = useState(true);
   const [siteFormsStatus, setSiteFormsStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [myWorkItems, setMyWorkItems] = useState<DBMyWorkItem[]>([]);
+  const [myWorkStatus, setMyWorkStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   // Keep a stable ref to orgId so callbacks always read the latest value
   // without needing to be re-created (avoids cascading re-renders).
   const orgIdRef = useRef(orgId);
   orgIdRef.current = orgId;
+  const authUserIdRef = useRef(authUserId);
+  authUserIdRef.current = authUserId;
 
   useEffect(() => {
     // Block all data loading if org context is not resolved.
@@ -1860,6 +1889,58 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       })));
       setSiteFormsStatus('success');
     }
+  }, []);
+
+  // ── My Work (personal task organiser — on-demand, user-scoped) ─────────────────
+  const reloadMyWork = useCallback(async () => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setMyWorkStatus('loading');
+    const { data, error } = await supabase
+      .from('vy_my_work_items')
+      .select('*')
+      .eq('org_id', oid)
+      .eq('user_id', authUserIdRef.current ?? '')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('[VYSITE] reloadMyWork error:', error);
+      setMyWorkStatus('error');
+    } else {
+      setMyWorkItems((data ?? []) as unknown as DBMyWorkItem[]);
+      setMyWorkStatus('success');
+    }
+  }, []);
+
+  const addMyWorkItem = useCallback(async (item: DBMyWorkItem): Promise<string | null> => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return 'No organisation context.';
+    const row = { ...item, org_id: oid, user_id: authUserIdRef.current ?? item.user_id };
+    setMyWorkItems(prev => [row, ...prev]);
+    const { error } = await supabase.from('vy_my_work_items').insert(row);
+    logWrite('addMyWorkItem', 'vy_my_work_items', error);
+    return error ? error.message : null;
+  }, []);
+
+  const updateMyWorkItem = useCallback(async (item: DBMyWorkItem) => {
+    setMyWorkItems(prev => prev.map(x => x.id === item.id ? { ...item, updated_at: new Date().toISOString() } : x));
+    const { error } = await supabase.from('vy_my_work_items').update({
+      title: item.title,
+      description: item.description,
+      notes: item.notes,
+      project_id: item.project_id,
+      urgency: item.urgency,
+      due_date: item.due_date,
+      status: item.status,
+      completed_at: item.completed_at,
+      updated_at: new Date().toISOString(),
+    }).eq('id', item.id);
+    logWrite('updateMyWorkItem', 'vy_my_work_items', error);
+  }, []);
+
+  const removeMyWorkItem = useCallback(async (id: string) => {
+    setMyWorkItems(prev => prev.filter(x => x.id !== id));
+    const { error } = await supabase.from('vy_my_work_items').delete().eq('id', id);
+    logWrite('removeMyWorkItem', 'vy_my_work_items', error);
   }, []);
 
   const fetchSiteFormDetail = useCallback(async (id: string): Promise<DBSiteForm | null> => {
@@ -2810,5 +2891,6 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     projectCosts,
     loadProjectCosts, loadProjectCostSummary,
     addProjectCost, updateProjectCost, removeProjectCost, batchAddProjectCosts,
+    myWorkItems, myWorkStatus, reloadMyWork, addMyWorkItem, updateMyWorkItem, removeMyWorkItem,
   };
 }

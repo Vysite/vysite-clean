@@ -2,7 +2,7 @@ import {
   LayoutDashboard, FileText, FolderKanban, ClipboardList,
   AlertOctagon, Zap, BookOpen, BarChart2,
   Settings, MessageSquare, Wrench, ChevronLeft,
-  ChevronRight, X, TrendingUp, Network,
+  ChevronRight, X, TrendingUp, Network, CheckSquare,
 } from 'lucide-react';
 
 export type Page =
@@ -14,6 +14,7 @@ export type Page =
   | 'site-forms'
   | 'snagging'
   | 'actions'
+  | 'my-work'
   | 'testing'
   | 'supply-chain'
   | 'reports'
@@ -39,6 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'site-forms',    label: 'Site Forms',          icon: <ClipboardList size={18} />,   moduleKey: 'site-forms' },
   { page: 'snagging',      label: 'Snagging',            icon: <AlertOctagon size={18} />,    moduleKey: 'snagging' },
   { page: 'actions',       label: 'Actions',             icon: <Zap size={18} />,             moduleKey: 'actions' },
+  { page: 'my-work',       label: 'My Work',             icon: <CheckSquare size={18} /> },
   { page: 'testing',       label: 'O&M Manual',          icon: <BookOpen size={18} />,        moduleKey: 'testing' },
   { page: 'supply-chain',  label: 'Supply Chain',        icon: <Network size={18} />,         moduleKey: 'supply-chain' },
   { page: 'reports',       label: 'Reports',             icon: <BarChart2 size={18} />,       moduleKey: 'reports' },

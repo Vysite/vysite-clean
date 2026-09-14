@@ -9,6 +9,7 @@ import Projects from './pages/Projects';
 import SiteForms from './pages/SiteForms';
 import Snagging from './pages/Snagging';
 import Actions from './pages/Actions';
+import MyWork from './pages/MyWork';
 import Reports from './pages/Reports';
 import BetaFeedback from './pages/BetaFeedback';
 import Settings from './pages/Settings';
@@ -97,6 +98,8 @@ function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pending
       return guard(perms['modules.actions'] && isModuleEnabled('actions'),
         <Actions pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} pendingFilter={pendingFilter} onPendingFilterConsumed={() => setPendingFilter(null)} />,
         'Actions Tracker');
+    case 'my-work':
+      return <MyWork />;
     case 'testing':
       return guard(perms['modules.testing'] && isModuleEnabled('testing'),
         <OAndMManual />,
