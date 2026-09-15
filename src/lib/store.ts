@@ -1440,6 +1440,13 @@ export interface AppStore {
   addMyWorkItem: (item: DBMyWorkItem) => Promise<string | null>;
   updateMyWorkItem: (item: DBMyWorkItem) => Promise<void>;
   removeMyWorkItem: (id: string) => Promise<void>;
+  myWorkNotes: DBMyWorkNote[];
+  myWorkNoteCounts: Record<string, number>;
+  loadMyWorkNotes: (itemId: string) => Promise<void>;
+  loadAllMyWorkNoteCounts: () => Promise<void>;
+  addMyWorkNote: (note: DBMyWorkNote) => Promise<void>;
+  updateMyWorkNote: (note: DBMyWorkNote) => Promise<void>;
+  removeMyWorkNote: (id: string) => Promise<void>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1469,6 +1476,16 @@ export interface DBMyWorkItem {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+}
+
+export interface DBMyWorkNote {
+  id: string;
+  org_id: string;
+  user_id: string;
+  my_work_item_id: string;
+  note_text: string;
+  created_at: string;
+  updated_at: string;
 }
 
 const DEV = import.meta.env.DEV;
@@ -1537,6 +1554,8 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [siteFormsStatus, setSiteFormsStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [myWorkItems, setMyWorkItems] = useState<DBMyWorkItem[]>([]);
   const [myWorkStatus, setMyWorkStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [myWorkNotes, setMyWorkNotes] = useState<DBMyWorkNote[]>([]);
+  const [myWorkNoteCounts, setMyWorkNoteCounts] = useState<Record<string, number>>({});
 
   // Keep a stable ref to orgId so callbacks always read the latest value
   // without needing to be re-created (avoids cascading re-renders).
@@ -1939,9 +1958,75 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
 
   const removeMyWorkItem = useCallback(async (id: string) => {
     setMyWorkItems(prev => prev.filter(x => x.id !== id));
+    setMyWorkNotes(prev => prev.filter(n => n.my_work_item_id !== id));
     const { error } = await supabase.from('vy_my_work_items').delete().eq('id', id);
     logWrite('removeMyWorkItem', 'vy_my_work_items', error);
   }, []);
+
+  // ── My Work Notes (timestamped note history — on-demand, user-scoped) ──────────
+
+  const loadMyWorkNotes = useCallback(async (itemId: string) => {
+    const { data, error } = await supabase
+      .from('vy_my_work_notes')
+      .select('*')
+      .eq('my_work_item_id', itemId)
+      .order('created_at', { ascending: true });
+    if (error) {
+      console.error('[VYSITE] loadMyWorkNotes error:', error);
+      return;
+    }
+    setMyWorkNotes(prev => {
+      const filtered = prev.filter(n => n.my_work_item_id !== itemId);
+      return [...filtered, ...((data ?? []) as unknown as DBMyWorkNote[])];
+    });
+  }, []);
+
+  const loadAllMyWorkNoteCounts = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('vy_my_work_notes')
+      .select('my_work_item_id');
+    if (error) {
+      console.error('[VYSITE] loadAllMyWorkNoteCounts error:', error);
+      return;
+    }
+    const counts: Record<string, number> = {};
+    for (const row of (data ?? []) as { my_work_item_id: string }[]) {
+      counts[row.my_work_item_id] = (counts[row.my_work_item_id] ?? 0) + 1;
+    }
+    setMyWorkNoteCounts(counts);
+  }, []);
+
+  const addMyWorkNote = useCallback(async (note: DBMyWorkNote) => {
+    setMyWorkNotes(prev => [...prev, note]);
+    setMyWorkNoteCounts(prev => ({ ...prev, [note.my_work_item_id]: (prev[note.my_work_item_id] ?? 0) + 1 }));
+    const { error } = await supabase.from('vy_my_work_notes').insert(note);
+    logWrite('addMyWorkNote', 'vy_my_work_notes', error);
+  }, []);
+
+  const updateMyWorkNote = useCallback(async (note: DBMyWorkNote) => {
+    setMyWorkNotes(prev => prev.map(n => n.id === note.id ? { ...note, updated_at: new Date().toISOString() } : n));
+    const { error } = await supabase.from('vy_my_work_notes').update({
+      note_text: note.note_text,
+      updated_at: new Date().toISOString(),
+    }).eq('id', note.id);
+    logWrite('updateMyWorkNote', 'vy_my_work_notes', error);
+  }, []);
+
+  const removeMyWorkNote = useCallback(async (id: string) => {
+    const note = myWorkNotes.find(n => n.id === id);
+    setMyWorkNotes(prev => prev.filter(n => n.id !== id));
+    if (note) {
+      setMyWorkNoteCounts(prev => {
+        const current = prev[note.my_work_item_id] ?? 0;
+        const next = { ...prev };
+        if (current <= 1) delete next[note.my_work_item_id];
+        else next[note.my_work_item_id] = current - 1;
+        return next;
+      });
+    }
+    const { error } = await supabase.from('vy_my_work_notes').delete().eq('id', id);
+    logWrite('removeMyWorkNote', 'vy_my_work_notes', error);
+  }, [myWorkNotes]);
 
   const fetchSiteFormDetail = useCallback(async (id: string): Promise<DBSiteForm | null> => {
     const { data, error } = await supabase.from('vy_site_forms').select('*').eq('id', id).maybeSingle();
@@ -2892,5 +2977,6 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     loadProjectCosts, loadProjectCostSummary,
     addProjectCost, updateProjectCost, removeProjectCost, batchAddProjectCosts,
     myWorkItems, myWorkStatus, reloadMyWork, addMyWorkItem, updateMyWorkItem, removeMyWorkItem,
+    myWorkNotes, myWorkNoteCounts, loadMyWorkNotes, loadAllMyWorkNoteCounts, addMyWorkNote, updateMyWorkNote, removeMyWorkNote,
   };
 }

@@ -2,10 +2,10 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   Plus, Search, Calendar, CheckCircle, Circle, Trash2, Pencil,
   ChevronDown, ChevronUp, AlertTriangle, Clock, X, Download,
-  RotateCcw, RefreshCw, Undo2,
+  RotateCcw, RefreshCw, Undo2, MessageSquare, Check,
 } from 'lucide-react';
 import { useAppStore } from '../lib/StoreContext';
-import type { DBMyWorkItem } from '../lib/store';
+import type { DBMyWorkItem, DBMyWorkNote } from '../lib/store';
 import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 
 type Urgency = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
@@ -148,6 +148,145 @@ function ItemModal({ initial, mode, projects, onSave, onClose }: ItemModalProps)
   );
 }
 
+// ─── Notes section inside expanded detail ──────────────────────────────────────
+
+function fmtNoteTimestamp(iso: string): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return `${date} · ${time}`;
+}
+
+function NotesSection({ itemId, orgId, userId }: { itemId: string; orgId: string; userId: string }) {
+  const store = useAppStore();
+  const notes = useMemo(
+    () => store.myWorkNotes.filter(n => n.my_work_item_id === itemId).sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    [store.myWorkNotes, itemId],
+  );
+  const [draft, setDraft] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleAdd = useCallback(async () => {
+    const text = draft.trim();
+    if (!text) return;
+    const note: DBMyWorkNote = {
+      id: crypto.randomUUID(),
+      org_id: orgId,
+      user_id: userId,
+      my_work_item_id: itemId,
+      note_text: text,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    await store.addMyWorkNote(note);
+    setDraft('');
+  }, [draft, orgId, userId, itemId, store]);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingId) return;
+    const note = notes.find(n => n.id === editingId);
+    if (!note) return;
+    await store.updateMyWorkNote({ ...note, note_text: editText.trim() });
+    setEditingId(null);
+    setEditText('');
+  }, [editingId, editText, notes, store]);
+
+  const handleDelete = useCallback(async (id: string) => {
+    await store.removeMyWorkNote(id);
+    setConfirmDeleteId(null);
+  }, [store]);
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center gap-1.5 mb-2">
+        <MessageSquare size={11} className="text-slate-600" />
+        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Notes / Updates</span>
+      </div>
+
+      {notes.length === 0 && !editingId && (
+        <p className="text-[11px] text-slate-700 mb-2">No notes yet.</p>
+      )}
+
+      <div className="space-y-2 mb-3">
+        {notes.map(note => (
+          <div key={note.id} className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2">
+            {editingId === note.id ? (
+              <div className="space-y-2">
+                <textarea
+                  value={editText}
+                  onChange={e => setEditText(e.target.value)}
+                  rows={2}
+                  autoFocus
+                  className="w-full bg-[#111827] border border-[#2a3a5a] rounded-md px-2.5 py-2 text-xs text-slate-200 outline-none focus:border-[#f97316] resize-none"
+                />
+                <div className="flex gap-2">
+                  <button onClick={handleSaveEdit} className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-white bg-[#f97316] rounded-md hover:bg-orange-600 transition-colors">
+                    <Check size={9} /> Save
+                  </button>
+                  <button onClick={() => { setEditingId(null); setEditText(''); }} className="text-[10px] text-slate-500 hover:text-slate-300 px-2 py-1">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-slate-300 leading-relaxed">{note.note_text}</p>
+                <div className="flex items-center gap-3 mt-1.5">
+                  <span className="text-[10px] text-slate-600">{fmtNoteTimestamp(note.created_at)}</span>
+                  {note.updated_at !== note.created_at && (
+                    <span className="text-[9px] text-slate-700 italic">edited</span>
+                  )}
+                  <div className="ml-auto flex items-center gap-1">
+                    {confirmDeleteId === note.id ? (
+                      <>
+                        <button onClick={() => handleDelete(note.id)} className="text-[10px] font-semibold text-red-400 hover:text-red-300 px-1.5 py-0.5">Delete</button>
+                        <button onClick={() => setConfirmDeleteId(null)} className="text-[10px] text-slate-500 hover:text-slate-300 px-1.5 py-0.5">Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => { setEditingId(note.id); setEditText(note.note_text); }}
+                          className="p-1 text-slate-600 hover:text-[#f97316] transition-colors"
+                          title="Edit note"
+                        >
+                          <Pencil size={10} />
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(note.id)}
+                          className="p-1 text-slate-600 hover:text-red-400 transition-colors"
+                          title="Delete note"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Quick add input */}
+      <div className="flex items-center gap-2">
+        <input
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAdd(); } }}
+          placeholder="+ Add a quick note…"
+          className="flex-1 bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600 transition-colors"
+        />
+        {draft.trim() && (
+          <button onClick={handleAdd} className="px-3 py-2 bg-[#f97316] text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors">
+            Add
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Inline expand row ───────────────────────────────────────────────────────────
 
 function ItemDetail({ item, projectName, onEdit }: { item: DBMyWorkItem; projectName: string; onEdit: () => void }) {
@@ -187,6 +326,7 @@ export default function MyWork() {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState<DBMyWorkItem | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loadedNotesFor, setLoadedNotesFor] = useState<Set<string>>(new Set());
   const [quickAdd, setQuickAdd] = useState('');
   const [undoItem, setUndoItem] = useState<DBMyWorkItem | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -194,7 +334,10 @@ export default function MyWork() {
 
   // Load on mount only — NOT part of global loadAllData
   useEffect(() => {
-    if (orgId && userId) store.reloadMyWork();
+    if (orgId && userId) {
+      store.reloadMyWork();
+      store.loadAllMyWorkNoteCounts();
+    }
   }, [orgId, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const visibleProjects = useMemo(() => {
@@ -384,6 +527,17 @@ export default function MyWork() {
     await store.removeMyWorkItem(id);
     if (expandedId === id) setExpandedId(null);
   }, [store, expandedId]);
+
+  const toggleExpand = useCallback((itemId: string) => {
+    setExpandedId(prev => {
+      if (prev === itemId) return null;
+      if (!loadedNotesFor.has(itemId)) {
+        store.loadMyWorkNotes(itemId);
+        setLoadedNotesFor(prevSet => new Set(prevSet).add(itemId));
+      }
+      return itemId;
+    });
+  }, [loadedNotesFor, store]);
 
   // ─── PDF Export ────────────────────────────────────────────────────────────────
   const handleExportPDF = useCallback(() => {
@@ -631,7 +785,7 @@ export default function MyWork() {
 
                   {/* Title + meta — clickable to expand */}
                   <button
-                    onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                    onClick={() => toggleExpand(item.id)}
                     className="flex-1 text-left min-w-0"
                   >
                     <div className={`text-sm font-medium truncate ${isCompleted ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
@@ -649,6 +803,16 @@ export default function MyWork() {
                       <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${URGENCY_BADGE[item.urgency]}`}>
                         {item.urgency}
                       </span>
+                      {(() => {
+                        const noteCount = store.myWorkNoteCounts[item.id] ?? 0;
+                        if (noteCount === 0) return null;
+                        return (
+                          <span className="flex items-center gap-0.5 text-[10px] text-slate-600">
+                            <MessageSquare size={9} />
+                            {noteCount} {noteCount === 1 ? 'note' : 'notes'}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </button>
 
@@ -665,11 +829,23 @@ export default function MyWork() {
                 </div>
 
                 {isExpanded && (
-                  <ItemDetail
-                    item={item}
-                    projectName={proj ?? 'General'}
-                    onEdit={() => { setEditItem(item); setShowModal(true); }}
-                  />
+                  <div className="px-4 pb-3 pt-1 border-t border-[#1e2d4a]/50 space-y-2">
+                    {item.description && <p className="text-xs text-slate-400 leading-relaxed">{item.description}</p>}
+                    {item.notes && (
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Notes</span>
+                        <p className="text-xs text-slate-400 leading-relaxed mt-0.5">{item.notes}</p>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-4 text-[10px] text-slate-600">
+                      <span>Added: <span className="text-slate-500">{fmtDate(item.created_at)}</span></span>
+                      {item.completed_at && <span>Completed: <span className="text-slate-500">{fmtDate(item.completed_at)}</span></span>}
+                      <button onClick={() => { setEditItem(item); setShowModal(true); }} className="ml-auto flex items-center gap-1 text-slate-500 hover:text-[#f97316] transition-colors font-semibold">
+                        <Pencil size={11} /> Edit
+                      </button>
+                    </div>
+                    <NotesSection itemId={item.id} orgId={orgId} userId={userId} />
+                  </div>
                 )}
               </div>
             );
