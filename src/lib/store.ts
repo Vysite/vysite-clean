@@ -1915,6 +1915,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
     setMyWorkStatus('loading');
+    setMyWorkNotes([]);
     const { data, error } = await supabase
       .from('vy_my_work_items')
       .select('*')
@@ -1997,9 +1998,10 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   }, []);
 
   const addMyWorkNote = useCallback(async (note: DBMyWorkNote) => {
-    setMyWorkNotes(prev => [...prev, note]);
+    const row = { ...note, user_id: authUserIdRef.current ?? note.user_id };
+    setMyWorkNotes(prev => [...prev, row]);
     setMyWorkNoteCounts(prev => ({ ...prev, [note.my_work_item_id]: (prev[note.my_work_item_id] ?? 0) + 1 }));
-    const { error } = await supabase.from('vy_my_work_notes').insert(note);
+    const { error } = await supabase.from('vy_my_work_notes').insert(row);
     logWrite('addMyWorkNote', 'vy_my_work_notes', error);
   }, []);
 
