@@ -1214,9 +1214,15 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
     }
     if (type === 'Mechanical Close-Up Certificate' || type === 'Electrical Close-Up Certificate') {
       const allComplete = cucRows.length > 0 && cucRows.every(r => r.status === 'Complete');
-      const effectiveStatus = status === 'Issued'
-        ? (allComplete ? 'Issued' : 'Draft')
-        : (allComplete ? 'Ready to Issue' : 'Draft');
+      // Validate status: don't allow Ready to Issue / Submitted / Handed Over if not all complete
+      let effectiveStatus = status;
+      if (!allComplete && (effectiveStatus === 'Ready to Issue' || effectiveStatus === 'Submitted' || effectiveStatus === 'Handed Over')) {
+        effectiveStatus = effectiveStatus === 'Handed Over' ? 'Submitted' : 'Draft';
+      }
+      // Handed Over requires prior Submitted
+      if (effectiveStatus === 'Handed Over' && initialData?.status !== 'Submitted' && initialData?.status !== 'Handed Over') {
+        effectiveStatus = 'Submitted';
+      }
       Object.assign(base, {
         title:            form.title || form.cucRef,
         cucRef:           form.cucRef,
@@ -1224,11 +1230,13 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
         cucDescription:   form.cucDescription,
         cucInspectedBy:   form.cucInspectedBy || form.completedBy,
         cucRows:          JSON.stringify(cucRows),
-        cucIssuedDate:    effectiveStatus === 'Issued' ? (form.cucIssuedDate || new Date().toISOString().split('T')[0]) : '',
+        cucIssuedDate:    (effectiveStatus === 'Submitted' || effectiveStatus === 'Handed Over')
+          ? (form.cucIssuedDate || new Date().toISOString().split('T')[0])
+          : '',
         cucEngineerName:  form.cucEngineerName,
         cucWitnessName:   form.cucWitnessName,
         status:           effectiveStatus as ExtendedFormStatus,
-        submittedDate:    effectiveStatus === 'Issued' ? new Date().toISOString().split('T')[0] : undefined,
+        submittedDate:    (effectiveStatus === 'Submitted' || effectiveStatus === 'Handed Over') ? new Date().toISOString().split('T')[0] : undefined,
       });
     }
     onSave(base, uploadedFiles);
@@ -5303,7 +5311,9 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
           {/* ── Close-Up Certificate (Mechanical / Electrical) ── */}
           {isCUC && (() => {
             const allComplete = cucRows.length > 0 && cucRows.every(r => r.status === 'Complete');
-            const isIssued = form.status === 'Issued' || (initialData?.status === 'Issued');
+            const curStatus = (form.status as string) || (initialData?.status as string) || 'Draft';
+            const isSubmitted = curStatus === 'Submitted' || curStatus === 'Handed Over';
+            const canSubmit = allComplete && (curStatus === 'Ready to Issue' || curStatus === 'Draft' || curStatus === 'Under Review');
             return (
               <>
                 <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-4 space-y-4">
@@ -5356,7 +5366,7 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
                       allComplete ? 'text-emerald-400 bg-emerald-900/20 border-emerald-800/40' :
                       'text-amber-400 bg-amber-900/20 border-amber-800/40'
                     }`}>
-                      {allComplete ? 'READY TO ISSUE' : 'DRAFT'}
+                      {allComplete ? 'READY TO ISSUE' : cucRows.length > 0 ? 'DRAFT' : 'EMPTY'}
                     </span>
                   </div>
                   <CloseUpRows rows={cucRows} onChange={setCucRows} />
@@ -5365,23 +5375,23 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
                 {/* Issue section */}
                 <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-4 space-y-4">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Declaration & Sign-Off</p>
-                  {allComplete && !isIssued && (
+                  {canSubmit && (
                     <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-lg px-4 py-3 space-y-3">
                       <p className="text-xs font-bold text-emerald-400">ALL CLOSE-UP REQUIREMENTS COMPLETE</p>
                       <button
                         type="button"
-                        onClick={() => setForm(f => ({ ...f, status: 'Issued' }))}
+                        onClick={() => setForm(f => ({ ...f, status: 'Submitted' }))}
                         className={`px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${accentColor}`}
                       >
                         ISSUE CLOSE-UP CERTIFICATE
                       </button>
-                      <p className="text-[10px] text-slate-500">Click to issue this certificate. The status will be set to Issued on save.</p>
+                      <p className="text-[10px] text-slate-500">Click to formally submit this certificate. The status will be set to Submitted on save.</p>
                     </div>
                   )}
-                  {isIssued && (
+                  {isSubmitted && (
                     <div className="bg-sky-900/20 border border-sky-700/40 rounded-lg px-4 py-3">
-                      <p className="text-xs font-bold text-sky-400">CERTIFICATE ISSUED</p>
-                      <p className="text-[10px] text-slate-500 mt-1">This certificate has been issued and forms part of the project record.</p>
+                      <p className="text-xs font-bold text-sky-400">{curStatus === 'Handed Over' ? 'CERTIFICATE HANDED OVER' : 'CERTIFICATE SUBMITTED'}</p>
+                      <p className="text-[10px] text-slate-500 mt-1">This certificate has been formally submitted{curStatus === 'Handed Over' ? ' and handed over' : ''} and forms part of the project record.</p>
                     </div>
                   )}
                   <div className="grid grid-cols-2 gap-3">

@@ -29,6 +29,7 @@ const ALL_STATUSES: ExtendedFormStatus[] = [
   'Draft', 'Submitted', 'Approved', 'Issued',
   'Open', 'Acknowledged', 'Actioned', 'Resolved', 'Closed',
   'Action Required', 'Awaiting Response', 'Escalated', 'Ready to Issue',
+  'Under Review', 'Handed Over',
 ];
 
 // ─── Category definitions ─────────────────────────────────────────────────────
@@ -165,6 +166,8 @@ function StatusDropdown({ form, onStatusChange, canEdit }: StatusDropdownProps) 
     form.status === 'Resolved'         ? 'text-emerald-400 bg-emerald-900/20 border-emerald-800/40' :
     form.status === 'Closed'           ? 'text-slate-400 bg-slate-700/30 border-slate-600/40' :
     form.status === 'Ready to Issue'   ? 'text-emerald-400 bg-emerald-900/20 border-emerald-800/40' :
+    form.status === 'Under Review'    ? 'text-sky-400 bg-sky-900/20 border-sky-800/40' :
+    form.status === 'Handed Over'     ? 'text-teal-400 bg-teal-900/20 border-teal-800/40' :
     'text-slate-400 bg-slate-700/30 border-slate-600/40';
 
   if (!canEdit) {
@@ -173,6 +176,25 @@ function StatusDropdown({ form, onStatusChange, canEdit }: StatusDropdownProps) 
         {form.status}
       </span>
     );
+  }
+
+  // Close-Up Certificate status filtering
+  const isCUC = form.type === 'Mechanical Close-Up Certificate' || form.type === 'Electrical Close-Up Certificate';
+  let availableStatuses = ALL_STATUSES;
+  if (isCUC) {
+    const cucRowsJson = (form as Record<string, unknown>).cucRows as string | undefined;
+    let cucRows: { status: string }[] = [];
+    try { cucRows = cucRowsJson ? JSON.parse(cucRowsJson) : []; } catch { /* */ }
+    const allComplete = cucRows.length > 0 && cucRows.every(r => r.status === 'Complete');
+    const CUC_STATUSES = ['Draft', 'Under Review', 'Ready to Issue', 'Submitted', 'Handed Over'] as const;
+    const cur = form.status as string;
+    availableStatuses = CUC_STATUSES.filter(s => {
+      if (s === 'Ready to Issue' || s === 'Submitted') return allComplete;
+      if (s === 'Handed Over') return cur === 'Submitted' || cur === 'Handed Over';
+      return true;
+    }) as unknown as string[];
+    // Always include current status even if it wouldn't normally be available
+    if (!availableStatuses.includes(cur)) availableStatuses = [cur, ...availableStatuses];
   }
 
   return (
@@ -186,7 +208,7 @@ function StatusDropdown({ form, onStatusChange, canEdit }: StatusDropdownProps) 
       className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 border cursor-pointer outline-none appearance-none ${statusColor} hover:opacity-80 transition-opacity`}
       style={{ backgroundImage: 'none' }}
     >
-      {ALL_STATUSES.map(s => (
+      {availableStatuses.map(s => (
         <option key={s} value={s} className="bg-[#1a2236] text-slate-200 text-xs font-normal">{s}</option>
       ))}
     </select>
@@ -442,7 +464,8 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
       ?? (data as Record<string, unknown>).inspectionRef
       ?? (data as Record<string, unknown>).shuRef
       ?? (data as Record<string, unknown>).scrRef
-      ?? (data as Record<string, unknown>).snRef;
+      ?? (data as Record<string, unknown>).snRef
+      ?? (data as Record<string, unknown>).cucRef;
     if (ref) return String(ref);
     return data.type;
   };
@@ -1130,6 +1153,13 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
                         </div>
                         {/* Row 2: title */}
                         <p className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate leading-snug">{f.title || te.label}</p>
+                        {/* Row 2b: close-up context (Mechanical/Electrical Close-Up only) */}
+                        {(f.type === 'Mechanical Close-Up Certificate' || f.type === 'Electrical Close-Up Certificate') && (() => {
+                          const loc = (f as Record<string, unknown>).cucLocationArea as string | undefined;
+                          const desc = (f as Record<string, unknown>).cucDescription as string | undefined;
+                          const ctx = [loc, desc].filter(Boolean).join(' — ');
+                          return ctx ? <p className="text-[11px] text-slate-500 mt-0.5 truncate leading-snug">{ctx}</p> : null;
+                        })()}
                         {/* Row 3: meta */}
                         <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
                           {f.projectName && (

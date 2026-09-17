@@ -28,6 +28,9 @@ const STATUS_COLORS: Record<string, string> = {
   Escalated:         'bg-red-900/60 text-red-300',
   'Action Required': 'bg-red-900/60 text-red-300',
   Issued:            'bg-sky-900/60 text-sky-300',
+  'Ready to Issue':  'bg-emerald-900/60 text-emerald-300',
+  'Under Review':    'bg-sky-900/60 text-sky-300',
+  'Handed Over':     'bg-teal-900/60 text-teal-300',
 };
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
@@ -144,6 +147,7 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
   const isSCR  = form.type === 'Site Change Request';
   const isSN   = form.type === 'Site Note';
   const isFR   = form.type === 'Flushing Register';
+  const isCUC  = form.type === 'Mechanical Close-Up Certificate' || form.type === 'Electrical Close-Up Certificate';
 
   // Parse JSON arrays for view
   let ramsHazards: HazardRecord[] = [];
@@ -201,6 +205,10 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
 
   let frRows: FlushingRegisterRow[] = [];
   if (isFR && form.frRows) { try { frRows = JSON.parse(form.frRows as string); } catch { /* */ } }
+
+  interface CloseUpRowView { id: string; requirement: string; status: string; }
+  let cucRows: CloseUpRowView[] = [];
+  if (isCUC && form.cucRows) { try { cucRows = JSON.parse(form.cucRows as string); } catch { /* */ } }
   type FrChecks = Record<string, string>;
   let frStartChecks: FrChecks = {};
   if (isFR && form.frStartChecks) { try { frStartChecks = JSON.parse(form.frStartChecks as string); } catch { /* */ } }
@@ -1218,8 +1226,64 @@ export function ViewModal({ form, onClose, onEdit, onDelete }: ViewModalProps) {
             </Section>
           </>}
 
+          {/* ── Close-Up Certificate ── */}
+          {isCUC && (() => {
+            const complete = cucRows.filter(r => r.status === 'Complete').length;
+            const total = cucRows.length;
+            const allComplete = total > 0 && complete === total;
+            return (
+              <>
+                <Section label="Close-Up Details">
+                  <Field2Col items={[
+                    ['Certificate Ref', s('cucRef')],
+                    ['Location / Area', s('cucLocationArea')],
+                    ['Inspected By', s('cucInspectedBy') ?? s('completedBy')],
+                    ['Date', fmtDate(s('date'))],
+                  ]} />
+                  {s('cucDescription') && <ViewField label="Close-Up Description" value={s('cucDescription')} />}
+                </Section>
+
+                {cucRows.length > 0 && (
+                  <Section label={`Close-Up Requirements (${complete} of ${total} complete)`}>
+                    <div className={`mb-3 px-4 py-2.5 rounded-xl border text-xs font-bold ${
+                      allComplete
+                        ? 'bg-emerald-900/20 border-emerald-700/40 text-emerald-400'
+                        : 'bg-amber-900/20 border-amber-700/40 text-amber-400'
+                    }`}>
+                      {allComplete
+                        ? 'ALL CLOSE-UP REQUIREMENTS COMPLETE'
+                        : `${total - complete} requirement${total - complete !== 1 ? 's' : ''} still outstanding`}
+                    </div>
+                    <div className="space-y-1.5">
+                      {cucRows.map((row, i) => (
+                        <div key={row.id ?? i} className="flex items-center justify-between py-2 border-b border-[#1e2d4a]/50 last:border-0">
+                          <span className="text-xs text-slate-300 pr-4 flex-1">{row.requirement}</span>
+                          <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${
+                            row.status === 'Complete'
+                              ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700/40'
+                              : 'bg-amber-900/60 text-amber-300 border-amber-700/40'
+                          }`}>{row.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+
+                {s('cucEngineerName') || s('cucWitnessName') || s('cucIssuedDate') ? (
+                  <Section label="Sign-Off">
+                    <Field2Col items={[
+                      ['Engineer Name', s('cucEngineerName')],
+                      ['Witness Name', s('cucWitnessName')],
+                      ['Date Issued', fmtDate(s('cucIssuedDate'))],
+                    ]} />
+                  </Section>
+                ) : null}
+              </>
+            );
+          })()}
+
           {/* Generic comments/notes fallback */}
-          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isTWR && !isQA && !isPCC && !isSHU && !isSCR && !isSN && !isFR && (form.comments || form.notes) && (
+          {!isRAMS && !isDSR && !isECR && !isAIR && !isPCR && !isMVHR && !isTWR && !isQA && !isPCC && !isSHU && !isSCR && !isSN && !isFR && !isCUC && (form.comments || form.notes) && (
             <ViewField label="Comments / Notes" value={String(form.comments || form.notes || '')} />
           )}
 

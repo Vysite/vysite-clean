@@ -1404,7 +1404,9 @@ function buildCloseUpCertificateBody(f: Record<string, unknown>): string {
   let rows: CUCRow[] = [];
   try { rows = JSON.parse(safeStr(f.cucRows) || '[]') as CUCRow[]; } catch { /* */ }
   const allComplete = rows.length > 0 && rows.every(r => r.status === 'Complete');
-  const isIssued = safeStr(f.status) === 'Issued';
+  const statusStr = safeStr(f.status);
+  const isFormal = statusStr === 'Submitted' || statusStr === 'Handed Over';
+  const bannerLabel = statusStr === 'Handed Over' ? 'CERTIFICATE HANDED OVER' : statusStr === 'Submitted' ? 'CERTIFICATE SUBMITTED' : isFormal ? 'CERTIFICATE ISSUED' : '';
 
   const rowsTable = rows.length ? `
     <table class="data-table">
@@ -1422,19 +1424,19 @@ function buildCloseUpCertificateBody(f: Record<string, unknown>): string {
       }).join('')}
     </table>` : '<p style="font-size:10px;color:#475569;font-style:italic">No close-up requirements recorded.</p>';
 
-  const statusBanner = isIssued
+  const statusBanner = isFormal
     ? `<div style="background:#e0f2fe;border:1.5px solid #0369a1;border-radius:8px;padding:12px 18px;margin:14px 0;page-break-inside:avoid">
-        <span style="font-size:14px;font-weight:800;color:#0369a1">CERTIFICATE ISSUED</span>
+        <span style="font-size:14px;font-weight:800;color:#0369a1">${bannerLabel}</span>
       </div>`
     : allComplete
     ? `<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:12px 18px;margin:14px 0;page-break-inside:avoid">
         <span style="font-size:14px;font-weight:800;color:#16a34a">ALL CLOSE-UP REQUIREMENTS COMPLETE — READY TO ISSUE</span>
       </div>`
     : `<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:12px 18px;margin:14px 0;page-break-inside:avoid">
-        <span style="font-size:14px;font-weight:800;color:#d97706">DRAFT — OUTSTANDING ITEMS REMAIN</span>
+        <span style="font-size:14px;font-weight:800;color:#d97706">${statusStr === 'Under Review' ? 'UNDER REVIEW — OUTSTANDING ITEMS REMAIN' : 'DRAFT — OUTSTANDING ITEMS REMAIN'}</span>
       </div>`;
 
-  const declaration = isIssued ? `
+  const declaration = isFormal ? `
     <div class="section" style="page-break-inside:avoid">
       ${sectionHeading('Declaration')}
       <div class="section-content" style="font-style:italic;background:#f0fdf4;border-color:#86efac">

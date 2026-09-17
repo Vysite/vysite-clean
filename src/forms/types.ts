@@ -23,7 +23,8 @@ export type ExtendedFormType =
 export type ExtendedFormStatus =
   | FormStatus
   | 'Issued' | 'Awaiting Response' | 'Closed' | 'Resolved' | 'Escalated' | 'Action Required'
-  | 'Open' | 'Acknowledged' | 'Actioned' | 'Ready to Issue';
+  | 'Open' | 'Acknowledged' | 'Actioned' | 'Ready to Issue'
+  | 'Under Review' | 'Handed Over';
 
 export interface ExtendedSiteForm extends Omit<SiteForm, 'type' | 'status'> {
   type: ExtendedFormType;
