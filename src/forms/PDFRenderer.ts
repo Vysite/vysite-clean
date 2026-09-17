@@ -1399,6 +1399,70 @@ function buildQABody(f: Record<string, unknown>): string {
   `;
 }
 
+function buildCloseUpCertificateBody(f: Record<string, unknown>): string {
+  interface CUCRow { id: string; requirement: string; status: string; }
+  let rows: CUCRow[] = [];
+  try { rows = JSON.parse(safeStr(f.cucRows) || '[]') as CUCRow[]; } catch { /* */ }
+  const allComplete = rows.length > 0 && rows.every(r => r.status === 'Complete');
+  const isIssued = safeStr(f.status) === 'Issued';
+
+  const rowsTable = rows.length ? `
+    <table class="data-table">
+      <tr><th style="width:8%">#</th><th>Installation / Close-Up Requirement</th><th style="width:18%;text-align:center">Status</th></tr>
+      ${rows.map((r, i) => {
+        const badge = r.status === 'Complete'
+          ? '<span class="badge-pass">Complete</span>'
+          : '<span class="badge-fail" style="background:#fef9c3;color:#854d0e">Outstanding</span>';
+        const rowBg = r.status === 'Complete' ? 'background:#f0fdf4' : '';
+        return `<tr style="${rowBg}">
+          <td style="text-align:center;font-weight:600">${i + 1}</td>
+          <td>${esc(r.requirement)}</td>
+          <td style="text-align:center">${badge}</td>
+        </tr>`;
+      }).join('')}
+    </table>` : '<p style="font-size:10px;color:#475569;font-style:italic">No close-up requirements recorded.</p>';
+
+  const statusBanner = isIssued
+    ? `<div style="background:#e0f2fe;border:1.5px solid #0369a1;border-radius:8px;padding:12px 18px;margin:14px 0;page-break-inside:avoid">
+        <span style="font-size:14px;font-weight:800;color:#0369a1">CERTIFICATE ISSUED</span>
+      </div>`
+    : allComplete
+    ? `<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:12px 18px;margin:14px 0;page-break-inside:avoid">
+        <span style="font-size:14px;font-weight:800;color:#16a34a">ALL CLOSE-UP REQUIREMENTS COMPLETE — READY TO ISSUE</span>
+      </div>`
+    : `<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:12px 18px;margin:14px 0;page-break-inside:avoid">
+        <span style="font-size:14px;font-weight:800;color:#d97706">DRAFT — OUTSTANDING ITEMS REMAIN</span>
+      </div>`;
+
+  const declaration = isIssued ? `
+    <div class="section" style="page-break-inside:avoid">
+      ${sectionHeading('Declaration')}
+      <div class="section-content" style="font-style:italic;background:#f0fdf4;border-color:#86efac">
+        The installation identified within this certificate has been inspected prior to close-up and the recorded requirements have been confirmed complete.
+      </div>
+    </div>` : '';
+
+  return `
+    ${sectionHtml('Certificate Details', dataGrid([
+      ['Certificate Ref', safeStr(f.cucRef)],
+      ['Date', fmtDate(safeStr(f.date))],
+      ['Location / Area', safeStr(f.cucLocationArea)],
+      ['Inspected By', safeStr(f.cucInspectedBy) || safeStr(f.completedBy)],
+      ['Project', safeStr(f.projectName)],
+      ['Status', safeStr(f.status)],
+    ], 3))}
+    ${safeStr(f.cucDescription) ? section('Close-Up Description', safeStr(f.cucDescription)) : ''}
+    ${statusBanner}
+    ${sectionHtml(`Close-Up Register (${rows.length} ${rows.length === 1 ? 'item' : 'items'})`, rowsTable)}
+    ${declaration}
+    ${sectionHtml('Sign-Off', dataGrid([
+      ['Engineer Name', safeStr(f.cucEngineerName)],
+      ['Witness Name', safeStr(f.cucWitnessName)],
+      ['Date Issued', fmtDate(safeStr(f.cucIssuedDate))],
+    ], 3))}
+  `;
+}
+
 function buildGenericBody(f: Record<string, unknown>): string {
   return `
     ${section('Description', safeStr(f.description))}
@@ -1874,6 +1938,8 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
       'Site Change Request': 'Site Change Request',
       'Site Note': 'Site Note',
       'Flushing Register': 'Mechanical — Daily Flushing Register',
+      'Mechanical Close-Up Certificate': 'Mechanical Close-Up Certificate',
+      'Electrical Close-Up Certificate': 'Electrical Close-Up Certificate',
     };
     return map[form.type] ?? form.type;
   })();
@@ -1948,6 +2014,8 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
     case 'Site Change Request':            formBody = buildSiteChangeRequestBody(f); break;
     case 'Site Note':                      formBody = buildSiteNoteBody(f); break;
     case 'Flushing Register':              formBody = buildFlushingRegisterBody(f); break;
+    case 'Mechanical Close-Up Certificate':
+    case 'Electrical Close-Up Certificate':  formBody = buildCloseUpCertificateBody(f); break;
     default:                               formBody = buildGenericBody(f); break;
   }
 
@@ -1956,7 +2024,7 @@ export function buildFormPageHTML(form: ExtendedSiteForm, orgSettings?: OrgSetti
     ? sectionHtml('Evidence & Attachments', evidenceHtml(attachments))
     : '';
 
-  const docRef = safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.shuRef) || safeStr(f.scrRef) || safeStr(f.snRef) || safeStr(f.frRef) || safeStr(f.id) || `VY-${Date.now()}`;
+  const docRef = safeStr(f.rfiRef) || safeStr(f.tqRef) || safeStr(f.ramsRef) || safeStr(f.noticeRef) || safeStr(f.shuRef) || safeStr(f.scrRef) || safeStr(f.snRef) || safeStr(f.frRef) || safeStr(f.cucRef) || safeStr(f.id) || `VY-${Date.now()}`;
   const legalFooter = reportFooter({
     formType: form.type,
     docRef,

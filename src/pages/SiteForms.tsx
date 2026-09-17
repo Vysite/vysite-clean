@@ -28,7 +28,7 @@ interface SiteFormsProps {
 const ALL_STATUSES: ExtendedFormStatus[] = [
   'Draft', 'Submitted', 'Approved', 'Issued',
   'Open', 'Acknowledged', 'Actioned', 'Resolved', 'Closed',
-  'Action Required', 'Awaiting Response', 'Escalated',
+  'Action Required', 'Awaiting Response', 'Escalated', 'Ready to Issue',
 ];
 
 // ─── Category definitions ─────────────────────────────────────────────────────
@@ -56,6 +56,7 @@ const FORM_CATEGORIES = [
       { type: 'MVHR Commissioning Record', title: 'MVHR Commissioning Record', description: 'Mechanical Ventilation with Heat Recovery commissioning — unit details, installation checks, airflow readings per room, functional testing, defects and sign-off' },
       { type: 'Temperature Water Readings', title: 'Temperature Water Readings', description: 'Domestic hot and cold water temperature survey — outlet readings, 20s/60s temps, pass/fail assessment and sign-off' },
       { type: 'Flushing Register', title: 'Flushing Register', description: 'Daily Legionella flushing register — start/end of shift checks, outlet register table, daily summary and declaration (ACoP L8 / HSG274 / BSRIA BG29)' },
+      { type: 'Mechanical Close-Up Certificate', title: 'Mechanical Close-Up Certificate', description: 'Progressive close-up record for mechanical installations before concealment — dynamic checklist with Outstanding/Complete status, issue when all items complete' },
     ],
   },
   {
@@ -65,6 +66,7 @@ const FORM_CATEGORIES = [
       { type: 'Electrical Commissioning Report', title: 'Electrical Commissioning Report', description: 'Daily ECR — shift, team, progress, testing, blockers, sign-off' },
       { type: 'Dead Testing',    title: 'Dead Test Record', description: 'Electrical dead testing — insulation resistance and polarity' },
       { type: 'Continuity Test', title: 'Continuity Test',  description: 'Record conductor continuity resistance measurements' },
+      { type: 'Electrical Close-Up Certificate', title: 'Electrical Close-Up Certificate', description: 'Progressive close-up record for electrical installations before concealment — dynamic checklist with Outstanding/Complete status, issue when all items complete' },
     ],
   },
   {
@@ -162,6 +164,7 @@ function StatusDropdown({ form, onStatusChange, canEdit }: StatusDropdownProps) 
     form.status === 'Actioned'         ? 'text-violet-400 bg-violet-900/20 border-violet-800/40' :
     form.status === 'Resolved'         ? 'text-emerald-400 bg-emerald-900/20 border-emerald-800/40' :
     form.status === 'Closed'           ? 'text-slate-400 bg-slate-700/30 border-slate-600/40' :
+    form.status === 'Ready to Issue'   ? 'text-emerald-400 bg-emerald-900/20 border-emerald-800/40' :
     'text-slate-400 bg-slate-700/30 border-slate-600/40';
 
   if (!canEdit) {
@@ -314,7 +317,7 @@ const ALL_SITE_FORM_FIELDS = [...SITE_FORM_COMMON_FIELDS, ...SITE_FORM_TYPE_FIEL
 
 // Fields that should NOT be copied when creating a similar form
 const SKIP_COPY_FIELDS = new Set([
-  'id', 'rfiRef', 'tqRef', 'noticeRef', 'variationRef', 'wcRef', 'inspectionRef', 'shuRef', 'scrRef', 'snRef',
+  'id', 'rfiRef', 'tqRef', 'noticeRef', 'variationRef', 'wcRef', 'inspectionRef', 'shuRef', 'scrRef', 'snRef', 'cucRef',
   'comments', 'form_comments', 'submittedDate', 'completedBy', 'date',
 ]);
 

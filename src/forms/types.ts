@@ -16,12 +16,14 @@ export type ExtendedFormType =
   | 'Site Hold Up'
   | 'Site Change Request'
   | 'Site Note'
-  | 'Flushing Register';
+  | 'Flushing Register'
+  | 'Mechanical Close-Up Certificate'
+  | 'Electrical Close-Up Certificate';
 
 export type ExtendedFormStatus =
   | FormStatus
   | 'Issued' | 'Awaiting Response' | 'Closed' | 'Resolved' | 'Escalated' | 'Action Required'
-  | 'Open' | 'Acknowledged' | 'Actioned';
+  | 'Open' | 'Acknowledged' | 'Actioned' | 'Ready to Issue';
 
 export interface ExtendedSiteForm extends Omit<SiteForm, 'type' | 'status'> {
   type: ExtendedFormType;
@@ -451,6 +453,15 @@ export interface ExtendedSiteForm extends Omit<SiteForm, 'type' | 'status'> {
   snBody?: string;
   snRecommendedAction?: string;
   snTime?: string;
+  // Close-Up Certificate (Mechanical / Electrical)
+  cucRef?: string;
+  cucLocationArea?: string;
+  cucDescription?: string;
+  cucInspectedBy?: string;
+  cucRows?: string;            // JSON: CloseUpRow[]
+  cucIssuedDate?: string;
+  cucEngineerName?: string;
+  cucWitnessName?: string;
 }
 
 export const TYPE_MAP: Record<string, { bg: string; text: string; label: string; border: string }> = {
@@ -484,6 +495,8 @@ export const TYPE_MAP: Record<string, { bg: string; text: string; label: string;
   'Site Change Request':              { bg: 'bg-sky-900/60',     text: 'text-sky-400',     label: 'Change Request',     border: 'border-l-sky-600' },
   'Site Note':                        { bg: 'bg-slate-700/60',   text: 'text-slate-300',   label: 'Site Note',          border: 'border-l-slate-500' },
   'Flushing Register':                { bg: 'bg-cyan-900/60',    text: 'text-cyan-300',    label: 'Flushing Register',  border: 'border-l-cyan-500' },
+  'Mechanical Close-Up Certificate':  { bg: 'bg-sky-900/60',     text: 'text-sky-300',     label: 'Mech Close-Up',      border: 'border-l-sky-500' },
+  'Electrical Close-Up Certificate':  { bg: 'bg-yellow-900/60',  text: 'text-yellow-300',  label: 'Elec Close-Up',      border: 'border-l-yellow-500' },
 };
 
 export const inputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600';

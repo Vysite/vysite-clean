@@ -18,6 +18,7 @@ import {
   type PCCAssetRecord, PCCAssetRows,
   type PCCChecklistItem, PCCChecklistRows,
   type FlushingRegisterRow, FlushingRegisterRows,
+  type CloseUpRow, CloseUpRows, MECHANICAL_CLOSEUP_STARTERS, ELECTRICAL_CLOSEUP_STARTERS,
   type ChecklistEntry, SWA_DEFAULT_ENTRY, SWASection,
 } from './SubComponents';
 export interface FormBuilderProps {
@@ -465,6 +466,14 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
     frCompletedBy:  sv('frCompletedBy'),
     frPosition:     sv('frPosition'),
     frDeclDate:     sv('frDeclDate', new Date().toISOString().split('T')[0]),
+    // Close-Up Certificate
+    cucRef:          sv('cucRef', `CUC-${String(Math.floor(Math.random() * 9000) + 1000)}`),
+    cucLocationArea: sv('cucLocationArea'),
+    cucDescription:  sv('cucDescription'),
+    cucInspectedBy:  sv('cucInspectedBy'),
+    cucIssuedDate:   sv('cucIssuedDate'),
+    cucEngineerName: sv('cucEngineerName'),
+    cucWitnessName:  sv('cucWitnessName'),
   }));
 
   // Site Walk checklist state — stored separately due to nested structure
@@ -646,6 +655,18 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
   const [frEndChecks,   setFrEndChecks]   = useState<FrChecks>(() => parseFrChecks('frEndChecks'));
   const setFrCheck = (setter: Dispatch<SetStateAction<FrChecks>>, key: string, val: string) =>
     setter(prev => ({ ...prev, [key]: val }));
+
+  // Close-Up Certificate — dynamic state
+  const isCUC = type === 'Mechanical Close-Up Certificate' || type === 'Electrical Close-Up Certificate';
+  const [cucRows, setCucRows] = useState<CloseUpRow[]>(() => {
+    if (!init?.cucRows) {
+      if (isCUC) return type === 'Mechanical Close-Up Certificate'
+        ? MECHANICAL_CLOSEUP_STARTERS.map(r => ({ ...r }))
+        : ELECTRICAL_CLOSEUP_STARTERS.map(r => ({ ...r }));
+      return [];
+    }
+    try { return JSON.parse(init.cucRows as string) as CloseUpRow[]; } catch { return []; }
+  });
 
   const set = (key: string) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [key]: e.target.value }));
@@ -1191,6 +1212,25 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
         notes:            form.notes,
       });
     }
+    if (type === 'Mechanical Close-Up Certificate' || type === 'Electrical Close-Up Certificate') {
+      const allComplete = cucRows.length > 0 && cucRows.every(r => r.status === 'Complete');
+      const effectiveStatus = status === 'Issued'
+        ? (allComplete ? 'Issued' : 'Draft')
+        : (allComplete ? 'Ready to Issue' : 'Draft');
+      Object.assign(base, {
+        title:            form.title || form.cucRef,
+        cucRef:           form.cucRef,
+        cucLocationArea:  form.cucLocationArea,
+        cucDescription:   form.cucDescription,
+        cucInspectedBy:   form.cucInspectedBy || form.completedBy,
+        cucRows:          JSON.stringify(cucRows),
+        cucIssuedDate:    effectiveStatus === 'Issued' ? (form.cucIssuedDate || new Date().toISOString().split('T')[0]) : '',
+        cucEngineerName:  form.cucEngineerName,
+        cucWitnessName:   form.cucWitnessName,
+        status:           effectiveStatus as ExtendedFormStatus,
+        submittedDate:    effectiveStatus === 'Issued' ? new Date().toISOString().split('T')[0] : undefined,
+      });
+    }
     onSave(base, uploadedFiles);
     onClose();
   };
@@ -1225,6 +1265,8 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
   const isSCR = type === 'Site Change Request';
   const isSN  = type === 'Site Note';
   const isFR  = type === 'Flushing Register';
+  const isMechCUC = type === 'Mechanical Close-Up Certificate';
+  const isElecCUC = type === 'Electrical Close-Up Certificate';
 
   const accentColor = isRAMS
     ? 'bg-orange-600 hover:bg-orange-700'
@@ -1280,6 +1322,10 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
     ? 'bg-slate-600 hover:bg-slate-700'
     : isFR
     ? 'bg-cyan-600 hover:bg-cyan-700'
+    : isMechCUC
+    ? 'bg-sky-600 hover:bg-sky-700'
+    : isElecCUC
+    ? 'bg-yellow-600 hover:bg-yellow-700'
     : 'bg-[#f97316] hover:bg-orange-600';
 
   const rfiStatuses = ['Draft', 'Issued', 'Awaiting Response', 'Closed'];
@@ -5254,12 +5300,116 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
             );
           })()}
 
+          {/* ── Close-Up Certificate (Mechanical / Electrical) ── */}
+          {isCUC && (() => {
+            const allComplete = cucRows.length > 0 && cucRows.every(r => r.status === 'Complete');
+            const isIssued = form.status === 'Issued' || (initialData?.status === 'Issued');
+            return (
+              <>
+                <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-4 space-y-4">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isMechCUC ? 'Mechanical' : 'Electrical'} Close-Up Certificate
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Certificate Reference</label>
+                      <input value={form.cucRef} onChange={set('cucRef')} className={`${inputCls} mt-1`} placeholder="CUC-0001" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Date *</label>
+                      <input type="date" value={form.date} onChange={set('date')} className={`${inputCls} mt-1`} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Project *</label>
+                    <div className="relative">
+                      <select value={form.project} onChange={set('project')} className={`${inputCls} appearance-none pr-8`}>
+                        <option value="">Select project...</option>
+                        {visibleProjects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Location / Area *</label>
+                      <input value={form.cucLocationArea} onChange={set('cucLocationArea')} className={`${inputCls} mt-1`} placeholder="e.g. PW23" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Completed / Inspected By *</label>
+                      <input value={form.cucInspectedBy || form.completedBy} onChange={e => { setForm(f => ({ ...f, cucInspectedBy: e.target.value, completedBy: e.target.value })); }} className={`${inputCls} mt-1`} placeholder="Full name" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Close-Up Description</label>
+                    <textarea value={form.cucDescription} onChange={set('cucDescription')} rows={2} className={`${inputCls} mt-1 resize-none`} placeholder="e.g. Domestic Services Above Ceiling" />
+                  </div>
+                </div>
+
+                {/* Close-Up Register */}
+                <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#1e2d4a] pb-2">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Close-Up Register ({cucRows.length} {cucRows.length === 1 ? 'item' : 'items'})
+                    </p>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                      allComplete ? 'text-emerald-400 bg-emerald-900/20 border-emerald-800/40' :
+                      'text-amber-400 bg-amber-900/20 border-amber-800/40'
+                    }`}>
+                      {allComplete ? 'READY TO ISSUE' : 'DRAFT'}
+                    </span>
+                  </div>
+                  <CloseUpRows rows={cucRows} onChange={setCucRows} />
+                </div>
+
+                {/* Issue section */}
+                <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-xl p-4 space-y-4">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Declaration & Sign-Off</p>
+                  {allComplete && !isIssued && (
+                    <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-lg px-4 py-3 space-y-3">
+                      <p className="text-xs font-bold text-emerald-400">ALL CLOSE-UP REQUIREMENTS COMPLETE</p>
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, status: 'Issued' }))}
+                        className={`px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${accentColor}`}
+                      >
+                        ISSUE CLOSE-UP CERTIFICATE
+                      </button>
+                      <p className="text-[10px] text-slate-500">Click to issue this certificate. The status will be set to Issued on save.</p>
+                    </div>
+                  )}
+                  {isIssued && (
+                    <div className="bg-sky-900/20 border border-sky-700/40 rounded-lg px-4 py-3">
+                      <p className="text-xs font-bold text-sky-400">CERTIFICATE ISSUED</p>
+                      <p className="text-[10px] text-slate-500 mt-1">This certificate has been issued and forms part of the project record.</p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Engineer Name</label>
+                      <input value={form.cucEngineerName} onChange={set('cucEngineerName')} className={`${inputCls} mt-1`} placeholder="Name" />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Witness Name</label>
+                      <input value={form.cucWitnessName} onChange={set('cucWitnessName')} className={`${inputCls} mt-1`} placeholder="Name" />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelCls}>Attachments / Photographic Evidence</label>
+                  <FileUploadComponent files={uploadedFiles} onChange={setUploadedFiles} accept="image/*,.pdf,.doc,.docx" label="Upload photos of installation before concealment" />
+                </div>
+              </>
+            );
+          })()}
+
           {/* Common fields fallback */}
           {!isRFI && !isHoldUp && !isDelay && !isVariation && !isEWN && !isSI && !isTQ && !isHS
             && !isPressureTest && !isFlushingRecord && !isValveChecklist && !isAHUCommissioning
             && !isDeadTesting && !isContinuityTest && !isToolboxTalk && !isSiteWalkAudit
             && !isECR && !isDaily && !isRAMS && !isAIR && !isPCR && !isHIU && !isMVHR && !isTWR && !isPCC
-            && !isSHU && !isSCR && !isSN && !isFR && (
+            && !isSHU && !isSCR && !isSN && !isFR && !isCUC && (
             <>
               <div>
                 <label className={labelCls}>Project</label>
@@ -5328,6 +5478,7 @@ export function FormBuilder({ type, orgId: orgIdProp, onClose, onSave, initialDa
               : isPCC ? 'Issue Certificate'
               : isSN ? 'Submit Site Note'
               : isFR ? 'Submit Flushing Register'
+              : isCUC ? 'Save Close-Up Certificate'
               : 'Submit Form'}
           </button>
         </div>

@@ -1080,3 +1080,96 @@ export function FlushingRegisterRows({
     </div>
   );
 }
+
+// ─── Close-Up Certificate ──────────────────────────────────────────────────────
+
+export interface CloseUpRow {
+  id: string;
+  requirement: string;
+  status: 'Outstanding' | 'Complete';
+}
+
+export const MECHANICAL_CLOSEUP_STARTERS: CloseUpRow[] = [
+  { id: 'cu-1',  requirement: 'Pipework installed correctly and coordinated', status: 'Outstanding' },
+  { id: 'cu-2',  requirement: 'Hot/cold/return services correctly identified and uncrossed', status: 'Outstanding' },
+  { id: 'cu-3',  requirement: 'Pipework supports complete', status: 'Outstanding' },
+  { id: 'cu-4',  requirement: 'Pressure testing complete where applicable', status: 'Outstanding' },
+  { id: 'cu-5',  requirement: 'Soil/waste pipework tested and inspected', status: 'Outstanding' },
+  { id: 'cu-6',  requirement: 'Soil/waste caps closed and secure', status: 'Outstanding' },
+  { id: 'cu-7',  requirement: 'Insulation/lagging complete where required before close-up', status: 'Outstanding' },
+  { id: 'cu-8',  requirement: 'Valves and maintainable components accessible', status: 'Outstanding' },
+  { id: 'cu-9',  requirement: 'Required access panels identified/provided', status: 'Outstanding' },
+  { id: 'cu-10', requirement: 'Service penetrations complete', status: 'Outstanding' },
+  { id: 'cu-11', requirement: 'Fire stopping complete where applicable', status: 'Outstanding' },
+  { id: 'cu-12', requirement: 'Installation photographed before concealment', status: 'Outstanding' },
+];
+
+export const ELECTRICAL_CLOSEUP_STARTERS: CloseUpRow[] = [
+  { id: 'cu-1',  requirement: 'Containment installation complete', status: 'Outstanding' },
+  { id: 'cu-2',  requirement: 'Containment supports complete', status: 'Outstanding' },
+  { id: 'cu-3',  requirement: 'Cables installed correctly', status: 'Outstanding' },
+  { id: 'cu-4',  requirement: 'Cable segregation maintained', status: 'Outstanding' },
+  { id: 'cu-5',  requirement: 'Earthing/bonding complete where applicable', status: 'Outstanding' },
+  { id: 'cu-6',  requirement: 'Connections complete where required before close-up', status: 'Outstanding' },
+  { id: 'cu-7',  requirement: 'Cable/containment identification complete', status: 'Outstanding' },
+  { id: 'cu-8',  requirement: 'Service penetrations complete', status: 'Outstanding' },
+  { id: 'cu-9',  requirement: 'Fire stopping complete where applicable', status: 'Outstanding' },
+  { id: 'cu-10', requirement: 'Required access maintained', status: 'Outstanding' },
+  { id: 'cu-11', requirement: 'Installation photographed before concealment', status: 'Outstanding' },
+];
+
+let closeUpSeq = 0;
+function newCloseUpId(): string {
+  closeUpSeq++;
+  return `cu-${Date.now()}-${closeUpSeq}`;
+}
+
+export function CloseUpRows({
+  rows, onChange,
+}: { rows: CloseUpRow[]; onChange: (rows: CloseUpRow[]) => void }) {
+  const add = () => onChange([...rows, { id: newCloseUpId(), requirement: '', status: 'Outstanding' }]);
+  const rem = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
+  const upd = (i: number, field: keyof CloseUpRow, val: string) =>
+    onChange(rows.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+
+  const allComplete = rows.length > 0 && rows.every(r => r.status === 'Complete');
+
+  return (
+    <div className="space-y-3">
+      {allComplete && (
+        <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-xl px-4 py-3 flex items-center gap-2">
+          <span className="text-emerald-400 font-bold text-xs">ALL CLOSE-UP REQUIREMENTS COMPLETE</span>
+        </div>
+      )}
+      {rows.map((row, i) => (
+        <div key={row.id} className={`bg-[#0d1628] border rounded-xl p-3.5 flex items-center gap-3 ${row.status === 'Complete' ? 'border-emerald-800/50' : 'border-[#1e2d4a]'}`}>
+          <span className="text-[10px] font-bold text-slate-600 shrink-0 w-6">{i + 1}</span>
+          <input
+            value={row.requirement}
+            onChange={e => upd(i, 'requirement', e.target.value)}
+            className={`${inputCls} flex-1`}
+            placeholder="Installation / close-up requirement..."
+          />
+          <button
+            type="button"
+            onClick={() => upd(i, 'status', row.status === 'Complete' ? 'Outstanding' : 'Complete')}
+            className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all shrink-0 ${
+              row.status === 'Complete'
+                ? 'bg-emerald-600 border-emerald-600 text-white'
+                : 'bg-transparent border-slate-600 text-slate-500 hover:border-slate-400 hover:text-slate-300'
+            }`}
+          >
+            {row.status === 'Complete' ? 'COMPLETE' : 'OUTSTANDING'}
+          </button>
+          <button type="button" onClick={() => rem(i)} className="text-slate-700 hover:text-red-400 transition-colors shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={add}
+        className="w-full py-2.5 border border-dashed border-[#1e2d4a] rounded-xl text-xs text-slate-600 hover:text-slate-400 hover:border-slate-500 transition-colors font-semibold">
+        + Add Close-Up Requirement
+      </button>
+    </div>
+  );
+}
