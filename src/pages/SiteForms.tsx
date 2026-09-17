@@ -1152,7 +1152,9 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
                           </div>
                         </div>
                         {/* Row 2: title */}
-                        <p className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate leading-snug">{f.title || te.label}</p>
+                        <p className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate leading-snug">
+                          {(f.type === 'Mechanical Close-Up Certificate' || f.type === 'Electrical Close-Up Certificate') ? f.type : (f.title || te.label)}
+                        </p>
                         {/* Row 2b: close-up context (Mechanical/Electrical Close-Up only) */}
                         {(f.type === 'Mechanical Close-Up Certificate' || f.type === 'Electrical Close-Up Certificate') && (() => {
                           const loc = (f as Record<string, unknown>).cucLocationArea as string | undefined;
@@ -1162,6 +1164,10 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
                         })()}
                         {/* Row 3: meta */}
                         <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
+                          {(f.type === 'Mechanical Close-Up Certificate' || f.type === 'Electrical Close-Up Certificate') && (() => {
+                            const ref = (f as Record<string, unknown>).cucRef as string | undefined;
+                            return ref ? <span className="text-xs text-slate-600 font-mono">{ref}</span> : null;
+                          })()}
                           {f.projectName && (
                             <span className="text-xs text-slate-400 truncate max-w-[180px]">{f.projectName}</span>
                           )}
