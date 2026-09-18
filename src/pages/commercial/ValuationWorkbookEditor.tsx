@@ -220,7 +220,7 @@ function ImportModal({ tab, workbookId, orgId, onImportLines, onImportExtras, on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-      <div className="w-full max-w-3xl mx-4 rounded-2xl overflow-hidden shadow-2xl flex flex-col" style={{ background: '#0d1628', border: '1px solid #1e2d4a', maxHeight: '85vh' }}>
+      <div className="w-full max-w-5xl mx-4 rounded-2xl overflow-hidden shadow-2xl flex flex-col" style={{ background: '#0d1628', border: '1px solid #1e2d4a', maxHeight: '85vh' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: '1px solid #1e2d4a' }}>
           <p className="text-sm font-bold text-white">Import from Spreadsheet</p>
@@ -297,25 +297,25 @@ function ImportModal({ tab, workbookId, orgId, onImportLines, onImportExtras, on
                   <thead>
                     <tr style={{ background: '#111827', borderBottom: '1px solid #1e2d4a' }}>
                       {['#', 'Description', 'Section', 'Unit', 'Qty', 'Rate', 'Contract Value'].map(h => (
-                        <th key={h} className="px-2 py-2 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">{h}</th>
+                        <th key={h} className="px-2.5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {contractPreview.slice(0, 20).map((l, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid #1e2d4a' }} className="hover:bg-[#111827]/50">
-                        <td className="px-2 py-1.5 text-slate-500 font-mono">{l.item_number || i + 1}</td>
-                        <td className="px-2 py-1.5 text-slate-300 max-w-[200px] truncate">{l.description}</td>
-                        <td className="px-2 py-1.5 text-slate-500">{l.section}</td>
-                        <td className="px-2 py-1.5 text-slate-500">{l.unit}</td>
-                        <td className="px-2 py-1.5 text-slate-400">{l.quantity ?? ''}</td>
-                        <td className="px-2 py-1.5 text-slate-400">{l.rate != null ? fmtCurrency(l.rate) : ''}</td>
-                        <td className="px-2 py-1.5 text-white font-semibold">{fmtCurrency(l.contract_value)}</td>
+                        <td className="px-2.5 py-2.5 text-slate-500 font-mono">{l.item_number || i + 1}</td>
+                        <td className="px-2.5 py-2.5 text-slate-300 max-w-[200px] truncate">{l.description}</td>
+                        <td className="px-2.5 py-2.5 text-slate-500">{l.section}</td>
+                        <td className="px-2.5 py-2.5 text-slate-500">{l.unit}</td>
+                        <td className="px-2.5 py-2.5 text-slate-400">{l.quantity ?? ''}</td>
+                        <td className="px-2.5 py-2.5 text-slate-400">{l.rate != null ? fmtCurrency(l.rate) : ''}</td>
+                        <td className="px-2.5 py-2.5 text-white font-semibold">{fmtCurrency(l.contract_value)}</td>
                       </tr>
                     ))}
                     {contractPreview.length > 20 && (
                       <tr>
-                        <td colSpan={7} className="px-2 py-1.5 text-[10px] text-slate-600 text-center">
+                        <td colSpan={7} className="px-2.5 py-2.5 text-[10px] text-slate-600 text-center">
                           + {contractPreview.length - 20} more rows
                         </td>
                       </tr>
@@ -324,7 +324,7 @@ function ImportModal({ tab, workbookId, orgId, onImportLines, onImportExtras, on
                 </table>
               </div>
               <p className="text-[10px] text-slate-600 mt-2">
-                Total: {fmtCurrency(contractPreview.reduce((s, l) => s + l.contract_value, 0))}
+                Total: <span className="font-bold text-white">{fmtCurrency(contractPreview.reduce((s, l) => s + l.contract_value, 0))}</span>
               </p>
             </div>
           )}
@@ -340,16 +340,16 @@ function ImportModal({ tab, workbookId, orgId, onImportLines, onImportExtras, on
                   <thead>
                     <tr style={{ background: '#111827', borderBottom: '1px solid #1e2d4a' }}>
                       {['Ref', 'Description', 'Agreed Value'].map(h => (
-                        <th key={h} className="px-2 py-2 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">{h}</th>
+                        <th key={h} className="px-2.5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {extrasPreview.map((e, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid #1e2d4a' }} className="hover:bg-[#111827]/50">
-                        <td className="px-2 py-1.5 text-slate-500 font-mono">{e.ref}</td>
-                        <td className="px-2 py-1.5 text-slate-300">{e.description}</td>
-                        <td className="px-2 py-1.5 text-white font-semibold">{fmtCurrency(e.agreed_value)}</td>
+                        <td className="px-2.5 py-2.5 text-slate-500 font-mono">{e.ref}</td>
+                        <td className="px-2.5 py-2.5 text-slate-300">{e.description}</td>
+                        <td className="px-2.5 py-2.5 text-white font-semibold">{fmtCurrency(e.agreed_value)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -682,39 +682,39 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
           </div>
         ) : (
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1e2d4a' }}>
-            <table className="w-full text-xs">
-              <thead>
+            <table className="w-full text-xs min-w-[760px]">
+              <thead className="sticky top-0 z-10">
                 <tr style={{ background: '#111827', borderBottom: '1px solid #1e2d4a' }}>
                   {['#', 'Description', 'Section', 'Unit', 'Qty', 'Rate', 'Contract Value', ''].map((h, i) => (
-                    <th key={i} className={`px-2 py-2 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500 ${i === 6 ? 'text-right' : ''}`}>{h}</th>
+                    <th key={i} className={`px-2.5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 ${i === 6 ? 'text-right' : ''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {lines.map((l, idx) => (
                   <tr key={l.id} style={{ borderBottom: '1px solid #1e2d4a' }} className="group hover:bg-[#111827]/40">
-                    <td className="px-2 py-2 text-slate-500 font-mono w-12">
+                    <td className="px-2.5 py-2.5 text-slate-500 font-mono w-12">
                       <EditCell value={l.item_number} onCommit={v => patchLine(l.id, { item_number: v })} className="text-slate-500" />
                     </td>
-                    <td className="px-2 py-2 text-slate-300 max-w-[220px]">
+                    <td className="px-2.5 py-2.5 text-slate-300 max-w-[220px]">
                       <EditCell value={l.description} onCommit={v => patchLine(l.id, { description: v })} className="text-slate-300" />
                     </td>
-                    <td className="px-2 py-2 text-slate-500 w-24">
+                    <td className="px-2.5 py-2.5 text-slate-500 w-24">
                       <EditCell value={l.section ?? ''} onCommit={v => patchLine(l.id, { section: v })} className="text-slate-500" />
                     </td>
-                    <td className="px-2 py-2 text-slate-500 w-16">
+                    <td className="px-2.5 py-2.5 text-slate-500 w-16">
                       <EditCell value={l.unit ?? ''} onCommit={v => patchLine(l.id, { unit: v })} className="text-slate-500" />
                     </td>
-                    <td className="px-2 py-2 text-slate-400 w-16">
+                    <td className="px-2.5 py-2.5 text-slate-400 w-16">
                       <EditCell value={l.quantity != null ? String(l.quantity) : ''} numeric onCommit={v => patchLine(l.id, { quantity: v === '' ? null : parseFloat(v) || null })} className="text-slate-400" />
                     </td>
-                    <td className="px-2 py-2 text-slate-400 w-20">
+                    <td className="px-2.5 py-2.5 text-slate-400 w-20">
                       <EditCell value={l.rate != null ? String(l.rate) : ''} numeric onCommit={v => patchLine(l.id, { rate: v === '' ? null : parseFloat(v) || null })} className="text-slate-400" />
                     </td>
-                    <td className="px-2 py-2 text-white font-semibold text-right w-28">
+                    <td className="px-2.5 py-2.5 text-white font-semibold text-right w-28">
                       <EditCell value={String(l.contract_value)} numeric onCommit={v => patchLine(l.id, { contract_value: parseFloat(v) || 0 })} className="text-white font-semibold text-right" />
                     </td>
-                    <td className="px-2 py-2 w-8">
+                    <td className="px-2.5 py-2.5 w-8">
                       {canEdit && (
                         <button onClick={() => setDeleteLineId(l.id)}
                           className="p-1 text-slate-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 rounded">
@@ -726,8 +726,8 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
                 ))}
                 {/* Totals row */}
                 <tr style={{ background: '#111827' }}>
-                  <td colSpan={6} className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">Total</td>
-                  <td className="px-2 py-2 text-right font-black text-white text-sm">{fmtCurrency(contractTotal)}</td>
+                  <td colSpan={6} className="px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">Total</td>
+                  <td className="px-2.5 py-3 text-right font-black text-[#f97316] text-base">{fmtCurrency(contractTotal)}</td>
                   <td />
                 </tr>
               </tbody>
@@ -752,27 +752,27 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
           </div>
         ) : (
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1e2d4a' }}>
-            <table className="w-full text-xs">
-              <thead>
+            <table className="w-full text-xs min-w-[500px]">
+              <thead className="sticky top-0 z-10">
                 <tr style={{ background: '#111827', borderBottom: '1px solid #1e2d4a' }}>
                   {['Ref', 'Description', 'Agreed Value', ''].map((h, i) => (
-                    <th key={i} className={`px-2 py-2 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500 ${i === 2 ? 'text-right' : ''}`}>{h}</th>
+                    <th key={i} className={`px-2.5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 ${i === 2 ? 'text-right' : ''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {extras.map(e => (
                   <tr key={e.id} style={{ borderBottom: '1px solid #1e2d4a' }} className="group hover:bg-[#111827]/40">
-                    <td className="px-2 py-2 text-slate-500 font-mono w-20">
+                    <td className="px-2.5 py-2.5 text-slate-500 font-mono w-20">
                       <EditCell value={e.ref ?? ''} onCommit={v => patchExtra(e.id, { ref: v })} className="text-slate-500" />
                     </td>
-                    <td className="px-2 py-2 text-slate-300">
+                    <td className="px-2.5 py-2.5 text-slate-300">
                       <EditCell value={e.description} onCommit={v => patchExtra(e.id, { description: v })} className="text-slate-300" />
                     </td>
-                    <td className="px-2 py-2 text-white font-semibold text-right w-28">
+                    <td className="px-2.5 py-2.5 text-white font-semibold text-right w-28">
                       <EditCell value={String(e.agreed_value)} numeric onCommit={v => patchExtra(e.id, { agreed_value: parseFloat(v) || 0 })} className="text-white font-semibold text-right" />
                     </td>
-                    <td className="px-2 py-2 w-8">
+                    <td className="px-2.5 py-2.5 w-8">
                       {canEdit && (
                         <button onClick={() => setDeleteExtraId(e.id)}
                           className="p-1 text-slate-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 rounded">
@@ -783,8 +783,8 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
                   </tr>
                 ))}
                 <tr style={{ background: '#111827' }}>
-                  <td colSpan={2} className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">Total</td>
-                  <td className="px-2 py-2 text-right font-black text-white text-sm">{fmtCurrency(extrasTotal)}</td>
+                  <td colSpan={2} className="px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">Total</td>
+                  <td className="px-2.5 py-3 text-right font-black text-[#f97316] text-base">{fmtCurrency(extrasTotal)}</td>
                   <td />
                 </tr>
               </tbody>

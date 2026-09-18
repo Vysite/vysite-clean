@@ -569,8 +569,8 @@ export default function ValuationDetail({
           {linesExpanded && (
             <div className="mt-1 rounded-xl overflow-hidden" style={{ border: '1px solid #1e2d4a' }}>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs min-w-[860px]">
-                  <thead>
+                <table className="w-full text-xs min-w-[1100px]">
+                  <thead className="sticky top-0 z-10">
                     <tr style={{ background: '#111827', borderBottom: '1px solid #1e2d4a' }}>
                       {[
                         ['#', 'w-10', ''], ['Description', '', ''], ['Sec', 'w-16', ''],
@@ -580,7 +580,7 @@ export default function ValuationDetail({
                         ['Curr Value', 'w-24', 'text-right'], ['This Val', 'w-24', 'text-right'],
                         ['Notes', 'w-28', ''],
                       ].map(([label, w, align]) => (
-                        <th key={label} className={`px-2 py-2 text-[9px] font-bold uppercase tracking-wider text-slate-500 ${w} ${align}`}>{label}</th>
+                        <th key={label} className={`px-2.5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 ${w} ${align}`}>{label}</th>
                       ))}
                     </tr>
                   </thead>
@@ -592,21 +592,21 @@ export default function ValuationDetail({
                       const thisV = currV - prevV;
                       return (
                         <tr key={l.id} style={{ borderBottom: '1px solid #1a2640' }} className={idx % 2 !== 0 ? 'bg-[#0a0f1a]' : ''}>
-                          <td className="px-2 py-1.5 text-slate-600 font-mono">{l.item_number || idx + 1}</td>
-                          <td className="px-2 py-1.5 text-slate-300">{l.description}</td>
-                          <td className="px-2 py-1.5 text-slate-500">{l.section}</td>
-                          <td className="px-2 py-1.5 text-slate-500">{l.unit}</td>
-                          <td className="px-2 py-1.5 text-slate-400 text-right tabular-nums">{l.quantity != null ? l.quantity : ''}</td>
-                          <td className="px-2 py-1.5 text-slate-400 text-right tabular-nums">{l.rate != null ? fmtCurrency(l.rate) : ''}</td>
-                          <td className="px-2 py-1.5 text-slate-300 text-right tabular-nums font-medium">{fmtCurrency(l.contract_value)}</td>
-                          <td className="px-2 py-1.5 text-slate-500 text-right tabular-nums">{entry.previous_pct.toFixed(2)}%</td>
-                          <td className="px-2 py-1.5 text-slate-500 text-right tabular-nums">{fmtCurrency(prevV)}</td>
-                          <td className="px-2 py-1.5 text-right">
+                          <td className="px-2.5 py-2.5 text-slate-600 font-mono">{l.item_number || idx + 1}</td>
+                          <td className="px-2.5 py-2.5 text-slate-300">{l.description}</td>
+                          <td className="px-2.5 py-2.5 text-slate-500">{l.section}</td>
+                          <td className="px-2.5 py-2.5 text-slate-500">{l.unit}</td>
+                          <td className="px-2.5 py-2.5 text-slate-400 text-right tabular-nums">{l.quantity != null ? l.quantity : ''}</td>
+                          <td className="px-2.5 py-2.5 text-slate-400 text-right tabular-nums">{l.rate != null ? fmtCurrency(l.rate) : ''}</td>
+                          <td className="px-2.5 py-2.5 text-slate-300 text-right tabular-nums font-medium">{fmtCurrency(l.contract_value)}</td>
+                          <td className="px-2.5 py-2.5 text-slate-500 text-right tabular-nums">{entry.previous_pct.toFixed(2)}%</td>
+                          <td className="px-2.5 py-2.5 text-slate-500 text-right tabular-nums">{fmtCurrency(prevV)}</td>
+                          <td className="px-2.5 py-2.5 text-right">
                             <PctInput value={entry.current_pct} disabled={!effectiveCanEdit} onCommit={v => handleLinePct(l.id, v)} />
                           </td>
-                          <td className="px-2 py-1.5 text-white text-right tabular-nums font-medium">{fmtCurrency(currV)}</td>
-                          <td className={`px-2 py-1.5 text-right tabular-nums font-semibold ${thisV >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtCurrency(thisV)}</td>
-                          <td className="px-2 py-1.5">
+                          <td className="px-2.5 py-2.5 text-white text-right tabular-nums font-medium">{fmtCurrency(currV)}</td>
+                          <td className={`px-2.5 py-2.5 text-right tabular-nums font-semibold ${thisV >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtCurrency(thisV)}</td>
+                          <td className="px-2.5 py-2.5">
                             {effectiveCanEdit
                               ? <NotesInput value={entry.notes} onCommit={v => handleLineNotes(l.id, v)} />
                               : <span className="text-slate-600 text-xs">{entry.notes}</span>}
@@ -615,13 +615,13 @@ export default function ValuationDetail({
                       );
                     })}
                     <tr style={{ background: '#111827' }}>
-                      <td colSpan={6} className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">Subtotal</td>
-                      <td className="px-2 py-2 text-right text-slate-300 font-bold">{fmtCurrency(totals.contractOriginal)}</td>
+                      <td colSpan={6} className="px-2.5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">Subtotal</td>
+                      <td className="px-2.5 py-3 text-right text-slate-300 font-bold">{fmtCurrency(totals.contractOriginal)}</td>
                       <td />
-                      <td className="px-2 py-2 text-right text-slate-400 font-bold">{fmtCurrency(totals.contractPrevValue)}</td>
+                      <td className="px-2.5 py-3 text-right text-slate-400 font-bold">{fmtCurrency(totals.contractPrevValue)}</td>
                       <td />
-                      <td className="px-2 py-2 text-right text-white font-bold">{fmtCurrency(totals.contractCurrValue)}</td>
-                      <td className="px-2 py-2 text-right text-emerald-400 font-bold">{fmtCurrency(totals.contractThisVal)}</td>
+                      <td className="px-2.5 py-3 text-right text-white font-bold">{fmtCurrency(totals.contractCurrValue)}</td>
+                      <td className="px-2.5 py-3 text-right text-emerald-400 font-bold">{fmtCurrency(totals.contractThisVal)}</td>
                       <td />
                     </tr>
                   </tbody>
@@ -640,15 +640,15 @@ export default function ValuationDetail({
           {extrasExpanded && (
             <div className="mt-1 rounded-xl overflow-hidden" style={{ border: '1px solid #1e2d4a' }}>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs min-w-[700px]">
-                  <thead>
+                <table className="w-full text-xs min-w-[800px]">
+                  <thead className="sticky top-0 z-10">
                     <tr style={{ background: '#111827', borderBottom: '1px solid #1e2d4a' }}>
                       {[['Ref', 'w-16', ''], ['Description', '', ''], ['Agreed Value', 'w-24', 'text-right'],
                         ['Prev %', 'w-16', 'text-right'], ['Prev Value', 'w-24', 'text-right'],
                         ['Curr %', 'w-16', 'text-right'], ['Curr Value', 'w-24', 'text-right'],
                         ['This Val', 'w-24', 'text-right'], ['Notes', 'w-28', '']
                       ].map(([label, w, align]) => (
-                        <th key={label} className={`px-2 py-2 text-[9px] font-bold uppercase tracking-wider text-slate-500 ${w} ${align}`}>{label}</th>
+                        <th key={label} className={`px-2.5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 ${w} ${align}`}>{label}</th>
                       ))}
                     </tr>
                   </thead>
@@ -660,17 +660,17 @@ export default function ValuationDetail({
                       const thisV = currV - prevV;
                       return (
                         <tr key={ex.id} style={{ borderBottom: '1px solid #1a2640' }} className={idx % 2 !== 0 ? 'bg-[#0a0f1a]' : ''}>
-                          <td className="px-2 py-1.5 text-slate-500 font-mono">{ex.ref}</td>
-                          <td className="px-2 py-1.5 text-slate-300">{ex.description}</td>
-                          <td className="px-2 py-1.5 text-slate-300 text-right tabular-nums font-medium">{fmtCurrency(ex.agreed_value)}</td>
-                          <td className="px-2 py-1.5 text-slate-500 text-right tabular-nums">{entry.previous_pct.toFixed(2)}%</td>
-                          <td className="px-2 py-1.5 text-slate-500 text-right tabular-nums">{fmtCurrency(prevV)}</td>
-                          <td className="px-2 py-1.5 text-right">
+                          <td className="px-2.5 py-2.5 text-slate-500 font-mono">{ex.ref}</td>
+                          <td className="px-2.5 py-2.5 text-slate-300">{ex.description}</td>
+                          <td className="px-2.5 py-2.5 text-slate-300 text-right tabular-nums font-medium">{fmtCurrency(ex.agreed_value)}</td>
+                          <td className="px-2.5 py-2.5 text-slate-500 text-right tabular-nums">{entry.previous_pct.toFixed(2)}%</td>
+                          <td className="px-2.5 py-2.5 text-slate-500 text-right tabular-nums">{fmtCurrency(prevV)}</td>
+                          <td className="px-2.5 py-2.5 text-right">
                             <PctInput value={entry.current_pct} disabled={!effectiveCanEdit} onCommit={v => handleExtraPct(ex.id, v)} />
                           </td>
-                          <td className="px-2 py-1.5 text-white text-right tabular-nums font-medium">{fmtCurrency(currV)}</td>
-                          <td className={`px-2 py-1.5 text-right tabular-nums font-semibold ${thisV >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtCurrency(thisV)}</td>
-                          <td className="px-2 py-1.5">
+                          <td className="px-2.5 py-2.5 text-white text-right tabular-nums font-medium">{fmtCurrency(currV)}</td>
+                          <td className={`px-2.5 py-2.5 text-right tabular-nums font-semibold ${thisV >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtCurrency(thisV)}</td>
+                          <td className="px-2.5 py-2.5">
                             {effectiveCanEdit
                               ? <NotesInput value={entry.notes} onCommit={v => handleExtraNotes(ex.id, v)} />
                               : <span className="text-slate-600 text-xs">{entry.notes}</span>}
@@ -679,13 +679,13 @@ export default function ValuationDetail({
                       );
                     })}
                     <tr style={{ background: '#111827' }}>
-                      <td colSpan={2} className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">Subtotal</td>
-                      <td className="px-2 py-2 text-right text-slate-300 font-bold">{fmtCurrency(totals.extrasOriginal)}</td>
+                      <td colSpan={2} className="px-2.5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">Subtotal</td>
+                      <td className="px-2.5 py-3 text-right text-slate-300 font-bold">{fmtCurrency(totals.extrasOriginal)}</td>
                       <td />
-                      <td className="px-2 py-2 text-right text-slate-400 font-bold">{fmtCurrency(totals.extrasPrevValue)}</td>
+                      <td className="px-2.5 py-3 text-right text-slate-400 font-bold">{fmtCurrency(totals.extrasPrevValue)}</td>
                       <td />
-                      <td className="px-2 py-2 text-right text-white font-bold">{fmtCurrency(totals.extrasCurrValue)}</td>
-                      <td className="px-2 py-2 text-right text-emerald-400 font-bold">{fmtCurrency(totals.extrasThisVal)}</td>
+                      <td className="px-2.5 py-3 text-right text-white font-bold">{fmtCurrency(totals.extrasCurrValue)}</td>
+                      <td className="px-2.5 py-3 text-right text-emerald-400 font-bold">{fmtCurrency(totals.extrasThisVal)}</td>
                       <td />
                     </tr>
                   </tbody>
@@ -731,12 +731,12 @@ export default function ValuationDetail({
               <span className="text-xs font-bold tabular-nums text-amber-400">({fmtCurrency(totals.mcdAmt)})</span>
             </div>
           )}
-          <div className="flex items-center justify-between px-4 py-3"
+          <div className="flex items-center justify-between px-5 py-4"
             style={{ background: 'rgba(16,185,129,0.08)', borderTop: totals.retentionPct === 0 && totals.mcdPct === 0 ? '1px solid rgba(16,185,129,0.2)' : undefined }}>
             <span className="text-sm font-bold text-emerald-400">
               {totals.retentionPct > 0 || totals.mcdPct > 0 ? 'Net Valuation Due' : 'Amount Due This Valuation'}
             </span>
-            <span className={`text-lg font-black tabular-nums ${totals.netValuation >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <span className={`text-xl font-black tabular-nums ${totals.netValuation >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
               {fmtCurrency(totals.netValuation)}
             </span>
           </div>
