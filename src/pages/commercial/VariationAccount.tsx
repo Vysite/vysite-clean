@@ -168,24 +168,24 @@ function calcLine(f: LineFormState) {
   return { qty, cost, mkup, salesPrice, lineTotal };
 }
 
-const buThCls   = 'px-2 py-2.5 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap';
-const buCellCls = 'px-2 py-2 align-middle';
+const buThCls   = 'px-2.5 py-3 text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap';
+const buCellCls = 'px-2.5 py-2.5 align-middle';
 
 function LineFormRow({
   form, onChange, onSave, onCancel,
 }: { form: LineFormState; onChange: (f: LineFormState) => void; onSave: () => void; onCancel: () => void }) {
-  const inCls = 'w-full bg-[#0a0f1e] border border-[#1e2d4a] rounded px-1.5 py-1 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]';
+  const inCls = 'w-full bg-[#0a0f1e] border border-[#1e2d4a] rounded px-2 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316] transition-colors';
   const c = calcLine(form);
   return (
     <tr className="border-t border-[#1e2d4a]/50 bg-[#0d1e35]/60">
       <td className={buCellCls}></td>
-      <td className={buCellCls}><input className={inCls} placeholder="Description" value={form.description} onChange={e => onChange({ ...form, description: e.target.value })} autoFocus /></td>
+      <td className={buCellCls}><input className={inCls} placeholder="Describe commercial build-up item…" value={form.description} onChange={e => onChange({ ...form, description: e.target.value })} autoFocus /></td>
       <td className={buCellCls}>
         <select className={inCls} value={form.type} onChange={e => onChange({ ...form, type: e.target.value })}>
           {LINE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
       </td>
-      <td className={buCellCls}><input className={inCls} placeholder="Unit" value={form.unit} onChange={e => onChange({ ...form, unit: e.target.value })} /></td>
+      <td className={buCellCls}><input className={inCls} placeholder="nr" value={form.unit} onChange={e => onChange({ ...form, unit: e.target.value })} /></td>
       <td className={buCellCls}><input className={`${inCls} text-right`} placeholder="0" value={form.quantity} onChange={e => onChange({ ...form, quantity: e.target.value })} /></td>
       <td className={buCellCls}><input className={`${inCls} text-right`} placeholder="0.00" value={form.cost_price} onChange={e => onChange({ ...form, cost_price: e.target.value })} /></td>
       <td className={buCellCls}><input className={`${inCls} text-right`} placeholder="0" value={form.markup_pct} onChange={e => onChange({ ...form, markup_pct: e.target.value })} /></td>
@@ -261,21 +261,21 @@ function BuildUpTable({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="overflow-x-auto rounded-lg border border-[#1e2d4a]">
-        <table className="w-full text-xs min-w-[700px]">
-          <thead className="bg-[#0d1628]">
+        <table className="w-full text-xs min-w-[760px]">
+          <thead className="bg-[#0d1628] sticky top-0 z-10">
             <tr>
-              <th className={`${buThCls} w-8`}>No.</th>
-              <th className={buThCls}>Description</th>
-              <th className={buThCls}>Type</th>
-              <th className={buThCls}>Unit</th>
-              <th className={`${buThCls} text-right`}>Qty</th>
-              <th className={`${buThCls} text-right`}>Cost</th>
-              <th className={`${buThCls} text-right`}>Markup %</th>
-              <th className={`${buThCls} text-right`}>Sales</th>
-              <th className={`${buThCls} text-right`}>Total</th>
-              {canEdit && <th className={`${buThCls} w-16`}></th>}
+              <th className={`${buThCls} w-10`}>No.</th>
+              <th className={buThCls} style={{ width: '30%' }}>Description</th>
+              <th className={buThCls} style={{ width: '9%' }}>Type</th>
+              <th className={buThCls} style={{ width: '6%' }}>Unit</th>
+              <th className={`${buThCls} text-right`} style={{ width: '7%' }}>Qty</th>
+              <th className={`${buThCls} text-right`} style={{ width: '9%' }}>Cost</th>
+              <th className={`${buThCls} text-right`} style={{ width: '8%' }}>Markup %</th>
+              <th className={`${buThCls} text-right`} style={{ width: '9%' }}>Sales</th>
+              <th className={`${buThCls} text-right`} style={{ width: '10%' }}>Total</th>
+              {canEdit && <th className={`${buThCls} w-14`}></th>}
             </tr>
           </thead>
           <tbody>
@@ -337,9 +337,9 @@ function BuildUpTable({
           </tbody>
           {lines.length > 0 && (
             <tfoot>
-              <tr className="border-t border-[#1e2d4a] bg-[#0d1628]">
-                <td colSpan={canEdit ? 8 : 8} className="px-2 py-2.5 text-xs font-semibold text-slate-400 text-right">Build-Up Total</td>
-                <td className="px-2 py-2.5 text-right tabular-nums text-sm font-bold text-[#f97316]">{fmtCurrency(buildUpTotal)}</td>
+              <tr className="border-t-2 border-[#1e2d4a] bg-[#0d1628]">
+                <td colSpan={canEdit ? 8 : 8} className="px-2.5 py-3 text-xs font-semibold text-slate-400 text-right">Build-Up Total</td>
+                <td className="px-2.5 py-3 text-right tabular-nums text-base font-bold text-[#f97316]">{fmtCurrency(buildUpTotal)}</td>
                 {canEdit && <td></td>}
               </tr>
             </tfoot>
@@ -350,20 +350,21 @@ function BuildUpTable({
       {canEdit && !addingNew && !editingId && (
         <button
           onClick={() => setAddingNew(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-[#1e2d4a] text-xs text-slate-500 hover:text-slate-300 hover:border-[#f97316]/50 transition-colors"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-dashed border-[#1e2d4a] text-sm text-slate-400 hover:text-[#f97316] hover:border-[#f97316]/50 transition-colors font-medium"
         >
-          <Plus size={12} /> Add line
+          <Plus size={15} /> Add Line
         </button>
       )}
 
       {lines.length > 0 && (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#0d1628] border border-[#1e2d4a]">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <Calculator size={12} />
-            <span>{lines.length} line{lines.length !== 1 ? 's' : ''}</span>
+        <div className="flex items-center justify-between px-5 py-3.5 rounded-xl bg-gradient-to-r from-[#0d1628] to-[#111d33] border border-[#f97316]/20">
+          <div className="flex items-center gap-2.5 text-xs text-slate-500">
+            <Calculator size={14} className="text-[#f97316]/60" />
+            <span className="font-medium">{lines.length} line{lines.length !== 1 ? 's' : ''}</span>
           </div>
-          <div className="text-sm font-bold text-[#f97316] tabular-nums">
-            Build-Up Total: {fmtCurrency(buildUpTotal)}
+          <div className="flex items-baseline gap-3">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cost Build-Up Total</span>
+            <span className="text-xl font-bold text-[#f97316] tabular-nums">{fmtCurrency(buildUpTotal)}</span>
           </div>
         </div>
       )}
@@ -766,7 +767,7 @@ function VariationDrawer({
   return (
     <div className="fixed inset-0 z-50 flex items-stretch justify-end bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="relative w-full max-w-2xl bg-[#0d1628] border-l border-[#1e2d4a] flex flex-col overflow-hidden"
+        className={`relative w-full ${tab === 'build-up' ? 'max-w-[1400px]' : 'max-w-2xl'} bg-[#0d1628] border-l border-[#1e2d4a] flex flex-col overflow-hidden transition-[max-width] duration-300 ease-in-out`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -930,7 +931,11 @@ function VariationDrawer({
 
           {/* ── Cost Build-Up ── */}
           {tab === 'build-up' && (
-            <div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cost Build-Up Schedule</h3>
+                <span className="text-[10px] text-slate-600">{buildUpLines.length} line{buildUpLines.length !== 1 ? 's' : ''}</span>
+              </div>
               <BuildUpTable
                 lines={buildUpLines}
                 vaItemId={stableId}
