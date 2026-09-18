@@ -532,7 +532,7 @@ export default function CommercialApplications({
           )}
         </div>
       ) : (
-        <div className="bg-[#0a1120] border border-[#1e2d4a] rounded-xl overflow-hidden">
+        <div className="bg-[#0a1120] border border-[#1e2d4a] rounded-xl overflow-visible">
           {/* Table header */}
           <div className="grid grid-cols-[2.5rem_1fr_6rem_6rem_6rem_6rem_6rem_6rem_auto] gap-2 px-4 py-2.5 bg-[#0d1628] border-b border-[#1e2d4a]">
             {['No.', 'Period', 'Applied', 'Certified', 'Paid', 'Outstanding', 'Retention', 'Status', ''].map((h, i) => (
