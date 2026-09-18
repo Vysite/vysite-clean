@@ -501,14 +501,19 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
   const patchLine = async (id: string, patch: Partial<DBWorkbookLine>) => {
     const line = lines.find(l => l.id === id);
     if (!line) return;
+    const merged = { ...line, ...patch };
+    // Auto-compute contract_value from qty × rate when either changes and both are present
+    if ((patch.quantity !== undefined || patch.rate !== undefined) && merged.quantity != null && merged.rate != null) {
+      merged.contract_value = merged.quantity * merged.rate;
+    }
     onSaveStart();
-    await store.updateWorkbookLine({ ...line, ...patch });
+    await store.updateWorkbookLine(merged);
     onSaveDone();
     const changes: string[] = [];
     if (patch.description !== undefined && patch.description !== line.description)
       changes.push(`description: "${line.description}" → "${patch.description}"`);
-    if (patch.contract_value !== undefined && patch.contract_value !== line.contract_value)
-      changes.push(`value: ${fmtCurrency(line.contract_value)} → ${fmtCurrency(patch.contract_value)}`);
+    if (merged.contract_value !== line.contract_value)
+      changes.push(`value: ${fmtCurrency(line.contract_value)} → ${fmtCurrency(merged.contract_value)}`);
     if (patch.item_number !== undefined && patch.item_number !== line.item_number)
       changes.push(`item number: "${line.item_number}" → "${patch.item_number}"`);
     if (changes.length > 0) {

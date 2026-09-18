@@ -399,8 +399,8 @@ const LINE_TYPES = ['Labour', 'Material', 'Plant', 'Subcontractor', 'Prelims', '
 type DraftLineItem = Omit<CommercialLineItem, 'id' | 'orgId' | 'recordId'> & { id?: string };
 
 // Shared cell/input styles matching VA build-up table
-const liCellCls = 'px-2 py-2 text-xs';
-const liThCls   = 'px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500';
+const liCellCls = 'px-2.5 py-2.5 text-xs';
+const liThCls   = 'px-2.5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500';
 const liNumIn   = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded px-1.5 py-1 text-xs text-white text-right placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]';
 const liTxtIn   = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded px-1.5 py-1 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#f97316]';
 const liSelIn   = `${liTxtIn} appearance-none cursor-pointer`;
@@ -573,8 +573,8 @@ function LineItemEditor({
   return (
     <div className="space-y-3">
       <div className="overflow-x-auto rounded-lg border border-[#1e2d4a]">
-        <table className="w-full text-xs min-w-[600px]">
-          <thead className="bg-[#0d1628]">
+        <table className="w-full text-xs min-w-[760px]">
+          <thead className="bg-[#0d1628] sticky top-0 z-10">
             <tr>
               <th className={`${liThCls} w-8`}>No.</th>
               <th className={liThCls}>Description</th>
@@ -652,7 +652,7 @@ function LineItemEditor({
             <tfoot>
               <tr className="border-t border-[#1e2d4a] bg-[#0d1628]">
                 <td colSpan={canViewPricing ? 8 : 6} className="px-2 py-2.5 text-xs font-semibold text-slate-400 text-right">Totals</td>
-                <td className="px-2 py-2.5 text-right tabular-nums text-sm font-bold text-[#f97316]">{fmtCurrency(totals.totalClient)}</td>
+                <td className="px-2.5 py-3 text-right tabular-nums text-base font-black text-[#f97316]">{fmtCurrency(totals.totalClient)}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -1582,7 +1582,7 @@ function DetailModal({ record, isNew, orgId, projects, allRecords, canViewPricin
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#111827] border border-[#1e2d4a] rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl">
+      <div className={`bg-[#111827] border border-[#1e2d4a] rounded-2xl w-full max-h-[92vh] flex flex-col shadow-2xl transition-all duration-300 ${tab === 'cost' ? 'max-w-[1400px]' : 'max-w-3xl'}`}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#1e2d4a] shrink-0">
           <div className="flex items-center gap-3 min-w-0">
