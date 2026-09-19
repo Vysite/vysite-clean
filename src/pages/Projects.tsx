@@ -151,7 +151,7 @@ function AddDocumentModal({ projectId, projectName, uploadedByDefault, onClose, 
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+      <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-[#1e2d4a]">
           <h3 className="text-base font-bold text-white">Add Document</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a] transition-colors"><X size={16} /></button>
@@ -715,7 +715,7 @@ function ProgrammesTab({
     }
     return (
       <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
-        <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between p-5 border-b border-[#1e2d4a]">
             <h3 className="text-base font-bold text-white">{task ? 'Edit Task' : 'Add Task'}</h3>
             <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a] transition-colors"><X size={16} /></button>
@@ -2197,12 +2197,12 @@ function EditProjectModal({ project, onClose, onSave }: EditProjectModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-lg">
-        <div className="flex items-center justify-between p-6 border-b border-[#1e2d4a]">
+      <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-[#1e2d4a] shrink-0">
           <h2 className="text-lg font-bold text-white">Edit Project</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a] transition-colors"><X size={18} /></button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto overscroll-contain flex-1">
           <div><label className={labelCls}>Project Name *</label><input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inputCls} /></div>
           <div><label className={labelCls}>Client *</label><input required value={form.client} onChange={e => setForm(f => ({ ...f, client: e.target.value }))} className={inputCls} /></div>
           <div><label className={labelCls}>Location</label><input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className={inputCls} /></div>
@@ -2254,7 +2254,7 @@ function EditProjectModal({ project, onClose, onSave }: EditProjectModalProps) {
             <div><label className={labelCls}>Contract Value</label><input value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} className={inputCls} placeholder="e.g. £125,000" /></div>
             <div><label className={labelCls}>Committed / Spent</label><input value={form.committed} onChange={e => setForm(f => ({ ...f, committed: e.target.value }))} className={inputCls} placeholder="e.g. 50000" /></div>
           </div>
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-2 sticky bottom-0 -mx-6 px-6 pb-6 bg-[#1a2236] border-t border-[#1e2d4a] mt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors">Cancel</button>
             <button type="submit" className="flex-1 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">Save Changes</button>
           </div>
@@ -2309,12 +2309,12 @@ function CreateProjectModal({ onClose, onSave }: CreateProjectModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-lg">
-        <div className="flex items-center justify-between p-6 border-b border-[#1e2d4a]">
+      <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-[#1e2d4a] shrink-0">
           <h2 className="text-lg font-bold text-white">Create New Project</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a] transition-colors"><X size={18} /></button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto overscroll-contain flex-1">
           {saveError && (
             <div className="bg-red-900/40 border border-red-500/50 rounded-lg px-4 py-3 text-sm text-red-300">
               {saveError}
@@ -2370,7 +2370,7 @@ function CreateProjectModal({ onClose, onSave }: CreateProjectModalProps) {
             <div><label className={labelCls}>Contract Value</label><input value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} className={inputCls} placeholder="£000,000" /></div>
             <div><label className={labelCls}>Committed / Spent</label><input value={form.committed} onChange={e => setForm(f => ({ ...f, committed: e.target.value }))} className={inputCls} placeholder="Optional" /></div>
           </div>
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-2 sticky bottom-0 -mx-6 px-6 pb-6 bg-[#1a2236] border-t border-[#1e2d4a] mt-2">
             <button type="button" onClick={onClose} disabled={saving} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors disabled:opacity-50">Cancel</button>
             <button type="submit" disabled={saving} className="flex-1 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50">
               {saving ? 'Saving…' : 'Create Project'}
