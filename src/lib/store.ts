@@ -586,6 +586,23 @@ export interface DBTender {
   contract_review?: unknown;  // legacy — kept for backward compat read
   contract_reviews?: unknown;
   submitted_date?: string;
+  client_contact_name?: string;
+  client_contact_title?: string;
+  client_contact_email?: string;
+  client_contact_phone?: string;
+}
+
+export interface DBTenderKeyAction {
+  id: string;
+  org_id: string;
+  tender_id: string;
+  title: string;
+  due_date: string | null;
+  status: 'Open' | 'Completed';
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
 }
 
 export interface DBTCRecord {
@@ -765,6 +782,10 @@ function dbToTender(r: DBTender): Tender {
     aiReview: r.ai_review as Tender['aiReview'] ?? undefined,
     contractReviews: migrateContractReviews(r),
     submittedDate: r.submitted_date || undefined,
+    clientContactName: r.client_contact_name ?? undefined,
+    clientContactTitle: r.client_contact_title ?? undefined,
+    clientContactEmail: r.client_contact_email ?? undefined,
+    clientContactPhone: r.client_contact_phone ?? undefined,
   };
 }
 
@@ -825,6 +846,10 @@ function tenderToDB(t: Tender): DBTender {
     ai_review: t.aiReview ?? null,
     contract_reviews: t.contractReviews ?? null,
     submitted_date: t.submittedDate ?? '',
+    client_contact_name: t.clientContactName ?? null,
+    client_contact_title: t.clientContactTitle ?? null,
+    client_contact_email: t.clientContactEmail ?? null,
+    client_contact_phone: t.clientContactPhone ?? null,
   };
 }
 
@@ -1292,6 +1317,11 @@ export interface AppStore {
   addTender: (t: Tender) => Promise<string | null>;
   updateTender: (t: Tender) => Promise<void>;
   removeTender: (id: string) => Promise<void>;
+  tenderKeyActions: DBTenderKeyAction[];
+  loadTenderKeyActions: (tenderId: string) => Promise<void>;
+  addTenderKeyAction: (a: DBTenderKeyAction) => Promise<string | null>;
+  updateTenderKeyAction: (a: DBTenderKeyAction) => Promise<void>;
+  removeTenderKeyAction: (id: string) => Promise<void>;
 
   // TC Records
   addTCRecord: (r: DBTCRecord) => Promise<void>;
@@ -1518,6 +1548,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [snaggingReports, setSnaggingReports] = useState<DBSnaggingReport[]>([]);
   const [siteForms, setSiteForms] = useState<DBSiteForm[]>([]);
   const [tenders, setTenders] = useState<Tender[]>([]);
+  const [tenderKeyActions, setTenderKeyActions] = useState<DBTenderKeyAction[]>([]);
   const [tcRecords, setTCRecords] = useState<DBTCRecord[]>([]);
   const [maintenanceJobs, setMaintenanceJobs] = useState<DBMaintenanceJob[]>([]);
   const [maintenanceSites, setMaintenanceSites] = useState<DBMaintenanceSite[]>([]);
@@ -2103,6 +2134,51 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     setTenders(prev => prev.filter(t => t.id !== id));
     const { error } = await supabase.from('vy_tenders').delete().eq('id', id);
     logWrite('removeTender', 'vy_tenders', error);
+  }, []);
+
+  // ── Tender Key Actions ─────────────────────────────────────────────────────────
+  const loadTenderKeyActions = useCallback(async (tenderId: string) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const { data, error } = await supabase
+      .from('vy_tender_key_actions')
+      .select('*')
+      .eq('org_id', oid)
+      .eq('tender_id', tenderId)
+      .order('created_at', { ascending: false });
+    if (error) { console.error('[VYSITE] loadTenderKeyActions error:', error); return; }
+    setTenderKeyActions(prev => {
+      const filtered = prev.filter(a => a.tender_id !== tenderId);
+      return [...filtered, ...((data ?? []) as DBTenderKeyAction[])];
+    });
+  }, []);
+
+  const addTenderKeyAction = useCallback(async (a: DBTenderKeyAction): Promise<string | null> => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return 'No organisation context.';
+    const row = { ...a, org_id: oid };
+    setTenderKeyActions(prev => [row, ...prev]);
+    const { error } = await supabase.from('vy_tender_key_actions').insert(row);
+    logWrite('addTenderKeyAction', 'vy_tender_key_actions', error);
+    return error ? error.message : null;
+  }, []);
+
+  const updateTenderKeyAction = useCallback(async (a: DBTenderKeyAction) => {
+    setTenderKeyActions(prev => prev.map(x => x.id === a.id ? { ...a, updated_at: new Date().toISOString() } : x));
+    const { error } = await supabase.from('vy_tender_key_actions').update({
+      title: a.title,
+      due_date: a.due_date,
+      status: a.status,
+      completed_at: a.completed_at,
+      updated_at: new Date().toISOString(),
+    }).eq('id', a.id);
+    logWrite('updateTenderKeyAction', 'vy_tender_key_actions', error);
+  }, []);
+
+  const removeTenderKeyAction = useCallback(async (id: string) => {
+    setTenderKeyActions(prev => prev.filter(a => a.id !== id));
+    const { error } = await supabase.from('vy_tender_key_actions').delete().eq('id', id);
+    logWrite('removeTenderKeyAction', 'vy_tender_key_actions', error);
   }, []);
 
   // ── TC Records ────────────────────────────────────────────────────────────────
@@ -2937,6 +3013,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addSnaggingReport, updateSnaggingReport, removeSnaggingReport,
     addSiteForm, updateSiteForm, removeSiteForm, siteFormsStatus, reloadSiteForms, fetchSiteFormDetail,
     addTender, updateTender, removeTender,
+    tenderKeyActions, loadTenderKeyActions, addTenderKeyAction, updateTenderKeyAction, removeTenderKeyAction,
     addTCRecord, updateTCRecord, removeTCRecord,
     addMaintenanceJob, updateMaintenanceJob, removeMaintenanceJob,
     maintenanceSites, maintenanceSitesLoading,

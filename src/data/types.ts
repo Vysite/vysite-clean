@@ -531,6 +531,10 @@ export interface Tender {
   lastUpdated: string;
   nextAction: string;
   internalNotes: string;
+  clientContactName?: string;
+  clientContactTitle?: string;
+  clientContactEmail?: string;
+  clientContactPhone?: string;
   scopeNotes: TenderScopeNotes;
   scopeEntries?: TenderScopeEntry[];
   subcontractors: TenderSubcontractor[];

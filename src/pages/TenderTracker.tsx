@@ -19,10 +19,10 @@ import type {
   LucideIcon,
 } from '../data/types';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
-import type { DBNotification, DBAttachment } from '../lib/store';
+import type { DBNotification, DBAttachment, DBTenderKeyAction } from '../lib/store';
 import FileUpload from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
-import { Paperclip, Eye, Download, Sparkles } from 'lucide-react';
+import { Paperclip, Eye, Download, Sparkles, Calendar, Check, RotateCcw, Pencil } from 'lucide-react';
 import { nextRef as getNextRef } from '../lib/refSequence';
 import AITenderAssistant from '../components/AITenderAssistant';
 import AIContractReview from '../components/AIContractReview';
@@ -1357,6 +1357,10 @@ function EditTenderModal({ tender, onClose, onSave, onDelete, canDelete }: EditT
     status: tender.status,
     nextAction: tender.nextAction,
     internalNotes: tender.internalNotes,
+    contactName: tender.clientContactName ?? '',
+    contactTitle: tender.clientContactTitle ?? '',
+    contactEmail: tender.clientContactEmail ?? '',
+    contactPhone: tender.clientContactPhone ?? '',
   });
 
   const inputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600';
@@ -1376,6 +1380,10 @@ function EditTenderModal({ tender, onClose, onSave, onDelete, canDelete }: EditT
       status: form.status as TenderStatus,
       nextAction: form.nextAction,
       internalNotes: form.internalNotes,
+      clientContactName: form.contactName || undefined,
+      clientContactTitle: form.contactTitle || undefined,
+      clientContactEmail: form.contactEmail || undefined,
+      clientContactPhone: form.contactPhone || undefined,
       lastUpdated: new Date().toISOString().slice(0, 10),
     };
     if (form.status === 'Submitted' && !tender.submittedDate) {
@@ -1429,6 +1437,15 @@ function EditTenderModal({ tender, onClose, onSave, onDelete, canDelete }: EditT
             <label className={labelCls}>Client *</label>
             <input required value={form.client} onChange={e => setForm(f => ({ ...f, client: e.target.value }))} className={inputCls} />
           </div>
+          <div className="border border-[#1e2d4a] rounded-xl p-4 space-y-3 bg-[#0d1628]/40">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Client Contact (Optional)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={labelCls}>Contact Name</label><input value={form.contactName} onChange={e => setForm(f => ({ ...f, contactName: e.target.value }))} className={inputCls} placeholder="e.g. Sarah Mitchell" /></div>
+              <div><label className={labelCls}>Job Title</label><input value={form.contactTitle} onChange={e => setForm(f => ({ ...f, contactTitle: e.target.value }))} className={inputCls} placeholder="e.g. Senior QS" /></div>
+              <div><label className={labelCls}>Email</label><input type="email" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))} className={inputCls} placeholder="sarah@example.com" /></div>
+              <div><label className={labelCls}>Telephone</label><input value={form.contactPhone} onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))} className={inputCls} placeholder="01234 567890" /></div>
+            </div>
+          </div>
           <div>
             <label className={labelCls}>Site / Location</label>
             <input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className={inputCls} />
@@ -1473,8 +1490,8 @@ function EditTenderModal({ tender, onClose, onSave, onDelete, canDelete }: EditT
             <input value={form.nextAction} onChange={e => setForm(f => ({ ...f, nextAction: e.target.value }))} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Internal Notes</label>
-            <textarea value={form.internalNotes} onChange={e => setForm(f => ({ ...f, internalNotes: e.target.value }))} rows={3} className={`${inputCls} resize-none`} />
+            <label className={labelCls}>Project Overview</label>
+            <textarea value={form.internalNotes} onChange={e => setForm(f => ({ ...f, internalNotes: e.target.value }))} rows={3} className={`${inputCls} resize-none`} placeholder="Describe the project/opportunity being priced..." />
           </div>
           <div className="pt-2 space-y-2">
             <div className="flex gap-3">
@@ -2489,6 +2506,197 @@ interface TenderDetailProps {
   convertError?: string | null;
 }
 
+// ─── Tender Key Actions ───────────────────────────────────────────────────────
+
+function TenderKeyActions({ tenderId }: { tenderId: string }) {
+  const store = useAppStore();
+  const [filter, setFilter] = useState<'Open' | 'Completed' | 'All'>('Open');
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState<DBTenderKeyAction | null>(null);
+  const [title, setTitle] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    store.loadTenderKeyActions(tenderId).then(() => setLoaded(true));
+  }, [tenderId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const allActions = store.tenderKeyActions.filter(a => a.tender_id === tenderId);
+  const filtered = filter === 'All' ? allActions : allActions.filter(a => a.status === filter);
+  const openCount = allActions.filter(a => a.status === 'Open').length;
+  const completedCount = allActions.filter(a => a.status === 'Completed').length;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const handleAdd = async () => {
+    if (!title.trim()) return;
+    const a: DBTenderKeyAction = {
+      id: `ka${Date.now()}`,
+      org_id: store.currentOrgId ?? '',
+      tender_id: tenderId,
+      title: title.trim(),
+      due_date: dueDate || null,
+      status: 'Open',
+      completed_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: store.currentUser?.name ?? null,
+    };
+    await store.addTenderKeyAction(a);
+    setTitle('');
+    setDueDate('');
+    setShowAdd(false);
+  };
+
+  const handleSave = async () => {
+    if (!editing || !title.trim()) return;
+    await store.updateTenderKeyAction({ ...editing, title: title.trim(), due_date: dueDate || null });
+    setEditing(null);
+    setTitle('');
+    setDueDate('');
+  };
+
+  const toggleComplete = async (a: DBTenderKeyAction) => {
+    if (a.status === 'Open') {
+      await store.updateTenderKeyAction({ ...a, status: 'Completed', completed_at: new Date().toISOString() });
+    } else {
+      await store.updateTenderKeyAction({ ...a, status: 'Open', completed_at: null });
+    }
+  };
+
+  const startEdit = (a: DBTenderKeyAction) => {
+    setEditing(a);
+    setTitle(a.title);
+    setDueDate(a.due_date ?? '');
+  };
+
+  const filterBtnCls = (f: typeof filter) =>
+    `px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+      filter === f ? 'bg-[#f97316] text-white' : 'text-slate-500 hover:text-slate-300 hover:bg-[#1e2d4a]'
+    }`;
+
+  return (
+    <div className="bg-[#0d1628] rounded-xl border border-[#1e2d4a] p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-bold text-white">Next Key Actions</p>
+          {openCount > 0 && <span className="text-[10px] font-bold bg-[#f97316]/20 text-[#f97316] px-2 py-0.5 rounded-full">{openCount} open</span>}
+        </div>
+        <button onClick={() => { setShowAdd(true); setTitle(''); setDueDate(''); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f97316]/10 hover:bg-[#f97316]/20 border border-[#f97316]/40 text-[#f97316] rounded-lg text-xs font-semibold transition-all">
+          <Plus size={13} />Add Key Action
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2 mb-4">
+        <button className={filterBtnCls('Open')} onClick={() => setFilter('Open')}>Open ({openCount})</button>
+        <button className={filterBtnCls('Completed')} onClick={() => setFilter('Completed')}>Completed ({completedCount})</button>
+        <button className={filterBtnCls('All')} onClick={() => setFilter('All')}>All ({allActions.length})</button>
+      </div>
+
+      {showAdd && (
+        <div className="mb-4 bg-[#1a2236] border border-[#1e2d4a] rounded-lg p-4 space-y-3">
+          <input
+            autoFocus
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') setShowAdd(false); }}
+            placeholder="Action title, e.g. 'Obtain subcontractor quotations'"
+            className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600"
+          />
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+              <Calendar size={12} />Due:
+            </label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-[#f97316]" />
+            <div className="ml-auto flex gap-2">
+              <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-300 border border-[#1e2d4a] rounded-lg transition-colors">Cancel</button>
+              <button onClick={handleAdd} disabled={!title.trim()} className="px-3 py-1.5 bg-[#f97316] text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors disabled:opacity-40">Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <div className="mb-4 bg-[#1a2236] border border-[#f97316]/40 rounded-lg p-4 space-y-3">
+          <p className="text-[10px] font-bold text-[#f97316] uppercase tracking-wider">Edit Action</p>
+          <input
+            autoFocus
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(null); }}
+            className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600"
+          />
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+              <Calendar size={12} />Due:
+            </label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-[#f97316]" />
+            <div className="ml-auto flex gap-2">
+              <button onClick={() => setEditing(null)} className="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-300 border border-[#1e2d4a] rounded-lg transition-colors">Cancel</button>
+              <button onClick={handleSave} disabled={!title.trim()} className="px-3 py-1.5 bg-[#f97316] text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors disabled:opacity-40">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {!loaded ? (
+          <p className="text-xs text-slate-600 italic text-center py-3">Loading actions...</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-xs text-slate-600 italic text-center py-3">
+            {filter === 'Open' ? 'No open key actions. Add one to get started.' : `No ${filter.toLowerCase()} actions.`}
+          </p>
+        ) : (
+          filtered.map(a => {
+            const isOverdue = a.status === 'Open' && a.due_date && a.due_date < today;
+            return (
+              <div key={a.id} className="group flex items-center gap-3 bg-[#1a2236] border border-[#1e2d4a] rounded-lg px-3 py-2.5 hover:border-slate-600 transition-colors">
+                <button
+                  onClick={() => toggleComplete(a)}
+                  className={`shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                    a.status === 'Completed' ? 'bg-emerald-600 border-emerald-600' : 'border-slate-600 hover:border-[#f97316]'
+                  }`}
+                  title={a.status === 'Open' ? 'Mark complete' : 'Reopen'}
+                >
+                  {a.status === 'Completed' && <Check size={12} className="text-white" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm ${a.status === 'Completed' ? 'text-slate-600 line-through' : 'text-slate-200'}`}>{a.title}</p>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    {a.due_date && (
+                      <span className={`text-[10px] flex items-center gap-1 ${isOverdue ? 'text-red-400 font-semibold' : 'text-slate-500'}`}>
+                        <Calendar size={9} />
+                        {isOverdue ? 'Overdue — ' : 'Due '}
+                        {new Date(a.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    )}
+                    {a.status === 'Completed' && a.completed_at && (
+                      <span className="text-[10px] text-emerald-500">Completed {new Date(a.completed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  {a.status === 'Completed' && (
+                    <button onClick={() => toggleComplete(a)} className="p-1.5 rounded text-slate-500 hover:text-[#f97316] hover:bg-[#0d1628] transition-colors" title="Reopen">
+                      <RotateCcw size={12} />
+                    </button>
+                  )}
+                  <button onClick={() => startEdit(a)} className="p-1.5 rounded text-slate-500 hover:text-[#f97316] hover:bg-[#0d1628] transition-colors" title="Edit">
+                    <Pencil size={12} />
+                  </button>
+                  <button onClick={() => store.removeTenderKeyAction(a.id)} className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-900/30 transition-colors" title="Delete">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoading, convertError }: TenderDetailProps) {
   const store = useAppStore();
   const perms = usePermissions();
@@ -2822,8 +3030,17 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
             </div>
 
             <div className={sectionCls}>
-              <p className={labelCls}>Key Next Action</p>
-              <p className="text-sm text-[#f97316] font-semibold">{tender.nextAction || '—'}</p>
+              <p className={labelCls}>Client Contact</p>
+              {(tender.clientContactName || tender.clientContactTitle || tender.clientContactEmail || tender.clientContactPhone) ? (
+                <div className="space-y-1">
+                  {tender.clientContactName && <p className="text-sm text-white font-semibold">{tender.clientContactName}</p>}
+                  {tender.clientContactTitle && <p className="text-xs text-slate-400">{tender.clientContactTitle}</p>}
+                  {tender.clientContactEmail && <a href={`mailto:${tender.clientContactEmail}`} className="block text-xs text-[#f97316] hover:underline">{tender.clientContactEmail}</a>}
+                  {tender.clientContactPhone && <p className="text-xs text-slate-400">{tender.clientContactPhone}</p>}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600 italic">No client contact details recorded.</p>
+              )}
             </div>
 
             {/* Tender Progress */}
@@ -2854,7 +3071,7 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
             <div className={sectionCls}>
               <div className="flex items-center gap-2 mb-3">
                 <StickyNote size={14} className="text-[#f97316]" />
-                <p className="text-sm font-bold text-white">Internal Notes</p>
+                <p className="text-sm font-bold text-white">Project Overview</p>
               </div>
               <textarea
                 id="internal-notes-area"
@@ -2862,15 +3079,18 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
                 onChange={e => setEditNotes(e.target.value)}
                 rows={5}
                 className={textareaCls}
-                placeholder="Add internal notes, pricing assumptions, commercial observations..."
+                placeholder="Describe the project/opportunity being priced, e.g. 'Mechanical refurbishment of an occupied hospital ward including domestic water alterations, drainage modifications and ventilation works.'"
               />
               <div className="flex items-center gap-3 mt-3">
                 <button onClick={saveNotes} className="flex items-center gap-2 px-4 py-2 bg-[#f97316] text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors">
-                  <Save size={12} />Save Notes
+                  <Save size={12} />Save Overview
                 </button>
                 {noteSaved && <span className="text-xs text-emerald-400 font-semibold">Saved</span>}
               </div>
             </div>
+
+            {/* Next Key Actions */}
+            <TenderKeyActions tenderId={tender.id} />
           </div>
 
           <div className="space-y-5">
@@ -3456,6 +3676,7 @@ function CreateTenderModal({ onClose, onSave }: { onClose: () => void; onSave: (
   const [form, setForm] = useState({
     name: '', client: '', location: '', returnDate: '', estimatedValue: '',
     owner: '', priority: 'High' as TenderPriority, nextAction: '', internalNotes: '',
+    contactName: '', contactTitle: '', contactEmail: '', contactPhone: '',
   });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -3483,6 +3704,10 @@ function CreateTenderModal({ onClose, onSave }: { onClose: () => void; onSave: (
       lastUpdated: today,
       nextAction: form.nextAction,
       internalNotes: form.internalNotes,
+      clientContactName: form.contactName || undefined,
+      clientContactTitle: form.contactTitle || undefined,
+      clientContactEmail: form.contactEmail || undefined,
+      clientContactPhone: form.contactPhone || undefined,
       scopeNotes: { summary: '', inclusions: '', exclusions: '', assumptions: '', risks: '', opportunities: '', specialistItems: '', siteVisitNotes: '' },
       scopeEntries: [],
       subcontractors: [],
@@ -3514,6 +3739,15 @@ function CreateTenderModal({ onClose, onSave }: { onClose: () => void; onSave: (
           )}
           <div><label className={labelCls}>Tender Name *</label><input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="e.g. Ward 5 Electrical Upgrade" /></div>
           <div><label className={labelCls}>Client *</label><input required value={form.client} onChange={e => setForm(f => ({ ...f, client: e.target.value }))} className={inputCls} placeholder="Client name" /></div>
+          <div className="border border-[#1e2d4a] rounded-xl p-4 space-y-3 bg-[#0d1628]/40">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Client Contact (Optional)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={labelCls}>Contact Name</label><input value={form.contactName} onChange={e => setForm(f => ({ ...f, contactName: e.target.value }))} className={inputCls} placeholder="e.g. Sarah Mitchell" /></div>
+              <div><label className={labelCls}>Job Title</label><input value={form.contactTitle} onChange={e => setForm(f => ({ ...f, contactTitle: e.target.value }))} className={inputCls} placeholder="e.g. Senior QS" /></div>
+              <div><label className={labelCls}>Email</label><input type="email" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))} className={inputCls} placeholder="sarah@example.com" /></div>
+              <div><label className={labelCls}>Telephone</label><input value={form.contactPhone} onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))} className={inputCls} placeholder="01234 567890" /></div>
+            </div>
+          </div>
           <div><label className={labelCls}>Site / Location</label><input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} className={inputCls} placeholder="Site address" /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Return Date *</label><input required type="date" value={form.returnDate} onChange={e => setForm(f => ({ ...f, returnDate: e.target.value }))} className={inputCls} /></div>
@@ -3534,8 +3768,7 @@ function CreateTenderModal({ onClose, onSave }: { onClose: () => void; onSave: (
               </select>
             </div>
           </div>
-          <div><label className={labelCls}>Next Action</label><input value={form.nextAction} onChange={e => setForm(f => ({ ...f, nextAction: e.target.value }))} className={inputCls} placeholder="What needs to happen next?" /></div>
-          <div><label className={labelCls}>Internal Notes</label><textarea value={form.internalNotes} onChange={e => setForm(f => ({ ...f, internalNotes: e.target.value }))} rows={2} className={`${inputCls} resize-none`} /></div>
+          <div><label className={labelCls}>Project Overview</label><textarea value={form.internalNotes} onChange={e => setForm(f => ({ ...f, internalNotes: e.target.value }))} rows={3} className={`${inputCls} resize-none`} placeholder="Describe the project/opportunity being priced, e.g. 'Mechanical refurbishment of an occupied hospital ward including domestic water alterations, drainage modifications and ventilation works.'" /></div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} disabled={saving} className="flex-1 py-2.5 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-400 hover:bg-[#1e2d4a] transition-colors disabled:opacity-50">Cancel</button>
             <button type="submit" disabled={saving} className="flex-1 py-2.5 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50">
