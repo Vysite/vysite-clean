@@ -3,7 +3,7 @@ import {
   Building2, Search, Archive, RotateCcw, Trash2,
   AlertCircle, ChevronDown, Calendar, Users, ArrowLeft,
   Save, Upload, Mail, Phone, Globe, Hash,
-  Shield, Plus, Zap, Clock,
+  Shield, Plus, Zap, Clock, User,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import ConfirmDeleteOrgModal from '../components/ConfirmDeleteOrgModal';
@@ -447,37 +447,61 @@ function SubscriptionOverridePanel({ org, onBack, onRefresh }: { org: Org; onBac
 
 // ─── Company Profile Panel ─────────────────────────────────────────────────────
 
+interface AdminContact {
+  name: string;
+  email: string;
+}
+
 function CompanyProfilePanel({ org, onBack }: { org: Org; onBack: () => void }) {
   const [form, setForm] = useState<OrgProfile>(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [admin, setAdmin] = useState<AdminContact | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       setError(null);
-      const { data, error: err } = await supabase
-        .from('vy_settings')
-        .select('company_name,company_address,company_phone,company_email,company_website,company_vat_number,company_number,logo_data_url')
-        .eq('org_id', org.id)
-        .maybeSingle();
-      if (err) {
-        setError(err.message);
-      } else if (data) {
+      const [profileRes, adminRes] = await Promise.all([
+        supabase
+          .from('vy_settings')
+          .select('company_name,company_address,company_phone,company_email,company_website,company_vat_number,company_number,logo_data_url')
+          .eq('org_id', org.id)
+          .maybeSingle(),
+        supabase
+          .from('vy_platform_users')
+          .select('name, email')
+          .eq('org_id', org.id)
+          .eq('role', 'Admin')
+          .eq('status', 'Active')
+          .order('join_date', { ascending: true })
+          .limit(1),
+      ]);
+
+      if (profileRes.error) {
+        setError(profileRes.error.message);
+      } else if (profileRes.data) {
         setForm({
-          company_name: data.company_name ?? '',
-          company_address: data.company_address ?? '',
-          company_phone: data.company_phone ?? '',
-          company_email: data.company_email ?? '',
-          company_website: data.company_website ?? '',
-          company_vat_number: data.company_vat_number ?? '',
-          company_number: data.company_number ?? '',
-          logo_data_url: data.logo_data_url ?? '',
+          company_name: profileRes.data.company_name ?? '',
+          company_address: profileRes.data.company_address ?? '',
+          company_phone: profileRes.data.company_phone ?? '',
+          company_email: profileRes.data.company_email ?? '',
+          company_website: profileRes.data.company_website ?? '',
+          company_vat_number: profileRes.data.company_vat_number ?? '',
+          company_number: profileRes.data.company_number ?? '',
+          logo_data_url: profileRes.data.logo_data_url ?? '',
         });
       }
+
+      if (adminRes.data && adminRes.data.length > 0) {
+        setAdmin({ name: adminRes.data[0].name, email: adminRes.data[0].email });
+      } else {
+        setAdmin(null);
+      }
+
       setLoading(false);
     }
     load();
@@ -562,6 +586,24 @@ function CompanyProfilePanel({ org, onBack }: { org: Org; onBack: () => void }) 
           </div>
         ) : (
           <div className="space-y-6">
+            {/* Primary Admin */}
+            <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg p-4">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-3">Primary Admin</p>
+              {admin ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-[#1a2236] border border-[#1e2d4a] flex items-center justify-center shrink-0">
+                    <User size={15} className="text-[#f97316]" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{admin.name}</p>
+                    <a href={`mailto:${admin.email}`} className="text-xs text-[#f97316] hover:underline truncate block">{admin.email}</a>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-600 italic">No active admin user found for this organisation.</p>
+              )}
+            </div>
+
             {/* Logo */}
             <div>
               <label className={labelCls}>Company Logo</label>

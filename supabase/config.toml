@@ -1,0 +1,38 @@
+[functions.admin-invite-super-admin]
+verify_jwt = true
+
+[functions.ai-contract-review]
+verify_jwt = true
+
+[functions.ai-tender-assistant]
+verify_jwt = true
+
+[functions.delete-org]
+verify_jwt = true
+
+[functions.invite-org-user]
+verify_jwt = true
+
+[functions.provision-trial-org]
+verify_jwt = false
+
+[functions.remove-org-user]
+verify_jwt = true
+
+[functions.resend-trial-invite]
+verify_jwt = true
+
+[functions.seed-test-users]
+verify_jwt = true
+
+[functions.send-feedback-email]
+verify_jwt = true
+
+[functions.stripe-checkout]
+verify_jwt = true
+
+[functions.stripe-portal]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false
