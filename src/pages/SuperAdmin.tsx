@@ -4,7 +4,7 @@ import {
   Shield, Building2, ChevronRight, ChevronLeft, ToggleLeft, ToggleRight,
   Save, AlertCircle, CheckCircle, RefreshCw, UserPlus, Trash2, Ban, Search,
   FlaskConical, X, Clock, Archive, RotateCcw, AlertTriangle, ChevronDown,
-  Upload, Mail, Phone, Globe, Hash, Send, Zap, Plus,
+  Upload, Mail, Phone, Globe, Hash, Send, Zap, Plus, User,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { env } from '../lib/env';
@@ -895,12 +895,18 @@ const EMPTY_PROFILE: OrgProfile = {
 const profileInputCls = 'mt-1.5 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] transition-colors';
 const profileLabelCls = 'text-xs font-semibold text-slate-500 uppercase tracking-wider';
 
+interface AdminContact {
+  name: string;
+  email: string;
+}
+
 function CompanyProfileSection({ orgId }: { orgId: string }) {
   const [form, setForm] = useState<OrgProfile>(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [admin, setAdmin] = useState<AdminContact | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -908,24 +914,39 @@ function CompanyProfileSection({ orgId }: { orgId: string }) {
     async function load() {
       setLoading(true);
       setProfileError(null);
-      const { data, error } = await supabase
-        .from('vy_settings')
-        .select('company_name,company_address,company_phone,company_email,company_website,company_vat_number,company_number,logo_data_url')
-        .eq('org_id', orgId)
-        .maybeSingle();
+      const [profileRes, adminRes] = await Promise.all([
+        supabase
+          .from('vy_settings')
+          .select('company_name,company_address,company_phone,company_email,company_website,company_vat_number,company_number,logo_data_url')
+          .eq('org_id', orgId)
+          .maybeSingle(),
+        supabase
+          .from('vy_platform_users')
+          .select('name, email')
+          .eq('org_id', orgId)
+          .eq('role', 'Admin')
+          .eq('status', 'Active')
+          .order('join_date', { ascending: true })
+          .limit(1),
+      ]);
       if (cancelled) return;
-      if (error) { setProfileError(error.message); }
-      else if (data) {
+      if (profileRes.error) { setProfileError(profileRes.error.message); }
+      else if (profileRes.data) {
         setForm({
-          company_name: data.company_name ?? '',
-          company_address: data.company_address ?? '',
-          company_phone: data.company_phone ?? '',
-          company_email: data.company_email ?? '',
-          company_website: data.company_website ?? '',
-          company_vat_number: data.company_vat_number ?? '',
-          company_number: data.company_number ?? '',
-          logo_data_url: data.logo_data_url ?? '',
+          company_name: profileRes.data.company_name ?? '',
+          company_address: profileRes.data.company_address ?? '',
+          company_phone: profileRes.data.company_phone ?? '',
+          company_email: profileRes.data.company_email ?? '',
+          company_website: profileRes.data.company_website ?? '',
+          company_vat_number: profileRes.data.company_vat_number ?? '',
+          company_number: profileRes.data.company_number ?? '',
+          logo_data_url: profileRes.data.logo_data_url ?? '',
         });
+      }
+      if (adminRes.data && adminRes.data.length > 0) {
+        setAdmin({ name: adminRes.data[0].name, email: adminRes.data[0].email });
+      } else {
+        setAdmin(null);
       }
       setLoading(false);
     }
@@ -980,6 +1001,24 @@ function CompanyProfileSection({ orgId }: { orgId: string }) {
         </div>
       ) : (
         <div className="space-y-5">
+          {/* Primary Admin */}
+          <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg p-4">
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-3">Primary Admin</p>
+            {admin ? (
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#1a2236] border border-[#1e2d4a] flex items-center justify-center shrink-0">
+                  <User size={15} className="text-[#f97316]" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{admin.name}</p>
+                  <a href={`mailto:${admin.email}`} className="text-xs text-[#f97316] hover:underline truncate block select-all">{admin.email}</a>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-600 italic">No active admin user found for this organisation.</p>
+            )}
+          </div>
+
           {/* Logo */}
           <div>
             <label className={profileLabelCls}>Company Logo</label>
