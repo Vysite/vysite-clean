@@ -8,11 +8,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// Pricing per 1M tokens (claude-opus-4-5 as of 2025)
-const COST_PER_1M_INPUT        = 15.0;
-const COST_PER_1M_OUTPUT       = 75.0;
-const COST_PER_1M_CACHE_READ   = 1.5;
-const COST_PER_1M_CACHE_WRITE  = 18.75;
+// Pricing per 1M tokens (claude-sonnet-4-5 as of 2025)
+const COST_PER_1M_INPUT        = 3.0;
+const COST_PER_1M_OUTPUT       = 15.0;
+const COST_PER_1M_CACHE_READ   = 0.3;
+const COST_PER_1M_CACHE_WRITE  = 3.75;
+
+const MODEL = "claude-sonnet-4-5-20250929";
 
 type AITask =
   | "draft-rfi"
@@ -580,7 +582,7 @@ Deno.serve(async (req: Request) => {
             user_id: userId ?? null,
             feature: "tender-assistant",
             call_type: task,
-            model: "claude-opus-4-5",
+            model: MODEL,
             input_tokens: 0, output_tokens: 0,
             cache_read_tokens: 0, cache_creation_tokens: 0,
             estimated_cost_usd: 0,
@@ -604,7 +606,7 @@ Deno.serve(async (req: Request) => {
             user_id: userId ?? null,
             feature: "tender-assistant",
             call_type: task,
-            model: "claude-opus-4-5",
+            model: MODEL,
             input_tokens: 0, output_tokens: 0,
             cache_read_tokens: 0, cache_creation_tokens: 0,
             estimated_cost_usd: 0,
@@ -634,7 +636,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Call Claude ───────────────────────────────────────────────────────────
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey, timeout: 120_000, maxRetries: 1 });
     const prompt = buildPrompt(task, body);
     const maxTokens = isDocumentTask || task === "reconcile-findings" ? 8192 : 1024;
 
@@ -642,7 +644,7 @@ Deno.serve(async (req: Request) => {
 
     if (task === "review-document" && body.documentBase64 && body.documentMimeType === "application/pdf") {
       message = await client.messages.create({
-        model: "claude-opus-4-5",
+        model: MODEL,
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{
@@ -658,7 +660,7 @@ Deno.serve(async (req: Request) => {
       });
     } else if (task === "review-document" && body.documentText) {
       message = await client.messages.create({
-        model: "claude-opus-4-5",
+        model: MODEL,
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{ role: "user", content: `${prompt}\n\n--- DOCUMENT CONTENT ---\n${body.documentText}` }],
@@ -666,14 +668,14 @@ Deno.serve(async (req: Request) => {
     } else if (task === "review-document" && body.documentBase64 && body.documentMimeType) {
       const textContent = body.documentText ?? "Document content not available for this file type.";
       message = await client.messages.create({
-        model: "claude-opus-4-5",
+        model: MODEL,
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{ role: "user", content: `${prompt}\n\n--- DOCUMENT CONTENT ---\n${textContent}` }],
       });
     } else {
       message = await client.messages.create({
-        model: "claude-opus-4-5",
+        model: MODEL,
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{ role: "user", content: prompt }],
@@ -706,7 +708,7 @@ Deno.serve(async (req: Request) => {
           user_id: userId ?? null,
           feature: "tender-assistant",
           call_type: callType,
-          model: "claude-opus-4-5",
+          model: MODEL,
           input_tokens: usage.input_tokens ?? 0,
           output_tokens: usage.output_tokens ?? 0,
           cache_read_tokens: cacheRead,
@@ -731,7 +733,7 @@ Deno.serve(async (req: Request) => {
         user_id: userId ?? null,
         feature: "tender-assistant",
         call_type: callType,
-        model: "claude-opus-4-5",
+        model: MODEL,
         input_tokens: usage.input_tokens ?? 0,
         output_tokens: usage.output_tokens ?? 0,
         cache_read_tokens: cacheRead,
@@ -906,6 +908,23 @@ Deno.serve(async (req: Request) => {
           errorCode: "INSUFFICIENT_CREDIT",
         }),
         { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const isTimeout =
+      lower.includes("timeout") ||
+      lower.includes("timed out") ||
+      lower.includes("deadline exceeded") ||
+      errStatus === 408;
+
+    if (isTimeout) {
+      console.error(`[ai-tender-assistant] Timeout error HTTP=${errStatus ?? "unknown"}`);
+      return new Response(
+        JSON.stringify({
+          error: "The AI service took too long to respond. Please try again — if the problem persists, try a smaller document or fewer pages.",
+          errorCode: "AI_TIMEOUT",
+        }),
+        { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

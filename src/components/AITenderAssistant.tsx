@@ -145,7 +145,7 @@ function SaveBar({ label, onSave, disabled }: { label: string; onSave: () => voi
   );
 }
 
-type ErrorVariant = 'auth' | 'credit' | 'overloaded' | 'zero_results' | 'generic';
+type ErrorVariant = 'auth' | 'credit' | 'overloaded' | 'timeout' | 'zero_results' | 'generic';
 
 function ErrorBanner({ message, variant, onDismiss }: { message: string; variant: ErrorVariant; onDismiss: () => void }) {
   const [copied, setCopied] = useState(false);
@@ -154,6 +154,7 @@ function ErrorBanner({ message, variant, onDismiss }: { message: string; variant
     const prefix =
       variant === 'auth'         ? 'AI Tender Assistant — Authentication Error' :
       variant === 'credit'       ? 'AI Tender Assistant — Anthropic API Credit Error' :
+      variant === 'timeout'      ? 'AI Tender Assistant — Timeout Error' :
       variant === 'zero_results' ? 'AI Tender Assistant — Zero Results Warning' :
                                    'AI Tender Assistant Error';
     navigator.clipboard.writeText(`${prefix}\n\n${message}`).then(() => {
@@ -233,6 +234,31 @@ function ErrorBanner({ message, variant, onDismiss }: { message: string; variant
             </p>
           </div>
           <button onClick={onDismiss} className="p-1 rounded text-amber-600 hover:text-amber-400 hover:bg-amber-900/40 transition-colors shrink-0" title="Dismiss">
+            <X size={13} />
+          </button>
+        </div>
+        <div className="flex items-center gap-2 pt-1">
+          {copyBtn('text-amber-500 hover:text-amber-300', 'border-amber-800/50 hover:border-amber-700/70')}
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'timeout') {
+    return (
+      <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-4 space-y-2">
+        <div className="flex items-start gap-2">
+          <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-amber-300">AI Service Timeout</p>
+            <p className="text-xs text-amber-200/80 leading-relaxed mt-1">
+              The AI took too long to process this document. Please try again — if the problem persists, try a smaller document or fewer pages.
+            </p>
+            <p className="text-[10px] text-amber-500/70 mt-1">
+              No AI allowance has been consumed for this attempt.
+            </p>
+          </div>
+          <button onClick={onDismiss} className="p-1 rounded text-amber-700 hover:text-amber-400 hover:bg-amber-900/40 transition-colors shrink-0" title="Dismiss">
             <X size={13} />
           </button>
         </div>
@@ -1130,6 +1156,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
       code === 'INVALID_API_KEY'     ? 'auth'         :
       code === 'INSUFFICIENT_CREDIT' ? 'credit'        :
       code === 'PROVIDER_OVERLOADED' ? 'overloaded'    :
+      code === 'AI_TIMEOUT'          ? 'timeout'       :
       code === 'ZERO_RESULTS'        ? 'zero_results'  :
                                        'generic';
     console.error('[AITenderAssistant] Error:', err);
@@ -1237,7 +1264,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
         ...(authUser?.id ? { userId: authUser.id } : {}),
       }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ error: res.ok ? 'Unexpected response format from AI service' : 'AI request failed — the service may be temporarily unavailable. Please try again.' }));
     if (!res.ok || data.error) throwFromResponse(data, 'AI request failed');
     const result = data.result as DocumentReviewResult;
     const counts = data.findings ?? {
@@ -1277,7 +1304,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
       }),
     });
     console.log(`[AITenderAssistant] processChunk: response status=${res.status} ok=${res.ok}`);
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ error: res.ok ? 'Unexpected response format from AI service' : 'AI request failed — the service may be temporarily unavailable. Please try again.' }));
     console.log(`[AITenderAssistant] processChunk: response keys=${Object.keys(data).join(',')} warning=${data.warning ?? 'none'}`);
     if (!res.ok && !data.result) throwFromResponse(data, 'AI request failed');
     const result = data.result as DocumentReviewResult;
@@ -1558,7 +1585,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
             ...(authUser?.id ? { userId: authUser.id } : {}),
           }),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({ error: res.ok ? 'Unexpected response format from AI service' : 'AI request failed — the service may be temporarily unavailable. Please try again.' }));
         if (!res.ok || data.error) throw new Error(data.error ?? 'AI request failed');
         setSingleResult(data.result);
       } catch (e) {
