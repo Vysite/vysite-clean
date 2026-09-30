@@ -6,6 +6,7 @@ import { splitPdfIntoChunks, getPdfPageCount, type PdfChunk } from '../lib/pdfCh
 import ReconcileFindings, { type ReconcileApplyResult } from './ReconcileFindings';
 import ChatGPTImport from './ChatGPTImport';
 import { useAuth } from '../lib/AuthContext';
+import { supabase } from '../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -884,6 +885,18 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+  async function getAuthHeaders(): Promise<Record<string, string>> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw Object.assign(new Error('Your session has expired. Please refresh the page and try again.'), { errorCode: 'NO_SESSION' });
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'Apikey': supabaseKey,
+    };
+  }
+
   const isLargePdf = pdfPageCount !== null && pdfPageCount > PDF_CHUNK_THRESHOLD;
   const isChunking = (loading || retrying) && chunkStatuses.length > 0;
 
@@ -1255,9 +1268,10 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
   // ─── API calls ───────────────────────────────────────────────────────────────
 
   async function callEdgeFunction(body: Record<string, unknown>): Promise<DocumentReviewResult> {
+    const headers = await getAuthHeaders();
     const res = await fetch(`${supabaseUrl}/functions/v1/ai-tender-assistant`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+      headers,
       body: JSON.stringify({
         ...body,
         ...(currentOrgId ? { orgId: currentOrgId } : {}),
@@ -1285,9 +1299,10 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
   async function processChunk(file: File, chunk: PdfChunk, chunkIndex: number, chunkTotal: number, pageCount: number): Promise<{ result: DocumentReviewResult; findings: number }> {
     const base64 = await readBlobAsBase64(chunk.blob);
     console.log(`[AITenderAssistant] processChunk: submitting chunk ${chunkIndex + 1}/${chunkTotal} pages ${chunk.startPage}–${chunk.endPage} (base64 size: ${Math.round(base64.length / 1024)}KB)`);
+    const headers = await getAuthHeaders();
     const res = await fetch(`${supabaseUrl}/functions/v1/ai-tender-assistant`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+      headers,
       body: JSON.stringify({
         task: 'review-document',
         tenderName: tender.name,
@@ -1573,9 +1588,10 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
       setSavedCount(0);
       try {
         if (!context.trim()) { setError('Please enter some context first.'); setLoading(false); return; }
+        const headers = await getAuthHeaders();
         const res = await fetch(`${supabaseUrl}/functions/v1/ai-tender-assistant`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+          headers,
           body: JSON.stringify({
             task: selectedTask,
             tenderName: tender.name,
