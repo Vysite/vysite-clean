@@ -1278,10 +1278,23 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
         ...(authUser?.id ? { userId: authUser.id } : {}),
       }),
     });
-    const data = await res.json().catch(() => ({ error: res.ok ? 'Unexpected response format from AI service' : 'AI request failed — the service may be temporarily unavailable. Please try again.' }));
-    if (!res.ok || data.error) throwFromResponse(data, 'AI request failed');
-    const result = data.result as DocumentReviewResult;
-    const counts = data.findings ?? {
+    const rawBody = await res.text();
+    const contentType = res.headers.get('content-type');
+    let data: Record<string, unknown>;
+    try { data = JSON.parse(rawBody); }
+    catch { data = { error: res.ok ? 'Unexpected response format from AI service' : 'AI request failed — the service may be temporarily unavailable. Please try again.' }; }
+    if (!res.ok) {
+      console.error('AI TENDER ASSISTANT HTTP DIAGNOSTIC — callEdgeFunction', {
+        url: res.url,
+        status: res.status,
+        statusText: res.statusText,
+        contentType,
+        rawBody: rawBody.slice(0, 4000),
+      });
+    }
+    if (!res.ok || data.error) throwFromResponse(data as { error?: string; errorCode?: string }, 'AI request failed');
+    const result = (data as { result: DocumentReviewResult }).result;
+    const counts = (data as { findings?: Record<string, number> }).findings ?? {
       rfis: result?.rfis?.length ?? 0,
       assumptions: result?.assumptions?.length ?? 0,
       exclusions: result?.exclusions?.length ?? 0,
@@ -1319,11 +1332,24 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
       }),
     });
     console.log(`[AITenderAssistant] processChunk: response status=${res.status} ok=${res.ok}`);
-    const data = await res.json().catch(() => ({ error: res.ok ? 'Unexpected response format from AI service' : 'AI request failed — the service may be temporarily unavailable. Please try again.' }));
-    console.log(`[AITenderAssistant] processChunk: response keys=${Object.keys(data).join(',')} warning=${data.warning ?? 'none'}`);
-    if (!res.ok && !data.result) throwFromResponse(data, 'AI request failed');
-    const result = data.result as DocumentReviewResult;
-    const findings: number = data.findings?.total ?? (
+    const rawBody = await res.text();
+    const contentType = res.headers.get('content-type');
+    let data: Record<string, unknown>;
+    try { data = JSON.parse(rawBody); }
+    catch { data = { error: res.ok ? 'Unexpected response format from AI service' : 'AI request failed — the service may be temporarily unavailable. Please try again.' }; }
+    if (!res.ok) {
+      console.error('AI TENDER ASSISTANT HTTP DIAGNOSTIC — processChunk', {
+        url: res.url,
+        status: res.status,
+        statusText: res.statusText,
+        contentType,
+        rawBody: rawBody.slice(0, 4000),
+      });
+    }
+    console.log(`[AITenderAssistant] processChunk: response keys=${Object.keys(data).join(',')} warning=${(data as { warning?: string }).warning ?? 'none'}`);
+    if (!res.ok && !(data as { result?: unknown }).result) throwFromResponse(data as { error?: string; errorCode?: string }, 'AI request failed');
+    const result = (data as { result: DocumentReviewResult }).result;
+    const findings: number = (data as { findings?: { total?: number } }).findings?.total ?? (
       (result.rfis?.length ?? 0) + (result.assumptions?.length ?? 0) +
       (result.exclusions?.length ?? 0) + (result.scopeNotes?.length ?? 0) + (result.risks?.length ?? 0)
     );
@@ -1601,9 +1627,22 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
             ...(authUser?.id ? { userId: authUser.id } : {}),
           }),
         });
-        const data = await res.json().catch(() => ({ error: res.ok ? 'Unexpected response format from AI service' : 'AI request failed — the service may be temporarily unavailable. Please try again.' }));
-        if (!res.ok || data.error) throw new Error(data.error ?? 'AI request failed');
-        setSingleResult(data.result);
+        const rawBody = await res.text();
+        const contentType = res.headers.get('content-type');
+        let data: Record<string, unknown>;
+        try { data = JSON.parse(rawBody); }
+        catch { data = { error: res.ok ? 'Unexpected response format from AI service' : 'AI request failed — the service may be temporarily unavailable. Please try again.' }; }
+        if (!res.ok) {
+          console.error('AI TENDER ASSISTANT HTTP DIAGNOSTIC — handleGenerate', {
+            url: res.url,
+            status: res.status,
+            statusText: res.statusText,
+            contentType,
+            rawBody: rawBody.slice(0, 4000),
+          });
+        }
+        if (!res.ok || (data as { error?: string }).error) throw new Error((data as { error?: string }).error ?? 'AI request failed');
+        setSingleResult((data as { result: unknown }).result);
       } catch (e) {
         setAIError(e);
       } finally {
