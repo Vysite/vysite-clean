@@ -409,7 +409,7 @@ Aim for 5-10 risks based only on the provided information.`;
 
       return `${tenderCtx}Review the attached tender document and extract ALL commercially useful information for a UK MEP/construction tender submission.${chunkProgressCtx}
 
-Extract every commercially relevant item. Do not skip, omit, or summarise — include each distinct finding as a separate item.
+Before composing the JSON response, analyse the COMPLETE document across all five categories. Allocate the available response budget across ALL APPLICABLE categories so that no single category exhausts the output. Target approximately 3–8 of the MOST MATERIAL findings per applicable category — do NOT invent findings merely to fill a category; an empty array is correct if there are no genuine findings. Where the document contains more valid findings than can reasonably fit, prioritise the highest-value findings in each category rather than exhausting the budget on one. Keep each finding concise while preserving useful source traceability.
 
 Respond with ONLY this JSON structure — no markdown, no commentary, nothing outside the JSON:
 {
@@ -435,13 +435,14 @@ For any finding where you can identify the document location, add a "source" obj
 {"source": {"document": "filename or title", "pageRange": "page or range e.g. 12 or 8-15", "section": "section heading", "clause": "clause ref e.g. 3.2.1"}}
 Omit "source" entirely if you cannot identify a specific location. Omit individual fields within "source" if unknown. Do NOT use "Not identified", "Unknown", "N/A" or similar placeholder text.
 
-RFIs: missing/unclear/conflicting information — design responsibility, missing specs, ambiguous scope, commissioning requirements, interface responsibilities, testing obligations, approval requirements.
-Assumptions: start with "Assumed" or "It is assumed that" — based on what the document states, implies, or omits.
-Exclusions: items excluded from tender price — builders work, asbestos, scaffolding, out-of-hours, statutory fees, design fees, utility charges, specialist surveys, fire stopping, painting.
-Scope Notes: key commercial/technical information — named products, equipment, performance requirements, standards, specified systems, installation requirements, testing requirements, clearance distances, support spacing, cable restrictions, bonding requirements, commissioning procedures.
-Risks: commercial/programme/technical risks — unclear scope, missing information, unusual specs, design gaps, coordination risks, long-lead items.
+Category definitions:
+- RFI: A question requiring clarification because information is missing, ambiguous, conflicting or requires confirmation. Examples: design responsibility, missing specs, ambiguous scope, commissioning requirements, interface responsibilities, testing obligations, approval requirements.
+- Assumption: A positive basis adopted for tender pricing/design where information is incomplete or not confirmed. Start with "Assumed" or "It is assumed that".
+- Exclusion: Work, cost, responsibility, service or item specifically outside the tender price/scope. Examples: builders work, asbestos, scaffolding, out-of-hours, statutory fees, design fees, utility charges, specialist surveys, fire stopping, painting. IMPORTANT: if the document states something is "excluded", "not included", "by others", or "not in M&E scope", classify it as an Exclusion — do NOT automatically write it as an assumption.
+- Qualification / Scope Note: A condition, limitation, dependency or commercial/technical basis attached to the tender offer. Examples: named products, equipment, performance requirements, standards, specified systems, installation requirements, testing requirements, clearance distances, support spacing, cable restrictions, bonding requirements, commissioning procedures.
+- Risk: A matter that may materially affect cost, programme, design, compliance, procurement or delivery. Examples: unclear scope, missing information, unusual specs, design gaps, coordination risks, long-lead items.
 
-Extract 5-20 items per category as appropriate. Prioritise completeness over brevity.`;
+Do not duplicate the same finding across categories unless there is a genuine commercial reason.`;
     }
 
     case "consolidate-review": {
