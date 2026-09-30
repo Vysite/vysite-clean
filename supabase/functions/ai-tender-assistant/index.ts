@@ -636,9 +636,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Call Claude ───────────────────────────────────────────────────────────
-    const client = new Anthropic({ apiKey, timeout: 120_000, maxRetries: 1 });
+    const client = new Anthropic({ apiKey, timeout: 120_000, maxRetries: 0 });
     const prompt = buildPrompt(task, body);
-    const maxTokens = isDocumentTask || task === "reconcile-findings" ? 8192 : 1024;
+    const maxTokens = isDocumentTask || task === "reconcile-findings" ? 4096 : 1024;
 
     let message: Anthropic.Message;
 
