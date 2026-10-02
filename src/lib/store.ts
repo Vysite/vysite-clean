@@ -590,6 +590,9 @@ export interface DBTender {
   client_contact_title?: string;
   client_contact_email?: string;
   client_contact_phone?: string;
+  mcd_type?: string;
+  mcd_pct?: number;
+  mcd_fixed_value?: number;
 }
 
 export interface DBTenderKeyAction {
@@ -786,6 +789,9 @@ function dbToTender(r: DBTender): Tender {
     clientContactTitle: r.client_contact_title ?? undefined,
     clientContactEmail: r.client_contact_email ?? undefined,
     clientContactPhone: r.client_contact_phone ?? undefined,
+    mcdType: (r.mcd_type as Tender['mcdType']) ?? 'none',
+    mcdPct: r.mcd_pct ?? 0,
+    mcdFixedValue: r.mcd_fixed_value ?? 0,
   };
 }
 
@@ -850,6 +856,9 @@ function tenderToDB(t: Tender): DBTender {
     client_contact_title: t.clientContactTitle ?? null,
     client_contact_email: t.clientContactEmail ?? null,
     client_contact_phone: t.clientContactPhone ?? null,
+    mcd_type: t.mcdType ?? 'none',
+    mcd_pct: t.mcdPct ?? 0,
+    mcd_fixed_value: t.mcdFixedValue ?? 0,
   };
 }
 

@@ -213,7 +213,7 @@ export interface TenderScopeEntry {
   findingType?: string;    // original external classification, e.g. 'Design Responsibility'
 }
 
-export type EstimateLineType = 'works' | 'preliminaries' | 'optional';
+export type EstimateLineType = 'works' | 'preliminaries' | 'optional' | 'allowance';
 
 export interface EstimateItem {
   id: string;
@@ -554,6 +554,9 @@ export interface Tender {
   aiReview?: StoredAIReview;
   contractReviews?: ContractReviewRecord[];
   submittedDate?: string;
+  mcdType?: 'none' | 'percentage' | 'fixed';
+  mcdPct?: number;
+  mcdFixedValue?: number;
 }
 
 export const tenders: Tender[] = [];

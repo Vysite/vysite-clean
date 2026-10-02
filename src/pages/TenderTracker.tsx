@@ -2198,6 +2198,15 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showPrelims, setShowPrelims] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
+  const [showAllowances, setShowAllowances] = useState(false);
+  const [mcdType, setMcdType] = useState<'none' | 'percentage' | 'fixed'>(tender.mcdType ?? 'none');
+  const [mcdPct, setMcdPct] = useState(tender.mcdPct ?? 0);
+  const [mcdFixedValue, setMcdFixedValue] = useState(tender.mcdFixedValue ?? 0);
+
+  function saveMcd(type: 'none' | 'percentage' | 'fixed', pct: number, fixed: number) {
+    setMcdType(type); setMcdPct(pct); setMcdFixedValue(fixed);
+    onUpdate({ ...tender, mcdType: type, mcdPct: pct, mcdFixedValue: fixed });
+  }
 
   function save(updated: EstimateItem[]) {
     const renumbered = updated.map((it, i) => ({ ...it, lineNo: i + 1 }));
@@ -2267,6 +2276,7 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   const worksItems = items.filter(it => getLineType(it) === 'works');
   const prelimItems = items.filter(it => getLineType(it) === 'preliminaries');
   const optionalItems = items.filter(it => getLineType(it) === 'optional');
+  const allowanceItems = items.filter(it => getLineType(it) === 'allowance');
   const optionalIncluded = optionalItems.filter(it => isIncluded(it));
   const optionalExcluded = optionalItems.filter(it => !isIncluded(it));
 
@@ -2282,20 +2292,31 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   const prelimTotals = groupTotals(prelimItems);
   const optIncludedTotals = groupTotals(optionalIncluded);
   const optExcludedTotals = groupTotals(optionalExcluded);
+  const allowanceTotals = groupTotals(allowanceItems);
 
-  // Included tender totals (works + prelims + included optional)
-  const totals = {
-    cost: worksTotals.cost + prelimTotals.cost + optIncludedTotals.cost,
-    sale: worksTotals.sale + prelimTotals.sale + optIncludedTotals.sale,
-    profit: worksTotals.profit + prelimTotals.profit + optIncludedTotals.profit,
-  };
-  const overallMarginPct = totals.sale > 0 ? (totals.profit / totals.sale) * 100 : 0;
+  // Included tender totals (works + prelims + included optional + allowances)
+  const includedCost = worksTotals.cost + prelimTotals.cost + optIncludedTotals.cost + allowanceTotals.cost;
+  const tenderValueBeforeMcd = worksTotals.sale + prelimTotals.sale + optIncludedTotals.sale + allowanceTotals.sale;
+
+  // MCD calculation
+  const mcdValue = mcdType === 'percentage'
+    ? tenderValueBeforeMcd * mcdPct / 100
+    : mcdType === 'fixed'
+      ? mcdFixedValue
+      : 0;
+  const finalTenderSum = tenderValueBeforeMcd - mcdValue;
+  const profitAfterMcd = finalTenderSum - includedCost;
+  const marginAfterMcd = finalTenderSum > 0 ? (profitAfterMcd / finalTenderSum) * 100 : 0;
+
+  // Legacy totals alias for compatibility
+  const totals = { cost: includedCost, sale: tenderValueBeforeMcd, profit: profitAfterMcd };
+  const overallMarginPct = marginAfterMcd;
 
   const fmt = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtC = (n: number) => `£${fmt(n)}`;
 
   // PDF print handlers — SAFETY: only show works items to preserve current PDF behaviour.
-  // Preliminaries and optional items must NOT appear in PDFs until PDF phases are implemented.
+  // Preliminaries, optional, and allowance items must NOT appear in PDFs until PDF phases are implemented.
   function handlePrintInternal() {
     setShowExportMenu(false);
     const exportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -2632,7 +2653,7 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold text-white">Estimate Schedule</h3>
-          <p className="text-xs text-slate-500 mt-0.5">{worksItems.length} line item{worksItems.length !== 1 ? 's' : ''}{canViewPricing ? ` · Total sale: ${fmtC(totals.sale)}` : ''}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{worksItems.length} works line{worksItems.length !== 1 ? 's' : ''}{canViewPricing ? ` · Final tender sum: ${fmtC(finalTenderSum)}` : ''}</p>
         </div>
         <div className="flex items-center gap-2">
           {canViewPricing && <div className="relative">
@@ -2679,7 +2700,7 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
             <p className="text-sm font-semibold text-slate-400">Financial data restricted</p>
             <p className="text-xs text-slate-600 mt-1">You don't have permission to view pricing and estimate values.</p>
           </div>
-        ) : worksItems.length === 0 && prelimItems.length === 0 && optionalItems.length === 0 ? (
+        ) : worksItems.length === 0 && prelimItems.length === 0 && optionalItems.length === 0 && allowanceItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Calculator size={32} className="text-slate-600 mb-3" />
             <p className="text-sm font-semibold text-slate-400">No estimate items yet</p>
@@ -2740,14 +2761,34 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
         </div>
       )}
 
-      {/* KPI cards — include only included items */}
-      {canViewPricing && (worksItems.length > 0 || prelimItems.length > 0 || optionalIncluded.length > 0) && (
+      {/* Internal Allowances / Contingency — collapsible */}
+      {canViewPricing && (
+        <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden">
+          <CollapsibleHeader
+            label="Internal Allowances / Contingency"
+            icon={Calculator}
+            count={allowanceItems.length}
+            sale={allowanceTotals.sale}
+            expanded={showAllowances}
+            onToggle={() => setShowAllowances(v => !v)}
+            onAdd={() => addLine('allowance')}
+          />
+          {showAllowances && (
+            <div className="border-t border-[#1e2d4a]">
+              {renderEstimateTable(allowanceItems, 'allowance')}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* KPI cards — post-MCD headline position */}
+      {canViewPricing && (worksItems.length > 0 || prelimItems.length > 0 || optionalIncluded.length > 0 || allowanceItems.length > 0) && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: 'Total Cost', value: fmtC(totals.cost), color: 'text-slate-300', sub: 'Works + prelims + included optional' },
-            { label: 'Total Sale Value', value: fmtC(totals.sale), color: 'text-white', sub: 'Included tender value' },
-            { label: 'Total Profit', value: fmtC(totals.profit), color: totals.profit >= 0 ? 'text-emerald-400' : 'text-red-400', sub: 'Sale minus cost' },
-            { label: 'Overall Margin', value: `${overallMarginPct.toFixed(1)}%`, color: overallMarginPct >= 15 ? 'text-emerald-400' : overallMarginPct >= 8 ? 'text-amber-400' : 'text-red-400', sub: 'Profit / Sale × 100' },
+            { label: 'Total Cost', value: fmtC(includedCost), color: 'text-slate-300', sub: 'All included line types' },
+            { label: mcdType === 'none' ? 'Tender Value' : 'Final Tender Sum', value: fmtC(finalTenderSum), color: 'text-white', sub: mcdType === 'none' ? 'Before MCD (none applied)' : `After MCD ${mcdType === 'percentage' ? mcdPct + '%' : fmtC(mcdFixedValue)}` },
+            { label: 'Profit', value: fmtC(profitAfterMcd), color: profitAfterMcd >= 0 ? 'text-emerald-400' : 'text-red-400', sub: mcdType === 'none' ? 'Sale minus cost' : 'Post-MCD profit' },
+            { label: 'Margin', value: `${marginAfterMcd.toFixed(1)}%`, color: marginAfterMcd >= 15 ? 'text-emerald-400' : marginAfterMcd >= 8 ? 'text-amber-400' : 'text-red-400', sub: 'Profit / Tender Value × 100' },
           ].map(card => (
             <div key={card.label} className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-4">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{card.label}</p>
@@ -2755,6 +2796,111 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
               <p className="text-[10px] text-slate-600 mt-1">{card.sub}</p>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Tender Financial Summary */}
+      {canViewPricing && (worksItems.length > 0 || prelimItems.length > 0 || optionalIncluded.length > 0 || allowanceItems.length > 0) && (
+        <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden">
+          <div className="px-4 py-3 border-b border-[#1e2d4a]">
+            <p className="text-sm font-bold text-white">Tender Financial Summary</p>
+          </div>
+          <div className="p-4 space-y-1">
+            {/* Build-up table */}
+            <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-0.5 text-xs">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-600 py-1.5"></div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-600 text-right py-1.5">Cost</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-600 text-right py-1.5">Sale</div>
+
+              <div className="text-slate-400 py-1.5">Works</div>
+              <div className="text-right font-mono text-slate-300 py-1.5">{fmtC(worksTotals.cost)}</div>
+              <div className="text-right font-mono text-slate-300 py-1.5">{fmtC(worksTotals.sale)}</div>
+
+              <div className="text-slate-400 py-1.5">Preliminaries</div>
+              <div className="text-right font-mono text-slate-300 py-1.5">{fmtC(prelimTotals.cost)}</div>
+              <div className="text-right font-mono text-slate-300 py-1.5">{fmtC(prelimTotals.sale)}</div>
+
+              <div className="text-slate-400 py-1.5">Included Options</div>
+              <div className="text-right font-mono text-slate-300 py-1.5">{fmtC(optIncludedTotals.cost)}</div>
+              <div className="text-right font-mono text-slate-300 py-1.5">{fmtC(optIncludedTotals.sale)}</div>
+
+              <div className="text-slate-400 py-1.5">Internal Allowances</div>
+              <div className="text-right font-mono text-slate-300 py-1.5">{fmtC(allowanceTotals.cost)}</div>
+              <div className="text-right font-mono text-slate-300 py-1.5">{fmtC(allowanceTotals.sale)}</div>
+            </div>
+
+            {/* Divider + totals */}
+            <div className="border-t border-[#1e2d4a] my-2"></div>
+            <div className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-xs">
+              <div className="text-slate-400 font-semibold py-1">Total Included Cost</div>
+              <div className="text-right font-mono text-slate-200 font-semibold py-1">{fmtC(includedCost)}</div>
+
+              <div className="text-slate-400 font-semibold py-1">Tender Value Before MCD</div>
+              <div className="text-right font-mono text-white font-bold py-1">{fmtC(tenderValueBeforeMcd)}</div>
+            </div>
+
+            {/* MCD control */}
+            <div className="border-t border-[#1e2d4a] my-2"></div>
+            <div className="flex flex-wrap items-center gap-3 py-2">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">MCD</span>
+              <div className="flex gap-1 bg-[#0d1628] border border-[#1e2d4a] rounded-lg p-1">
+                {([['none', 'Not Applicable'], ['percentage', 'Percentage'], ['fixed', 'Fixed Value']] as const).map(([val, lbl]) => (
+                  <button key={val} onClick={() => saveMcd(val, val === 'percentage' ? (mcdPct || 2.5) : mcdPct, val === 'fixed' ? (mcdFixedValue || 0) : mcdFixedValue)}
+                    className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${mcdType === val ? 'bg-[#f97316] text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+              {mcdType === 'percentage' && (
+                <div className="flex items-center gap-1.5">
+                  <input type="number" min="0" max="100" step="0.1" value={mcdPct}
+                    onChange={e => saveMcd('percentage', parseFloat(e.target.value) || 0, mcdFixedValue)}
+                    className="w-20 bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-2 py-1.5 text-xs text-slate-200 text-right font-mono outline-none focus:border-[#f97316]" />
+                  <span className="text-xs text-slate-500 font-semibold">%</span>
+                </div>
+              )}
+              {mcdType === 'fixed' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-slate-500 font-semibold">£</span>
+                  <input type="number" min="0" step="any" value={mcdFixedValue}
+                    onChange={e => saveMcd('fixed', mcdPct, parseFloat(e.target.value) || 0)}
+                    className="w-32 bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-2 py-1.5 text-xs text-slate-200 text-right font-mono outline-none focus:border-[#f97316]" />
+                </div>
+              )}
+            </div>
+
+            {/* MCD deduction + final */}
+            {mcdType !== 'none' && (
+              <div className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-xs">
+                <div className="text-red-400 py-1">MCD {mcdType === 'percentage' ? `(${mcdPct}%)` : '(Fixed)'}</div>
+                <div className="text-right font-mono text-red-400 py-1">({fmtC(mcdValue)})</div>
+
+                <div className="text-white font-bold py-1.5">Final Tender Sum</div>
+                <div className="text-right font-mono text-white font-bold py-1.5">{fmtC(finalTenderSum)}</div>
+              </div>
+            )}
+            {mcdType !== 'none' && <div className="border-t border-[#1e2d4a] my-1"></div>}
+
+            {/* Profit + margin */}
+            <div className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-xs">
+              <div className="text-slate-400 py-1">Profit {mcdType !== 'none' ? 'After MCD' : ''}</div>
+              <div className={`text-right font-mono py-1 ${profitAfterMcd >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtC(profitAfterMcd)}</div>
+
+              <div className="text-slate-400 py-1">Margin {mcdType !== 'none' ? 'After MCD' : ''}</div>
+              <div className={`text-right font-mono py-1 ${marginAfterMcd >= 15 ? 'text-emerald-400' : marginAfterMcd >= 8 ? 'text-amber-400' : 'text-red-400'}`}>{marginAfterMcd.toFixed(1)}%</div>
+            </div>
+
+            {/* Excluded optional — informational only */}
+            {optExcludedTotals.sale > 0 && (
+              <>
+                <div className="border-t border-[#1e2d4a] my-2"></div>
+                <div className="grid grid-cols-[1fr_auto] gap-x-6 text-xs">
+                  <div className="text-slate-500 py-1">Optional / Excluded Items <span className="text-[10px] text-slate-600">(informational — not included in tender sum)</span></div>
+                  <div className="text-right font-mono text-slate-500 py-1">{fmtC(optExcludedTotals.sale)}</div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
