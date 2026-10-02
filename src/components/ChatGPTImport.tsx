@@ -4,6 +4,7 @@ import {
   X, Upload, FileText, Download, AlertTriangle, CheckCircle,
   ChevronDown, Save, RefreshCw, Info, AlertCircle,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import type {
   ImportRow, ImportCategory, TenderRFI, TenderScopeEntry, TenderSubcontractor, RFIStatus,
 } from '../data/types';
@@ -25,7 +26,7 @@ const TEMPLATE_EXAMPLE_ROWS: string[][] = [
   ['Risk', 'Structural capacity for inertia bases', 'Inertia base weight requirement of 1.5x supported equipment weight may exceed structural capacity assumptions.', '', '0710826-SP-ME-100.pdf', '22', 'Pr_80_77_94 — 3.3.1.2', 'High', 'Raise RFI or add as exclusion', 'Open', ''],
 ];
 
-function exportTemplate() {
+function exportCsvTemplate() {
   const rows = [TEMPLATE_HEADERS, ...TEMPLATE_EXAMPLE_ROWS];
   const csv = rows.map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -35,6 +36,14 @@ function exportTemplate() {
   a.download = 'VYSITE_External_Findings_Template.csv';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function exportXlsxTemplate() {
+  const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS, ...TEMPLATE_EXAMPLE_ROWS]);
+  ws['!cols'] = TEMPLATE_HEADERS.map(() => ({ wch: 28 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'External Findings');
+  XLSX.writeFile(wb, 'VYSITE_External_Findings_Template.xlsx');
 }
 
 // ─── CSV parser ───────────────────────────────────────────────────────────────
@@ -68,6 +77,12 @@ function parseCSV(text: string): string[][] {
 function parseImportFile(text: string): { rows: ImportRow[]; unknownHeaders: string[] } {
   const all = parseCSV(text);
   if (all.length < 2) return { rows: [], unknownHeaders: [] };
+  return parseImportRows(all);
+}
+
+function parseImportRows(data: string[][]): { rows: ImportRow[]; unknownHeaders: string[] } {
+  if (data.length < 2) return { rows: [], unknownHeaders: [] };
+  const all = data;
 
   const headers = all[0].map(h => h.trim().toLowerCase());
   const find = (names: string[]) => headers.findIndex(h => names.some(n => h.includes(n.toLowerCase())));
@@ -119,14 +134,14 @@ function parseImportFile(text: string): { rows: ImportRow[]; unknownHeaders: str
 
 // ─── Finding type → VYSITE destination routing ───────────────────────────────
 
-type VysiteDestination = 'Qualification' | 'Assumption' | 'Exclusion' | 'RFI' | 'Subcontractor';
+type VysiteDestination = 'Scope' | 'Qualification' | 'Assumption' | 'Exclusion' | 'RFI' | 'Subcontractor';
 
 const ROUTING_MAP: Record<string, VysiteDestination> = {
   'Assumption':             'Assumption',
   'Exclusion':              'Exclusion',
   'RFI':                    'RFI',
   'Clarification':          'RFI',
-  'Scope Note':             'Qualification',
+  'Scope Note':             'Scope',
   'Design Responsibility':  'Qualification',
   'Programme / Logistics':  'Qualification',
   'Compliance Requirement': 'Qualification',
@@ -135,6 +150,7 @@ const ROUTING_MAP: Record<string, VysiteDestination> = {
 };
 
 const DESTINATION_LABELS: Record<VysiteDestination, string> = {
+  'Scope':          'Scope',
   'Qualification':  'Qualifications',
   'Assumption':     'Assumptions',
   'Exclusion':      'Exclusions',
@@ -142,7 +158,10 @@ const DESTINATION_LABELS: Record<VysiteDestination, string> = {
   'Subcontractor':  'Subcontractors',
 };
 
-const DESTINATION_OPTIONS: VysiteDestination[] = ['Qualification', 'Assumption', 'Exclusion', 'RFI', 'Subcontractor'];
+const DESTINATION_OPTIONS: VysiteDestination[] = ['Scope', 'Qualification', 'Assumption', 'Exclusion', 'RFI', 'Subcontractor'];
+
+// Risk findings can be routed to these destinations (no Subcontractor for Risk)
+const RISK_DESTINATION_OPTIONS: VysiteDestination[] = ['Scope', 'Qualification', 'Assumption', 'Exclusion', 'RFI'];
 
 // Categories that the VYSITE Qualifications tab should display
 const QUALIFICATION_CATEGORIES = ['Scope Note', 'Design Responsibility', 'Programme / Logistics', 'Compliance Requirement', 'Commercial Note'];
@@ -186,18 +205,29 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(file: File) {
-    const text = await file.text();
-    const { rows: parsed, unknownHeaders } = parseImportFile(text);
+    const isXlsx = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+    let parsed: { rows: ImportRow[]; unknownHeaders: string[] };
+    if (isXlsx) {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const wsName = wb.SheetNames[0];
+      const ws = wb.Sheets[wsName];
+      const data: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][];
+      parsed = parseImportRows(data);
+    } else {
+      const text = await file.text();
+      parsed = parseImportFile(text);
+    }
     const existingTexts = new Set([
       ...(tender.scopeEntries ?? []).map(e => e.text.trim().toLowerCase()),
       ...tender.rfis.map(r => (r.subject ?? r.question).trim().toLowerCase()),
     ]);
-    const deduped = parsed.map(r => ({
+    const deduped = parsed.rows.map(r => ({
       ...r,
       _duplicate: existingTexts.has((r.suggestedWording || r.finding || r.title).trim().toLowerCase()),
     }));
     setRows(deduped);
-    setUnknownCats(unknownHeaders);
+    setUnknownCats(parsed.unknownHeaders);
     setFileName(file.name);
     setStep('preview');
   }
@@ -275,9 +305,10 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
       } else {
         // Map destination to the category value the tabs expect
         const categoryField =
-          dest === 'Assumption' ? 'Assumptions' :
-          dest === 'Exclusion'  ? 'Exclusions'  :
-          'Scope Note';
+          dest === 'Assumption'   ? 'Assumptions' :
+          dest === 'Exclusion'    ? 'Exclusions'  :
+          dest === 'Scope'        ? 'Scope'       :
+          'Qualifications';
 
         newEntries.push({
           id: `se-import-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -317,10 +348,10 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
             <p className="text-[11px] text-slate-500">{tender.name}</p>
           </div>
           <button
-            onClick={exportTemplate}
+            onClick={exportXlsxTemplate}
             className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 hover:text-slate-200 border border-[#1e2d4a] hover:border-slate-600 px-3 py-1.5 rounded-lg transition-colors"
           >
-            <Download size={12} />Export Template
+            <Download size={12} />Excel Template
           </button>
           <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-[#1a2236] transition-colors">
             <X size={16} />
@@ -351,15 +382,18 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
                 className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all ${dragOver ? 'border-emerald-500 bg-emerald-900/10' : 'border-[#1e2d4a] hover:border-[#2a3d5a] hover:bg-[#0d1628]/60'}`}
               >
                 <Upload size={24} className="text-slate-600 mx-auto mb-3" />
-                <p className="text-sm font-semibold text-slate-400 mb-1">Drop CSV file here</p>
-                <p className="text-xs text-slate-600">or click to browse — CSV only</p>
-                <input ref={fileInputRef} type="file" accept=".csv,.tsv,.txt" className="hidden"
+                <p className="text-sm font-semibold text-slate-400 mb-1">Drop CSV or Excel file here</p>
+                <p className="text-xs text-slate-600">or click to browse — CSV or .xlsx</p>
+                <input ref={fileInputRef} type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
               </div>
 
-              <div className="flex justify-center">
-                <button onClick={exportTemplate} className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">
-                  <Download size={12} />Download blank import template with example rows
+              <div className="flex justify-center gap-4">
+                <button onClick={exportXlsxTemplate} className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                  <Download size={12} />Download Excel template with example rows
+                </button>
+                <button onClick={exportCsvTemplate} className="flex items-center gap-2 text-xs text-slate-600 hover:text-slate-400 transition-colors">
+                  <Download size={12} />CSV template
                 </button>
               </div>
             </div>
@@ -514,7 +548,7 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
                                   style={{ colorScheme: 'dark' }}
                                 >
                                   {needsDestChoice && <option value="" style={{ backgroundColor: '#1a2236', color: '#94a3b8' }}>Choose destination...</option>}
-                                  {DESTINATION_OPTIONS.map(d => <option key={d} value={d} style={{ backgroundColor: '#1a2236', color: '#e2e8f0' }}>{DESTINATION_LABELS[d]}</option>)}
+                                  {(isRisk ? RISK_DESTINATION_OPTIONS : DESTINATION_OPTIONS).map(d => <option key={d} value={d} style={{ backgroundColor: '#1a2236', color: '#e2e8f0' }}>{DESTINATION_LABELS[d]}</option>)}
                                 </select>
                                 <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                               </div>
