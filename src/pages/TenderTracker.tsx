@@ -2315,27 +2315,90 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   const fmt = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtC = (n: number) => `£${fmt(n)}`;
 
-  // PDF print handlers — SAFETY: only show works items to preserve current PDF behaviour.
-  // Preliminaries, optional, and allowance items must NOT appear in PDFs until PDF phases are implemented.
+  // PDF print handlers — Phase 3: extended to show all estimating sections.
+  // Internal PDF: full commercial detail including allowances, cost, markup, profit, margin.
+  // Client PDF: sale-only breakdown, NO cost/markup/profit/margin/allowances.
   function handlePrintInternal() {
     setShowExportMenu(false);
     const exportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const pdfItems = worksItems;
-    const rows = pdfItems.map(item => {
-      const { costTotal, saleRate, saleTotal, profit } = calcLine(item);
-      return `<tr>
-        <td style="font-family:monospace;color:#94a3b8">${String(item.lineNo).padStart(2,'0')}</td>
-        <td>${item.description}</td>
-        <td>${item.unit}</td>
-        <td class="num">${fmt(item.quantity)}</td>
-        <td class="num">${fmtC(item.costRate)}</td>
-        <td class="num">${fmtC(costTotal)}</td>
-        <td class="num">${item.markupPct}%</td>
-        <td class="num">${fmtC(saleRate)}</td>
-        <td class="num">${fmtC(saleTotal)}</td>
-        <td class="num" style="color:${profit>=0?'#059669':'#dc2626'}">${fmtC(profit)}</td>
-      </tr>`;
-    }).join('');
+    const epLogoUrl = store.settings?.logo_data_url;
+    const epHeaderLogoHtml = epLogoUrl
+      ? `<img src="${epLogoUrl}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
+      : `<div class="ep-logo">VYSITE</div><div class="ep-logo-sub">Construction Management Platform</div>`;
+    const epFooterLogoHtml = epLogoUrl
+      ? `<img src="${epLogoUrl}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:3px">`
+      : `<div class="ep-footer-logo">VYSITE</div>`;
+    const totalCount = worksItems.length + prelimItems.length + optionalIncluded.length + optionalExcluded.length + allowanceItems.length;
+
+    // Internal row generator — full commercial columns
+    function internalRows(arr: EstimateItem[]) {
+      return arr.map(item => {
+        const { costTotal, saleRate, saleTotal, profit } = calcLine(item);
+        return `<tr>
+          <td style="font-family:monospace;color:#94a3b8">${String(item.lineNo).padStart(2,'0')}</td>
+          <td>${item.description}</td>
+          <td>${item.unit}</td>
+          <td class="num">${fmt(item.quantity)}</td>
+          <td class="num">${fmtC(item.costRate)}</td>
+          <td class="num">${fmtC(costTotal)}</td>
+          <td class="num">${item.markupPct}%</td>
+          <td class="num">${fmtC(saleRate)}</td>
+          <td class="num">${fmtC(saleTotal)}</td>
+          <td class="num" style="color:${profit>=0?'#059669':'#dc2626'}">${fmtC(profit)}</td>
+        </tr>`;
+      }).join('');
+    }
+    const internalThead = `<thead><tr><th>#</th><th>Description</th><th>Unit</th><th class="num">Qty</th><th class="num">Cost Rate</th><th class="num">Cost Total</th><th class="num">Markup %</th><th class="num">Sale Rate</th><th class="num">Sale Total</th><th class="num">Profit</th></tr></thead>`;
+
+    // Section builder
+    function sectionHtml(label: string, rows: string, note?: string) {
+      return `<div style="margin-top:18px;page-break-inside:auto">
+        <div class="ep-section-label">${label}</div>
+        <table>${internalThead}<tbody>${rows}</tbody></table>
+        ${note ? `<p style="font-size:10px;color:#94a3b8;margin-top:6px;font-style:italic">${note}</p>` : ''}
+      </div>`;
+    }
+
+    // Financial summary HTML — reuses exact same calculation values as the screen
+    let summaryRows = '';
+    summaryRows += `<div class="ep-summary-row"><span class="ep-summary-label">Works</span><span>${fmtC(worksTotals.cost)}</span><span style="margin-left:24px">${fmtC(worksTotals.sale)}</span></div>`;
+    if (prelimItems.length > 0)
+      summaryRows += `<div class="ep-summary-row"><span class="ep-summary-label">Preliminaries</span><span>${fmtC(prelimTotals.cost)}</span><span style="margin-left:24px">${fmtC(prelimTotals.sale)}</span></div>`;
+    if (optionalIncluded.length > 0)
+      summaryRows += `<div class="ep-summary-row"><span class="ep-summary-label">Included Options</span><span>${fmtC(optIncludedTotals.cost)}</span><span style="margin-left:24px">${fmtC(optIncludedTotals.sale)}</span></div>`;
+    if (allowanceItems.length > 0)
+      summaryRows += `<div class="ep-summary-row"><span class="ep-summary-label">Internal Allowances</span><span>${fmtC(allowanceTotals.cost)}</span><span style="margin-left:24px">${fmtC(allowanceTotals.sale)}</span></div>`;
+    summaryRows += `<div class="ep-summary-row" style="border-top:2px solid #e2e8f0;font-weight:600"><span class="ep-summary-label">Total Included Cost</span><span>${fmtC(includedCost)}</span><span></span></div>`;
+    summaryRows += `<div class="ep-summary-row"><span class="ep-summary-label">Tender Value Before MCD</span><span></span><span style="margin-left:24px;font-weight:700">${fmtC(tenderValueBeforeMcd)}</span></div>`;
+    if (mcdType !== 'none') {
+      const mcdLabel = mcdType === 'percentage' ? `MCD (${mcdPct}%)` : 'MCD';
+      summaryRows += `<div class="ep-summary-row"><span class="ep-summary-label">${mcdLabel}</span><span></span><span style="margin-left:24px;color:#dc2626">(${fmtC(mcdValue)})</span></div>`;
+    }
+    summaryRows += `<div class="ep-summary-row" style="background:#f97316;color:white;font-weight:700;font-size:13px"><span class="ep-summary-label" style="color:white">FINAL TENDER SUM</span><span></span><span style="margin-left:24px">${fmtC(finalTenderSum)}</span></div>`;
+    summaryRows += `<div class="ep-summary-row"><span class="ep-summary-label">Profit ${mcdType !== 'none' ? 'After MCD' : ''}</span><span style="color:${profitAfterMcd>=0?'#059669':'#dc2626'}">${fmtC(profitAfterMcd)}</span><span></span></div>`;
+    summaryRows += `<div class="ep-summary-row"><span class="ep-summary-label">Margin ${mcdType !== 'none' ? 'After MCD' : ''}</span><span style="color:${marginAfterMcd>=15?'#059669':marginAfterMcd>=8?'#f59e0b':'#dc2626'}">${marginAfterMcd.toFixed(1)}%</span><span></span></div>`;
+    if (optExcludedTotals.sale > 0) {
+      summaryRows += `<div class="ep-summary-row" style="border-top:1px dashed #cbd5e1;margin-top:4px;color:#94a3b8"><span class="ep-summary-label" style="color:#94a3b8">Optional / Excluded Items (NOT included in tender sum)</span><span></span><span style="margin-left:24px;color:#94a3b8">${fmtC(optExcludedTotals.sale)}</span></div>`;
+    }
+
+    // Build sections conditionally
+    let sectionsHtml = '';
+    // Works — always show
+    sectionsHtml += `<div class="ep-section-label" style="margin-top:4px">Works Estimate</div>
+      <table>${internalThead}<tbody>${internalRows(worksItems) || '<tr><td colspan="10" style="text-align:center;color:#94a3b8;font-style:italic;padding:20px">No works items.</td></tr>'}</tbody></table>`;
+    // Preliminaries — only if items exist
+    if (prelimItems.length > 0)
+      sectionsHtml += sectionHtml('Preliminaries', internalRows(prelimItems));
+    // Included Options
+    if (optionalIncluded.length > 0)
+      sectionsHtml += sectionHtml('Included Options', internalRows(optionalIncluded));
+    // Excluded Optional
+    if (optionalExcluded.length > 0)
+      sectionsHtml += sectionHtml('Optional / Below-the-Line Items — NOT Included in Tender Sum', internalRows(optionalExcluded), 'These items are informational only and do not contribute to the Final Tender Sum.');
+    // Internal Allowances
+    if (allowanceItems.length > 0)
+      sectionsHtml += sectionHtml('Internal Allowances / Contingency', internalRows(allowanceItems));
+
     const styles = `
       .ep-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #f97316;padding-bottom:20px;margin-bottom:24px}
       .ep-logo{font-size:26px;font-weight:900;color:#f97316;letter-spacing:2px}
@@ -2348,31 +2411,23 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
       .ep-ml{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:3px}
       .ep-mv{font-size:12px;font-weight:600;color:#1e293b}
       .ep-mv-orange{color:#f97316}
-      .ep-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px}
-      table{width:100%;border-collapse:collapse;font-size:11px}
+      .ep-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px;page-break-after:avoid}
+      table{width:100%;border-collapse:collapse;font-size:11px;page-break-inside:auto}
       th{background:#f1f5f9;color:#475569;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0}
       th.num{text-align:right}
       td{padding:8px 10px;color:#1e293b;border-bottom:1px solid #e2e8f0;vertical-align:top}
       td.num{text-align:right;font-family:monospace}
+      tr{page-break-inside:avoid}
       tr:nth-child(even) td{background:#f8fafc}
-      .ep-summary{margin-top:20px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden}
+      thead{display:table-header-group}
+      .ep-summary{margin-top:20px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;page-break-inside:avoid}
       .ep-summary-row{display:flex;justify-content:space-between;padding:8px 14px;border-bottom:1px solid #e2e8f0;font-size:11px}
-      .ep-summary-row:last-child{border-bottom:none;background:#f97316;color:white;font-weight:700}
+      .ep-summary-row:last-child{border-bottom:none}
       .ep-summary-label{color:#475569}
-      .ep-summary-row:last-child .ep-summary-label{color:white}
       .ep-confidential{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#dc2626;border:1px solid #dc2626;padding:2px 8px;border-radius:4px}
       .ep-footer{margin-top:32px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8}
       .ep-footer-logo{font-size:13px;font-weight:900;color:#f97316;letter-spacing:1px}
     `;
-    const epLogoUrl = store.settings?.logo_data_url;
-    const epHeaderLogoHtml = epLogoUrl
-      ? `<img src="${epLogoUrl}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
-      : `<div class="ep-logo">VYSITE</div><div class="ep-logo-sub">Construction Management Platform</div>`;
-    const epFooterLogoHtml = epLogoUrl
-      ? `<img src="${epLogoUrl}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:3px">`
-      : `<div class="ep-footer-logo">VYSITE</div>`;
-    const pdfTotals = groupTotals(pdfItems);
-    const pdfMargin = pdfTotals.sale > 0 ? (pdfTotals.profit / pdfTotals.sale) * 100 : 0;
     const body = `
       <div class="ep-header">
         <div>${epHeaderLogoHtml}</div>
@@ -2384,17 +2439,10 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
         <div class="ep-mc"><div class="ep-ml">Tender Reference</div><div class="ep-mv ep-mv-orange">${tender.ref}</div></div>
         <div class="ep-mc"><div class="ep-ml">Location</div><div class="ep-mv">${tender.location||'—'}</div></div>
         <div class="ep-mc"><div class="ep-ml">Export Date</div><div class="ep-mv">${exportDate}</div></div>
-        <div class="ep-mc"><div class="ep-ml">Line Items</div><div class="ep-mv">${pdfItems.length}</div></div>
+        <div class="ep-mc"><div class="ep-ml">Line Items</div><div class="ep-mv">${totalCount}</div></div>
       </div>
-      <div class="ep-section-label">Estimate Schedule — Internal</div>
-      <table><thead><tr><th>#</th><th>Description</th><th>Unit</th><th class="num">Qty</th><th class="num">Cost Rate</th><th class="num">Cost Total</th><th class="num">Markup %</th><th class="num">Sale Rate</th><th class="num">Sale Total</th><th class="num">Profit</th></tr></thead>
-      <tbody>${rows||'<tr><td colspan="10" style="text-align:center;color:#94a3b8;font-style:italic;padding:20px">No estimate items added.</td></tr>'}</tbody></table>
-      <div class="ep-summary">
-        <div class="ep-summary-row"><span class="ep-summary-label">Total Cost</span><span>${fmtC(pdfTotals.cost)}</span></div>
-        <div class="ep-summary-row"><span class="ep-summary-label">Total Sale Value</span><span>${fmtC(pdfTotals.sale)}</span></div>
-        <div class="ep-summary-row"><span class="ep-summary-label">Total Profit</span><span style="color:${pdfTotals.profit>=0?'#059669':'#dc2626'}">${fmtC(pdfTotals.profit)}</span></div>
-        <div class="ep-summary-row"><span class="ep-summary-label">Overall Margin</span><span>${pdfMargin.toFixed(1)}%</span></div>
-      </div>
+      ${sectionsHtml}
+      <div class="ep-summary">${summaryRows}</div>
       <div class="ep-footer">
         <div>${epFooterLogoHtml}<div style="margin-top:3px">Generated ${exportDate} · Internal Estimate · ${tender.ref}</div></div>
         <div><span class="ep-confidential">Commercially Sensitive — Internal Only</span></div>
@@ -2406,18 +2454,67 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   function handlePrintClient() {
     setShowExportMenu(false);
     const exportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const pdfItems = worksItems;
-    const rows = pdfItems.map(item => {
-      const { saleRate, saleTotal } = calcLine(item);
-      return `<tr>
-        <td style="font-family:monospace;color:#94a3b8">${String(item.lineNo).padStart(2,'0')}</td>
-        <td>${item.description}</td>
-        <td>${item.unit}</td>
-        <td class="num">${fmt(item.quantity)}</td>
-        <td class="num">${fmtC(saleRate)}</td>
-        <td class="num">${fmtC(saleTotal)}</td>
-      </tr>`;
-    }).join('');
+    const epLogoUrl2 = store.settings?.logo_data_url;
+    const epHeaderLogoHtml2 = epLogoUrl2
+      ? `<img src="${epLogoUrl2}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
+      : `<div class="ep-logo">VYSITE</div><div class="ep-logo-sub">Construction Management Platform</div>`;
+    const epFooterLogoHtml2 = epLogoUrl2
+      ? `<img src="${epLogoUrl2}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:3px">`
+      : `<div class="ep-footer-logo">VYSITE</div>`;
+    const totalCount = worksItems.length + prelimItems.length + optionalIncluded.length + optionalExcluded.length;
+
+    // CLIENT-SAFE row generator — sale columns only, NO cost/markup/profit
+    function clientRows(arr: EstimateItem[]) {
+      return arr.map(item => {
+        const { saleRate, saleTotal } = calcLine(item);
+        return `<tr>
+          <td style="font-family:monospace;color:#94a3b8">${String(item.lineNo).padStart(2,'0')}</td>
+          <td>${item.description}</td>
+          <td>${item.unit}</td>
+          <td class="num">${fmt(item.quantity)}</td>
+          <td class="num">${fmtC(saleRate)}</td>
+          <td class="num">${fmtC(saleTotal)}</td>
+        </tr>`;
+      }).join('');
+    }
+    const clientThead = `<thead><tr><th>#</th><th>Description</th><th>Unit</th><th class="num">Quantity</th><th class="num">Rate</th><th class="num">Total</th></tr></thead>`;
+
+    function clientSectionHtml(label: string, rows: string, note?: string) {
+      return `<div style="margin-top:18px;page-break-inside:auto">
+        <div class="ep-section-label">${label}</div>
+        <table>${clientThead}<tbody>${rows}</tbody></table>
+        ${note ? `<p style="font-size:10px;color:#94a3b8;margin-top:6px;font-style:italic">${note}</p>` : ''}
+      </div>`;
+    }
+
+    // Build client sections — NO allowance items anywhere
+    let clientSections = '';
+    clientSections += `<div class="ep-section-label" style="margin-top:4px">Pricing Schedule — Works</div>
+      <table>${clientThead}<tbody>${clientRows(worksItems) || '<tr><td colspan="6" style="text-align:center;color:#94a3b8;font-style:italic;padding:20px">No items.</td></tr>'}</tbody></table>`;
+    if (prelimItems.length > 0)
+      clientSections += clientSectionHtml('Preliminaries', clientRows(prelimItems));
+    if (optionalIncluded.length > 0)
+      clientSections += clientSectionHtml('Included Options', clientRows(optionalIncluded));
+
+    // Client tender summary — sale values only, no cost/profit/margin
+    let clientSummary = '';
+    clientSummary += `<div class="ep-summary-row"><span class="ep-summary-label">Tender Value</span><span style="font-weight:700">${fmtC(tenderValueBeforeMcd)}</span></div>`;
+    if (mcdType !== 'none') {
+      const mcdLabel2 = mcdType === 'percentage' ? `Main Contractor's Discount (${mcdPct}%)` : "Main Contractor's Discount";
+      clientSummary += `<div class="ep-summary-row"><span class="ep-summary-label">${mcdLabel2}</span><span style="color:#dc2626">(${fmtC(mcdValue)})</span></div>`;
+    }
+    clientSummary += `<div class="ep-summary-row" style="background:#f97316;color:white;font-weight:700;font-size:13px"><span class="ep-summary-label" style="color:white">FINAL TENDER SUM</span><span>${fmtC(finalTenderSum)}</span></div>`;
+
+    // Excluded optional — after main total
+    let excludedHtml = '';
+    if (optionalExcluded.length > 0) {
+      excludedHtml = `<div style="margin-top:24px;page-break-inside:avoid">
+        <div class="ep-section-label">Optional / Below-the-Line Items — Not Included in Tender Sum</div>
+        <p style="font-size:10px;color:#94a3b8;margin-bottom:10px;font-style:italic">The following items are not included within the Final Tender Sum unless expressly stated otherwise.</p>
+        <table>${clientThead}<tbody>${clientRows(optionalExcluded)}</tbody></table>
+      </div>`;
+    }
+
     const styles = `
       .ep-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #f97316;padding-bottom:20px;margin-bottom:24px}
       .ep-logo{font-size:26px;font-weight:900;color:#f97316;letter-spacing:2px}
@@ -2430,29 +2527,22 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
       .ep-ml{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:3px}
       .ep-mv{font-size:12px;font-weight:600;color:#1e293b}
       .ep-mv-orange{color:#f97316}
-      .ep-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px}
-      table{width:100%;border-collapse:collapse;font-size:11px}
+      .ep-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px;page-break-after:avoid}
+      table{width:100%;border-collapse:collapse;font-size:11px;page-break-inside:auto}
       th{background:#f1f5f9;color:#475569;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0}
       th.num{text-align:right}
       td{padding:8px 10px;color:#1e293b;border-bottom:1px solid #e2e8f0;vertical-align:top}
       td.num{text-align:right;font-family:monospace}
+      tr{page-break-inside:avoid}
       tr:nth-child(even) td{background:#f8fafc}
-      .ep-summary{margin-top:20px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden}
-      .ep-summary-row{display:flex;justify-content:space-between;padding:8px 14px;border-bottom:1px solid #e2e8f0;font-size:11px}
-      .ep-summary-row:last-child{border-bottom:none;background:#f97316;color:white;font-weight:700}
+      thead{display:table-header-group}
+      .ep-summary{margin-top:20px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;page-break-inside:avoid}
+      .ep-summary-row{display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e2e8f0;font-size:12px}
+      .ep-summary-row:last-child{border-bottom:none}
       .ep-summary-label{color:#475569}
-      .ep-summary-row:last-child .ep-summary-label{color:white}
       .ep-footer{margin-top:32px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8}
       .ep-footer-logo{font-size:13px;font-weight:900;color:#f97316;letter-spacing:1px}
     `;
-    const epLogoUrl2 = store.settings?.logo_data_url;
-    const epHeaderLogoHtml2 = epLogoUrl2
-      ? `<img src="${epLogoUrl2}" alt="Logo" style="height:36px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px">`
-      : `<div class="ep-logo">VYSITE</div><div class="ep-logo-sub">Construction Management Platform</div>`;
-    const epFooterLogoHtml2 = epLogoUrl2
-      ? `<img src="${epLogoUrl2}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:3px">`
-      : `<div class="ep-footer-logo">VYSITE</div>`;
-    const pdfTotals = groupTotals(pdfItems);
     const body = `
       <div class="ep-header">
         <div>${epHeaderLogoHtml2}</div>
@@ -2464,14 +2554,11 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
         <div class="ep-mc"><div class="ep-ml">Tender Reference</div><div class="ep-mv ep-mv-orange">${tender.ref}</div></div>
         <div class="ep-mc"><div class="ep-ml">Location</div><div class="ep-mv">${tender.location||'—'}</div></div>
         <div class="ep-mc"><div class="ep-ml">Export Date</div><div class="ep-mv">${exportDate}</div></div>
-        <div class="ep-mc"><div class="ep-ml">Line Items</div><div class="ep-mv">${pdfItems.length}</div></div>
+        <div class="ep-mc"><div class="ep-ml">Line Items</div><div class="ep-mv">${totalCount}</div></div>
       </div>
-      <div class="ep-section-label">Pricing Schedule</div>
-      <table><thead><tr><th>#</th><th>Description</th><th>Unit</th><th class="num">Quantity</th><th class="num">Rate</th><th class="num">Total</th></tr></thead>
-      <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#94a3b8;font-style:italic;padding:20px">No estimate items added.</td></tr>'}</tbody></table>
-      <div class="ep-summary">
-        <div class="ep-summary-row"><span class="ep-summary-label">Total Tender Value</span><span style="font-weight:700">${fmtC(pdfTotals.sale)}</span></div>
-      </div>
+      ${clientSections}
+      <div class="ep-summary">${clientSummary}</div>
+      ${excludedHtml}
       <div class="ep-footer">
         <div>${epFooterLogoHtml2}<div style="margin-top:3px">Generated ${exportDate} · Tender Estimate · ${tender.ref}</div></div>
         <div></div>
