@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Plus, Search, ChevronDown, Clock, TrendingUp, FileText, MessageSquare, Users, HelpCircle, FolderOpen, Trophy, X, CheckCircle, AlertTriangle, Send, CreditCard as Edit2, Save, StickyNote, AtSign, Trash2, Calculator, ChevronUp, BookOpen, Lock, Copy, Layers } from 'lucide-react';
+import { ArrowLeft, Plus, Search, ChevronDown, Clock, TrendingUp, FileText, MessageSquare, Users, HelpCircle, FolderOpen, Trophy, X, CheckCircle, AlertTriangle, Send, CreditCard as Edit2, Save, StickyNote, AtSign, Trash2, Calculator, ChevronUp, BookOpen, Lock, Copy, Layers, CheckSquare, Square } from 'lucide-react';
 import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { RowActionsMenu } from '../components/RowActionsMenu';
@@ -778,9 +778,14 @@ interface TenderRFIRegisterProps {
   onOpenRFI: (rfi: TenderRFI) => void;
   onUpdateStatus: (rfiId: string, status: RFIStatus) => void;
   onDeleteRFI: (rfi: TenderRFI) => void;
+  bulkSelectedIds: Set<string>;
+  onToggleBulkItem: (id: string) => void;
+  onToggleBulkAll: (ids: string[]) => void;
+  onClearBulk: () => void;
+  onBulkDelete: () => void;
 }
 
-function TenderRFIRegister({ rfis, attachments, canCreate, canEdit, canDelete, onAddRFI, onEditRFI, onOpenRFI, onUpdateStatus, onDeleteRFI }: TenderRFIRegisterProps) {
+function TenderRFIRegister({ rfis, attachments, canCreate, canEdit, canDelete, onAddRFI, onEditRFI, onOpenRFI, onUpdateStatus, onDeleteRFI, bulkSelectedIds, onToggleBulkItem, onToggleBulkAll, onClearBulk, onBulkDelete }: TenderRFIRegisterProps) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'All' | 'Open' | 'Overdue' | RFIStatus>('All');
   const today = new Date().toISOString().slice(0, 10);
@@ -828,6 +833,12 @@ function TenderRFIRegister({ rfis, attachments, canCreate, canEdit, canDelete, o
 
   return (
     <div className="space-y-4">
+      <BulkActionBar
+        count={bulkSelectedIds.size}
+        onSelectAll={() => onToggleBulkAll(filtered.map(r => r.id))}
+        onClear={onClearBulk}
+        onDelete={onBulkDelete}
+      />
       {/* Compact monitoring strip — clickable filters */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
@@ -878,7 +889,14 @@ function TenderRFIRegister({ rfis, attachments, canCreate, canEdit, canDelete, o
       {/* Register grid */}
       <div className="bg-[#0d1628] rounded-xl border border-[#1e2d4a] overflow-hidden flex flex-col">
         {/* Column headers — sticky */}
-        <div className="hidden md:grid grid-cols-[70px_40px_1fr_110px_100px_110px_140px_32px] gap-2 px-3 py-2 border-b border-[#1e2d4a] bg-[#111827] shrink-0">
+        <div className="hidden md:grid grid-cols-[28px_70px_40px_1fr_110px_100px_110px_140px_32px] gap-2 px-3 py-2 border-b border-[#1e2d4a] bg-[#111827] shrink-0">
+          <span className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">
+            <button onClick={() => onToggleBulkAll(filtered.map(r => r.id))} className="flex items-center">
+              {filtered.length > 0 && filtered.every(r => bulkSelectedIds.has(r.id))
+                ? <CheckSquare size={13} className="text-[#f97316]" />
+                : <Square size={13} className="text-slate-600 hover:text-slate-400" />}
+            </button>
+          </span>
           {['Ref', 'Age', 'Subject / Question', 'Directed To', 'Raised', 'Response Due', 'Status', ''].map(h => (
             <span key={h} className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">{h}</span>
           ))}
@@ -908,7 +926,16 @@ function TenderRFIRegister({ rfis, attachments, canCreate, canEdit, canDelete, o
                 {/* Main row */}
                 <div
                   onClick={() => onOpenRFI(rfi)}
-                  className="grid grid-cols-1 md:grid-cols-[70px_40px_1fr_110px_100px_110px_140px_32px] gap-2 px-3 py-3 cursor-pointer group hover:bg-[#111827] transition-colors items-center">
+                  className="grid grid-cols-1 md:grid-cols-[28px_70px_40px_1fr_110px_100px_110px_140px_32px] gap-2 px-3 py-3 cursor-pointer group hover:bg-[#111827] transition-colors items-center">
+
+                  {/* Checkbox */}
+                  <div onClick={e => e.stopPropagation()} className="flex items-center">
+                    <button onClick={() => onToggleBulkItem(rfi.id)} className="p-0.5 rounded hover:bg-[#1e2d4a] transition-colors">
+                      {bulkSelectedIds.has(rfi.id)
+                        ? <CheckSquare size={14} className="text-[#f97316]" />
+                        : <Square size={14} className="text-slate-600 hover:text-slate-400" />}
+                    </button>
+                  </div>
 
                   {/* Ref */}
                   <span className="text-[11px] font-mono font-bold text-slate-500">{rfi.ref}</span>
@@ -1695,15 +1722,41 @@ function matchesTabCategory(entryCategory: string, tabCategory: string): boolean
   return entryCategory === tabCategory;
 }
 
+// ─── Bulk Action Bar ──────────────────────────────────────────────────────────
+
+function BulkActionBar({ count, onSelectAll, onClear, onDelete }: {
+  count: number;
+  onSelectAll: () => void;
+  onClear: () => void;
+  onDelete: () => void;
+}) {
+  if (count === 0) return null;
+  return (
+    <div className="flex items-center gap-3 bg-[#1a2236] border border-[#f97316]/30 rounded-xl px-4 py-2.5 mb-3">
+      <span className="text-xs font-semibold text-[#f97316]">{count} selected</span>
+      <button onClick={onSelectAll} className="text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors">Select All</button>
+      <button onClick={onClear} className="text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors">Clear Selection</button>
+      <button onClick={onDelete} className="ml-auto flex items-center gap-1.5 text-[11px] font-bold text-red-400 hover:text-red-300 hover:bg-red-900/30 px-3 py-1.5 rounded-lg transition-colors">
+        <Trash2 size={12} />Delete Selected
+      </button>
+    </div>
+  );
+}
+
 // ─── Scope Entry Tab (Assumptions / Exclusions / Qualifications) ──────────────
 
-function ScopeEntryTab({ category, entries, sectionCls, onAdd, onEdit, onDelete }: {
+function ScopeEntryTab({ category, entries, sectionCls, onAdd, onEdit, onDelete, bulkSelectedIds, onToggleBulkItem, onToggleBulkAll, onClearBulk, onBulkDelete }: {
   category: string;
   entries: TenderScopeEntry[];
   sectionCls: string;
   onAdd: (entry: TenderScopeEntry) => void;
   onEdit: (entry: TenderScopeEntry) => void;
   onDelete: (entry: TenderScopeEntry) => void;
+  bulkSelectedIds: Set<string>;
+  onToggleBulkItem: (id: string) => void;
+  onToggleBulkAll: (ids: string[]) => void;
+  onClearBulk: () => void;
+  onBulkDelete: () => void;
 }) {
   const store = useAppStore();
   const [text, setText] = useState('');
@@ -1746,6 +1799,26 @@ function ScopeEntryTab({ category, entries, sectionCls, onAdd, onEdit, onDelete 
 
   return (
     <div className="space-y-4">
+      <BulkActionBar
+        count={bulkSelectedIds.size}
+        onSelectAll={() => onToggleBulkAll(filtered.map(e => e.id))}
+        onClear={onClearBulk}
+        onDelete={onBulkDelete}
+      />
+      {filtered.length > 0 && (
+        <div className="flex items-center gap-2 mb-1 px-1">
+          <button
+            onClick={() => onToggleBulkAll(filtered.map(e => e.id))}
+            className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            {filtered.length > 0 && filtered.every(e => bulkSelectedIds.has(e.id))
+              ? <CheckSquare size={14} className="text-[#f97316]" />
+              : <Square size={14} className="text-slate-600" />}
+            Select All
+          </button>
+          <span className="text-[10px] text-slate-600">{filtered.length} {filtered.length === 1 ? 'item' : 'items'}</span>
+        </div>
+      )}
       <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
         {filtered.length === 0 && (
           <div className={`text-center py-12 ${sectionCls}`}>
@@ -1755,8 +1828,17 @@ function ScopeEntryTab({ category, entries, sectionCls, onAdd, onEdit, onDelete 
           </div>
         )}
         {filtered.map(entry => (
-          <div key={entry.id} className={`${sectionCls} group`}>
+          <div key={entry.id} className={`${sectionCls} group ${bulkSelectedIds.has(entry.id) ? 'border-[#f97316]/40 bg-orange-950/10' : ''}`}>
             <div className="flex items-center gap-2 mb-1.5">
+              <button
+                onClick={() => onToggleBulkItem(entry.id)}
+                className="shrink-0 p-0.5 rounded hover:bg-[#1e2d4a] transition-colors"
+                title="Select item"
+              >
+                {bulkSelectedIds.has(entry.id)
+                  ? <CheckSquare size={15} className="text-[#f97316]" />
+                  : <Square size={15} className="text-slate-600 hover:text-slate-400" />}
+              </button>
               <div className="w-6 h-6 rounded-full bg-[#f97316] flex items-center justify-center text-white text-[9px] font-bold shrink-0">{entry.avatar}</div>
               <span className="text-xs font-semibold text-slate-300">{entry.user}</span>
               <span className="text-[10px] text-slate-600">{new Date(entry.datetime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} {new Date(entry.datetime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -2746,7 +2828,10 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
   const tenderRef = useRef(tender);
   useEffect(() => { tenderRef.current = tender; }, [tender]);
 
-  const [activeTab, setActiveTab] = useState<Tab>('Overview');
+  const [activeTab, setActiveTabRaw] = useState<Tab>('Overview');
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<number | null>(null);
+  const setActiveTab = (tab: Tab) => { setBulkSelected(new Set()); setActiveTabRaw(tab); };
   const [newComment, setNewComment] = useState('');
   const [editNotes, setEditNotes] = useState(tender.internalNotes);
   const scopeNotes = tender.scopeNotes ?? { summary: '', inclusions: '', exclusions: '', assumptions: '', risks: '', opportunities: '', specialistItems: '', siteVisitNotes: '' };
@@ -2771,6 +2856,40 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
   const [showExport, setShowExport] = useState(false);
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<{ type: 'rfi' | 'scopeEntry' | 'comment'; id: string } | null>(null);
+
+  const toggleBulkItem = (id: string) => {
+    setBulkSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleBulkAll = (ids: string[]) => {
+    setBulkSelected(prev => {
+      if (ids.length > 0 && ids.every(id => prev.has(id))) {
+        return new Set();
+      }
+      return new Set(ids);
+    });
+  };
+  const clearBulkSelection = () => setBulkSelected(new Set());
+  const handleBulkDelete = () => {
+    const ids = new Set(bulkSelected);
+    if (ids.size === 0) return;
+    if (activeTab === 'RFIs') {
+      onUpdate({ ...tender, rfis: tender.rfis.filter((r: TenderRFI) => !ids.has(r.id)) });
+    } else if (activeTab === 'Subcontractors') {
+      onUpdate({ ...tender, subcontractors: tender.subcontractors.filter((s: TenderSubcontractor) => !ids.has(s.id)) });
+    } else {
+      setScopeEntries(prev => {
+        const updated = prev.filter(e => !ids.has(e.id));
+        onUpdate({ ...tender, scopeEntries: updated });
+        return updated;
+      });
+    }
+    setBulkSelected(new Set());
+    setBulkDeleteConfirm(null);
+  };
 
   const days = daysRemaining(tender.returnDate);
   const isActive = !['Won', 'Lost', 'No Bid', 'Submitted'].includes(tender.status);
@@ -3206,6 +3325,11 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
           }}
           onEdit={setEditingScopeEntry}
           onDelete={(entry) => setDeleteConfirmItem({ type: 'scopeEntry', id: entry.id })}
+          bulkSelectedIds={bulkSelected}
+          onToggleBulkItem={toggleBulkItem}
+          onToggleBulkAll={toggleBulkAll}
+          onClearBulk={clearBulkSelection}
+          onBulkDelete={() => setBulkDeleteConfirm(bulkSelected.size)}
         />
       )}
 
@@ -3222,6 +3346,11 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
           }}
           onEdit={setEditingScopeEntry}
           onDelete={(entry) => setDeleteConfirmItem({ type: 'scopeEntry', id: entry.id })}
+          bulkSelectedIds={bulkSelected}
+          onToggleBulkItem={toggleBulkItem}
+          onToggleBulkAll={toggleBulkAll}
+          onClearBulk={clearBulkSelection}
+          onBulkDelete={() => setBulkDeleteConfirm(bulkSelected.size)}
         />
       )}
 
@@ -3238,6 +3367,11 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
           }}
           onEdit={setEditingScopeEntry}
           onDelete={(entry) => setDeleteConfirmItem({ type: 'scopeEntry', id: entry.id })}
+          bulkSelectedIds={bulkSelected}
+          onToggleBulkItem={toggleBulkItem}
+          onToggleBulkAll={toggleBulkAll}
+          onClearBulk={clearBulkSelection}
+          onBulkDelete={() => setBulkDeleteConfirm(bulkSelected.size)}
         />
       )}
 
@@ -3254,6 +3388,11 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
           }}
           onEdit={setEditingScopeEntry}
           onDelete={(entry) => setDeleteConfirmItem({ type: 'scopeEntry', id: entry.id })}
+          bulkSelectedIds={bulkSelected}
+          onToggleBulkItem={toggleBulkItem}
+          onToggleBulkAll={toggleBulkAll}
+          onClearBulk={clearBulkSelection}
+          onBulkDelete={() => setBulkDeleteConfirm(bulkSelected.size)}
         />
       )}
 
@@ -3331,10 +3470,23 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
       {/* ── SUBCONTRACTORS ── */}
       {activeTab === 'Subcontractors' && (
         <div className="space-y-4">
+          <BulkActionBar
+            count={bulkSelected.size}
+            onSelectAll={() => toggleBulkAll(tender.subcontractors.map(s => s.id))}
+            onClear={clearBulkSelection}
+            onDelete={() => setBulkDeleteConfirm(bulkSelected.size)}
+          />
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#1e2d4a]">
+                  <th className="text-left text-[10px] font-bold text-slate-600 uppercase tracking-wider pb-3 pr-2" style={{ width: 32 }}>
+                    <button onClick={() => toggleBulkAll(tender.subcontractors.map(s => s.id))} className="flex items-center">
+                      {tender.subcontractors.length > 0 && tender.subcontractors.every(s => bulkSelected.has(s.id))
+                        ? <CheckSquare size={13} className="text-[#f97316]" />
+                        : <Square size={13} className="text-slate-600 hover:text-slate-400" />}
+                    </button>
+                  </th>
                   {['Package', 'Company', 'Contact', 'Date Sent', 'Return Due', 'Status', 'Notes', ''].map(h => (
                     <th key={h} className="text-left text-[10px] font-bold text-slate-600 uppercase tracking-wider pb-3 pr-4">{h}</th>
                   ))}
@@ -3342,12 +3494,19 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
               </thead>
               <tbody className="divide-y divide-[#1e2d4a]">
                 {tender.subcontractors.length === 0 && (
-                  <tr><td colSpan={8} className="py-10 text-center text-sm text-slate-500">No subcontractor enquiries yet.</td></tr>
+                  <tr><td colSpan={9} className="py-10 text-center text-sm text-slate-500">No subcontractor enquiries yet.</td></tr>
                 )}
                 {tender.subcontractors.map((sc: TenderSubcontractor) => {
                   const scAttCount = store.attachments.filter(a => a.linked_type === 'tender_sc' && a.linked_id === sc.id).length;
                   return (
-                  <tr key={sc.id} className="hover:bg-[#0d1628]/40 transition-colors group">
+                  <tr key={sc.id} className={`hover:bg-[#0d1628]/40 transition-colors group ${bulkSelected.has(sc.id) ? 'bg-orange-950/10' : ''}`}>
+                    <td className="py-3 pr-2">
+                      <button onClick={() => toggleBulkItem(sc.id)} className="p-0.5 rounded hover:bg-[#1e2d4a] transition-colors">
+                        {bulkSelected.has(sc.id)
+                          ? <CheckSquare size={14} className="text-[#f97316]" />
+                          : <Square size={14} className="text-slate-600 hover:text-slate-400" />}
+                      </button>
+                    </td>
                     <td className="py-3 pr-4 text-sm font-semibold text-slate-200 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
                         {sc.package}
@@ -3367,9 +3526,11 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
                     </td>
                     <td className="py-3 pr-4 text-xs text-slate-500 max-w-[180px] truncate">{sc.notes || '—'}</td>
                     <td className="py-3">
-                      <button type="button" onClick={() => setEditingSC(sc)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-500 hover:text-[#f97316] hover:bg-[#1e2d4a] transition-all">
-                        <Edit2 size={13} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => setEditingSC(sc)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-500 hover:text-[#f97316] hover:bg-[#1e2d4a] transition-all">
+                          <Edit2 size={13} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   );
@@ -3400,6 +3561,11 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
             });
           }}
           onDeleteRFI={rfi => setDeleteConfirmItem({ type: 'rfi', id: rfi.id })}
+          bulkSelectedIds={bulkSelected}
+          onToggleBulkItem={toggleBulkItem}
+          onToggleBulkAll={toggleBulkAll}
+          onClearBulk={clearBulkSelection}
+          onBulkDelete={() => setBulkDeleteConfirm(bulkSelected.size)}
         />
       )}
 
@@ -3713,6 +3879,16 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
             }
             setDeleteConfirmItem(null);
           }}
+        />
+      )}
+
+      {bulkDeleteConfirm !== null && bulkDeleteConfirm > 0 && (
+        <ConfirmDeleteModal
+          title="Delete selected items?"
+          description={`This will permanently delete ${bulkDeleteConfirm} selected tender ${bulkDeleteConfirm === 1 ? 'record' : 'records'}. This action cannot be undone.`}
+          confirmLabel={`Delete ${bulkDeleteConfirm} ${bulkDeleteConfirm === 1 ? 'Item' : 'Items'}`}
+          onCancel={() => setBulkDeleteConfirm(null)}
+          onConfirm={handleBulkDelete}
         />
       )}
 

@@ -5,9 +5,10 @@ interface ConfirmDeleteModalProps {
   description: string;
   onConfirm: () => void;
   onCancel: () => void;
+  confirmLabel?: string;
 }
 
-export default function ConfirmDeleteModal({ title, description, onConfirm, onCancel }: ConfirmDeleteModalProps) {
+export default function ConfirmDeleteModal({ title, description, onConfirm, onCancel, confirmLabel }: ConfirmDeleteModalProps) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onCancel}>
       <div className="bg-[#1a2236] border border-[#1e2d4a] rounded-2xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
@@ -35,7 +36,7 @@ export default function ConfirmDeleteModal({ title, description, onConfirm, onCa
               onClick={onConfirm}
               className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold transition-colors"
             >
-              Delete
+              {confirmLabel ?? 'Delete'}
             </button>
           </div>
         </div>
