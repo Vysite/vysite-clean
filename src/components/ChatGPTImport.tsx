@@ -2,9 +2,11 @@ import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X, Upload, FileText, Download, AlertTriangle, CheckCircle,
-  ChevronDown, Save, RefreshCw, Info,
+  ChevronDown, Save, RefreshCw, Info, AlertCircle,
 } from 'lucide-react';
-import type { ImportRow, ImportCategory, TenderRFI, TenderScopeEntry, RFIStatus } from '../data/types';
+import type {
+  ImportRow, ImportCategory, TenderRFI, TenderScopeEntry, TenderSubcontractor, RFIStatus,
+} from '../data/types';
 import { IMPORT_CATEGORIES } from '../data/types';
 
 // ─── Template definition ──────────────────────────────────────────────────────
@@ -30,7 +32,7 @@ function exportTemplate() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'VYSITE_ChatGPT_Review_Template.csv';
+  a.download = 'VYSITE_External_Findings_Template.csv';
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -115,21 +117,38 @@ function parseImportFile(text: string): { rows: ImportRow[]; unknownHeaders: str
   return { rows, unknownHeaders };
 }
 
-// ─── Category → tender tab mapping ───────────────────────────────────────────
+// ─── Finding type → VYSITE destination routing ───────────────────────────────
 
-const CATEGORY_TAB_MAP: Record<string, string> = {
-  'Scope Note':             'Qualifications',
-  'Assumption':             'Assumptions',
-  'Exclusion':              'Exclusions',
-  'RFI':                    'RFIs',
-  'Risk':                   'Risks',
-  'Clarification':          'Qualifications',
-  'Subcontractor':          'Qualifications',
-  'Commercial Note':        'Qualifications',
-  'Design Responsibility':  'Qualifications',
-  'Programme / Logistics':  'Qualifications',
-  'Compliance Requirement': 'Qualifications',
+type VysiteDestination = 'Qualification' | 'Assumption' | 'Exclusion' | 'RFI' | 'Subcontractor';
+
+const ROUTING_MAP: Record<string, VysiteDestination> = {
+  'Assumption':             'Assumption',
+  'Exclusion':              'Exclusion',
+  'RFI':                    'RFI',
+  'Clarification':          'RFI',
+  'Scope Note':             'Qualification',
+  'Design Responsibility':  'Qualification',
+  'Programme / Logistics':  'Qualification',
+  'Compliance Requirement': 'Qualification',
+  'Commercial Note':        'Qualification',
+  'Subcontractor':          'Subcontractor',
 };
+
+const DESTINATION_LABELS: Record<VysiteDestination, string> = {
+  'Qualification':  'Qualifications',
+  'Assumption':     'Assumptions',
+  'Exclusion':      'Exclusions',
+  'RFI':            'RFIs',
+  'Subcontractor':  'Subcontractors',
+};
+
+const DESTINATION_OPTIONS: VysiteDestination[] = ['Qualification', 'Assumption', 'Exclusion', 'RFI', 'Subcontractor'];
+
+// Categories that the VYSITE Qualifications tab should display
+const QUALIFICATION_CATEGORIES = ['Scope Note', 'Design Responsibility', 'Programme / Logistics', 'Compliance Requirement', 'Commercial Note'];
+
+// Categories excluded from client-facing PDF export (internal only)
+const INTERNAL_CATEGORIES = ['Commercial Note'];
 
 const categoryBadge: Record<string, string> = {
   'Scope Note':             'bg-teal-900/40 text-teal-300 border-teal-800/40',
@@ -148,9 +167,9 @@ const categoryBadge: Record<string, string> = {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
-  tender: { id: string; name: string; rfis: TenderRFI[]; scopeEntries?: TenderScopeEntry[] };
+  tender: { id: string; name: string; rfis: TenderRFI[]; scopeEntries?: TenderScopeEntry[]; subcontractors?: TenderSubcontractor[] };
   currentUser: { name: string; avatar?: string } | null;
-  onImport: (rfis: TenderRFI[], scopeEntries: TenderScopeEntry[]) => void;
+  onImport: (rfis: TenderRFI[], scopeEntries: TenderScopeEntry[], subcontractors: TenderSubcontractor[]) => void;
   onClose: () => void;
 }
 
@@ -163,12 +182,12 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
   const [fileName, setFileName] = useState('');
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
   const [catOverrides, setCatOverrides] = useState<Record<number, ImportCategory>>({});
+  const [destOverrides, setDestOverrides] = useState<Record<number, VysiteDestination | ''>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(file: File) {
     const text = await file.text();
     const { rows: parsed, unknownHeaders } = parseImportFile(text);
-    // Mark duplicates against existing tender entries
     const existingTexts = new Set([
       ...(tender.scopeEntries ?? []).map(e => e.text.trim().toLowerCase()),
       ...tender.rfis.map(r => (r.subject ?? r.question).trim().toLowerCase()),
@@ -202,20 +221,32 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
     return catOverrides[i] ?? row.category;
   }
 
+  function resolveDestination(row: ImportRow, i: number): VysiteDestination | '' {
+    const override = destOverrides[i];
+    if (override) return override;
+    const cat = resolveCategory(row, i) as string;
+    return ROUTING_MAP[cat] ?? '';
+  }
+
   function handleImport() {
     const user = currentUser?.name ?? 'Import';
     const avatar = user.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
     const now = new Date().toISOString();
     const newRFIs: TenderRFI[] = [];
     const newEntries: TenderScopeEntry[] = [];
+    const newSubcontractors: TenderSubcontractor[] = [];
     let rfiIdx = tender.rfis.length + 1;
 
-    rows.filter(r => r._selected).forEach((r, _i) => {
-      const cat = resolveCategory(r, rows.indexOf(r));
-      const tab = CATEGORY_TAB_MAP[cat] ?? 'Qualifications';
-      const text = r.suggestedWording || r.finding || r.title;
+    rows.forEach((r, i) => {
+      if (!r._selected) return;
+      const cat = resolveCategory(r, i) as string;
+      const dest = resolveDestination(r, i);
+      if (!dest) return;
 
-      if (cat === 'RFI') {
+      const text = r.suggestedWording || r.finding || r.title;
+      const sourceRef = [r.sourceDocument, r.pageReference ? `p.${r.pageReference}` : '', r.sectionClauseReference].filter(Boolean).join(' · ');
+
+      if (dest === 'RFI') {
         newRFIs.push({
           id: `rfi-import-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           ref: `RFI-${String(rfiIdx++).padStart(3, '0')}`,
@@ -227,12 +258,30 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
           sourceDocument: r.sourceDocument || undefined,
           pageReference: r.pageReference || undefined,
           sectionClause: r.sectionClauseReference || undefined,
-          importSource: 'ChatGPT Import',
+          importSource: 'External Import',
+          findingType: cat,
+        });
+      } else if (dest === 'Subcontractor') {
+        newSubcontractors.push({
+          id: `sc-import-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          package: r.title || r.finding.slice(0, 80) || 'Imported package',
+          company: '',
+          contact: '',
+          dateSent: '',
+          returnDue: '',
+          status: 'Not Sent',
+          notes: [text, sourceRef, r.notes, r.actionRequired].filter(Boolean).join('\n'),
         });
       } else {
+        // Map destination to the category value the tabs expect
+        const categoryField =
+          dest === 'Assumption' ? 'Assumptions' :
+          dest === 'Exclusion'  ? 'Exclusions'  :
+          'Scope Note';
+
         newEntries.push({
           id: `se-import-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          category: tab === 'Risks' ? 'Risks' : cat,
+          category: categoryField,
           user,
           avatar,
           datetime: now,
@@ -240,12 +289,13 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
           sourceDocument: r.sourceDocument || undefined,
           pageReference: r.pageReference || undefined,
           sectionClause: r.sectionClauseReference || undefined,
-          importSource: 'ChatGPT Import',
+          importSource: 'External Import',
+          findingType: cat,
         });
       }
     });
 
-    onImport(newRFIs, newEntries);
+    onImport(newRFIs, newEntries, newSubcontractors);
     setStep('done');
   }
 
@@ -263,7 +313,7 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
             <FileText size={15} className="text-emerald-400" />
           </div>
           <div className="flex-1">
-            <h2 className="text-sm font-bold text-white">ChatGPT Findings Import</h2>
+            <h2 className="text-sm font-bold text-white">External Findings Import</h2>
             <p className="text-[11px] text-slate-500">{tender.name}</p>
           </div>
           <button
@@ -286,8 +336,9 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
                 <div className="flex items-start gap-2">
                   <Info size={13} className="text-blue-400 shrink-0 mt-0.5" />
                   <div className="text-xs text-slate-400 leading-relaxed space-y-1">
-                    <p>Upload a CSV file exported from ChatGPT or another AI review tool. The file must contain a <span className="font-semibold text-slate-300">Category</span> column and at least a <span className="font-semibold text-slate-300">Title</span> or <span className="font-semibold text-slate-300">Finding</span> column.</p>
-                    <p>Supported categories: {IMPORT_CATEGORIES.join(', ')}.</p>
+                    <p>Import tender findings prepared externally, including Excel, AI-assisted reviews or manual document reviews. The file must contain a <span className="font-semibold text-slate-300">Category</span> column and at least a <span className="font-semibold text-slate-300">Title</span> or <span className="font-semibold text-slate-300">Finding</span> column.</p>
+                    <p>Supported finding types: {IMPORT_CATEGORIES.join(', ')}.</p>
+                    <p>Each finding will be routed into the appropriate VYSITE tender tab. You can review and change the destination before importing.</p>
                   </div>
                 </div>
               </div>
@@ -357,24 +408,36 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
                 </div>
               )}
 
+              {/* Legend */}
+              <div className="flex items-center gap-3 flex-wrap text-[10px] text-slate-600">
+                <span className="font-semibold text-slate-500">VYSITE destinations:</span>
+                {DESTINATION_OPTIONS.map(d => (
+                  <span key={d} className="text-slate-500">{DESTINATION_LABELS[d]}</span>
+                ))}
+              </div>
+
               {/* Row list */}
               <div className="space-y-1.5">
                 {rows.map((row, i) => {
                   const cat = resolveCategory(row, i) as string;
                   const badgeCls = categoryBadge[cat] ?? 'bg-slate-700/40 text-slate-400 border-slate-600/40';
-                  const tab = CATEGORY_TAB_MAP[cat];
+                  const dest = resolveDestination(row, i);
+                  const isRisk = cat === 'Risk';
+                  const needsDestChoice = isRisk && !dest;
+                  const canSelect = row._valid && !row._duplicate && !row._unknownCategory && !needsDestChoice;
                   return (
                     <div key={i} className={`rounded-xl border transition-colors ${
                       !row._valid              ? 'bg-[#0d1628] border-[#1e2d4a] opacity-40' :
                       row._duplicate           ? 'bg-amber-900/10 border-amber-800/40' :
                       row._unknownCategory     ? 'bg-red-900/10 border-red-800/40' :
+                      needsDestChoice          ? 'bg-red-900/10 border-red-800/40' :
                       row._selected            ? 'bg-[#0d1e36] border-[#f97316]/30' :
                                                  'bg-[#0d1628] border-[#1e2d4a]'
                     }`}>
                       <div className="flex items-start gap-3 p-3">
                         <button
-                          onClick={() => row._valid && !row._duplicate && !row._unknownCategory && toggleRow(i)}
-                          disabled={!row._valid || row._duplicate || row._unknownCategory}
+                          onClick={() => canSelect && toggleRow(i)}
+                          disabled={!canSelect}
                           className={`mt-0.5 w-4 h-4 rounded shrink-0 border flex items-center justify-center transition-colors ${
                             row._selected ? 'bg-[#f97316] border-[#f97316]' : 'border-slate-600 hover:border-slate-400'
                           } disabled:opacity-40 disabled:cursor-not-allowed`}
@@ -384,7 +447,7 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
 
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            {/* Category selector */}
+                            {/* Category badge / selector */}
                             {row._unknownCategory ? (
                               <div className="relative">
                                 <select
@@ -404,13 +467,19 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
                             ) : (
                               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeCls}`}>{cat}</span>
                             )}
-                            {tab && !row._unknownCategory && (
-                              <span className="text-[10px] text-slate-600">→ {tab}</span>
+
+                            {/* Risk action required badge */}
+                            {isRisk && !row._unknownCategory && (
+                              <span className="text-[10px] font-semibold text-red-300 bg-red-900/30 border border-red-700/40 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <AlertCircle size={9} /> RISK — ACTION REQUIRED
+                              </span>
                             )}
+
                             {row._duplicate && (
                               <span className="text-[10px] font-semibold text-amber-400 bg-amber-900/30 border border-amber-800/40 px-1.5 py-0.5 rounded-full">Possible duplicate</span>
                             )}
                           </div>
+
                           <p className="text-xs font-semibold text-slate-200 leading-snug">{row.title || row.finding.slice(0, 100)}</p>
                           {row.suggestedWording && row.suggestedWording !== row.title && (
                             <p className="text-[11px] text-slate-500 leading-snug line-clamp-2">{row.suggestedWording}</p>
@@ -421,6 +490,40 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
                             {row.sectionClauseReference && <span className="text-[10px] text-slate-600">{row.sectionClauseReference}</span>}
                             {row.priority && <span className="text-[10px] text-slate-600">Priority: {row.priority}</span>}
                           </div>
+
+                          {/* Destination selector */}
+                          {!row._unknownCategory && row._valid && (
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <span className="text-[10px] text-slate-600">Destination:</span>
+                              <div className="relative">
+                                <select
+                                  value={dest}
+                                  onChange={e => {
+                                    const v = e.target.value as VysiteDestination;
+                                    setDestOverrides(prev => ({ ...prev, [i]: v }));
+                                    if (v && !row._selected) {
+                                      setRows(prev => prev.map((r, j) => j === i ? { ...r, _selected: true } : r));
+                                    }
+                                  }}
+                                  className={`text-[10px] font-semibold rounded px-2 py-0.5 pr-6 outline-none cursor-pointer appearance-none border ${
+                                    needsDestChoice
+                                      ? 'bg-red-900/40 text-red-300 border-red-700/60'
+                                      : 'bg-[#1a2236] text-slate-300 border-[#1e2d4a] hover:border-slate-600'
+                                  }`}
+                                >
+                                  {needsDestChoice && <option value="">Choose destination...</option>}
+                                  {DESTINATION_OPTIONS.map(d => <option key={d} value={d}>{DESTINATION_LABELS[d]}</option>)}
+                                </select>
+                                <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                              </div>
+                              {isRisk && (
+                                <span className="text-[10px] text-red-400/70">Requires commercial judgement</span>
+                              )}
+                              {cat === 'Commercial Note' && dest === 'Qualification' && (
+                                <span className="text-[10px] text-amber-400/70">Internal only — excluded from client exports</span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {row._duplicate && (
@@ -446,7 +549,7 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
                 <CheckCircle size={24} className="text-emerald-400" />
               </div>
               <p className="text-sm font-bold text-white">Import complete</p>
-              <p className="text-xs text-slate-400">{selectedCount} finding{selectedCount !== 1 ? 's' : ''} imported and marked as <span className="font-semibold text-slate-300">ChatGPT Import</span>.</p>
+              <p className="text-xs text-slate-400">{selectedCount} finding{selectedCount !== 1 ? 's' : ''} imported and marked as <span className="font-semibold text-slate-300">External Import</span>.</p>
               <p className="text-[10px] text-slate-600">Items are now visible in the relevant tender tabs.</p>
             </div>
           )}
@@ -457,8 +560,8 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
           <div className="flex items-center justify-between px-5 py-4 border-t border-[#1e2d4a] shrink-0 bg-[#0d1628]/50">
             <p className="text-[10px] text-slate-600 max-w-xs leading-snug">
               {selectedCount > 0
-                ? `${selectedCount} of ${validCount} findings selected for import. All imported items are marked as "ChatGPT Import" and will not overwrite existing live items.`
-                : 'Select findings to import.'}
+                ? `${selectedCount} of ${validCount} findings selected for import. All imported items are marked as "External Import" and will not overwrite existing live items.`
+                : 'Select findings to import. Risk findings require a destination before they can be selected.'}
             </p>
             <button
               onClick={handleImport}

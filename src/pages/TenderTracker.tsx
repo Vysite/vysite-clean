@@ -1187,7 +1187,7 @@ function AddRFIModal({ tenderId, tenderName: _tenderName, onClose, onSave, initi
                 </div>
                 <div>
                   <label className={labelCls}>Extracted From</label>
-                  <input value={form.extractedFrom} onChange={e => setForm(f => ({ ...f, extractedFrom: e.target.value }))} className={inputCls} placeholder="e.g. AI Review, ChatGPT Import, Manual" />
+                  <input value={form.extractedFrom} onChange={e => setForm(f => ({ ...f, extractedFrom: e.target.value }))} className={inputCls} placeholder="e.g. AI Review, External Import, Manual" />
                 </div>
               </div>
             )}
@@ -1523,11 +1523,13 @@ function SourceBadges({ entry }: { entry: TenderScopeEntry | TenderRFI }) {
   const page = entry.pageReference;
   const sc = entry.sectionClause;
   const imported = entry.importSource;
+  const findingType = (entry as TenderScopeEntry & { findingType?: string }).findingType;
   const drawing = (entry as TenderRFI & { drawingNumber?: string }).drawingNumber;
   const revision = (entry as TenderRFI & { revision?: string }).revision;
-  if (!src && !page && !sc && !imported && !drawing && !revision) return null;
+  if (!src && !page && !sc && !imported && !findingType && !drawing && !revision) return null;
   return (
     <div className="flex items-center gap-1.5 flex-wrap mt-1.5 pl-8">
+      {findingType && <span className="text-[9px] bg-sky-900/30 text-sky-400 px-1.5 py-0.5 rounded border border-sky-800/40">{findingType}</span>}
       {src && <span className="text-[9px] bg-slate-800/80 text-slate-500 px-1.5 py-0.5 rounded border border-slate-700/60 truncate max-w-[160px]" title={src}>{src}</span>}
       {drawing && <span className="text-[9px] bg-slate-800/80 text-slate-500 px-1.5 py-0.5 rounded border border-slate-700/60">{drawing}</span>}
       {page && <span className="text-[9px] bg-slate-800/80 text-slate-500 px-1.5 py-0.5 rounded border border-slate-700/60">pp.{page}</span>}
@@ -1660,7 +1662,7 @@ function EditScopeEntryModal({ entry, onClose, onSave }: EditScopeEntryModalProp
                 </div>
                 <div>
                   <label className={labelCls}>Extracted From</label>
-                  <input value={form.extractedFrom} onChange={e => setForm(f => ({ ...f, extractedFrom: e.target.value }))} className={inputCls} placeholder="e.g. AI Review, ChatGPT Import, Manual" />
+                  <input value={form.extractedFrom} onChange={e => setForm(f => ({ ...f, extractedFrom: e.target.value }))} className={inputCls} placeholder="e.g. AI Review, External Import, Manual" />
                 </div>
               </div>
             )}
@@ -1676,6 +1678,20 @@ function EditScopeEntryModal({ entry, onClose, onSave }: EditScopeEntryModalProp
   );
 }
 
+// ─── Category matching helpers ───────────────────────────────────────────────
+
+const ASSUMPTION_CATEGORIES = ['Assumptions', 'Assumption'];
+const EXCLUSION_CATEGORIES = ['Exclusions', 'Exclusion'];
+const QUALIFICATION_CATEGORIES = ['Scope Note', 'Design Responsibility', 'Programme / Logistics', 'Compliance Requirement', 'Commercial Note'];
+const CLIENT_EXPORT_QUALIFICATION_CATEGORIES = ['Scope Note', 'Design Responsibility', 'Programme / Logistics', 'Compliance Requirement'];
+
+function matchesTabCategory(entryCategory: string, tabCategory: string): boolean {
+  if (tabCategory === 'Assumptions') return ASSUMPTION_CATEGORIES.includes(entryCategory);
+  if (tabCategory === 'Exclusions') return EXCLUSION_CATEGORIES.includes(entryCategory);
+  if (tabCategory === 'Scope Note') return QUALIFICATION_CATEGORIES.includes(entryCategory);
+  return entryCategory === tabCategory;
+}
+
 // ─── Scope Entry Tab (Assumptions / Exclusions / Qualifications) ──────────────
 
 function ScopeEntryTab({ category, entries, sectionCls, onAdd, onEdit, onDelete }: {
@@ -1688,7 +1704,7 @@ function ScopeEntryTab({ category, entries, sectionCls, onAdd, onEdit, onDelete 
 }) {
   const store = useAppStore();
   const [text, setText] = useState('');
-  const filtered = entries.filter(e => e.category === category);
+  const filtered = entries.filter(e => matchesTabCategory(e.category, category));
   const inputCls = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600 resize-none';
 
   const singularLabel = category === 'Assumptions' ? 'Assumption'
@@ -1817,7 +1833,9 @@ function TenderExportModal({ tender, companyName, logoUrl, onClose }: TenderExpo
     return id === 'rfi'
       ? (tender.rfis ?? []).length
       : (tender.scopeEntries ?? []).filter((e: TenderScopeEntry) =>
-          e.category === (id === 'assumptions' ? 'Assumptions' : id === 'exclusions' ? 'Exclusions' : 'Scope Note')
+          id === 'assumptions' ? ASSUMPTION_CATEGORIES.includes(e.category)
+          : id === 'exclusions' ? EXCLUSION_CATEGORIES.includes(e.category)
+          : CLIENT_EXPORT_QUALIFICATION_CATEGORIES.includes(e.category)
         ).length;
   }
 
@@ -1868,9 +1886,12 @@ function TenderExportModal({ tender, companyName, logoUrl, onClose }: TenderExpo
             }).join('');
         tableHTML = `<table><thead><tr><th>Ref</th><th>Subject</th><th>Question / Detail</th><th>Assigned To</th><th>Date Raised</th><th>Status</th></tr></thead><tbody>${rfiRows}</tbody></table>`;
       } else {
-        const cat = opt.id === 'assumptions' ? 'Assumptions' : opt.id === 'exclusions' ? 'Exclusions' : 'Scope Note';
         const catLabel = opt.id === 'assumptions' ? 'Assumptions' : opt.id === 'exclusions' ? 'Exclusions' : 'Qualifications';
-        const entries = (tender.scopeEntries ?? []).filter((e: TenderScopeEntry) => e.category === cat);
+        const entries = (tender.scopeEntries ?? []).filter((e: TenderScopeEntry) =>
+          opt.id === 'assumptions' ? ASSUMPTION_CATEGORIES.includes(e.category)
+          : opt.id === 'exclusions' ? EXCLUSION_CATEGORIES.includes(e.category)
+          : CLIENT_EXPORT_QUALIFICATION_CATEGORIES.includes(e.category)
+        );
         const entryRows = entries.length === 0
           ? `<tr><td colspan="3" style="padding:16px;text-align:center;color:#94a3b8;font-style:italic">No ${catLabel.toLowerCase()} recorded for this tender.</td></tr>`
           : entries.map((e: TenderScopeEntry, i: number) => {
@@ -2966,9 +2987,9 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
       {(() => {
         const tabCounts: Partial<Record<Tab, number>> = {
           'RFIs':          tender.rfis.length,
-          'Assumptions':   scopeEntries.filter(e => e.category === 'Assumptions').length,
-          'Exclusions':    scopeEntries.filter(e => e.category === 'Exclusions').length,
-          'Qualifications':   scopeEntries.filter(e => e.category === 'Scope Note').length,
+          'Assumptions':   scopeEntries.filter(e => matchesTabCategory(e.category, 'Assumptions')).length,
+          'Exclusions':    scopeEntries.filter(e => matchesTabCategory(e.category, 'Exclusions')).length,
+          'Qualifications':   scopeEntries.filter(e => matchesTabCategory(e.category, 'Scope Note')).length,
           'Discussion':    tender.comments.length,
           'Documents':     tender.documents.length,
           'Subcontractors': tender.subcontractors.length,
@@ -3312,7 +3333,7 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
                     <td className="py-3 pr-4 text-sm text-slate-300 whitespace-nowrap">{sc.company}</td>
                     <td className="py-3 pr-4 text-sm text-slate-400 whitespace-nowrap">{sc.contact}</td>
                     <td className="py-3 pr-4 text-xs text-slate-500 whitespace-nowrap">{sc.dateSent ? new Date(sc.dateSent).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}</td>
-                    <td className="py-3 pr-4 text-xs text-slate-500 whitespace-nowrap">{new Date(sc.returnDue).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</td>
+                    <td className="py-3 pr-4 text-xs text-slate-500 whitespace-nowrap">{sc.returnDue ? new Date(sc.returnDue).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}</td>
                     <td className="py-3 pr-4">
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${scColors[sc.status]}`}>{sc.status}</span>
                     </td>
@@ -3617,8 +3638,7 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
         <AITenderAssistant
           tender={tender}
           currentUser={store.currentUser}
-          onCommit={({ rfis, scopeEntries, review, replaceRfis, replaceScopeEntries }) => {
-            // Single read of tenderRef.current — one onUpdate call — no two-callback race
+          onCommit={({ rfis, scopeEntries, subcontractors, review, replaceRfis, replaceScopeEntries }) => {
             const latest = tenderRef.current;
             const newRfis = rfis
               ? (replaceRfis ? rfis : [...latest.rfis, ...rfis])
@@ -3626,8 +3646,11 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
             const newScopeEntries = scopeEntries
               ? (replaceScopeEntries ? scopeEntries : [...(latest.scopeEntries ?? []), ...scopeEntries])
               : latest.scopeEntries;
+            const newSubcontractors = subcontractors
+              ? [...latest.subcontractors, ...subcontractors]
+              : latest.subcontractors;
             const newAiReview = review !== undefined ? (review ?? undefined) : latest.aiReview;
-            const updated = { ...latest, rfis: newRfis, scopeEntries: newScopeEntries, aiReview: newAiReview };
+            const updated = { ...latest, rfis: newRfis, scopeEntries: newScopeEntries, subcontractors: newSubcontractors, aiReview: newAiReview };
             if (scopeEntries) setScopeEntries(updated.scopeEntries ?? []);
             onUpdate(updated);
           }}

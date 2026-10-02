@@ -117,7 +117,7 @@ const PERM_GROUPS: PermGroup[] = [
       { key: 'ai.run_review',        label: 'Run AI review' },
       { key: 'ai.approve_findings',  label: 'Approve AI findings' },
       { key: 'ai.reconcile',         label: 'Reconcile AI findings' },
-      { key: 'ai.import',            label: 'Import ChatGPT/Excel findings' },
+      { key: 'ai.import',            label: 'Import external findings' },
       { key: 'ai.export',            label: 'Export AI outputs' },
     ],
   },

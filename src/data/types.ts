@@ -158,7 +158,8 @@ export interface TenderRFI {
   sourceDocument?: string;
   pageReference?: string;
   sectionClause?: string;
-  importSource?: string;   // e.g. 'ChatGPT Import', 'AI Review'
+  importSource?: string;   // e.g. 'External Import', 'AI Review'
+  findingType?: string;    // original external classification, e.g. 'Design Responsibility'
 }
 
 export interface TenderDocComment {
@@ -208,7 +209,8 @@ export interface TenderScopeEntry {
   sourceDocument?: string;
   pageReference?: string;
   sectionClause?: string;
-  importSource?: string;   // e.g. 'ChatGPT Import', 'AI Review'
+  importSource?: string;   // e.g. 'External Import', 'AI Review'
+  findingType?: string;    // original external classification, e.g. 'Design Responsibility'
 }
 
 export interface EstimateItem {

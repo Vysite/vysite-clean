@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Loader, AlertTriangle, CheckCircle, FileText, HelpCircle, Plus, Save, RotateCcw, Upload, FileSearch, File, Layers, RefreshCw, Trash2, Copy, Check, ZapOff, GitMerge, Download, PlayCircle, ChevronRight } from 'lucide-react';
-import type { TenderRFI, TenderScopeEntry, RFIStatus, StoredAIReview, AIReviewRFI, AIReviewRisk, LucideIcon, FindingSource, AIReviewListItem, BatchPageRange } from '../data/types';
+import type { TenderRFI, TenderScopeEntry, TenderSubcontractor, RFIStatus, StoredAIReview, AIReviewRFI, AIReviewRisk, LucideIcon, FindingSource, AIReviewListItem, BatchPageRange } from '../data/types';
 import { splitPdfIntoChunks, getPdfPageCount, type PdfChunk } from '../lib/pdfChunker';
 import ReconcileFindings, { type ReconcileApplyResult } from './ReconcileFindings';
 import ChatGPTImport from './ChatGPTImport';
@@ -37,6 +37,7 @@ interface ChunkStatus {
 interface CommitPayload {
   rfis?: TenderRFI[];
   scopeEntries?: TenderScopeEntry[];
+  subcontractors?: TenderSubcontractor[];
   review?: StoredAIReview | null;
   // When true, rfis/scopeEntries fully replace the existing arrays instead of appending
   replaceRfis?: boolean;
@@ -1154,9 +1155,13 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
     setShowReconcile(false);
   }
 
-  // Feature 4: Handle ChatGPT import commit
-  function handleImportCommit(rfis: TenderRFI[], entries: TenderScopeEntry[]) {
-    onCommit({ rfis: rfis.length > 0 ? rfis : undefined, scopeEntries: entries.length > 0 ? entries : undefined });
+  // Feature 4: Handle external findings import commit
+  function handleImportCommit(rfis: TenderRFI[], entries: TenderScopeEntry[], subcontractors: TenderSubcontractor[]) {
+    onCommit({
+      rfis: rfis.length > 0 ? rfis : undefined,
+      scopeEntries: entries.length > 0 ? entries : undefined,
+      subcontractors: subcontractors.length > 0 ? subcontractors : undefined,
+    });
     setShowImport(false);
   }
 
@@ -1810,7 +1815,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
                   <button
                     onClick={() => setShowImport(true)}
                     className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 hover:text-[#f97316] transition-colors px-2 py-1 rounded border border-slate-700 hover:border-[#f97316]/50"
-                    title="Import findings from ChatGPT or Excel"
+                    title="Import findings from an external review (Excel, AI-assisted, or manual)"
                   >
                     <Download size={11} />Import
                   </button>
@@ -1852,9 +1857,9 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
               <button
                 onClick={() => setShowImport(true)}
                 className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 hover:text-[#f97316] transition-colors px-2 py-1 rounded border border-slate-700 hover:border-[#f97316]/50"
-                title="Import findings from ChatGPT or Excel CSV"
+                title="Import findings from an external review (Excel, AI-assisted, or manual)"
               >
-                <Download size={11} />Import from ChatGPT / Excel
+                <Download size={11} />Import External Findings
               </button>
             </div>
           )}
@@ -2036,7 +2041,7 @@ export default function AITenderAssistant({ tender, currentUser, onCommit, onClo
         />
       )}
 
-      {/* Feature 4: ChatGPT import modal */}
+      {/* Feature 4: External findings import modal */}
       {showImport && (
         <ChatGPTImport
           tender={tender}
