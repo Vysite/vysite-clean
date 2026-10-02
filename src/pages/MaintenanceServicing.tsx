@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Plus, X, Search, ChevronDown, Wrench, AlertTriangle, Clock, CheckCircle2,
   Filter, Printer, Trash2, Eye, Download, Paperclip, MessageSquare,
@@ -9,7 +9,7 @@ import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
 import FileUploadComponent, { type UploadedFile } from '../components/FileUpload';
-import type { DBMaintenanceJob, MaintenanceStatus, MaintenancePriority, MaintenanceMaterial, MaintenanceComment, DBMaintenanceSite, MaintenanceLocationType } from '../lib/store';
+import type { DBMaintenanceJob, MaintenanceStatus, MaintenancePriority, MaintenanceMaterial, MaintenanceComment, DBMaintenanceSite, MaintenanceLocationType, DBPlatformUser } from '../lib/store';
 import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 import { nextRef } from '../lib/refSequence';
 
@@ -111,6 +111,111 @@ function PriorityBadge({ priority }: { priority: MaintenancePriority }) {
   );
 }
 
+// ─── User Picker (searchable combobox for VYSITE users) ───────────────────────
+
+interface UserPickerProps {
+  users: DBPlatformUser[];
+  selectedId: string;
+  onSelect: (userId: string, userName: string) => void;
+  placeholder?: string;
+}
+
+function UserPicker({ users, selectedId, onSelect, placeholder = 'Search user by name...' }: UserPickerProps) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selectedUser = users.find(u => u.id === selectedId);
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return users;
+    return users.filter(u => u.name.toLowerCase().includes(q) || u.role.toLowerCase().includes(q));
+  }, [users, query]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  if (selectedUser) {
+    return (
+      <div className="flex items-center justify-between bg-[#0d1628] border border-[#f97316] rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-6 h-6 rounded-full bg-[#f97316]/20 flex items-center justify-center text-[9px] font-bold text-[#f97316] shrink-0">
+            {selectedUser.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-200 truncate">{selectedUser.name}</p>
+            {selectedUser.role && <p className="text-[10px] text-slate-500">{selectedUser.role}</p>}
+          </div>
+        </div>
+        <button type="button" onClick={() => { onSelect('', ''); setQuery(''); }}
+          className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition-colors shrink-0">
+          <X size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+        <input
+          type="text"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder={placeholder}
+          className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600"
+        />
+      </div>
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg shadow-xl max-h-52 overflow-y-auto">
+          {filtered.slice(0, 50).map(u => (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => { onSelect(u.id, u.name); setOpen(false); setQuery(''); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#1e2d4a] transition-colors text-left"
+            >
+              <div className="w-6 h-6 rounded-full bg-[#f97316]/15 flex items-center justify-center text-[9px] font-bold text-[#f97316] shrink-0">
+                {u.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-200 truncate">{u.name}</p>
+                <p className="text-[10px] text-slate-500">{u.role}</p>
+              </div>
+            </button>
+          ))}
+          {filtered.length > 50 && (
+            <p className="text-[10px] text-slate-600 text-center py-1.5">Showing 50 of {filtered.length} — refine search</p>
+          )}
+        </div>
+      )}
+      {open && filtered.length === 0 && (
+        <div className="absolute z-50 mt-1 w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg shadow-xl p-3">
+          <p className="text-xs text-slate-600 text-center">No users match "{query}"</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function useActiveOrgUsers() {
+  const store = useAppStore();
+  return useMemo(
+    () => store.platformUsers.filter(u => u.status === 'Active'),
+    [store.platformUsers],
+  );
+}
+
 // ─── Create Job Modal ─────────────────────────────────────────────────────────
 
 interface CreateJobModalProps {
@@ -156,10 +261,10 @@ function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const orgEngineers = store.platformUsers.filter(u => u.role === 'Engineer' || u.role === 'Site Manager');
+  const activeOrgUsers = useActiveOrgUsers();
   const allEngineers = [
     ...engineers,
-    ...orgEngineers.map(u => u.name),
+    ...activeOrgUsers.map(u => u.name),
   ].filter((v, i, a) => a.indexOf(v) === i);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -175,7 +280,7 @@ function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }
     // Resolve engineer display name
     let engineerDisplayName = '';
     if (form.engineer_type === 'vysite' && form.engineer_user_id) {
-      const user = orgEngineers.find(u => u.id === form.engineer_user_id);
+      const user = activeOrgUsers.find(u => u.id === form.engineer_user_id);
       engineerDisplayName = user?.name ?? '';
     } else if (form.engineer_type === 'custom') {
       engineerDisplayName = form.engineer_name;
@@ -307,13 +412,11 @@ function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }
           {form.engineer_type === 'vysite' && (
             <div>
               <label className={labelCls}>Select VYSITE User</label>
-              <div className="relative">
-                <select value={form.engineer_user_id} onChange={e => setForm(f => ({ ...f, engineer_user_id: e.target.value }))} className={`${inputCls} appearance-none pr-8`}>
-                  <option value="">Select user...</option>
-                  {orgEngineers.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
-                </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-              </div>
+              <UserPicker
+                users={activeOrgUsers}
+                selectedId={form.engineer_user_id}
+                onSelect={(uid) => setForm(f => ({ ...f, engineer_user_id: uid }))}
+              />
             </div>
           )}
           {form.engineer_type === 'custom' && (
@@ -483,11 +586,11 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const isClosed = isClosedJob(job.status);
 
-  const orgEngineers = store.platformUsers.filter(u => u.role === 'Engineer' || u.role === 'Site Manager');
+  const activeOrgUsers = useActiveOrgUsers();
 
   const resolveEngineerName = (): string => {
     if (engineerType === 'vysite' && engineerUserId) {
-      const user = orgEngineers.find(u => u.id === engineerUserId);
+      const user = activeOrgUsers.find(u => u.id === engineerUserId);
       return user?.name ?? '';
     }
     if (engineerType === 'custom') return engineerName;
@@ -699,14 +802,11 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
                       </button>
                     </div>
                     {engineerType === 'vysite' && (
-                      <div className="relative">
-                        <select value={engineerUserId} onChange={e => setEngineerUserId(e.target.value)}
-                          className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-[#f97316] appearance-none pr-8">
-                          <option value="">Select user...</option>
-                          {orgEngineers.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
-                        </select>
-                        <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                      </div>
+                      <UserPicker
+                        users={activeOrgUsers}
+                        selectedId={engineerUserId}
+                        onSelect={(uid) => setEngineerUserId(uid)}
+                      />
                     )}
                     {engineerType === 'custom' && (
                       <div className="grid grid-cols-2 gap-2">
@@ -1431,8 +1531,9 @@ function MaintenanceWorkspace({ site, sites, onBack }: { site: DBMaintenanceSite
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
+  const activeOrgUsers = useActiveOrgUsers();
   const engineers = [
-    ...store.platformUsers.filter(u => u.role === 'Engineer' || u.role === 'Site Manager').map(u => u.name),
+    ...activeOrgUsers.map(u => u.name),
     ...jobs.map(j => j.engineer_name || j.assigned_engineer).filter(Boolean),
   ].filter((v, i, a) => v && a.indexOf(v) === i) as string[];
 
