@@ -967,6 +967,12 @@ export interface DBMaintenanceJob {
   target_date: string;
   completion_date: string;
   site_id?: string | null;
+  engineer_type?: string;
+  engineer_user_id?: string;
+  engineer_name?: string;
+  engineer_company?: string;
+  job_address?: string;
+  job_address_ref?: string;
   created_at?: string;
   updated_at?: string;
 }

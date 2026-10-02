@@ -134,6 +134,13 @@ function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }
     priority: 'Medium' as MaintenancePriority,
     target_date: '',
     internal_notes: '',
+    engineer_type: '' as '' | 'vysite' | 'custom',
+    engineer_user_id: '',
+    engineer_name: '',
+    engineer_company: '',
+    job_address: '',
+    job_address_ref: '',
+    use_location_address: true,
   });
   const [saving, setSaving] = useState(false);
 
@@ -149,9 +156,10 @@ function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
+  const orgEngineers = store.platformUsers.filter(u => u.role === 'Engineer' || u.role === 'Site Manager');
   const allEngineers = [
     ...engineers,
-    ...store.platformUsers.filter(u => u.role === 'Engineer' || u.role === 'Site Manager').map(u => u.name),
+    ...orgEngineers.map(u => u.name),
   ].filter((v, i, a) => a.indexOf(v) === i);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -164,6 +172,16 @@ function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }
     } catch (err) {
       console.error('[VYSITE] Maintenance job number generation failed, using fallback:', err);
     }
+    // Resolve engineer display name
+    let engineerDisplayName = '';
+    if (form.engineer_type === 'vysite' && form.engineer_user_id) {
+      const user = orgEngineers.find(u => u.id === form.engineer_user_id);
+      engineerDisplayName = user?.name ?? '';
+    } else if (form.engineer_type === 'custom') {
+      engineerDisplayName = form.engineer_name;
+    }
+    // Resolve job address
+    const effectiveJobAddress = form.use_location_address ? '' : form.job_address;
     onSave({
       id: `mnt${Date.now()}`,
       job_number: jobNumber,
@@ -171,10 +189,10 @@ function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }
       site_address: form.site_address,
       contact_name: form.contact_name,
       contact_number: form.contact_number,
-      assigned_engineer: form.assigned_engineer,
+      assigned_engineer: engineerDisplayName,
       description: form.description,
       priority: form.priority,
-      status: form.assigned_engineer ? 'Engineer Allocated' : 'New Job',
+      status: engineerDisplayName ? 'Engineer Allocated' : 'New Job',
       engineer_notes: '',
       internal_notes: form.internal_notes,
       materials: [],
@@ -182,6 +200,12 @@ function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }
       target_date: form.target_date,
       completion_date: '',
       site_id: form.site_id || null,
+      engineer_type: form.engineer_type,
+      engineer_user_id: form.engineer_type === 'vysite' ? form.engineer_user_id : '',
+      engineer_name: engineerDisplayName,
+      engineer_company: form.engineer_type === 'custom' ? form.engineer_company : '',
+      job_address: effectiveJobAddress,
+      job_address_ref: form.job_address_ref,
     });
     setSaving(false);
     onClose();
@@ -224,6 +248,31 @@ function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }
             <label className={labelCls}>Site Address *</label>
             <input required value={form.site_address} onChange={set('site_address')} className={inputCls} placeholder="Full site address" />
           </div>
+          {/* Job / Service Address */}
+          <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg p-4 space-y-3">
+            <div className="flex items-center gap-4">
+              <label className={`text-xs font-semibold flex items-center gap-2 cursor-pointer ${form.use_location_address ? 'text-[#f97316]' : 'text-slate-500'}`}>
+                <input type="radio" checked={form.use_location_address} onChange={() => setForm(f => ({ ...f, use_location_address: true }))} className="accent-[#f97316]" />
+                Use Location Address
+              </label>
+              <label className={`text-xs font-semibold flex items-center gap-2 cursor-pointer ${!form.use_location_address ? 'text-[#f97316]' : 'text-slate-500'}`}>
+                <input type="radio" checked={!form.use_location_address} onChange={() => setForm(f => ({ ...f, use_location_address: false }))} className="accent-[#f97316]" />
+                Different Job Address
+              </label>
+            </div>
+            {!form.use_location_address && (
+              <>
+                <div>
+                  <label className={labelCls}>Plot / Unit / Property Ref</label>
+                  <input value={form.job_address_ref} onChange={set('job_address_ref')} className={inputCls} placeholder="e.g. Plot 427" />
+                </div>
+                <div>
+                  <label className={labelCls}>Job / Service Address</label>
+                  <input value={form.job_address} onChange={set('job_address')} className={inputCls} placeholder="Actual job address (e.g. 18 Willow Close, Sevenoaks)" />
+                </div>
+              </>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Contact Name</label>
@@ -240,11 +289,12 @@ function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>Assigned Engineer</label>
+              <label className={labelCls}>Engineer Allocation</label>
               <div className="relative">
-                <select value={form.assigned_engineer} onChange={set('assigned_engineer')} className={`${inputCls} appearance-none pr-8`}>
+                <select value={form.engineer_type} onChange={e => setForm(f => ({ ...f, engineer_type: e.target.value as '' | 'vysite' | 'custom', engineer_user_id: '', engineer_name: '' }))} className={`${inputCls} appearance-none pr-8`}>
                   <option value="">Unassigned</option>
-                  {allEngineers.map(e => <option key={e}>{e}</option>)}
+                  <option value="vysite">VYSITE User</option>
+                  <option value="custom">Custom / External</option>
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
               </div>
@@ -254,6 +304,30 @@ function CreateJobModal({ onClose, onSave, engineers, sites, preselectedSiteId }
               <input type="date" value={form.target_date} onChange={set('target_date')} className={inputCls} />
             </div>
           </div>
+          {form.engineer_type === 'vysite' && (
+            <div>
+              <label className={labelCls}>Select VYSITE User</label>
+              <div className="relative">
+                <select value={form.engineer_user_id} onChange={e => setForm(f => ({ ...f, engineer_user_id: e.target.value }))} className={`${inputCls} appearance-none pr-8`}>
+                  <option value="">Select user...</option>
+                  {orgEngineers.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+              </div>
+            </div>
+          )}
+          {form.engineer_type === 'custom' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Engineer / Operative Name</label>
+                <input value={form.engineer_name} onChange={set('engineer_name')} className={inputCls} placeholder="e.g. Dave Jones" />
+              </div>
+              <div>
+                <label className={labelCls}>Company / Subcontractor</label>
+                <input value={form.engineer_company} onChange={set('engineer_company')} className={inputCls} placeholder="e.g. ABC Plumbing Ltd" />
+              </div>
+            </div>
+          )}
           <div>
             <label className={labelCls}>Internal Notes</label>
             <textarea value={form.internal_notes} onChange={set('internal_notes')} rows={2} className={`${inputCls} resize-none`} placeholder="Visible to office staff only..." />
@@ -312,6 +386,13 @@ function buildJobPrintHTML(job: DBMaintenanceJob, today: string, logoUrl?: strin
     .sig-hint{font-size:10px;color:#94a3b8}
     .footer{margin-top:28px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center}
   `;
+  const engineerDisplay = job.engineer_name || job.assigned_engineer || '';
+  const engineerCompany = job.engineer_company || '';
+  const engineerLabel = job.engineer_type === 'vysite' ? 'Assigned Engineer (VYSITE User)'
+    : job.engineer_type === 'custom' ? 'Assigned Engineer (External)'
+    : 'Assigned Engineer';
+  const jobAddressFull = [job.job_address_ref, job.job_address].filter(Boolean).join(', ');
+  const displayAddress = jobAddressFull || job.site_address;
   const body = `
     <div class="mj-header">
       <div>${mjLogoHtml}<div class="mj-sub">Maintenance &amp; Servicing Job Sheet</div></div>
@@ -324,15 +405,19 @@ function buildJobPrintHTML(job: DBMaintenanceJob, today: string, logoUrl?: strin
     <div class="grid3">
       <div class="field"><div class="field-lbl">Client</div><div class="field-val">${job.client_name}</div></div>
       <div class="field"><div class="field-lbl">Priority</div><div class="field-val">${job.priority}</div></div>
-      <div class="field"><div class="field-lbl">Assigned Engineer</div><div class="field-val">${job.assigned_engineer || '—'}</div></div>
+      <div class="field"><div class="field-lbl">${engineerLabel}</div><div class="field-val">${engineerDisplay || '—'}${engineerCompany ? `<br><span style="font-size:10px;color:#64748b">${engineerCompany}</span>` : ''}</div></div>
     </div>
     <div class="grid2">
-      <div class="field"><div class="field-lbl">Site Address</div><div class="field-val">${job.site_address}</div></div>
+      <div class="field"><div class="field-lbl">Location Address</div><div class="field-val">${job.site_address}</div></div>
+      <div class="field"><div class="field-lbl">Job / Service Address</div><div class="field-val">${jobAddressFull ? jobAddressFull : '<span style="color:#94a3b8">Same as location</span>'}</div></div>
+    </div>
+    <div class="grid2">
       <div class="field"><div class="field-lbl">Contact</div><div class="field-val">${job.contact_name || '—'}${job.contact_number ? ` · ${job.contact_number}` : ''}</div></div>
+      <div class="field"><div class="field-lbl">Target Date</div><div class="field-val">${job.target_date ? new Date(job.target_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}</div></div>
     </div>
     <div class="grid2">
-      <div class="field"><div class="field-lbl">Target Date</div><div class="field-val">${job.target_date ? new Date(job.target_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}</div></div>
       <div class="field"><div class="field-lbl">Completion Date</div><div class="field-val">${job.completion_date ? new Date(job.completion_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}</div></div>
+      <div class="field"><div class="field-lbl">Status</div><div class="field-val" style="color:${statusColor}">${job.status}</div></div>
     </div>
     <div class="section-title">Description of Work</div>
     <div style="padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;color:#334155;line-height:1.6;margin-bottom:12px">${job.description}</div>
@@ -366,8 +451,14 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
     priority: job.priority,
     target_date: job.target_date,
     completion_date: job.completion_date,
+    job_address: job.job_address ?? '',
+    job_address_ref: job.job_address_ref ?? '',
   });
   const [assigned, setAssigned] = useState(job.assigned_engineer);
+  const [engineerType, setEngineerType] = useState<'' | 'vysite' | 'custom'>(job.engineer_type ?? (job.assigned_engineer ? 'custom' : ''));
+  const [engineerUserId, setEngineerUserId] = useState(job.engineer_user_id ?? '');
+  const [engineerName, setEngineerName] = useState(job.engineer_name ?? job.assigned_engineer ?? '');
+  const [engineerCompany, setEngineerCompany] = useState(job.engineer_company ?? '');
   const [engineerNotes, setEngineerNotes] = useState(job.engineer_notes);
   const [internalNotes, setInternalNotes] = useState(job.internal_notes);
   const [materials, setMaterials] = useState<MaintenanceMaterial[]>(job.materials ?? []);
@@ -392,13 +483,20 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const isClosed = isClosedJob(job.status);
 
-  const allEngineers = [
-    ...engineers,
-    ...store.platformUsers.filter(u => u.role === 'Engineer' || u.role === 'Site Manager').map(u => u.name),
-  ].filter((v, i, a) => a.indexOf(v) === i);
+  const orgEngineers = store.platformUsers.filter(u => u.role === 'Engineer' || u.role === 'Site Manager');
+
+  const resolveEngineerName = (): string => {
+    if (engineerType === 'vysite' && engineerUserId) {
+      const user = orgEngineers.find(u => u.id === engineerUserId);
+      return user?.name ?? '';
+    }
+    if (engineerType === 'custom') return engineerName;
+    return '';
+  };
 
   const updateJob = (patch: Partial<DBMaintenanceJob>) => {
-    const updated = { ...job, ...patch, comments, materials, engineer_notes: engineerNotes, internal_notes: internalNotes, assigned_engineer: assigned };
+    const name = resolveEngineerName();
+    const updated = { ...job, ...patch, comments, materials, engineer_notes: engineerNotes, internal_notes: internalNotes, assigned_engineer: name || assigned };
     onUpdate({ ...updated, ...patch });
   };
 
@@ -413,6 +511,19 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
   const saveEdit = () => {
     updateJob({ ...editForm });
     setEditing(false);
+  };
+
+  const saveEngineer = () => {
+    const name = resolveEngineerName();
+    const patch: Partial<DBMaintenanceJob> = {
+      engineer_type: engineerType,
+      engineer_user_id: engineerType === 'vysite' ? engineerUserId : '',
+      engineer_name: name,
+      engineer_company: engineerType === 'custom' ? engineerCompany : '',
+      assigned_engineer: name || assigned,
+      status: name && job.status === 'New Job' ? 'Engineer Allocated' : job.status,
+    };
+    updateJob(patch);
   };
 
   const saveNotes = () => {
@@ -464,7 +575,7 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
             <div className="min-w-0">
               <span className="text-[10px] font-mono text-slate-500">{job.job_number}</span>
               <h2 className="text-base font-bold text-white leading-snug truncate">{job.client_name}</h2>
-              <p className="text-xs text-slate-500 truncate">{job.site_address}</p>
+              <p className="text-xs text-slate-500 truncate">{[job.job_address_ref, job.job_address].filter(Boolean).join(', ') || job.site_address}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -517,15 +628,20 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { label: 'Client', value: job.client_name, icon: User },
-                  { label: 'Assigned Engineer', value: job.assigned_engineer || 'Unassigned', icon: Wrench },
-                  { label: 'Site Address', value: job.site_address, icon: MapPin },
+                  { label: 'Engineer', value: job.engineer_name || job.assigned_engineer || 'Unassigned', sub: job.engineer_company || (job.engineer_type === 'vysite' ? 'VYSITE User' : job.engineer_type === 'custom' ? 'External' : ''), icon: Wrench },
+                  { label: 'Location Address', value: job.site_address, icon: MapPin },
+                  { label: 'Job Address', value: [job.job_address_ref, job.job_address].filter(Boolean).join(', ') || 'Same as location', icon: MapPinned },
                   { label: 'Contact', value: job.contact_name ? `${job.contact_name}${job.contact_number ? ` · ${job.contact_number}` : ''}` : '—', icon: Phone },
                   { label: 'Target Date', value: job.target_date ? new Date(job.target_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—', icon: Calendar },
                   { label: 'Completion Date', value: job.completion_date ? new Date(job.completion_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—', icon: CheckCircle2 },
                 ].map(item => (
                   <div key={item.label} className="bg-[#0d1628] rounded-lg p-3">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{item.label}</p>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      {item.icon && <item.icon size={11} className="text-slate-600" />}
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{item.label}</p>
+                    </div>
                     <p className="text-sm font-medium text-slate-200">{item.value}</p>
+                    {'sub' in item && item.sub && <p className="text-[10px] text-slate-500 mt-0.5">{item.sub}</p>}
                   </div>
                 ))}
               </div>
@@ -566,19 +682,38 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
               {canAssign && (
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Assign Engineer</p>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <select value={assigned} onChange={e => setAssigned(e.target.value)}
-                        className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-[#f97316] appearance-none pr-8">
-                        <option value="">Unassigned</option>
-                        {allEngineers.map(eng => <option key={eng}>{eng}</option>)}
-                      </select>
-                      <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <select value={engineerType} onChange={e => { setEngineerType(e.target.value as '' | 'vysite' | 'custom'); setEngineerUserId(''); setEngineerName(''); }}
+                          className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-[#f97316] appearance-none pr-8">
+                          <option value="">Unassigned</option>
+                          <option value="vysite">VYSITE User</option>
+                          <option value="custom">Custom / External</option>
+                        </select>
+                        <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                      </div>
+                      <button onClick={saveEngineer}
+                        className="px-3 py-2 bg-[#f97316] text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors">
+                        Save
+                      </button>
                     </div>
-                    <button onClick={() => updateJob({ assigned_engineer: assigned, status: assigned && job.status === 'New Job' ? 'Engineer Allocated' : job.status })}
-                      className="px-3 py-2 bg-[#f97316] text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors">
-                      Save
-                    </button>
+                    {engineerType === 'vysite' && (
+                      <div className="relative">
+                        <select value={engineerUserId} onChange={e => setEngineerUserId(e.target.value)}
+                          className="w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-[#f97316] appearance-none pr-8">
+                          <option value="">Select user...</option>
+                          {orgEngineers.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+                        </select>
+                        <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                      </div>
+                    )}
+                    {engineerType === 'custom' && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={engineerName} onChange={e => setEngineerName(e.target.value)} placeholder="Engineer / Operative name" className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600" />
+                        <input value={engineerCompany} onChange={e => setEngineerCompany(e.target.value)} placeholder="Company / Subcontractor (optional)" className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600" />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -635,8 +770,16 @@ function JobDetail({ job, onClose, onUpdate, onDelete, canEdit, canDelete, canAs
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Site Address</label>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Location Address</label>
                 <input value={editForm.site_address} onChange={e => setEditForm(f => ({ ...f, site_address: e.target.value }))} className={inputCls2} />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Plot / Unit / Property Ref</label>
+                <input value={editForm.job_address_ref} onChange={e => setEditForm(f => ({ ...f, job_address_ref: e.target.value }))} className={inputCls2} placeholder="e.g. Plot 427" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Job / Service Address</label>
+                <input value={editForm.job_address} onChange={e => setEditForm(f => ({ ...f, job_address: e.target.value }))} className={inputCls2} placeholder="Leave blank to use location address" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1186,7 +1329,7 @@ function JobRow({ job, onOpen, onDelete, canDelete, dimmed }: JobRowProps) {
                 <PriorityBadge priority={job.priority} />
               </div>
               <h3 className="font-semibold text-slate-200 text-sm">{job.client_name}</h3>
-              <p className="text-xs text-slate-500 mt-0.5 truncate">{job.site_address}</p>
+              <p className="text-xs text-slate-500 mt-0.5 truncate">{[job.job_address_ref, job.job_address].filter(Boolean).join(', ') || job.site_address}</p>
             </div>
           </div>
           <StatusBadge status={job.status} />
@@ -1194,7 +1337,8 @@ function JobRow({ job, onOpen, onDelete, canDelete, dimmed }: JobRowProps) {
         <div className="flex items-center gap-3 mt-3 pt-3 border-t border-[#1e2d4a]">
           {job.assigned_engineer ? (
             <span className="text-xs text-slate-500 truncate">
-              <span className="font-medium text-slate-300">{job.assigned_engineer}</span>
+              <span className="font-medium text-slate-300">{job.engineer_name || job.assigned_engineer}</span>
+              {job.engineer_company && <span className="text-slate-600 ml-1">· {job.engineer_company}</span>}
             </span>
           ) : (
             <span className="text-xs text-amber-500 flex items-center gap-1">
@@ -1242,8 +1386,13 @@ const MAINTENANCE_FIELDS: FieldSpec[] = [
   { label: 'Status',            key: 'status' },
   { label: 'Priority',          key: 'priority' },
   { label: 'Assigned Engineer', key: 'assigned_engineer' },
+  { label: 'Engineer Type',     key: 'engineer_type' },
+  { label: 'Engineer Name',     key: 'engineer_name' },
+  { label: 'Engineer Company',  key: 'engineer_company' },
   { label: 'Client',            key: 'client_name' },
   { label: 'Site Address',      key: 'site_address' },
+  { label: 'Job Address',       key: 'job_address' },
+  { label: 'Job Address Ref',   key: 'job_address_ref' },
   { label: 'Target Date',       key: 'target_date' },
   { label: 'Completion Date',   key: 'completion_date' },
   { label: 'Description',       key: 'description',    isNarrative: true },
@@ -1284,7 +1433,7 @@ function MaintenanceWorkspace({ site, sites, onBack }: { site: DBMaintenanceSite
 
   const engineers = [
     ...store.platformUsers.filter(u => u.role === 'Engineer' || u.role === 'Site Manager').map(u => u.name),
-    ...jobs.map(j => j.assigned_engineer).filter(Boolean),
+    ...jobs.map(j => j.engineer_name || j.assigned_engineer).filter(Boolean),
   ].filter((v, i, a) => v && a.indexOf(v) === i) as string[];
 
   const matchesFilters = (j: DBMaintenanceJob) => {
@@ -1293,7 +1442,10 @@ function MaintenanceWorkspace({ site, sites, onBack }: { site: DBMaintenanceSite
       j.job_number.toLowerCase().includes(q) ||
       j.client_name.toLowerCase().includes(q) ||
       j.site_address.toLowerCase().includes(q) ||
+      (j.job_address ?? '').toLowerCase().includes(q) ||
+      (j.job_address_ref ?? '').toLowerCase().includes(q) ||
       j.assigned_engineer.toLowerCase().includes(q) ||
+      (j.engineer_name ?? '').toLowerCase().includes(q) ||
       j.description.toLowerCase().includes(q);
     const matchStatus = filterStatus === 'All' || j.status === filterStatus;
     const matchPriority = filterPriority === 'All' || j.priority === filterPriority;
@@ -1335,9 +1487,9 @@ function MaintenanceWorkspace({ site, sites, onBack }: { site: DBMaintenanceSite
       return `<tr>
         <td style="font-family:monospace;font-size:10px;color:#64748b">${j.job_number}</td>
         <td style="font-weight:600">${j.client_name}</td>
-        <td>${j.site_address}</td>
+        <td>${[j.job_address_ref, j.job_address].filter(Boolean).join(', ') || j.site_address}</td>
         <td style="color:${priorityColor};font-weight:600">${j.priority}</td>
-        <td>${j.assigned_engineer || '—'}</td>
+        <td>${j.engineer_name || j.assigned_engineer || '—'}</td>
         <td>${targetStr}</td>
         <td>${j.status}</td>
       </tr>`;
