@@ -213,6 +213,8 @@ export interface TenderScopeEntry {
   findingType?: string;    // original external classification, e.g. 'Design Responsibility'
 }
 
+export type EstimateLineType = 'works' | 'preliminaries' | 'optional';
+
 export interface EstimateItem {
   id: string;
   lineNo: number;
@@ -221,6 +223,8 @@ export interface EstimateItem {
   quantity: number;
   costRate: number;
   markupPct: number;
+  lineType?: EstimateLineType;
+  includedInTenderSum?: boolean;
 }
 
 // ─── Commercial Module ────────────────────────────────────────────────────────

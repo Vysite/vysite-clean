@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Plus, Search, ChevronDown, Clock, TrendingUp, FileText, MessageSquare, Users, HelpCircle, FolderOpen, Trophy, X, CheckCircle, AlertTriangle, Send, CreditCard as Edit2, Save, StickyNote, AtSign, Trash2, Calculator, ChevronUp, BookOpen, Lock, Copy, Layers, CheckSquare, Square } from 'lucide-react';
+import { ArrowLeft, Plus, Search, ChevronDown, ChevronRight, Clock, TrendingUp, FileText, MessageSquare, Users, HelpCircle, FolderOpen, Trophy, X, CheckCircle, AlertTriangle, Send, CreditCard as Edit2, Save, StickyNote, AtSign, Trash2, Calculator, ChevronUp, BookOpen, Lock, Copy, Layers, CheckSquare, Square } from 'lucide-react';
 import { openPrintTab, buildPrintDocument } from '../lib/printTab';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { RowActionsMenu } from '../components/RowActionsMenu';
@@ -16,6 +16,7 @@ import type {
   SubcontractorStatus,
   RFIStatus,
   EstimateItem,
+  EstimateLineType,
   LucideIcon,
 } from '../data/types';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
@@ -2162,7 +2163,14 @@ function calcLine(item: EstimateItem) {
   return { costTotal, saleRate, saleTotal, profit };
 }
 
-const BLANK_LINE = (): EstimateItem => ({
+function getLineType(item: EstimateItem): EstimateLineType {
+  return item.lineType ?? 'works';
+}
+function isIncluded(item: EstimateItem): boolean {
+  return item.includedInTenderSum ?? true;
+}
+
+const BLANK_LINE = (lineType: EstimateLineType = 'works'): EstimateItem => ({
   id: crypto.randomUUID(),
   lineNo: 1,
   description: '',
@@ -2170,6 +2178,8 @@ const BLANK_LINE = (): EstimateItem => ({
   quantity: 1,
   costRate: 0,
   markupPct: 15,
+  lineType,
+  includedInTenderSum: lineType === 'optional' ? false : true,
 });
 
 interface EstimatingTabProps {
@@ -2186,6 +2196,8 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBuf, setEditBuf] = useState<EstimateItem | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showPrelims, setShowPrelims] = useState(false);
+  const [showOptional, setShowOptional] = useState(false);
 
   function save(updated: EstimateItem[]) {
     const renumbered = updated.map((it, i) => ({ ...it, lineNo: i + 1 }));
@@ -2193,12 +2205,14 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
     onUpdate({ ...tender, estimateItems: renumbered });
   }
 
-  function addLine() {
-    const next: EstimateItem = { ...BLANK_LINE(), lineNo: items.length + 1 };
+  function addLine(lineType: EstimateLineType) {
+    const next: EstimateItem = { ...BLANK_LINE(lineType), lineNo: items.length + 1 };
     const updated = [...items, next];
     setItems(updated);
     setEditingId(next.id);
     setEditBuf(next);
+    if (lineType === 'preliminaries') setShowPrelims(true);
+    if (lineType === 'optional') setShowOptional(true);
   }
 
   function startEdit(item: EstimateItem) {
@@ -2215,7 +2229,6 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   }
 
   function cancelEdit() {
-    // Remove the line if it was freshly added (empty description)
     if (editBuf && editBuf.description === '' && items.find(it => it.id === editBuf.id)) {
       const updated = items.filter(it => it.id !== editBuf.id);
       save(updated);
@@ -2228,35 +2241,66 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
     save(items.filter(it => it.id !== id));
   }
 
-  function moveUp(idx: number) {
+  function moveUp(idx: number, arr: EstimateItem[]) {
     if (idx === 0) return;
-    const updated = [...items];
-    [updated[idx - 1], updated[idx]] = [updated[idx], updated[idx - 1]];
-    save(updated);
+    const allItems = [...items];
+    const a = allItems.findIndex(it => it.id === arr[idx].id);
+    const b = allItems.findIndex(it => it.id === arr[idx - 1].id);
+    [allItems[a], allItems[b]] = [allItems[b], allItems[a]];
+    save(allItems);
   }
 
-  function moveDown(idx: number) {
-    if (idx === items.length - 1) return;
-    const updated = [...items];
-    [updated[idx], updated[idx + 1]] = [updated[idx + 1], updated[idx]];
-    save(updated);
+  function moveDown(idx: number, arr: EstimateItem[]) {
+    if (idx === arr.length - 1) return;
+    const allItems = [...items];
+    const a = allItems.findIndex(it => it.id === arr[idx].id);
+    const b = allItems.findIndex(it => it.id === arr[idx + 1].id);
+    [allItems[a], allItems[b]] = [allItems[b], allItems[a]];
+    save(allItems);
   }
 
-  // Totals
-  const totals = items.reduce((acc, it) => {
-    const { costTotal, saleTotal, profit } = calcLine(it);
-    return { cost: acc.cost + costTotal, sale: acc.sale + saleTotal, profit: acc.profit + profit };
-  }, { cost: 0, sale: 0, profit: 0 });
+  function toggleIncluded(id: string) {
+    save(items.map(it => it.id === id ? { ...it, includedInTenderSum: !isIncluded(it) } : it));
+  }
+
+  // Grouped items
+  const worksItems = items.filter(it => getLineType(it) === 'works');
+  const prelimItems = items.filter(it => getLineType(it) === 'preliminaries');
+  const optionalItems = items.filter(it => getLineType(it) === 'optional');
+  const optionalIncluded = optionalItems.filter(it => isIncluded(it));
+  const optionalExcluded = optionalItems.filter(it => !isIncluded(it));
+
+  // Grouped calculations
+  function groupTotals(arr: EstimateItem[]) {
+    return arr.reduce((acc, it) => {
+      const { costTotal, saleTotal, profit } = calcLine(it);
+      return { cost: acc.cost + costTotal, sale: acc.sale + saleTotal, profit: acc.profit + profit };
+    }, { cost: 0, sale: 0, profit: 0 });
+  }
+
+  const worksTotals = groupTotals(worksItems);
+  const prelimTotals = groupTotals(prelimItems);
+  const optIncludedTotals = groupTotals(optionalIncluded);
+  const optExcludedTotals = groupTotals(optionalExcluded);
+
+  // Included tender totals (works + prelims + included optional)
+  const totals = {
+    cost: worksTotals.cost + prelimTotals.cost + optIncludedTotals.cost,
+    sale: worksTotals.sale + prelimTotals.sale + optIncludedTotals.sale,
+    profit: worksTotals.profit + prelimTotals.profit + optIncludedTotals.profit,
+  };
   const overallMarginPct = totals.sale > 0 ? (totals.profit / totals.sale) * 100 : 0;
 
   const fmt = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtC = (n: number) => `£${fmt(n)}`;
 
-  // PDF print handlers
+  // PDF print handlers — SAFETY: only show works items to preserve current PDF behaviour.
+  // Preliminaries and optional items must NOT appear in PDFs until PDF phases are implemented.
   function handlePrintInternal() {
     setShowExportMenu(false);
     const exportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const rows = items.map(item => {
+    const pdfItems = worksItems;
+    const rows = pdfItems.map(item => {
       const { costTotal, saleRate, saleTotal, profit } = calcLine(item);
       return `<tr>
         <td style="font-family:monospace;color:#94a3b8">${String(item.lineNo).padStart(2,'0')}</td>
@@ -2306,6 +2350,8 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
     const epFooterLogoHtml = epLogoUrl
       ? `<img src="${epLogoUrl}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:3px">`
       : `<div class="ep-footer-logo">VYSITE</div>`;
+    const pdfTotals = groupTotals(pdfItems);
+    const pdfMargin = pdfTotals.sale > 0 ? (pdfTotals.profit / pdfTotals.sale) * 100 : 0;
     const body = `
       <div class="ep-header">
         <div>${epHeaderLogoHtml}</div>
@@ -2317,16 +2363,16 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
         <div class="ep-mc"><div class="ep-ml">Tender Reference</div><div class="ep-mv ep-mv-orange">${tender.ref}</div></div>
         <div class="ep-mc"><div class="ep-ml">Location</div><div class="ep-mv">${tender.location||'—'}</div></div>
         <div class="ep-mc"><div class="ep-ml">Export Date</div><div class="ep-mv">${exportDate}</div></div>
-        <div class="ep-mc"><div class="ep-ml">Line Items</div><div class="ep-mv">${items.length}</div></div>
+        <div class="ep-mc"><div class="ep-ml">Line Items</div><div class="ep-mv">${pdfItems.length}</div></div>
       </div>
       <div class="ep-section-label">Estimate Schedule — Internal</div>
       <table><thead><tr><th>#</th><th>Description</th><th>Unit</th><th class="num">Qty</th><th class="num">Cost Rate</th><th class="num">Cost Total</th><th class="num">Markup %</th><th class="num">Sale Rate</th><th class="num">Sale Total</th><th class="num">Profit</th></tr></thead>
       <tbody>${rows||'<tr><td colspan="10" style="text-align:center;color:#94a3b8;font-style:italic;padding:20px">No estimate items added.</td></tr>'}</tbody></table>
       <div class="ep-summary">
-        <div class="ep-summary-row"><span class="ep-summary-label">Total Cost</span><span>${fmtC(totals.cost)}</span></div>
-        <div class="ep-summary-row"><span class="ep-summary-label">Total Sale Value</span><span>${fmtC(totals.sale)}</span></div>
-        <div class="ep-summary-row"><span class="ep-summary-label">Total Profit</span><span style="color:${totals.profit>=0?'#059669':'#dc2626'}">${fmtC(totals.profit)}</span></div>
-        <div class="ep-summary-row"><span class="ep-summary-label">Overall Margin</span><span>${overallMarginPct.toFixed(1)}%</span></div>
+        <div class="ep-summary-row"><span class="ep-summary-label">Total Cost</span><span>${fmtC(pdfTotals.cost)}</span></div>
+        <div class="ep-summary-row"><span class="ep-summary-label">Total Sale Value</span><span>${fmtC(pdfTotals.sale)}</span></div>
+        <div class="ep-summary-row"><span class="ep-summary-label">Total Profit</span><span style="color:${pdfTotals.profit>=0?'#059669':'#dc2626'}">${fmtC(pdfTotals.profit)}</span></div>
+        <div class="ep-summary-row"><span class="ep-summary-label">Overall Margin</span><span>${pdfMargin.toFixed(1)}%</span></div>
       </div>
       <div class="ep-footer">
         <div>${epFooterLogoHtml}<div style="margin-top:3px">Generated ${exportDate} · Internal Estimate · ${tender.ref}</div></div>
@@ -2339,7 +2385,8 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   function handlePrintClient() {
     setShowExportMenu(false);
     const exportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const rows = items.map(item => {
+    const pdfItems = worksItems;
+    const rows = pdfItems.map(item => {
       const { saleRate, saleTotal } = calcLine(item);
       return `<tr>
         <td style="font-family:monospace;color:#94a3b8">${String(item.lineNo).padStart(2,'0')}</td>
@@ -2384,6 +2431,7 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
     const epFooterLogoHtml2 = epLogoUrl2
       ? `<img src="${epLogoUrl2}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:3px">`
       : `<div class="ep-footer-logo">VYSITE</div>`;
+    const pdfTotals = groupTotals(pdfItems);
     const body = `
       <div class="ep-header">
         <div>${epHeaderLogoHtml2}</div>
@@ -2395,13 +2443,13 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
         <div class="ep-mc"><div class="ep-ml">Tender Reference</div><div class="ep-mv ep-mv-orange">${tender.ref}</div></div>
         <div class="ep-mc"><div class="ep-ml">Location</div><div class="ep-mv">${tender.location||'—'}</div></div>
         <div class="ep-mc"><div class="ep-ml">Export Date</div><div class="ep-mv">${exportDate}</div></div>
-        <div class="ep-mc"><div class="ep-ml">Line Items</div><div class="ep-mv">${items.length}</div></div>
+        <div class="ep-mc"><div class="ep-ml">Line Items</div><div class="ep-mv">${pdfItems.length}</div></div>
       </div>
       <div class="ep-section-label">Pricing Schedule</div>
       <table><thead><tr><th>#</th><th>Description</th><th>Unit</th><th class="num">Quantity</th><th class="num">Rate</th><th class="num">Total</th></tr></thead>
       <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#94a3b8;font-style:italic;padding:20px">No estimate items added.</td></tr>'}</tbody></table>
       <div class="ep-summary">
-        <div class="ep-summary-row"><span class="ep-summary-label">Total Tender Value</span><span style="font-weight:700">${fmtC(totals.sale)}</span></div>
+        <div class="ep-summary-row"><span class="ep-summary-label">Total Tender Value</span><span style="font-weight:700">${fmtC(pdfTotals.sale)}</span></div>
       </div>
       <div class="ep-footer">
         <div>${epFooterLogoHtml2}<div style="margin-top:3px">Generated ${exportDate} · Tender Estimate · ${tender.ref}</div></div>
@@ -2417,6 +2465,166 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   const tdCls = 'px-3 py-2 text-xs text-slate-300 align-middle';
   const tdNumCls = `${tdCls} text-right font-mono`;
 
+  // Shared render for an estimating table section
+  function renderEstimateTable(sectionItems: EstimateItem[], sectionType: EstimateLineType) {
+    const isOptional = sectionType === 'optional';
+    if (sectionItems.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <Calculator size={24} className="text-slate-700 mb-2" />
+          <p className="text-xs text-slate-500">No {sectionType} items yet</p>
+        </div>
+      );
+    }
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="border-b border-[#1e2d4a]">
+            <tr>
+              <th className={thCls} style={{ width: 32 }}>#</th>
+              <th className={thCls}>Description</th>
+              <th className={thCls} style={{ width: 72 }}>Unit</th>
+              <th className={`${thCls} text-right`} style={{ width: 80 }}>Qty</th>
+              <th className={`${thCls} text-right`} style={{ width: 96 }}>Cost Rate</th>
+              <th className={`${thCls} text-right`} style={{ width: 96 }}>Cost Total</th>
+              <th className={`${thCls} text-right`} style={{ width: 80 }}>Markup %</th>
+              <th className={`${thCls} text-right`} style={{ width: 96 }}>Sale Rate</th>
+              <th className={`${thCls} text-right`} style={{ width: 96 }}>Sale Total</th>
+              <th className={`${thCls} text-right`} style={{ width: 96 }}>Profit</th>
+              {isOptional && <th className={`${thCls} text-center`} style={{ width: 90 }}>Incl.</th>}
+              <th className={thCls} style={{ width: 72 }}></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#1e2d4a]">
+            {sectionItems.map((item, idx) => {
+              const { costTotal, saleRate, saleTotal, profit } = calcLine(item);
+              const isEditing = editingId === item.id;
+
+              if (isEditing && editBuf) {
+                const buf = editBuf;
+                const { costTotal: bCT, saleRate: bSR, saleTotal: bST, profit: bP } = calcLine(buf);
+                return (
+                  <tr key={item.id} className="bg-orange-950/10 border-l-2 border-l-[#f97316]">
+                    <td className={tdCls}>
+                      <span className="text-[10px] font-mono text-slate-500">{String(item.lineNo).padStart(2,'0')}</span>
+                    </td>
+                    <td className={tdCls}>
+                      <input
+                        autoFocus
+                        value={buf.description}
+                        onChange={e => setEditBuf({ ...buf, description: e.target.value })}
+                        onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }}
+                        className={inputCls}
+                        placeholder="Line item description..."
+                      />
+                    </td>
+                    <td className={tdCls}>
+                      <select value={buf.unit} onChange={e => setEditBuf({ ...buf, unit: e.target.value })} className={inputCls}>
+                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </td>
+                    <td className={tdCls}>
+                      <input type="number" min="0" step="any" value={buf.quantity} onChange={e => setEditBuf({ ...buf, quantity: parseFloat(e.target.value) || 0 })} className={numInputCls} />
+                    </td>
+                    <td className={tdCls}>
+                      <input type="number" min="0" step="any" value={buf.costRate} onChange={e => setEditBuf({ ...buf, costRate: parseFloat(e.target.value) || 0 })} className={numInputCls} />
+                    </td>
+                    <td className={`${tdNumCls} text-slate-500`}>{fmtC(bCT)}</td>
+                    <td className={tdCls}>
+                      <input type="number" min="0" max="100" step="0.5" value={buf.markupPct} onChange={e => setEditBuf({ ...buf, markupPct: parseFloat(e.target.value) || 0 })} className={numInputCls} />
+                    </td>
+                    <td className={`${tdNumCls} text-slate-500`}>{fmtC(bSR)}</td>
+                    <td className={`${tdNumCls} text-slate-500`}>{fmtC(bST)}</td>
+                    <td className={`${tdNumCls} ${bP >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtC(bP)}</td>
+                    {isOptional && <td className={tdCls} onClick={e => e.stopPropagation()}><div className="text-center text-[10px] text-slate-600">—</div></td>}
+                    <td className={tdCls}>
+                      <div className="flex items-center gap-1">
+                        <button onClick={commitEdit} className="p-1 rounded bg-[#f97316]/20 text-[#f97316] hover:bg-[#f97316]/30 transition-colors" title="Save">
+                          <Save size={12} />
+                        </button>
+                        <button onClick={cancelEdit} className="p-1 rounded bg-slate-700/40 text-slate-400 hover:bg-slate-700/60 transition-colors" title="Cancel">
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              }
+
+              return (
+                <tr key={item.id} className="hover:bg-[#1e2d4a]/40 group cursor-pointer" onClick={() => startEdit(item)}>
+                  <td className={tdCls}>
+                    <span className="text-[10px] font-mono text-slate-500">{String(item.lineNo).padStart(2,'0')}</span>
+                  </td>
+                  <td className={`${tdCls} font-medium text-slate-200`}>{item.description || <span className="text-slate-600 italic">No description</span>}</td>
+                  <td className={tdCls}>{item.unit}</td>
+                  <td className={tdNumCls}>{fmt(item.quantity)}</td>
+                  <td className={tdNumCls}>{fmtC(item.costRate)}</td>
+                  <td className={tdNumCls}>{fmtC(costTotal)}</td>
+                  <td className={`${tdNumCls} text-amber-400`}>{item.markupPct}%</td>
+                  <td className={tdNumCls}>{fmtC(saleRate)}</td>
+                  <td className={`${tdNumCls} text-white font-semibold`}>{fmtC(saleTotal)}</td>
+                  <td className={`${tdNumCls} ${profit >= 0 ? 'text-emerald-400' : 'text-red-400'} font-semibold`}>{fmtC(profit)}</td>
+                  {isOptional && (
+                    <td className={tdCls} onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => toggleIncluded(item.id)}
+                        className={`text-[9px] font-bold px-2 py-1 rounded-full transition-colors ${
+                          isIncluded(item)
+                            ? 'bg-emerald-900/50 text-emerald-400 hover:bg-emerald-900/70'
+                            : 'bg-slate-800 text-slate-500 hover:bg-slate-700'
+                        }`}
+                        title={isIncluded(item) ? 'Included in tender sum — click to exclude' : 'Excluded from tender sum — click to include'}
+                      >
+                        {isIncluded(item) ? 'Yes' : 'No'}
+                      </button>
+                    </td>
+                  )}
+                  <td className={tdCls} onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => moveUp(idx, sectionItems)} disabled={idx === 0} className="p-1 rounded text-slate-500 hover:text-slate-300 disabled:opacity-20 transition-colors" title="Move up">
+                        <ChevronUp size={12} />
+                      </button>
+                      <button onClick={() => moveDown(idx, sectionItems)} disabled={idx === sectionItems.length - 1} className="p-1 rounded text-slate-500 hover:text-slate-300 disabled:opacity-20 transition-colors" title="Move down">
+                        <ChevronDown size={12} />
+                      </button>
+                      <button onClick={() => deleteLine(item.id)} className="p-1 rounded text-slate-500 hover:text-red-400 transition-colors" title="Delete">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // Collapsible section header
+  function CollapsibleHeader({ label, icon: Icon, count, sale, expanded, onToggle, onAdd }: {
+    label: string; icon: typeof Calculator; count: number; sale: number; expanded: boolean; onToggle: () => void; onAdd: () => void;
+  }) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-3">
+        <button onClick={onToggle} className="flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white transition-colors">
+          {expanded ? <ChevronDown size={14} className="text-[#f97316]" /> : <ChevronRight size={14} className="text-slate-600" />}
+          <Icon size={14} className="text-slate-500" />
+          {label}
+          {count > 0 && (
+            <span className="text-[10px] font-bold bg-[#0d1628] border border-[#1e2d4a] text-slate-400 px-1.5 py-0.5 rounded-full">{count}</span>
+          )}
+          {canViewPricing && count > 0 && (
+            <span className="text-[10px] text-slate-600 font-mono ml-1">{fmtC(sale)}</span>
+          )}
+        </button>
+        <button onClick={onAdd} className="ml-auto flex items-center gap-1 px-2.5 py-1 bg-[#f97316]/10 hover:bg-[#f97316]/20 border border-[#f97316]/30 text-[#f97316] rounded-lg text-[11px] font-semibold transition-colors">
+          <Plus size={11} />Add Line
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -2424,10 +2632,9 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold text-white">Estimate Schedule</h3>
-          <p className="text-xs text-slate-500 mt-0.5">{items.length} line item{items.length !== 1 ? 's' : ''}{canViewPricing ? ` · Total sale: ${fmtC(totals.sale)}` : ''}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{worksItems.length} line item{worksItems.length !== 1 ? 's' : ''}{canViewPricing ? ` · Total sale: ${fmtC(totals.sale)}` : ''}</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Export dropdown — gated on financial visibility */}
           {canViewPricing && <div className="relative">
             <button
               onClick={() => setShowExportMenu(v => !v)}
@@ -2458,13 +2665,13 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
               </div>
             )}
           </div>}
-          <button onClick={addLine} className="flex items-center gap-1.5 px-3 py-2 bg-[#f97316] text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors">
+          <button onClick={() => addLine('works')} className="flex items-center gap-1.5 px-3 py-2 bg-[#f97316] text-white rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors">
             <Plus size={13} />Add Line
           </button>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Main Estimate Schedule — Works items only */}
       <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden">
         {!canViewPricing ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -2472,125 +2679,73 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
             <p className="text-sm font-semibold text-slate-400">Financial data restricted</p>
             <p className="text-xs text-slate-600 mt-1">You don't have permission to view pricing and estimate values.</p>
           </div>
-        ) : items.length === 0 ? (
+        ) : worksItems.length === 0 && prelimItems.length === 0 && optionalItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Calculator size={32} className="text-slate-600 mb-3" />
             <p className="text-sm font-semibold text-slate-400">No estimate items yet</p>
             <p className="text-xs text-slate-600 mt-1">Click Add Line to start building your estimate</p>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-[#1e2d4a]">
-                <tr>
-                  <th className={thCls} style={{ width: 32 }}>#</th>
-                  <th className={thCls}>Description</th>
-                  <th className={thCls} style={{ width: 72 }}>Unit</th>
-                  <th className={`${thCls} text-right`} style={{ width: 80 }}>Qty</th>
-                  <th className={`${thCls} text-right`} style={{ width: 96 }}>Cost Rate</th>
-                  <th className={`${thCls} text-right`} style={{ width: 96 }}>Cost Total</th>
-                  <th className={`${thCls} text-right`} style={{ width: 80 }}>Markup %</th>
-                  <th className={`${thCls} text-right`} style={{ width: 96 }}>Sale Rate</th>
-                  <th className={`${thCls} text-right`} style={{ width: 96 }}>Sale Total</th>
-                  <th className={`${thCls} text-right`} style={{ width: 96 }}>Profit</th>
-                  <th className={thCls} style={{ width: 72 }}></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#1e2d4a]">
-                {items.map((item, idx) => {
-                  const { costTotal, saleRate, saleTotal, profit } = calcLine(item);
-                  const isEditing = editingId === item.id;
-
-                  if (isEditing && editBuf) {
-                    const buf = editBuf;
-                    const { costTotal: bCT, saleRate: bSR, saleTotal: bST, profit: bP } = calcLine(buf);
-                    return (
-                      <tr key={item.id} className="bg-orange-950/10 border-l-2 border-l-[#f97316]">
-                        <td className={tdCls}>
-                          <span className="text-[10px] font-mono text-slate-500">{String(item.lineNo).padStart(2,'0')}</span>
-                        </td>
-                        <td className={tdCls}>
-                          <input
-                            autoFocus
-                            value={buf.description}
-                            onChange={e => setEditBuf({ ...buf, description: e.target.value })}
-                            onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }}
-                            className={inputCls}
-                            placeholder="Line item description..."
-                          />
-                        </td>
-                        <td className={tdCls}>
-                          <select value={buf.unit} onChange={e => setEditBuf({ ...buf, unit: e.target.value })} className={inputCls}>
-                            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                          </select>
-                        </td>
-                        <td className={tdCls}>
-                          <input type="number" min="0" step="any" value={buf.quantity} onChange={e => setEditBuf({ ...buf, quantity: parseFloat(e.target.value) || 0 })} className={numInputCls} />
-                        </td>
-                        <td className={tdCls}>
-                          <input type="number" min="0" step="any" value={buf.costRate} onChange={e => setEditBuf({ ...buf, costRate: parseFloat(e.target.value) || 0 })} className={numInputCls} />
-                        </td>
-                        <td className={`${tdNumCls} text-slate-500`}>{fmtC(bCT)}</td>
-                        <td className={tdCls}>
-                          <input type="number" min="0" max="100" step="0.5" value={buf.markupPct} onChange={e => setEditBuf({ ...buf, markupPct: parseFloat(e.target.value) || 0 })} className={numInputCls} />
-                        </td>
-                        <td className={`${tdNumCls} text-slate-500`}>{fmtC(bSR)}</td>
-                        <td className={`${tdNumCls} text-slate-500`}>{fmtC(bST)}</td>
-                        <td className={`${tdNumCls} ${bP >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtC(bP)}</td>
-                        <td className={tdCls}>
-                          <div className="flex items-center gap-1">
-                            <button onClick={commitEdit} className="p-1 rounded bg-[#f97316]/20 text-[#f97316] hover:bg-[#f97316]/30 transition-colors" title="Save">
-                              <Save size={12} />
-                            </button>
-                            <button onClick={cancelEdit} className="p-1 rounded bg-slate-700/40 text-slate-400 hover:bg-slate-700/60 transition-colors" title="Cancel">
-                              <X size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  }
-
-                  return (
-                    <tr key={item.id} className="hover:bg-[#1e2d4a]/40 group cursor-pointer" onClick={() => startEdit(item)}>
-                      <td className={tdCls}>
-                        <span className="text-[10px] font-mono text-slate-500">{String(item.lineNo).padStart(2,'0')}</span>
-                      </td>
-                      <td className={`${tdCls} font-medium text-slate-200`}>{item.description || <span className="text-slate-600 italic">No description</span>}</td>
-                      <td className={tdCls}>{item.unit}</td>
-                      <td className={tdNumCls}>{fmt(item.quantity)}</td>
-                      <td className={tdNumCls}>{fmtC(item.costRate)}</td>
-                      <td className={tdNumCls}>{fmtC(costTotal)}</td>
-                      <td className={`${tdNumCls} text-amber-400`}>{item.markupPct}%</td>
-                      <td className={tdNumCls}>{fmtC(saleRate)}</td>
-                      <td className={`${tdNumCls} text-white font-semibold`}>{fmtC(saleTotal)}</td>
-                      <td className={`${tdNumCls} ${profit >= 0 ? 'text-emerald-400' : 'text-red-400'} font-semibold`}>{fmtC(profit)}</td>
-                      <td className={tdCls} onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => moveUp(idx)} disabled={idx === 0} className="p-1 rounded text-slate-500 hover:text-slate-300 disabled:opacity-20 transition-colors" title="Move up">
-                            <ChevronUp size={12} />
-                          </button>
-                          <button onClick={() => moveDown(idx)} disabled={idx === items.length - 1} className="p-1 rounded text-slate-500 hover:text-slate-300 disabled:opacity-20 transition-colors" title="Move down">
-                            <ChevronDown size={12} />
-                          </button>
-                          <button onClick={() => deleteLine(item.id)} className="p-1 rounded text-slate-500 hover:text-red-400 transition-colors" title="Delete">
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        ) : worksItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <Calculator size={24} className="text-slate-700 mb-2" />
+            <p className="text-xs text-slate-500">No works items yet. Click Add Line above.</p>
           </div>
-        )}
+        ) : renderEstimateTable(worksItems, 'works')}
       </div>
-      {canViewPricing && items.length > 0 && (
+
+      {/* Preliminaries — collapsible */}
+      {canViewPricing && (
+        <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden">
+          <CollapsibleHeader
+            label="Preliminaries"
+            icon={Layers}
+            count={prelimItems.length}
+            sale={prelimTotals.sale}
+            expanded={showPrelims}
+            onToggle={() => setShowPrelims(v => !v)}
+            onAdd={() => addLine('preliminaries')}
+          />
+          {showPrelims && (
+            <div className="border-t border-[#1e2d4a]">
+              {renderEstimateTable(prelimItems, 'preliminaries')}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Optional / Below-the-Line — collapsible */}
+      {canViewPricing && (
+        <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden">
+          <CollapsibleHeader
+            label="Optional / Below-the-Line"
+            icon={AlertTriangle}
+            count={optionalItems.length}
+            sale={optionalItems.reduce((s, it) => s + calcLine(it).saleTotal, 0)}
+            expanded={showOptional}
+            onToggle={() => setShowOptional(v => !v)}
+            onAdd={() => addLine('optional')}
+          />
+          {showOptional && (
+            <div className="border-t border-[#1e2d4a]">
+              {optionalItems.length > 0 && (
+                <div className="px-4 py-2 bg-[#0d1628]/60 border-b border-[#1e2d4a] flex items-center gap-4 text-[10px]">
+                  <span className="text-slate-500">Included: <span className="text-emerald-400 font-semibold">{optionalIncluded.length}</span></span>
+                  <span className="text-slate-500">Excluded: <span className="text-slate-400 font-semibold">{optionalExcluded.length}</span></span>
+                  {optExcludedTotals.sale > 0 && <span className="text-slate-600 font-mono ml-auto">Excluded sale: {fmtC(optExcludedTotals.sale)}</span>}
+                </div>
+              )}
+              {renderEstimateTable(optionalItems, 'optional')}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* KPI cards — include only included items */}
+      {canViewPricing && (worksItems.length > 0 || prelimItems.length > 0 || optionalIncluded.length > 0) && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: 'Total Cost', value: fmtC(totals.cost), color: 'text-slate-300', sub: 'Internal build cost' },
-            { label: 'Total Sale Value', value: fmtC(totals.sale), color: 'text-white', sub: 'Client-facing value' },
+            { label: 'Total Cost', value: fmtC(totals.cost), color: 'text-slate-300', sub: 'Works + prelims + included optional' },
+            { label: 'Total Sale Value', value: fmtC(totals.sale), color: 'text-white', sub: 'Included tender value' },
             { label: 'Total Profit', value: fmtC(totals.profit), color: totals.profit >= 0 ? 'text-emerald-400' : 'text-red-400', sub: 'Sale minus cost' },
             { label: 'Overall Margin', value: `${overallMarginPct.toFixed(1)}%`, color: overallMarginPct >= 15 ? 'text-emerald-400' : overallMarginPct >= 8 ? 'text-amber-400' : 'text-red-400', sub: 'Profit / Sale × 100' },
           ].map(card => (
