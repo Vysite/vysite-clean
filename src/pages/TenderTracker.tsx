@@ -2328,8 +2328,6 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
     const epFooterLogoHtml = epLogoUrl
       ? `<img src="${epLogoUrl}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:3px">`
       : `<div class="ep-footer-logo">VYSITE</div>`;
-    const totalCount = worksItems.length + prelimItems.length + optionalIncluded.length + optionalExcluded.length + allowanceItems.length;
-
     // Internal row generator — full commercial columns
     function internalRows(arr: EstimateItem[]) {
       return arr.map(item => {
@@ -2438,8 +2436,7 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
         <div class="ep-mc"><div class="ep-ml">Client</div><div class="ep-mv">${tender.client}</div></div>
         <div class="ep-mc"><div class="ep-ml">Tender Reference</div><div class="ep-mv ep-mv-orange">${tender.ref}</div></div>
         <div class="ep-mc"><div class="ep-ml">Location</div><div class="ep-mv">${tender.location||'—'}</div></div>
-        <div class="ep-mc"><div class="ep-ml">Export Date</div><div class="ep-mv">${exportDate}</div></div>
-        <div class="ep-mc"><div class="ep-ml">Line Items</div><div class="ep-mv">${totalCount}</div></div>
+        <div class="ep-mc" style="grid-column:span 2"><div class="ep-ml">Export Date</div><div class="ep-mv">${exportDate}</div></div>
       </div>
       ${sectionsHtml}
       <div class="ep-summary">${summaryRows}</div>
@@ -2461,8 +2458,6 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
     const epFooterLogoHtml2 = epLogoUrl2
       ? `<img src="${epLogoUrl2}" alt="Logo" style="height:22px;max-width:100px;object-fit:contain;display:block;margin-bottom:3px">`
       : `<div class="ep-footer-logo">VYSITE</div>`;
-    const totalCount = worksItems.length + prelimItems.length + optionalIncluded.length + optionalExcluded.length;
-
     // CLIENT-SAFE row generator — sale columns only, NO cost/markup/profit
     function clientRows(arr: EstimateItem[]) {
       return arr.map(item => {
@@ -2553,8 +2548,7 @@ function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
         <div class="ep-mc"><div class="ep-ml">Client</div><div class="ep-mv">${tender.client}</div></div>
         <div class="ep-mc"><div class="ep-ml">Tender Reference</div><div class="ep-mv ep-mv-orange">${tender.ref}</div></div>
         <div class="ep-mc"><div class="ep-ml">Location</div><div class="ep-mv">${tender.location||'—'}</div></div>
-        <div class="ep-mc"><div class="ep-ml">Export Date</div><div class="ep-mv">${exportDate}</div></div>
-        <div class="ep-mc"><div class="ep-ml">Line Items</div><div class="ep-mv">${totalCount}</div></div>
+        <div class="ep-mc" style="grid-column:span 2"><div class="ep-ml">Export Date</div><div class="ep-mv">${exportDate}</div></div>
       </div>
       ${clientSections}
       <div class="ep-summary">${clientSummary}</div>
