@@ -457,10 +457,11 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
                                     setCatOverrides(prev => ({ ...prev, [i]: v }));
                                     setRows(prev => prev.map((r, j) => j === i ? { ...r, _unknownCategory: false, _selected: true } : r));
                                   }}
-                                  className="text-[10px] font-semibold bg-red-900/40 text-red-300 border border-red-700/60 rounded px-2 py-0.5 pr-6 outline-none cursor-pointer appearance-none"
+                                  className="text-[10px] font-semibold bg-red-900/40 text-red-300 border border-red-700/60 rounded px-2 py-0.5 pr-6 outline-none cursor-pointer appearance-none relative z-10"
+                                  style={{ colorScheme: 'dark' }}
                                 >
-                                  <option value="">Assign category...</option>
-                                  {IMPORT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                  <option value="" style={{ backgroundColor: '#1a2236', color: '#94a3b8' }}>Assign category...</option>
+                                  {IMPORT_CATEGORIES.map(c => <option key={c} value={c} style={{ backgroundColor: '#1a2236', color: '#e2e8f0' }}>{c}</option>)}
                                 </select>
                                 <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-red-400 pointer-events-none" />
                               </div>
@@ -505,14 +506,15 @@ export default function ChatGPTImport({ tender, currentUser, onImport, onClose }
                                       setRows(prev => prev.map((r, j) => j === i ? { ...r, _selected: true } : r));
                                     }
                                   }}
-                                  className={`text-[10px] font-semibold rounded px-2 py-0.5 pr-6 outline-none cursor-pointer appearance-none border ${
+                                  className={`text-[10px] font-semibold rounded px-2 py-0.5 pr-6 outline-none cursor-pointer appearance-none border relative z-10 ${
                                     needsDestChoice
                                       ? 'bg-red-900/40 text-red-300 border-red-700/60'
                                       : 'bg-[#1a2236] text-slate-300 border-[#1e2d4a] hover:border-slate-600'
                                   }`}
+                                  style={{ colorScheme: 'dark' }}
                                 >
-                                  {needsDestChoice && <option value="">Choose destination...</option>}
-                                  {DESTINATION_OPTIONS.map(d => <option key={d} value={d}>{DESTINATION_LABELS[d]}</option>)}
+                                  {needsDestChoice && <option value="" style={{ backgroundColor: '#1a2236', color: '#94a3b8' }}>Choose destination...</option>}
+                                  {DESTINATION_OPTIONS.map(d => <option key={d} value={d} style={{ backgroundColor: '#1a2236', color: '#e2e8f0' }}>{DESTINATION_LABELS[d]}</option>)}
                                 </select>
                                 <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                               </div>
