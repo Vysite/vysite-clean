@@ -41,9 +41,32 @@ export async function buildOAndMPdf(
   tcRecords: DBTCRecord[],
   siteForms: DBSiteForm[],
   onProgress?: (p: BuildProgress) => void,
+  fetchSiteFormDetail?: (id: string) => Promise<DBSiteForm | null>,
 ): Promise<Uint8Array> {
   const ctx = new BuildContext(manual, project, orgInfo, onProgress);
   await ctx.init();
+
+  // Per-generation cache: site form ID → full DB record (with extra_data)
+  const formCache = new Map<string, DBSiteForm | null>();
+
+  const resolveForm = async (id: string): Promise<DBSiteForm | undefined> => {
+    if (formCache.has(id)) return formCache.get(id) ?? undefined;
+    // If the list record already has extra_data populated, use it directly
+    const listForm = siteForms.find(f => f.id === id);
+    if (listForm && listForm.extra_data && Object.keys(listForm.extra_data).length > 0) {
+      formCache.set(id, listForm);
+      return listForm;
+    }
+    // Otherwise fetch full detail on demand
+    if (fetchSiteFormDetail) {
+      const detail = await fetchSiteFormDetail(id);
+      formCache.set(id, detail);
+      return detail ?? undefined;
+    }
+    // No fetcher available — fall back to list record
+    formCache.set(id, listForm);
+    return listForm;
+  };
 
   const sortedSections = [...sections].sort((a, b) => a.sort_order - b.sort_order);
   const totalItems = items.length;
@@ -74,7 +97,7 @@ export async function buildOAndMPdf(
         const rec = tcRecords.find(r => r.id === item.source_record_id);
         await ctx.addTCRecord(item, rec);
       } else if (item.source_module === 'site_form') {
-        const form = siteForms.find(f => f.id === item.source_record_id);
+        const form = await resolveForm(item.source_record_id);
         await ctx.addSiteForm(item, form);
       }
     }

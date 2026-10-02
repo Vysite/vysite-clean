@@ -51,6 +51,7 @@ export default function OAndMPreview({ manual, sections, items, project, orgInfo
         store.tcRecords as DBTCRecord[],
         store.siteForms as DBSiteForm[],
         (p) => setProgress(p),
+        store.fetchSiteFormDetail,
       );
 
       // Trigger browser file download

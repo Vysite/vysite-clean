@@ -573,6 +573,30 @@ function buildFlushingRegisterBody(f: Record<string, unknown>): string {
   try { if (f.frEndChecks)   frEndChecks   = JSON.parse(f.frEndChecks as string); }   catch { /* */ }
   try { if (f.frRows)        frRows        = JSON.parse(f.frRows as string); }         catch { /* */ }
 
+  // Legacy compatibility: records created before the dedicated Flushing Register
+  // implementation used an `outlets` array + `declaration` text instead of the
+  // current fr* schema. Map the legacy fields into the current render structure
+  // without inventing data — only fields that genuinely exist are populated.
+  if (!frRows.length && Array.isArray(f.outlets)) {
+    const legacyOutlets = f.outlets as Array<Record<string, unknown>>;
+    frRows = legacyOutlets.map(o => ({
+      date: safeStr(f.date),
+      areaRoom: safeStr(o.location),
+      outletAsset: safeStr(o.outlet_type),
+      system: '',
+      durationMins: '',
+      valveSafe: '',
+      capped: '',
+      runningClear: safeStr(o.pass_fail),
+      engineer: safeStr(f.completedBy),
+      rowNotes: [
+        o.am_start_temp != null ? `AM start temp: ${o.am_start_temp}°C` : '',
+        o.pm_end_temp != null ? `PM end temp: ${o.pm_end_temp}°C` : '',
+      ].filter(Boolean).join('; '),
+    }));
+  }
+  const legacyDeclaration = safeStr(f.declaration);
+
   const checksBadge = (val: string) => {
     const v = (val || '').trim();
     if (v === 'Yes') return '<span class="badge-pass">Yes</span>';
@@ -642,7 +666,9 @@ function buildFlushingRegisterBody(f: Record<string, unknown>): string {
     <div class="section">
       ${sectionHeading('Declaration')}
       <div class="section-content" style="font-style:italic;background:#f0fdfa;border-color:#99f6e4">
-        I confirm that the flushing activities recorded on this register have been carried out in accordance with the site-specific Legionella risk assessment, the Written Scheme of Control and the requirements of HSG274 Part 2. All outlets flushed as required and any deficiencies or observations have been recorded above. This register forms part of the formal Legionella control records required under ACoP L8 (HSG274) and must be retained for a minimum of 5 years.
+        ${legacyDeclaration
+          ? esc(legacyDeclaration)
+          : 'I confirm that the flushing activities recorded on this register have been carried out in accordance with the site-specific Legionella risk assessment, the Written Scheme of Control and the requirements of HSG274 Part 2. All outlets flushed as required and any deficiencies or observations have been recorded above. This register forms part of the formal Legionella control records required under ACoP L8 (HSG274) and must be retained for a minimum of 5 years.'}
       </div>
     </div>
     ${sectionHtml('Sign-Off', dataGrid([

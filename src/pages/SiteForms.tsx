@@ -641,12 +641,28 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
     setViewingForm(full);
   };
 
-  const handleSingleExportPDF = (form: ExtendedSiteForm) => {
+  const resolveFullForm = async (form: ExtendedSiteForm): Promise<ExtendedSiteForm | null> => {
+    const detail = await store.fetchSiteFormDetail(form.id);
+    if (!detail) return null;
+    return {
+      ...form,
+      ...(detail.extra_data as Record<string, unknown> ?? {}),
+      form_comments: detail.form_comments ?? [],
+      extra_data: detail.extra_data,
+    } as ExtendedSiteForm;
+  };
+
+  const handleSingleExportPDF = async (form: ExtendedSiteForm) => {
+    const fullForm = await resolveFullForm(form);
+    if (!fullForm) {
+      alert('Unable to load the complete form for PDF export. Please try again.');
+      return;
+    }
     const orgSettings = { company_name: store.settings?.company_name ?? '', logo_data_url: store.settings?.logo_data_url ?? '' };
-    if (form.type === 'Practical Completion Certificate') {
-      renderFormPDF(form, orgSettings);
+    if (fullForm.type === 'Practical Completion Certificate') {
+      renderFormPDF(fullForm, orgSettings);
     } else {
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Site Forms — VYSITE</title><style>${FORM_PDF_CSS}</style></head><body>${buildFormPageHTML(form, orgSettings)}<script>window.onload=function(){window.print();};<\/script></body></html>`;
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Site Forms — VYSITE</title><style>${FORM_PDF_CSS}</style></head><body>${buildFormPageHTML(fullForm, orgSettings)}<script>window.onload=function(){window.print();};<\/script></body></html>`;
       openPrintTab(html);
     }
     logActivity({ orgId, userName, module: 'site_forms', recordId: form.id, recordRef: formRef(form), recordType: form.type, projectId: store.projects.find(p => p.name === form.projectName)?.id ?? null, projectName: form.projectName ?? null, actionType: 'pdf_exported', description: `${userName} exported ${form.type} to PDF on project ${form.projectName ?? ''}.` });
@@ -658,12 +674,21 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const clearSelection = () => setSelectedIds(new Set());
   const selectedForms = forms.filter(f => selectedIds.has(f.id));
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (selectedForms.length === 0) return;
     const orgSettings = { company_name: store.settings?.company_name ?? '', logo_data_url: store.settings?.logo_data_url ?? '' };
-    const pages = selectedForms.map((f, i) => {
+    const fullForms: ExtendedSiteForm[] = [];
+    for (const f of selectedForms) {
+      const full = await resolveFullForm(f);
+      if (!full) {
+        alert(`Unable to load the complete form "${f.type}" (${formRef(f)}) for PDF export. Please try again.`);
+        return;
+      }
+      fullForms.push(full);
+    }
+    const pages = fullForms.map((f, i) => {
       const pageHtml = buildFormPageHTML(f, orgSettings);
-      return i < selectedForms.length - 1
+      return i < fullForms.length - 1
         ? `<div style="page-break-after:always;break-after:page;">${pageHtml}</div>`
         : pageHtml;
     }).join('');
