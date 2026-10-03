@@ -3,6 +3,7 @@ import { FileImage, Ruler, Calculator, ClipboardList } from 'lucide-react';
 import type { Tender } from '../../data/types';
 import TenderDrawingsTab from './TenderDrawingsTab';
 import TakeoffSchedule from './TakeoffSchedule';
+import EstimatingSummary from './EstimatingSummary';
 
 interface EstimatingTabProps {
   tender: Tender;
@@ -66,11 +67,7 @@ export default function EstimatingWorkspace({ tender, onUpdate, EstimatingTab }:
       )}
 
       {subTab === 'Summary' && (
-        <PlaceholderPanel
-          title="Summary"
-          description="A consolidated summary of Drawings, Take-Off, and Estimate data will be available here once configured. This workspace is not yet set up."
-          icon={ClipboardList}
-        />
+        <EstimatingSummary tender={tender} onSwitchToTakeOff={() => setSubTab('Take-Off')} />
       )}
     </div>
   );

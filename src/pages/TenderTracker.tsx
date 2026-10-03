@@ -2389,7 +2389,7 @@ export function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
       const mcdLabel = mcdType === 'percentage' ? `MCD (${mcdPct}%)` : 'MCD';
       summaryRows += `<div class="ep-summary-row"><span class="ep-summary-label">${mcdLabel}</span><span></span><span style="margin-left:24px;color:#dc2626">(${fmtC(mcdValue)})</span></div>`;
     }
-    summaryRows += `<div class="ep-summary-row" style="background:#f97316;color:white;font-weight:700;font-size:13px"><span class="ep-summary-label" style="color:white">FINAL TENDER SUM</span><span></span><span style="margin-left:24px">${fmtC(finalTenderSum)}</span></div>`;
+    summaryRows += `<div class="ep-summary-row" style="background:#0f172a;color:white;font-weight:700;font-size:13px;border-top:3px solid #f97316"><span class="ep-summary-label" style="color:white">FINAL TENDER SUM</span><span></span><span style="margin-left:24px">${fmtC(finalTenderSum)}</span></div>`;
     summaryRows += `<div class="ep-summary-row"><span class="ep-summary-label">Profit ${mcdType !== 'none' ? 'After MCD' : ''}</span><span style="color:${profitAfterMcd>=0?'#059669':'#dc2626'}">${fmtC(profitAfterMcd)}</span><span></span></div>`;
     summaryRows += `<div class="ep-summary-row"><span class="ep-summary-label">Margin ${mcdType !== 'none' ? 'After MCD' : ''}</span><span style="color:${marginAfterMcd>=15?'#059669':marginAfterMcd>=8?'#f59e0b':'#dc2626'}">${marginAfterMcd.toFixed(1)}%</span><span></span></div>`;
     if (optExcludedTotals.sale > 0) {
@@ -2520,7 +2520,7 @@ export function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
       const mcdLabel2 = mcdType === 'percentage' ? `Main Contractor's Discount (${mcdPct}%)` : "Main Contractor's Discount";
       clientSummary += `<div class="ep-summary-row"><span class="ep-summary-label">${mcdLabel2}</span><span style="color:#dc2626">(${fmtC(mcdValue)})</span></div>`;
     }
-    clientSummary += `<div class="ep-summary-row" style="background:#f97316;color:white;font-weight:700;font-size:13px"><span class="ep-summary-label" style="color:white">FINAL TENDER SUM</span><span>${fmtC(finalTenderSum)}</span></div>`;
+    clientSummary += `<div class="ep-summary-row" style="background:#0f172a;color:white;font-weight:700;font-size:13px;border-top:3px solid #f97316"><span class="ep-summary-label" style="color:white">FINAL TENDER SUM</span><span>${fmtC(finalTenderSum)}</span></div>`;
 
     // Excluded optional — after main total
     let excludedHtml = '';
