@@ -68,6 +68,7 @@ const MODULES = [
   { key: 'actions',       label: 'Actions Tracker' },
   { key: 'testing',       label: 'O&M Manual' },
   { key: 'supply-chain',  label: 'Supply Chain' },
+  { key: 'asset-management', label: 'Asset Management' },
   { key: 'reports',       label: 'Reports' },
 ];
 

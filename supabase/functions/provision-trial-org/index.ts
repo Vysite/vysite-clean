@@ -27,6 +27,7 @@ const DEFAULT_MODULES = {
   reports: true,
   commercial: true,
   "supply-chain": true,
+  "asset-management": true,
 };
 
 // Full Admin role permissions — mirrors ROLE_PERMISSIONS['Admin'] in store.ts
@@ -48,6 +49,8 @@ const ADMIN_PERMISSIONS = {
   "modules.actions": true, "modules.comments": true, "modules.reports": true,
   "modules.commercial": true,
   "modules.supply_chain": true, "supply_chain.view": true, "supply_chain.create_edit": true,
+  "modules.assets": true, "asset.view": true, "asset.create": true, "asset.edit": true,
+  "asset.delete": true, "asset.comment": true, "asset.upload": true,
   "snagging.create": true, "snagging.edit": true, "snagging.delete": true, "snagging.export": true,
   "actions.create": true, "actions.edit": true, "actions.delete": true, "actions.export": true,
   "site_forms.create": true, "site_forms.edit": true, "site_forms.delete": true, "site_forms.export": true,
