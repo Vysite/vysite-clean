@@ -26,9 +26,13 @@ function fmtAge(d: string | null | undefined): string {
   const dt = new Date(d);
   if (isNaN(dt.getTime())) return '\u2014';
   const now = new Date();
+  const diffMs = now.getTime() - dt.getTime();
+  if (diffMs < 0) return '\u2014';
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (days < 31) return `${days} day${days === 1 ? '' : 's'}`;
   const months = (now.getFullYear() - dt.getFullYear()) * 12 + (now.getMonth() - dt.getMonth());
-  if (months < 0) return '\u2014';
-  if (months < 12) return `${months} month${months === 1 ? '' : 's'}`;
+  if (now.getDate() < dt.getDate()) months - 1;
+  if (months < 12) return `${Math.max(1, months)} month${months === 1 ? '' : 's'}`;
   const years = months / 12;
   if (years < 10) return `${years.toFixed(1)} years`;
   return `${Math.floor(years)} years`;
@@ -53,6 +57,7 @@ const REVIEW_THRESHOLDS = {
 
 function evaluateLifecycle(
   spendVsReplacement: number | null,
+  hasReplacementCost: boolean,
   condition: string | null,
   reactiveCount12m: number,
   breakdownCount12m: number,
@@ -63,6 +68,9 @@ function evaluateLifecycle(
   const reasons: string[] = [];
 
   if (!hasServiceHistory) {
+    if (!hasReplacementCost) {
+      return { status: 'normal', reasons: ['No Service & Maintenance history recorded for this Asset. Current replacement cost has not been recorded, so lifecycle expenditure cannot yet be compared against replacement value.'] };
+    }
     return { status: 'normal', reasons: ['No Service & Maintenance history recorded for this Asset.'] };
   }
 
@@ -112,6 +120,13 @@ function evaluateLifecycle(
   if (isPoor) return { status: 'monitor', reasons };
   if (reactiveConcern || breakdownConcern) return { status: 'monitor', reasons };
   if (trendIncreasing) return { status: 'monitor', reasons };
+
+  if (!hasReplacementCost) {
+    return {
+      status: 'normal',
+      reasons: ['No significant reactive maintenance or breakdown pattern has been identified. Current replacement cost has not been recorded, so lifecycle expenditure cannot yet be compared against replacement value.'],
+    };
+  }
 
   return {
     status: 'normal',
@@ -260,8 +275,11 @@ export default function AssetSummary({ asset, canViewFinancials }: Props) {
     }
 
     // Lifecycle review
+    const hasReplacementCost = asset.current_replacement_cost != null && asset.current_replacement_cost > 0;
+
     const review = evaluateLifecycle(
       spendVsReplacement,
+      hasReplacementCost,
       latestCondition,
       reactiveCount12m,
       breakdownCount12m,
