@@ -3,7 +3,7 @@ import type { DBTenderTakeoffItem } from './takeoffTypes';
 import type { DBTenderDrawing, DBTenderDrawingCalibration } from './drawingTypes';
 import type { CountGeometry, LinearGeometry, AreaGeometry } from './takeoffGeometry';
 import { isCountGeometry, isLinearGeometry, isAreaGeometry } from './takeoffGeometry';
-import { groupLinearRuns, areaPolygonQuantity, distanceInPdfPoints } from './takeoffCalculations';
+import { groupLinearRuns, areaPolygonQuantity, distanceInPdfPoints, finalQuantity } from './takeoffCalculations';
 
 export interface DrawingExportData {
   drawing: DBTenderDrawing;
@@ -128,8 +128,8 @@ export async function exportMarkedUpDrawingPDF(data: DrawingExportData): Promise
     }
   }
 
-  // Metadata page at the end
-  drawMetadataPage(pdfDoc, font, fontBold, drawing, tenderName, tenderRef, visibleItems, internal);
+  // Summary page(s) at the end
+  drawSummaryPages(pdfDoc, font, fontBold, drawing, tenderName, tenderRef, visibleItems, internal);
 
   const pdfBytesOut = await pdfDoc.save();
   const blob = new Blob([pdfBytesOut], { type: 'application/pdf' });
@@ -357,55 +357,32 @@ function drawLegendPDF(page: PDFPage, items: DBTenderTakeoffItem[], font: PDFFon
   }
 }
 
-// ── Metadata page ──────────────────────────────────────────────────────────
+// ── Summary page(s) ─────────────────────────────────────────────────────────
 
-function drawMetadataPage(pdfDoc: PDFDocument, font: PDFFont, fontBold: PDFFont, drawing: DBTenderDrawing, tenderName: string, tenderRef: string, items: DBTenderTakeoffItem[], internal: boolean): void {
-  const page = pdfDoc.addPage([595, 842]); // A4 portrait
-  const { width: pw, height: ph } = page.getSize();
+const SCOPE_LABELS: Record<string, string> = { standard: 'STD', addition: 'ADD', omission: 'OMIT' };
+
+const A4_W = 595;
+const A4_H = 842;
+
+function drawSummaryHeader(page: PDFPage, font: PDFFont, fontBold: PDFFont, titleText: string): void {
+  const pw = A4_W;
+  const ph = A4_H;
   const margin = 48;
-  const exportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  // Orange header bar
   page.drawRectangle({ x: 0, y: ph - 60, width: pw, height: 60, color: rgb(0.976, 0.451, 0.133) });
   page.drawText('VYSITE', { x: margin, y: ph - 38, size: 22, color: rgb(1, 1, 1), font: fontBold });
   page.drawText('Construction Management Platform', { x: margin, y: ph - 52, size: 8, color: rgb(1, 1, 1), font });
 
-  // Title
-  const titleText = sanitizePdfText(internal ? 'Marked-Up Drawing - Internal' : 'Marked-Up Drawing');
-  page.drawText(titleText, { x: pw - margin, y: ph - 38, size: 14, color: rgb(1, 1, 1), font: fontBold });
-  // Right-align
   const titleW = fontBold.widthOfTextAtSize(titleText, 14);
-  // Redraw right-aligned
-  page.drawRectangle({ x: 0, y: ph - 60, width: pw, height: 60, color: rgb(0.976, 0.451, 0.133) });
-  page.drawText('VYSITE', { x: margin, y: ph - 38, size: 22, color: rgb(1, 1, 1), font: fontBold });
-  page.drawText('Construction Management Platform', { x: margin, y: ph - 52, size: 8, color: rgb(1, 1, 1), font });
   page.drawText(titleText, { x: pw - margin - titleW, y: ph - 38, size: 14, color: rgb(1, 1, 1), font: fontBold });
+}
 
-  // Metadata box
-  const metaY = ph - 100;
-  const metaH = 180;
-  page.drawRectangle({ x: margin, y: metaY - metaH, width: pw - margin * 2, height: metaH, borderColor: rgb(0.89, 0.91, 0.94), borderWidth: 1, color: rgb(0.98, 0.99, 1) });
-
-  const labelColor = rgb(0.38, 0.43, 0.53);
-  const valColor = rgb(0.11, 0.16, 0.27);
+function drawSummaryFooter(page: PDFPage, font: PDFFont, fontBold: PDFFont, exportDate: string, tenderRef: string, internal: boolean): void {
+  const pw = A4_W;
+  const ph = A4_H;
+  const margin = 48;
   const orangeColor = rgb(0.976, 0.451, 0.133);
-  let y = metaY - 24;
-  const rowGap = 24;
-  const colL = margin + 16;
-  const colR = margin + (pw - margin * 2) / 2 + 16;
 
-  function metaRow(yPos: number, label: string, val: string, x: number, valColorOverride?: { r: number; g: number; b: number }) {
-    page.drawText(label.toUpperCase(), { x, y: yPos, size: 8, color: labelColor, font: fontBold });
-    page.drawText(val, { x, y: yPos - 12, size: 11, color: valColorOverride ?? valColor, font });
-  }
-
-  metaRow(y, 'Tender Name', sanitizePdfText(tenderName), colL); metaRow(y, 'Drawing Number', sanitizePdfText(drawing.drawing_number || '-'), colR, orangeColor); y -= rowGap;
-  metaRow(y, 'Tender Reference', sanitizePdfText(tenderRef), colL, orangeColor); metaRow(y, 'Drawing Title', sanitizePdfText(drawing.title), colR); y -= rowGap;
-  metaRow(y, 'Drawing Revision', sanitizePdfText(drawing.revision), colL); metaRow(y, 'Discipline', sanitizePdfText(drawing.discipline), colR); y -= rowGap;
-  metaRow(y, 'Export Date', exportDate, colL); metaRow(y, 'Page Count', String(drawing.page_count), colR); y -= rowGap;
-  metaRow(y, 'Take-Off Items', String(items.length), colL); metaRow(y, 'Visible Items', String(items.filter(i => i.is_visible).length), colR);
-
-  // Footer
   page.drawLine({ start: { x: margin, y: 50 }, end: { x: pw - margin, y: 50 }, thickness: 0.5, color: rgb(0.89, 0.91, 0.94) });
   page.drawText('Powered by VYSITE', { x: margin, y: 36, size: 10, color: orangeColor, font: fontBold });
   page.drawText(sanitizePdfText(`Generated ${exportDate} - ${tenderRef}`), { x: margin, y: 22, size: 8, color: rgb(0.38, 0.43, 0.53), font });
@@ -413,5 +390,144 @@ function drawMetadataPage(pdfDoc: PDFDocument, font: PDFFont, fontBold: PDFFont,
     const confText = sanitizePdfText('Commercially Sensitive - Internal Only');
     const confW = fontBold.widthOfTextAtSize(confText, 8);
     page.drawText(confText, { x: pw - margin - confW, y: 36, size: 8, color: rgb(0.86, 0.15, 0.15), font: fontBold });
+  }
+}
+
+function drawSummaryPages(pdfDoc: PDFDocument, font: PDFFont, fontBold: PDFFont, drawing: DBTenderDrawing, tenderName: string, tenderRef: string, items: DBTenderTakeoffItem[], internal: boolean): void {
+  const exportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const margin = 48;
+  const pw = A4_W;
+  const ph = A4_H;
+
+  // Column positions for the schedule table
+  const colColour = margin + 8;
+  const colDesc = margin + 28;
+  const colType = margin + 230;
+  const colQty = margin + 300;
+  const colUnit = margin + 360;
+  const colDisc = margin + 400;
+  const colScope = pw - margin - 50;
+
+  const rowH = 24;
+  const headerH = 28;
+  const metaH = 140;
+  const tableTop = ph - 60 - metaH - 30;
+  const footerH = 60;
+  const usableH = tableTop - footerH;
+  const rowsPerPage = Math.floor((usableH - headerH) / rowH);
+
+  const titleText = sanitizePdfText(internal ? 'Marked-Up Drawing Summary - Internal' : 'Marked-Up Drawing Summary');
+
+  // Draw pages
+  for (let pageStart = 0; pageStart < items.length; pageStart += rowsPerPage) {
+    const page = pdfDoc.addPage([pw, ph]);
+    const pageItems = items.slice(pageStart, pageStart + rowsPerPage);
+
+    drawSummaryHeader(page, font, fontBold, titleText);
+
+    // Compact metadata block — only on first summary page
+    if (pageStart === 0) {
+      const metaY = ph - 80;
+      page.drawRectangle({
+        x: margin, y: metaY - metaH, width: pw - margin * 2, height: metaH,
+        borderColor: rgb(0.89, 0.91, 0.94), borderWidth: 1, color: rgb(0.98, 0.99, 1),
+      });
+
+      const labelColor = rgb(0.38, 0.43, 0.53);
+      const valColor = rgb(0.11, 0.16, 0.27);
+      const orangeColor = rgb(0.976, 0.451, 0.133);
+      let y = metaY - 20;
+      const rowGap = 22;
+      const colL = margin + 16;
+      const colR = margin + (pw - margin * 2) / 2 + 16;
+
+      function metaRow(yPos: number, label: string, val: string, x: number, valColorOverride?: Color) {
+        page.drawText(label.toUpperCase(), { x, y: yPos, size: 8, color: labelColor, font: fontBold });
+        page.drawText(val, { x, y: yPos - 12, size: 11, color: valColorOverride ?? valColor, font });
+      }
+
+      metaRow(y, 'Tender Name', sanitizePdfText(tenderName), colL);
+      metaRow(y, 'Drawing Number', sanitizePdfText(drawing.drawing_number || '-'), colR, orangeColor); y -= rowGap;
+      metaRow(y, 'Tender Reference', sanitizePdfText(tenderRef), colL, orangeColor);
+      metaRow(y, 'Drawing Title', sanitizePdfText(drawing.title), colR); y -= rowGap;
+      metaRow(y, 'Drawing Revision', sanitizePdfText(drawing.revision), colL);
+      metaRow(y, 'Drawing Discipline', sanitizePdfText(drawing.discipline), colR); y -= rowGap;
+      metaRow(y, 'Export Date', exportDate, colL);
+      metaRow(y, 'Take-Off Items', String(items.length), colR);
+    }
+
+    // Section label
+    const sectionY = pageStart === 0 ? tableTop : ph - 80;
+    page.drawText('MARKED-UP ITEMS', { x: margin, y: sectionY, size: 10, color: rgb(0.38, 0.43, 0.53), font: fontBold });
+
+    // Table header
+    const tblHeaderY = sectionY - 16;
+    const tblStartY = tblHeaderY - headerH;
+    page.drawRectangle({ x: margin, y: tblStartY, width: pw - margin * 2, height: headerH, color: rgb(0.94, 0.96, 0.99) });
+    page.drawLine({ start: { x: margin, y: tblStartY }, end: { x: pw - margin, y: tblStartY }, thickness: 0.5, color: rgb(0.89, 0.91, 0.94) });
+    page.drawLine({ start: { x: margin, y: tblHeaderY }, end: { x: pw - margin, y: tblHeaderY }, thickness: 0.5, color: rgb(0.89, 0.91, 0.94) });
+
+    const hdrColor = rgb(0.38, 0.43, 0.53);
+    const hdrY = tblStartY + 10;
+    page.drawText('Description', { x: colDesc, y: hdrY, size: 8, color: hdrColor, font: fontBold });
+    page.drawText('Type', { x: colType, y: hdrY, size: 8, color: hdrColor, font: fontBold });
+    page.drawText('Qty', { x: colQty, y: hdrY, size: 8, color: hdrColor, font: fontBold });
+    page.drawText('Unit', { x: colUnit, y: hdrY, size: 8, color: hdrColor, font: fontBold });
+    page.drawText('Trade', { x: colDisc, y: hdrY, size: 8, color: hdrColor, font: fontBold });
+    page.drawText('Scope', { x: colScope, y: hdrY, size: 8, color: hdrColor, font: fontBold });
+
+    // Rows
+    for (let i = 0; i < pageItems.length; i++) {
+      const item = pageItems[i];
+      const rowY = tblStartY - (i + 1) * rowH + rowH / 2 + 4;
+
+      // Row separator line
+      const lineY = tblStartY - (i + 1) * rowH;
+      page.drawLine({ start: { x: margin, y: lineY }, end: { x: pw - margin, y: lineY }, thickness: 0.3, color: rgb(0.92, 0.93, 0.95) });
+
+      const color = parseTakeoffPdfColour(item.colour, item.label);
+      const symSize = 7;
+
+      // Colour symbol — drawn as PDF primitive
+      if (item.measurement_type === 'count') {
+        page.drawCircle({ x: colColour + symSize / 2, y: rowY, size: symSize / 2, color });
+      } else if (item.measurement_type === 'linear') {
+        page.drawLine({ start: { x: colColour, y: rowY }, end: { x: colColour + symSize, y: rowY }, thickness: 1.5, color });
+      } else if (item.measurement_type === 'area') {
+        page.drawRectangle({ x: colColour, y: rowY - symSize / 2, width: symSize, height: symSize, color });
+      }
+
+      // Description (truncate)
+      const maxDescW = colType - colDesc - 6;
+      let desc = sanitizePdfText(item.label || 'Untitled');
+      while (font.widthOfTextAtSize(desc, 9) > maxDescW && desc.length > 3) desc = desc.substring(0, desc.length - 1);
+      if (desc !== sanitizePdfText(item.label || 'Untitled')) desc = desc.substring(0, desc.length - 1) + '...';
+      page.drawText(desc, { x: colDesc, y: rowY - 3, size: 9, color: rgb(0.11, 0.16, 0.27), font });
+
+      // Type
+      page.drawText(TYPE_LABELS[item.measurement_type] || '', { x: colType, y: rowY - 3, size: 8, color: rgb(0.4, 0.45, 0.55), font });
+
+      // Final quantity
+      const fq = finalQuantity(item);
+      const qtyStr = fq.toFixed(item.measurement_type === 'count' ? 0 : 2);
+      const qtyText = sanitizePdfText(qtyStr);
+      const qtyW = font.widthOfTextAtSize(qtyText, 9);
+      page.drawText(qtyText, { x: colQty + (30 - qtyW) / 2, y: rowY - 3, size: 9, color: rgb(0.11, 0.16, 0.27), font: fontBold });
+
+      // Unit
+      page.drawText(sanitizePdfText(item.unit), { x: colUnit, y: rowY - 3, size: 8, color: rgb(0.4, 0.45, 0.55), font });
+
+      // Trade / Discipline (item's own discipline, NOT drawing discipline)
+      page.drawText(sanitizePdfText(item.discipline), { x: colDisc, y: rowY - 3, size: 8, color: rgb(0.4, 0.45, 0.55), font });
+
+      // Scope badge
+      const scopeLabel = SCOPE_LABELS[item.line_type] || item.line_type;
+      let scopeColor = rgb(0.4, 0.45, 0.55);
+      if (item.line_type === 'addition') scopeColor = rgb(0.02, 0.6, 0.41);
+      if (item.line_type === 'omission') scopeColor = rgb(0.86, 0.15, 0.15);
+      page.drawText(scopeLabel, { x: colScope, y: rowY - 3, size: 8, color: scopeColor, font: fontBold });
+    }
+
+    drawSummaryFooter(page, font, fontBold, exportDate, tenderRef, internal);
   }
 }
