@@ -1,14 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Hash, Minus, Square, FileText, AlertCircle, X } from 'lucide-react';
+import { Plus, Search, Hash, Minus, Square, FileText, AlertCircle, X, Download, ChevronDown } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import type { DBTenderTakeoffItem } from './takeoffTypes';
 import type { MeasurementType, TakeoffLineType } from './takeoffTypes';
 import { DISCIPLINES } from './drawingTypes';
 import { finalQuantity, calcTakeoffCosts, signedTakeoffCosts, formatCurrency } from './takeoffCalculations';
+import { exportInternalTakeoffPDF, exportClientTakeoffPDF } from './TakeoffSchedulePDF';
+import { exportMarkedUpDrawingPDF } from './TakeoffDrawingPDF';
 
 interface Props {
   tenderId: string;
   tenderName: string;
+  tenderRef: string;
+  tenderClient: string;
+  tenderLocation: string;
 }
 
 const TYPE_ICONS: Record<MeasurementType, typeof Hash> = {
@@ -21,7 +26,7 @@ const LINE_TYPE_BADGES: Record<TakeoffLineType, string> = {
   omission: 'bg-red-900/60 text-red-400',
 };
 
-export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
+export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tenderClient, tenderLocation }: Props) {
   const store = useAppStore();
   const perms = usePermissions();
   const isAdmin = store.currentUser?.role === 'Admin';
@@ -32,6 +37,8 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
   const [drawingFilter, setDrawingFilter] = useState('all');
   const [view, setView] = useState<'byDrawing' | 'list'>('list');
   const [showAddManual, setShowAddManual] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,6 +80,63 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
     return acc;
   }, {});
 
+  // Export handlers
+  const exportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const logoDataUrl = store.settings?.logo_data_url;
+
+  function buildPDFData() {
+    return {
+      tenderName, tenderRef, client: tenderClient, location: tenderLocation,
+      exportDate, logoDataUrl,
+      items: store.tenderTakeoffItems.filter(i => i.tender_id === tenderId),
+      drawings: store.tenderDrawings.filter(d => d.tender_id === tenderId),
+      calibrations: store.tenderDrawingCalibrations,
+    };
+  }
+
+  function handleExportInternal() {
+    const data = buildPDFData();
+    if (data.items.length === 0) { setError('No Take-Off items to export.'); return; }
+    exportInternalTakeoffPDF(data);
+  }
+
+  function handleExportClient() {
+    const data = buildPDFData();
+    if (data.items.length === 0) { setError('No Take-Off items to export.'); return; }
+    exportClientTakeoffPDF(data);
+  }
+
+  async function handleExportDrawing() {
+    const data = buildPDFData();
+    const drawingItems = data.items.filter(i => i.drawing_id !== null);
+    if (drawingItems.length === 0) { setError('No drawing-linked Take-Off items to export.'); return; }
+    const drawingIds = [...new Set(drawingItems.map(i => i.drawing_id!))];
+    setExporting(true);
+    try {
+      for (const drawingId of drawingIds) {
+        const drawing = data.drawings.find(d => d.id === drawingId);
+        if (!drawing) continue;
+        const url = await store.getTenderDrawingSignedUrl(drawing.storage_path);
+        if (!url) continue;
+        const response = await fetch(url);
+        if (!response.ok) continue;
+        const arrayBuffer = await response.arrayBuffer();
+        await exportMarkedUpDrawingPDF({
+          drawing,
+          items: data.items.filter(i => i.drawing_id === drawingId),
+          calibrations: data.calibrations,
+          pdfBytes: arrayBuffer,
+          tenderName, tenderRef,
+          internal: canViewFinancials,
+        });
+      }
+    } catch (err) {
+      setError(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {error && (
@@ -111,6 +175,29 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
         <button onClick={() => setShowAddManual(true)} className="flex items-center gap-2 px-3 py-2 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">
           <Plus size={14} />Manual Item
         </button>
+        <div className="relative">
+          <button onClick={() => setShowExportMenu(!showExportMenu)} disabled={exporting || store.tenderTakeoffItems.length === 0} className="flex items-center gap-2 px-3 py-2 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-300 hover:bg-[#1e2d4a] hover:text-white disabled:opacity-30 transition-colors">
+            <Download size={14} />Export PDF <ChevronDown size={12} />
+          </button>
+          {showExportMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+              <div className="absolute right-0 top-full mt-1 z-50 w-56 bg-[#1a2236] border border-[#1e2d4a] rounded-lg shadow-2xl overflow-hidden">
+                {canViewFinancials && (
+                  <button onClick={() => { setShowExportMenu(false); handleExportInternal(); }} className="w-full flex items-center gap-3 px-4 py-3 text-xs text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left">
+                    <FileText size={14} />Internal Take-Off
+                  </button>
+                )}
+                <button onClick={() => { setShowExportMenu(false); handleExportClient(); }} className="w-full flex items-center gap-3 px-4 py-3 text-xs text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left border-t border-[#1e2d4a]">
+                  <FileText size={14} />Client Take-Off
+                </button>
+                <button onClick={() => { setShowExportMenu(false); handleExportDrawing(); }} disabled={drawings.length === 0} className="w-full flex items-center gap-3 px-4 py-3 text-xs text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left border-t border-[#1e2d4a] disabled:opacity-30">
+                  <FileText size={14} />Marked-Up Drawing
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Summary — no mixed-unit totals */}

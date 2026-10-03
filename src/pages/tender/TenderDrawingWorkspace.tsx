@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize, Ruler, Check, X, AlertCircle, MoveHorizontal } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize, Ruler, Check, X, AlertCircle, MoveHorizontal, Download } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import type { DBTenderDrawing, DBTenderDrawingCalibration, CalibrationPoint, CalibrationMethod } from './drawingTypes';
 import { PRESET_SCALES } from './drawingTypes';
@@ -14,6 +14,7 @@ import { UndoStack } from './takeoffUndoRedo';
 import { TakeoffAnnotationLayer } from './TakeoffAnnotationLayer';
 import { TakeoffCountHitOverlay } from './TakeoffCountHitOverlay';
 import TakeoffSidebar, { type Tool } from './TakeoffSidebar';
+import { exportMarkedUpDrawingPDF } from './TakeoffDrawingPDF';
 
 interface Props {
   drawing: DBTenderDrawing;
@@ -697,6 +698,29 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
     store.removeTenderTakeoffItem(id);
   };
 
+  // ── Export Marked-Up Drawing PDF ────────────────────────────────────────
+  const handleExportDrawingPDF = useCallback(async () => {
+    try {
+      const url = await store.getTenderDrawingSignedUrl(drawing.storage_path);
+      if (!url) { setErrorMsg('Failed to get drawing file for export.'); return; }
+      const response = await fetch(url);
+      if (!response.ok) { setErrorMsg(`Failed to download drawing: HTTP ${response.status}`); return; }
+      const arrayBuffer = await response.arrayBuffer();
+      const drawingItems = store.tenderTakeoffItems.filter(i => i.drawing_id === drawing.id);
+      await exportMarkedUpDrawingPDF({
+        drawing,
+        items: drawingItems,
+        calibrations: store.tenderDrawingCalibrations,
+        pdfBytes: arrayBuffer,
+        tenderName: tenderId,
+        tenderRef: tenderId,
+        internal: canViewFinancials,
+      });
+    } catch (err) {
+      setErrorMsg(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }, [drawing, store, tenderId, canViewFinancials]);
+
   // ── Render ───────────────────────────────────────────────────────────────
   const cursor = isSpacePanning ? (isPanningRef.current ? 'grabbing' : 'grab') :
     showCalibration && calibrationMode === 'manual' ? 'crosshair'
@@ -733,6 +757,9 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
           </div>
           <button onClick={() => { cancelDraft(); setShowCalibration(!showCalibration); }} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${showCalibration ? 'bg-[#f97316] text-white' : 'text-slate-400 border border-[#1e2d4a] hover:bg-[#1e2d4a] hover:text-white'}`}>
             <Ruler size={14} />Calibrate
+          </button>
+          <button onClick={handleExportDrawingPDF} disabled={store.tenderTakeoffItems.filter(i => i.drawing_id === drawing.id).length === 0} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 border border-[#1e2d4a] hover:bg-[#1e2d4a] hover:text-white disabled:opacity-30 transition-colors" title="Export marked-up drawing PDF">
+            <Download size={14} />Export PDF
           </button>
         </div>
       </div>

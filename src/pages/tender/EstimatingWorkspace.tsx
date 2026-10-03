@@ -58,7 +58,7 @@ export default function EstimatingWorkspace({ tender, onUpdate, EstimatingTab }:
       )}
 
       {subTab === 'Take-Off' && (
-        <TakeoffSchedule tenderId={tender.id} tenderName={tender.name} />
+        <TakeoffSchedule tenderId={tender.id} tenderName={tender.name} tenderRef={tender.ref} tenderClient={tender.client} tenderLocation={tender.location} />
       )}
 
       {subTab === 'Estimate' && (
