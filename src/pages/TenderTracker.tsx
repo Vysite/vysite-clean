@@ -29,7 +29,7 @@ import AITenderAssistant from '../components/AITenderAssistant';
 import AIContractReview from '../components/AIContractReview';
 import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 import EstimatingWorkspace from './tender/EstimatingWorkspace';
-import { calcLine, lineSign, calcLineSigned, getLineType, isIncluded, groupTotals, computeEstimateSummary, fmtNum, fmtC, fmtDeduction } from './tender/estimateCalculations';
+import { calcLine, lineSign, calcLineSigned, getLineType, isIncluded, groupTotals, computeEstimateSummary, fmtC, fmtDeduction, fmtNum as fmt } from './tender/estimateCalculations';
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 
