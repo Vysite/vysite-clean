@@ -207,16 +207,18 @@ export function exportAssetSummaryPDF(data: AssetSummaryPDFData): void {
     ? `<span class="cond-tag cond-${calc.latestCondition.replace(/\s+/g, '-')}">${esc(calc.latestCondition)}</span>`
     : '\u2014';
 
-  // KPI cards — financial visible only in internal or when explicitly safe
-  const showFinancials = internal; // Client PDF excludes financial per VYSITE rules
-
-  const financialKPIs = showFinancials ? `
+  // Lifecycle financials shown in both client and internal; Original Asset Cost internal-only
+  const lifecycleFinancialKPIs = `
 <div class="kpi-grid no-break">
-  <div class="kpi-card"><div class="kpi-label">Original Asset Cost</div><div class="kpi-value">${fmtGBP(asset.original_asset_cost)}</div></div>
   <div class="kpi-card"><div class="kpi-label">Current Replacement Cost</div><div class="kpi-value">${fmtGBP(asset.current_replacement_cost)}</div></div>
   <div class="kpi-card"><div class="kpi-label">Lifetime Service Spend</div><div class="kpi-value">${fmtGBP(calc.lifetimeSpend)}</div></div>
   <div class="kpi-card"><div class="kpi-label">Spend vs Replacement</div><div class="kpi-value">${calc.spendVsReplacement != null ? (calc.spendVsReplacement * 100).toFixed(1) + '%' : '\u2014'}</div>${calc.spendVsReplacement == null ? '<div class="kpi-sub">Replacement cost required</div>' : ''}</div>
   <div class="kpi-card"><div class="kpi-label">Last 12 Months Spend</div><div class="kpi-value">${fmtGBP(calc.last12Spend)}</div></div>
+</div>`;
+
+  const originalCostKPI = internal ? `
+<div class="kpi-grid no-break">
+  <div class="kpi-card"><div class="kpi-label">Original Asset Cost</div><div class="kpi-value">${fmtGBP(asset.original_asset_cost)}</div></div>
 </div>` : '';
 
   const operationalKPIs = `
@@ -278,16 +280,16 @@ export function exportAssetSummaryPDF(data: AssetSummaryPDFData): void {
     `<div class="data-field"><div class="data-dot ${f.present ? 'dot-present' : 'dot-absent'}"></div><span class="${f.present ? '' : 'data-field-absent'}">${esc(f.label)}${f.present ? '' : ' not recorded'}</span></div>`
   ).join('');
 
-  // Recent service history
+  // Recent service history — cost column shown in both client and internal
   const recentRows = records.length > 0
     ? records.slice(0, 5).map(r => `<tr>
         <td>${fmtDate(r.service_date)}</td>
         <td>${esc(r.service_type)}</td>
         <td>${r.condition ? `<span class="cond-tag cond-${r.condition.replace(/\s+/g, '-')}">${esc(r.condition)}</span>` : '\u2014'}</td>
         <td>${esc(r.status)}</td>
-        ${showFinancials ? `<td style="text-align:right">${r.cost != null ? fmtGBP(r.cost) : '\u2014'}</td>` : ''}
+        <td style="text-align:right">${r.cost != null ? fmtGBP(r.cost) : '\u2014'}</td>
       </tr>`).join('')
-    : `<tr><td colspan="${showFinancials ? 5 : 4}" class="empty-notice">No Service &amp; Maintenance history recorded.</td></tr>`;
+    : `<tr><td colspan="5" class="empty-notice">No Service &amp; Maintenance history recorded.</td></tr>`;
 
   // ─── PAGE 1 ───
   const page1 = `
@@ -331,7 +333,8 @@ export function exportAssetSummaryPDF(data: AssetSummaryPDFData): void {
   <tr><td class="label">Location</td><td class="value">${esc(locationName)}</td><td></td><td></td></tr>
 </table>
 
-${financialKPIs}
+${lifecycleFinancialKPIs}
+${originalCostKPI}
 ${operationalKPIs}
 
 <div class="review-panel no-break" style="background:${reviewColor.bg};border:1px solid ${reviewColor.border};">
@@ -379,13 +382,11 @@ ${operationalKPIs}
   ${dataFieldsHtml}
 </div>
 
-${showFinancials ? `
 <div class="section-label">Cost Breakdown by Service Type</div>
 <table class="list-table no-break">
   <thead><tr><th>Service Type</th><th style="text-align:right">Records</th><th style="text-align:right">Total Cost</th></tr></thead>
   <tbody>${breakdownRows}</tbody>
 </table>
-` : ''}
 `;
 
   // ─── PAGE 3 ───
@@ -402,7 +403,6 @@ ${showFinancials ? `
   </div>
 </div>
 
-${showFinancials ? `
 <div class="section-label">Service &amp; Maintenance Spend Over Time</div>
 <div class="no-break">${trendBars}</div>
 
@@ -413,14 +413,13 @@ ${showFinancials ? `
     <tr><td class="label">Change</td><td class="value">${trendChangeHtml}</td><td></td><td></td></tr>
   </table>
 </div>
-` : ''}
 
 <div class="section-label">Key Dates / Lifecycle Timeline</div>
 ${timelineHtml}
 
 <div class="section-label">Recent Service History</div>
 <table class="list-table no-break">
-  <thead><tr><th>Date</th><th>Service Type</th><th>Condition</th><th>Status</th>${showFinancials ? '<th style="text-align:right">Cost</th>' : ''}</tr></thead>
+  <thead><tr><th>Date</th><th>Service Type</th><th>Condition</th><th>Status</th><th style="text-align:right">Cost</th></tr></thead>
   <tbody>${recentRows}</tbody>
 </table>
 
