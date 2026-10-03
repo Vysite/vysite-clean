@@ -188,6 +188,10 @@ export function exportAssetPDF(data: AssetPDFData): void {
       <td class="label">Commissioning Date</td><td class="value">${fmtD(asset.commissioning_date)}</td></tr>
   <tr><td class="label">Warranty Expiry</td><td class="value">${fmtD(asset.warranty_expiry)}</td>
       <td class="label">Project Reference</td><td class="value">${esc(asset.project_name) || '\u2014'}</td></tr>
+</table>
+
+<div class="section-label">Asset Value</div>
+<table class="data-table no-break">
   <tr><td class="label">Original Asset Cost</td><td class="value">${asset.original_asset_cost != null ? '\u00a3' + Number(asset.original_asset_cost).toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '\u2014'}</td>
       <td class="label">Current Replacement Cost</td><td class="value">${asset.current_replacement_cost != null ? '\u00a3' + Number(asset.current_replacement_cost).toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '\u2014'}</td></tr>
 </table>
