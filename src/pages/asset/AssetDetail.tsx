@@ -3,7 +3,7 @@ import { ArrowLeft, Package, FileText, MessageSquare, Edit3, Save, Plus, Trash2,
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import FileUpload, { type UploadedFile } from '../../components/FileUpload';
 import type { DBAsset, AssetStatus, DBAssetDocument, DBAssetActivity } from './types';
-import { ASSET_STATUSES, ASSET_TYPES, ASSET_STATUS_COLORS } from './types';
+import { ASSET_STATUSES, ASSET_TYPES, ASSET_STATUS_COLORS, ASSET_DOC_CATEGORIES } from './types';
 
 interface Props {
   asset: DBAsset;
@@ -217,6 +217,10 @@ function DocumentsTab({ asset, canUpload, canDelete }: { asset: DBAsset; canUplo
   const [docs, setDocs] = useState<DBAssetDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState<UploadedFile[]>([]);
+  const [category, setCategory] = useState<string>('Other');
+  const [notes, setNotes] = useState<string>('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     store.loadAssetDocuments(asset.id).then(() => setLoading(false));
@@ -227,25 +231,33 @@ function DocumentsTab({ asset, canUpload, canDelete }: { asset: DBAsset; canUplo
   }, [store.assetDocuments]);
 
   const fmtSize = (n: number) => n < 1024 ? `${n}B` : n < 1048576 ? `${(n / 1024).toFixed(0)}KB` : `${(n / 1048576).toFixed(1)}MB`;
+  const inputCls = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600';
+  const labelCls = 'text-xs font-semibold text-slate-500 uppercase tracking-wider';
 
-  async function handleUpload(files: UploadedFile[]) {
-    for (const f of files) {
+  async function handleSaveUpload() {
+    if (uploadFiles.length === 0) return;
+    setSaving(true);
+    for (const f of uploadFiles) {
       const id = await store.addAssetDocument({
         org_id: store.currentOrgId ?? '',
         asset_id: asset.id,
         name: f.name,
-        category: 'Other',
+        category,
         file_type: f.type,
         file_size: f.size,
         storage_path: null,
         data_url: f.dataUrl ?? null,
-        notes: null,
+        notes: notes || null,
         uploaded_by: store.currentUser?.name ?? null,
       });
       if (id) {
         await store.addAssetActivity({ org_id: store.currentOrgId ?? '', asset_id: asset.id, type: 'document_upload', text: `Document uploaded: ${f.name}`, user_name: store.currentUser?.name ?? '' });
       }
     }
+    setSaving(false);
+    setUploadFiles([]);
+    setCategory('Other');
+    setNotes('');
     setShowUpload(false);
     await store.loadAssetDocuments(asset.id);
   }
@@ -262,8 +274,27 @@ function DocumentsTab({ asset, canUpload, canDelete }: { asset: DBAsset; canUplo
         {canUpload && <button onClick={() => setShowUpload(!showUpload)} className="flex items-center gap-2 bg-[#f97316] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors"><Plus size={16} />Upload Document</button>}
       </div>
       {showUpload && (
-        <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-4">
-          <FileUpload onFilesAdded={handleUpload} maxFileSizeMB={25} />
+        <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-4 space-y-3">
+          <FileUpload files={uploadFiles} onChange={setUploadFiles} label="Upload Documents" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Category</label>
+              <select className={inputCls + ' mt-1.5'} value={category} onChange={e => setCategory(e.target.value)}>
+                {ASSET_DOC_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Notes</label>
+              <input className={inputCls + ' mt-1.5'} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional notes..." />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => { setShowUpload(false); setUploadFiles([]); }} className="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors">Cancel</button>
+            <button onClick={handleSaveUpload} disabled={uploadFiles.length === 0 || saving}
+              className="flex items-center gap-1.5 bg-[#f97316] text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors disabled:opacity-60">
+              {saving ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={12} />}Save Documents
+            </button>
+          </div>
         </div>
       )}
       {loading ? (

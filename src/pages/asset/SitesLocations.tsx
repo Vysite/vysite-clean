@@ -168,6 +168,7 @@ function SiteModal({ site, onClose }: { site?: DBAssetSite; onClose: () => void 
 function BuildingModal({ building, siteId, onClose }: { building?: DBAssetBuilding; siteId: string | null; onClose: () => void }) {
   const store = useAppStore();
   const [name, setName] = useState(building?.name ?? '');
+  const [description, setDescription] = useState(building?.notes ?? '');
   const [status, setStatus] = useState<LocationStatus>(building?.status ?? 'Active');
   const [saving, setSaving] = useState(false);
 
@@ -175,9 +176,9 @@ function BuildingModal({ building, siteId, onClose }: { building?: DBAssetBuildi
     if (!name.trim()) return;
     setSaving(true);
     if (building) {
-      await store.updateAssetBuilding({ id: building.id, name: name.trim(), status });
+      await store.updateAssetBuilding({ id: building.id, name: name.trim(), status, notes: description || null });
     } else {
-      await store.addAssetBuilding({ org_id: store.currentOrgId ?? '', site_id: siteId, name: name.trim(), status, notes: null, sort_order: 0 });
+      await store.addAssetBuilding({ org_id: store.currentOrgId ?? '', site_id: siteId, name: name.trim(), status, notes: description || null, sort_order: 0 });
     }
     setSaving(false);
     onClose();
@@ -186,6 +187,7 @@ function BuildingModal({ building, siteId, onClose }: { building?: DBAssetBuildi
   return (
     <Modal title={building ? 'Edit Building' : 'Add Building'} onClose={onClose} onSave={handleSave} saving={saving}>
       <Field label="Building Name *"><input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Farnborough Ward" /></Field>
+      <Field label="Address / Description"><input className={inputCls} value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. North campus, adjacent to main entrance" /></Field>
       <Field label="Status"><select className={inputCls} value={status} onChange={e => setStatus(e.target.value as LocationStatus)}><option>Active</option><option>Inactive</option></select></Field>
     </Modal>
   );
@@ -198,15 +200,16 @@ function LocationModal({ location, buildingId, onClose }: { location?: DBAssetLo
   const [area, setArea] = useState(location?.area ?? '');
   const [room, setRoom] = useState(location?.room ?? '');
   const [status, setStatus] = useState<LocationStatus>(location?.status ?? 'Active');
+  const [locNotes, setLocNotes] = useState(location?.notes ?? '');
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     if (!name.trim()) return;
     setSaving(true);
     if (location) {
-      await store.updateAssetLocation({ id: location.id, name: name.trim(), floor: floor || null, area: area || null, room: room || null, status });
+      await store.updateAssetLocation({ id: location.id, name: name.trim(), floor: floor || null, area: area || null, room: room || null, notes: locNotes || null, status });
     } else {
-      await store.addAssetLocation({ org_id: store.currentOrgId ?? '', building_id: buildingId, name: name.trim(), floor: floor || null, area: area || null, room: room || null, notes: null, status, sort_order: 0 });
+      await store.addAssetLocation({ org_id: store.currentOrgId ?? '', building_id: buildingId, name: name.trim(), floor: floor || null, area: area || null, room: room || null, notes: locNotes || null, status, sort_order: 0 });
     }
     setSaving(false);
     onClose();
@@ -220,6 +223,7 @@ function LocationModal({ location, buildingId, onClose }: { location?: DBAssetLo
         <Field label="Area"><input className={inputCls} value={area} onChange={e => setArea(e.target.value)} /></Field>
         <Field label="Room"><input className={inputCls} value={room} onChange={e => setRoom(e.target.value)} /></Field>
       </div>
+      <Field label="Notes"><textarea className={inputCls + ' resize-none'} rows={2} value={locNotes} onChange={e => setLocNotes(e.target.value)} /></Field>
       <Field label="Status"><select className={inputCls} value={status} onChange={e => setStatus(e.target.value as LocationStatus)}><option>Active</option><option>Inactive</option></select></Field>
     </Modal>
   );
