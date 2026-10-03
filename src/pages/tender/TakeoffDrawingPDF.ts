@@ -200,9 +200,12 @@ function renderAreaPDF(page: PDFPage, geo: AreaGeometry, color: Color, font: PDF
   const fontSize = Math.min(pw, ph) * 0.008;
 
   for (const poly of geo.polygons) {
-    // Outline
+    // Outline + fill via SVG path (pdf-lib has no drawPolygonPoints)
     const pts = poly.vertices.map(v => ({ x: nx(v.x, pw), y: ny(v.y, ph) }));
-    page.drawPolygonPoints({ points: pts, borderColor: color, borderWidth: lineWidth, color });
+    if (pts.length >= 2) {
+      const svgPath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ') + ' Z';
+      page.drawSvgPath(svgPath, { borderColor: color, borderWidth: lineWidth, color, opacity: 0.15 });
+    }
 
     // Area value at centroid
     let cx = 0, cy = 0;
