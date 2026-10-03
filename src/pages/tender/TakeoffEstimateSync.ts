@@ -57,6 +57,7 @@ export function getSyncStatus(
   );
   if (!linked) return 'not_synced';
   if (!linked.sourceTakeoffSyncHash) return 'synced';
+  if (!linked.sourceLineType) return 'changed';
   const currentHash = takeoffSyncHash(takeoffItem);
   return linked.sourceTakeoffSyncHash === currentHash ? 'synced' : 'changed';
 }
