@@ -260,7 +260,7 @@ function CreateAssetModal({ onClose }: { onClose: () => void }) {
     name: '', asset_type: 'Other', manufacturer: '', model: '', serial_number: '',
     site_id: '', building_id: '', location_id: '', status: 'Active' as AssetStatus,
     installation_date: '', commissioning_date: '', warranty_expiry: '',
-    project_id: '', notes: '',
+    project_id: '', notes: '', original_asset_cost: '', current_replacement_cost: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -320,6 +320,8 @@ function CreateAssetModal({ onClose }: { onClose: () => void }) {
       notes: form.notes || null,
       public_asset_token: null,
       created_by: store.currentUser?.name ?? null,
+      original_asset_cost: form.original_asset_cost ? parseFloat(form.original_asset_cost) : null,
+      current_replacement_cost: form.current_replacement_cost ? parseFloat(form.current_replacement_cost) : null,
     };
 
     const id = await store.addAsset(newAsset);
@@ -367,6 +369,19 @@ function CreateAssetModal({ onClose }: { onClose: () => void }) {
             <div><label className={labelCls}>Installation Date</label><input type="date" className={inputCls + ' mt-1.5'} value={form.installation_date} onChange={set('installation_date')} /></div>
             <div><label className={labelCls}>Commissioning Date</label><input type="date" className={inputCls + ' mt-1.5'} value={form.commissioning_date} onChange={set('commissioning_date')} /></div>
             <div><label className={labelCls}>Warranty Expiry</label><input type="date" className={inputCls + ' mt-1.5'} value={form.warranty_expiry} onChange={set('warranty_expiry')} /></div>
+          </div>
+          <div className="border-t border-[#1e2d4a] pt-4 mt-2">
+            <p className="text-xs font-bold text-[#f97316] uppercase tracking-wider mb-3">Asset Value</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Original Asset Cost (£)</label>
+                <input type="number" step="0.01" min="0" className={inputCls + ' mt-1.5'} value={form.original_asset_cost} onChange={set('original_asset_cost')} placeholder="0.00" />
+              </div>
+              <div>
+                <label className={labelCls}>Current Replacement Cost (£)</label>
+                <input type="number" step="0.01" min="0" className={inputCls + ' mt-1.5'} value={form.current_replacement_cost} onChange={set('current_replacement_cost')} placeholder="0.00" />
+              </div>
+            </div>
           </div>
           <div><label className={labelCls}>Notes</label><textarea className={inputCls + ' mt-1.5 resize-none'} rows={3} value={form.notes} onChange={set('notes')} /></div>
         </form>

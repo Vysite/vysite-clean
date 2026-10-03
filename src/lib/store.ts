@@ -147,7 +147,8 @@ export type PermissionKey =
   | 'asset.edit'
   | 'asset.delete'
   | 'asset.comment'
-  | 'asset.upload';
+  | 'asset.upload'
+  | 'asset.view_financials';
 
 export interface DBPlatformUser {
   id: string;
@@ -195,7 +196,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'modules.commercial': true, 'commercial.create': true, 'commercial.edit': true, 'commercial.delete': true,
     'modules.supply_chain': true, 'supply_chain.view': true, 'supply_chain.create_edit': true,
     'modules.assets': true, 'asset.view': true, 'asset.create': true, 'asset.edit': true, 'asset.delete': true,
-    'asset.comment': true, 'asset.upload': true,
+    'asset.comment': true, 'asset.upload': true, 'asset.view_financials': true,
   },
   'Commercial Lead': {
     'projects.view_all': true, 'projects.view_assigned': true,
@@ -221,7 +222,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'modules.commercial': true, 'commercial.create': true, 'commercial.edit': true, 'commercial.delete': true,
     'modules.supply_chain': true, 'supply_chain.view': true,
     'modules.assets': true, 'asset.view': true, 'asset.create': true, 'asset.edit': true, 'asset.delete': false,
-    'asset.comment': true, 'asset.upload': true,
+    'asset.comment': true, 'asset.upload': true, 'asset.view_financials': true,
   },
   'Project Manager': {
     'projects.view_assigned': true, 'projects.edit': true,
@@ -239,7 +240,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.assign': true, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
     'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
     'modules.assets': true, 'asset.view': true, 'asset.create': true, 'asset.edit': true, 'asset.delete': false,
-    'asset.comment': true, 'asset.upload': true,
+    'asset.comment': true, 'asset.upload': true, 'asset.view_financials': true,
   },
   'Site Manager': {
     'projects.view_assigned': true,
@@ -256,7 +257,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.assign': false, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
     'programmes.view': true, 'programmes.create': false, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
     'modules.assets': true, 'asset.view': true, 'asset.create': false, 'asset.edit': true, 'asset.delete': false,
-    'asset.comment': true, 'asset.upload': true,
+    'asset.comment': true, 'asset.upload': true, 'asset.view_financials': true,
   },
   Engineer: {
     'projects.view_assigned': true,
@@ -272,7 +273,7 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.assign': false, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
     'programmes.view': true, 'programmes.create': false, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
     'modules.assets': true, 'asset.view': true, 'asset.create': false, 'asset.edit': true, 'asset.delete': false,
-    'asset.comment': true, 'asset.upload': true,
+    'asset.comment': true, 'asset.upload': true, 'asset.view_financials': false,
   },
   'Estimator / QS': {
     'projects.view_assigned': true,

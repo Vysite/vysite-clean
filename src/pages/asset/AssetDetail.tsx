@@ -25,6 +25,7 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
   const canUpload = perms['asset.upload'] || isAdmin;
   const canCreate = perms['asset.create'] || isAdmin;
   const canView = perms['asset.view'] || isAdmin;
+  const canViewFinancials = perms['asset.view_financials'] || isAdmin;
 
   const [tab, setTab] = useState<Tab>('overview');
   const [editing, setEditing] = useState(false);
@@ -104,7 +105,7 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
       </div>
 
       {tab === 'overview' && (
-        <OverviewTab asset={asset} canEdit={canEdit} canUpload={canUpload} editing={editing} setEditing={setEditing}
+        <OverviewTab asset={asset} canEdit={canEdit} canUpload={canUpload} canViewFinancials={canViewFinancials} editing={editing} setEditing={setEditing}
           siteName={siteName} buildingName={buildingName} locationName={locationName}
           onAssetUpdated={onAssetUpdated} />
       )}
@@ -121,8 +122,8 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
   );
 }
 
-function OverviewTab({ asset, canEdit, canUpload, editing, setEditing, siteName, buildingName, locationName, onAssetUpdated }: {
-  asset: DBAsset; canEdit: boolean; canUpload: boolean; editing: boolean; setEditing: (b: boolean) => void;
+function OverviewTab({ asset, canEdit, canUpload, canViewFinancials, editing, setEditing, siteName, buildingName, locationName, onAssetUpdated }: {
+  asset: DBAsset; canEdit: boolean; canUpload: boolean; canViewFinancials: boolean; editing: boolean; setEditing: (b: boolean) => void;
   siteName: (id: string | null) => string; buildingName: (id: string | null) => string; locationName: (id: string | null) => string;
   onAssetUpdated: (a: DBAsset) => void;
 }) {
@@ -175,6 +176,21 @@ function OverviewTab({ asset, canEdit, canUpload, editing, setEditing, siteName,
           </div>
         )}
       </div>
+      {canViewFinancials && (
+        <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5">
+          <h3 className="text-xs font-bold text-[#f97316] uppercase tracking-wider mb-3">Asset Value</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+            <div className="flex justify-between py-2 border-b border-[#0d1628] last:border-0">
+              <span className="text-xs text-slate-500">Original Asset Cost</span>
+              <span className="text-sm text-slate-200 font-medium">{asset.original_asset_cost != null ? '\u00a3' + Number(asset.original_asset_cost).toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '\u2014'}</span>
+            </div>
+            <div className="flex justify-between py-2 border-b border-[#0d1628] last:border-0">
+              <span className="text-xs text-slate-500">Current Replacement Cost</span>
+              <span className="text-sm text-slate-200 font-medium">{asset.current_replacement_cost != null ? '\u00a3' + Number(asset.current_replacement_cost).toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '\u2014'}</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -348,6 +364,8 @@ function EditAssetForm({ asset, onCancel, onSave }: { asset: DBAsset; onCancel: 
     location_id: asset.location_id ?? '', status: asset.status as AssetStatus,
     installation_date: asset.installation_date ?? '', commissioning_date: asset.commissioning_date ?? '',
     warranty_expiry: asset.warranty_expiry ?? '', notes: asset.notes ?? '',
+    original_asset_cost: asset.original_asset_cost != null ? String(asset.original_asset_cost) : '',
+    current_replacement_cost: asset.current_replacement_cost != null ? String(asset.current_replacement_cost) : '',
   });
   const [saving, setSaving] = useState(false);
   const [serialWarn, setSerialWarn] = useState(false);
@@ -370,10 +388,17 @@ function EditAssetForm({ asset, onCancel, onSave }: { asset: DBAsset; onCancel: 
       status: form.status,
       installation_date: form.installation_date || null, commissioning_date: form.commissioning_date || null,
       warranty_expiry: form.warranty_expiry || null, notes: form.notes || null,
+      original_asset_cost: form.original_asset_cost ? parseFloat(form.original_asset_cost) : null,
+      current_replacement_cost: form.current_replacement_cost ? parseFloat(form.current_replacement_cost) : null,
     };
     await store.updateAsset(updates);
+    const valueChanged =
+      (form.original_asset_cost || null) !== (asset.original_asset_cost != null ? String(asset.original_asset_cost) : '') ||
+      (form.current_replacement_cost || null) !== (asset.current_replacement_cost != null ? String(asset.current_replacement_cost) : '');
     if (form.status !== prevStatus) {
       await store.addAssetActivity({ org_id: store.currentOrgId ?? '', asset_id: asset.id, type: 'status_change', text: `Status changed: ${prevStatus} \u2192 ${form.status}`, user_name: store.currentUser?.name ?? '' });
+    } else if (valueChanged) {
+      await store.addAssetActivity({ org_id: store.currentOrgId ?? '', asset_id: asset.id, type: 'value_updated', text: 'Asset value updated', user_name: store.currentUser?.name ?? '' });
     } else {
       await store.addAssetActivity({ org_id: store.currentOrgId ?? '', asset_id: asset.id, type: 'updated', text: 'Asset details updated', user_name: store.currentUser?.name ?? '' });
     }
@@ -413,6 +438,13 @@ function EditAssetForm({ asset, onCancel, onSave }: { asset: DBAsset; onCancel: 
         <div><label className={labelCls}>Warranty Expiry</label><input type="date" className={inputCls + ' mt-1.5'} value={form.warranty_expiry} onChange={set('warranty_expiry')} /></div>
       </div>
       <div><label className={labelCls}>Notes</label><textarea className={inputCls + ' mt-1.5 resize-none'} rows={3} value={form.notes} onChange={set('notes')} /></div>
+      <div className="border-t border-[#1e2d4a] pt-4 mt-2">
+        <p className="text-xs font-bold text-[#f97316] uppercase tracking-wider mb-3">Asset Value</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label className={labelCls}>Original Asset Cost (£)</label><input type="number" step="0.01" min="0" className={inputCls + ' mt-1.5'} value={form.original_asset_cost} onChange={set('original_asset_cost')} placeholder="0.00" /></div>
+          <div><label className={labelCls}>Current Replacement Cost (£)</label><input type="number" step="0.01" min="0" className={inputCls + ' mt-1.5'} value={form.current_replacement_cost} onChange={set('current_replacement_cost')} placeholder="0.00" /></div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -566,6 +598,7 @@ function ActivityTab({ asset, canComment }: { asset: DBAsset; canComment: boolea
     if (type === 'document_upload' || type === 'document_removed') return <FileText size={12} className="text-blue-400" />;
     if (type === 'image_upload' || type === 'image_removed' || type === 'primary_changed') return <ImageIcon size={12} className="text-orange-400" />;
     if (type.startsWith('service_')) return <Wrench size={12} className="text-sky-400" />;
+    if (type === 'value_updated') return <Edit3 size={12} className="text-emerald-400" />;
     return <MessageSquare size={12} className="text-slate-500" />;
   }
 

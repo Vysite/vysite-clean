@@ -83,6 +83,8 @@ export interface DBAsset {
   project_name: string | null;
   notes: string | null;
   public_asset_token: string | null;
+  original_asset_cost: number | null;
+  current_replacement_cost: number | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
