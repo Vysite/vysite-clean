@@ -7,6 +7,9 @@ import type {
 import type {
   DBSupplier, DBSupplierTrade, DBSupplierSpecialism, DBSupplierLabourRateType,
 } from '../pages/supplychain/types';
+import type {
+  DBTenderDrawing, DBTenderDrawingCalibration,
+} from '../pages/tender/drawingTypes';
 
 // ─── Types for DB rows ────────────────────────────────────────────────────────
 
@@ -1492,6 +1495,21 @@ export interface AppStore {
   addMyWorkNote: (note: DBMyWorkNote) => Promise<void>;
   updateMyWorkNote: (note: DBMyWorkNote) => Promise<void>;
   removeMyWorkNote: (id: string) => Promise<void>;
+
+  // Tender Drawings (on-demand, per-tender)
+  tenderDrawings: DBTenderDrawing[];
+  tenderDrawingsLoading: boolean;
+  loadTenderDrawings: (tenderId: string) => Promise<void>;
+  addTenderDrawing: (d: DBTenderDrawing) => Promise<string | null>;
+  updateTenderDrawing: (d: Partial<DBTenderDrawing> & { id: string }) => Promise<void>;
+  removeTenderDrawing: (id: string, storagePath: string) => Promise<void>;
+  getTenderDrawingSignedUrl: (storagePath: string) => Promise<string | null>;
+
+  // Tender Drawing Calibrations (on-demand, per-drawing)
+  tenderDrawingCalibrations: DBTenderDrawingCalibration[];
+  loadTenderDrawingCalibrations: (drawingId: string) => Promise<void>;
+  upsertTenderDrawingCalibration: (c: DBTenderDrawingCalibration) => Promise<void>;
+  removeTenderDrawingCalibration: (id: string) => Promise<void>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1602,6 +1620,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [myWorkStatus, setMyWorkStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [myWorkNotes, setMyWorkNotes] = useState<DBMyWorkNote[]>([]);
   const [myWorkNoteCounts, setMyWorkNoteCounts] = useState<Record<string, number>>({});
+  const [tenderDrawings, setTenderDrawings] = useState<DBTenderDrawing[]>([]);
+  const [tenderDrawingsLoading, setTenderDrawingsLoading] = useState(false);
+  const [tenderDrawingCalibrations, setTenderDrawingCalibrations] = useState<DBTenderDrawingCalibration[]>([]);
 
   // Keep a stable ref to orgId so callbacks always read the latest value
   // without needing to be re-created (avoids cascading re-renders).
@@ -3009,6 +3030,87 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     return null;
   }, []);
 
+  // ── Tender Drawings (on-demand, per-tender) ──────────────────────────────
+  const loadTenderDrawings = useCallback(async (tenderId: string) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setTenderDrawingsLoading(true);
+    const { data, error } = await supabase
+      .from('vy_tender_drawings')
+      .select('*')
+      .eq('org_id', oid)
+      .eq('tender_id', tenderId)
+      .order('created_at', { ascending: false });
+    if (error) { logWrite('loadTenderDrawings', 'vy_tender_drawings', error); }
+    setTenderDrawings((data ?? []) as DBTenderDrawing[]);
+    setTenderDrawingsLoading(false);
+  }, []);
+
+  const addTenderDrawing = useCallback(async (d: DBTenderDrawing): Promise<string | null> => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return 'No organisation context.';
+    setTenderDrawings(prev => [d, ...prev]);
+    const { error } = await supabase.from('vy_tender_drawings').insert({ ...d, org_id: oid });
+    logWrite('addTenderDrawing', 'vy_tender_drawings', error);
+    return error ? error.message : null;
+  }, []);
+
+  const updateTenderDrawing = useCallback(async (d: Partial<DBTenderDrawing> & { id: string }) => {
+    setTenderDrawings(prev => prev.map(x => x.id === d.id ? { ...x, ...d } : x));
+    const { id, ...rest } = d;
+    const { error } = await supabase.from('vy_tender_drawings').update(rest).eq('id', id);
+    logWrite('updateTenderDrawing', 'vy_tender_drawings', error);
+  }, []);
+
+  const removeTenderDrawing = useCallback(async (id: string, storagePath: string) => {
+    setTenderDrawings(prev => prev.filter(x => x.id !== id));
+    setTenderDrawingCalibrations(prev => prev.filter(c => c.drawing_id !== id));
+    const { error: dbErr } = await supabase.from('vy_tender_drawings').delete().eq('id', id);
+    logWrite('removeTenderDrawing', 'vy_tender_drawings', dbErr);
+    if (storagePath) {
+      const { error: stErr } = await supabase.storage.from('tender-drawings').remove([storagePath]);
+      logWrite('removeTenderDrawingStorage', 'tender-drawings', stErr);
+    }
+  }, []);
+
+  const getTenderDrawingSignedUrl = useCallback(async (storagePath: string): Promise<string | null> => {
+    const { data, error } = await supabase.storage.from('tender-drawings').createSignedUrl(storagePath, 3600);
+    if (error) { logWrite('getTenderDrawingSignedUrl', 'tender-drawings', error); return null; }
+    return data?.signedUrl ?? null;
+  }, []);
+
+  // ── Tender Drawing Calibrations (on-demand, per-drawing) ───────────────────
+  const loadTenderDrawingCalibrations = useCallback(async (drawingId: string) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const { data, error } = await supabase
+      .from('vy_tender_drawing_calibrations')
+      .select('*')
+      .eq('org_id', oid)
+      .eq('drawing_id', drawingId)
+      .order('page_number', { ascending: true });
+    if (error) { logWrite('loadTenderDrawingCalibrations', 'vy_tender_drawing_calibrations', error); }
+    setTenderDrawingCalibrations((data ?? []) as DBTenderDrawingCalibration[]);
+  }, []);
+
+  const upsertTenderDrawingCalibration = useCallback(async (c: DBTenderDrawingCalibration) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setTenderDrawingCalibrations(prev => {
+      const idx = prev.findIndex(x => x.drawing_id === c.drawing_id && x.page_number === c.page_number);
+      if (idx >= 0) { const copy = [...prev]; copy[idx] = c; return copy; }
+      return [...prev, c];
+    });
+    const { error } = await supabase.from('vy_tender_drawing_calibrations').upsert(c, { onConflict: 'drawing_id,page_number' });
+    logWrite('upsertTenderDrawingCalibration', 'vy_tender_drawing_calibrations', error);
+  }, []);
+
+  const removeTenderDrawingCalibration = useCallback(async (id: string) => {
+    setTenderDrawingCalibrations(prev => prev.filter(c => c.id !== id));
+    const { error } = await supabase.from('vy_tender_drawing_calibrations').delete().eq('id', id);
+    logWrite('removeTenderDrawingCalibration', 'vy_tender_drawing_calibrations', error);
+  }, []);
+
   return {
     projects, projectDocuments, attachments,
     actions, snags, snaggingReports, siteForms, tenders, tcRecords, maintenanceJobs, programmes, programmeTasks, keyDates,
@@ -3072,5 +3174,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addProjectCost, updateProjectCost, removeProjectCost, batchAddProjectCosts,
     myWorkItems, myWorkStatus, reloadMyWork, addMyWorkItem, updateMyWorkItem, removeMyWorkItem,
     myWorkNotes, myWorkNoteCounts, loadMyWorkNotes, loadAllMyWorkNoteCounts, addMyWorkNote, updateMyWorkNote, removeMyWorkNote,
+    tenderDrawings, tenderDrawingsLoading, loadTenderDrawings, addTenderDrawing, updateTenderDrawing, removeTenderDrawing, getTenderDrawingSignedUrl,
+    tenderDrawingCalibrations, loadTenderDrawingCalibrations, upsertTenderDrawingCalibration, removeTenderDrawingCalibration,
   };
 }

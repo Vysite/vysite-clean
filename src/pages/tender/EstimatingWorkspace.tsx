@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FileImage, Ruler, Calculator, ClipboardList } from 'lucide-react';
 import type { Tender } from '../../data/types';
+import TenderDrawingsTab from './TenderDrawingsTab';
 
 interface EstimatingTabProps {
   tender: Tender;
@@ -52,11 +53,7 @@ export default function EstimatingWorkspace({ tender, onUpdate, EstimatingTab }:
       </div>
 
       {subTab === 'Drawings' && (
-        <PlaceholderPanel
-          title="Drawings"
-          description="Drawing management and PDF viewer will be available here once configured. This workspace is not yet set up."
-          icon={FileImage}
-        />
+        <TenderDrawingsTab tenderId={tender.id} tenderName={tender.name} />
       )}
 
       {subTab === 'Take-Off' && (
