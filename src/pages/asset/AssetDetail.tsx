@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Package, FileText, MessageSquare, Edit3, Save, Plus, Trash2, Download, Paperclip, FileDown, Image as ImageIcon, Star, X, Loader2, Wrench } from 'lucide-react';
+import { ArrowLeft, Package, FileText, MessageSquare, Edit3, Save, Plus, Trash2, Download, Paperclip, FileDown, Image as ImageIcon, Star, X, Loader2, Wrench, BarChart3 } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import FileUpload, { type UploadedFile } from '../../components/FileUpload';
 import type { DBAsset, AssetStatus, DBAssetDocument, DBAssetActivity, DBAssetMedia } from './types';
 import { ASSET_STATUSES, ASSET_TYPES, ASSET_STATUS_COLORS, ASSET_DOC_CATEGORIES } from './types';
 import { exportAssetPDF } from './AssetPDF';
 import ServiceTab from './ServiceTab';
+import AssetSummary from './AssetSummary';
 
 interface Props {
   asset: DBAsset;
@@ -13,7 +14,7 @@ interface Props {
   onAssetUpdated: (a: DBAsset) => void;
 }
 
-type Tab = 'overview' | 'service' | 'documents' | 'activity';
+type Tab = 'overview' | 'summary' | 'service' | 'documents' | 'activity';
 
 export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
   const store = useAppStore();
@@ -99,6 +100,7 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
 
       <div className="flex gap-1 bg-[#1a2236] border border-[#1e2d4a] rounded-lg p-1 overflow-x-auto">
         <button className={tabCls('overview')} onClick={() => setTab('overview')}><Package size={15} />Overview</button>
+        <button className={tabCls('summary')} onClick={() => setTab('summary')}><BarChart3 size={15} />Summary</button>
         <button className={tabCls('service')} onClick={() => setTab('service')}><Wrench size={15} />Service & Maintenance</button>
         <button className={tabCls('documents')} onClick={() => setTab('documents')}><FileText size={15} />Documents</button>
         <button className={tabCls('activity')} onClick={() => setTab('activity')}><MessageSquare size={15} />Activity</button>
@@ -108,6 +110,9 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
         <OverviewTab asset={asset} canEdit={canEdit} canUpload={canUpload} canViewFinancials={canViewFinancials} editing={editing} setEditing={setEditing}
           siteName={siteName} buildingName={buildingName} locationName={locationName}
           onAssetUpdated={onAssetUpdated} />
+      )}
+      {tab === 'summary' && (
+        <AssetSummary asset={asset} canViewFinancials={canViewFinancials} />
       )}
       {tab === 'service' && (
         <ServiceTab asset={asset} canEdit={canEdit} canCreate={canCreate} canDelete={canDelete} canView={canView} canViewFinancials={canViewFinancials} />
