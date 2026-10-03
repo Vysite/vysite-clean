@@ -225,6 +225,11 @@ export interface EstimateItem {
   markupPct: number;
   lineType?: EstimateLineType;
   includedInTenderSum?: boolean;
+  // Take-Off sync metadata (optional — only on lines created from Take-Off)
+  sourceType?: 'takeoff';
+  sourceTakeoffItemId?: string;
+  sourceTakeoffSyncHash?: string;
+  sourceTakeoffSyncedAt?: string;
 }
 
 // ─── Commercial Module ────────────────────────────────────────────────────────

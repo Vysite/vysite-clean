@@ -23,7 +23,7 @@ import { useAppStore, usePermissions } from '../lib/StoreContext';
 import type { DBNotification, DBAttachment, DBTenderKeyAction } from '../lib/store';
 import FileUpload from '../components/FileUpload';
 import type { UploadedFile } from '../components/FileUpload';
-import { Paperclip, Eye, Download, Sparkles, Calendar, Check, RotateCcw, Pencil } from 'lucide-react';
+import { Paperclip, Eye, Download, Sparkles, Calendar, Check, RotateCcw, Pencil, Ruler } from 'lucide-react';
 import { nextRef as getNextRef } from '../lib/refSequence';
 import AITenderAssistant from '../components/AITenderAssistant';
 import AIContractReview from '../components/AIContractReview';
@@ -2659,7 +2659,14 @@ export function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
                   <td className={tdCls}>
                     <span className="text-[10px] font-mono text-slate-500">{String(item.lineNo).padStart(2,'0')}</span>
                   </td>
-                  <td className={`${tdCls} font-medium text-slate-200`}>{item.description || <span className="text-slate-600 italic">No description</span>}</td>
+                  <td className={`${tdCls} font-medium text-slate-200`}>
+                    {item.description || <span className="text-slate-600 italic">No description</span>}
+                    {item.sourceType === 'takeoff' && (
+                      <span title="Source: Take-Off" className="ml-1.5 inline-flex items-center gap-0.5 text-[8px] font-bold text-[#f97316] bg-[#f97316]/15 px-1 py-0.5 rounded align-middle">
+                        <Ruler size={8} />TO
+                      </span>
+                    )}
+                  </td>
                   <td className={tdCls}>{item.unit}</td>
                   <td className={tdNumCls}>{fmt(item.quantity)}</td>
                   <td className={tdNumCls}>{fmtC(item.costRate)}</td>

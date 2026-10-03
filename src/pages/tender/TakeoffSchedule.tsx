@@ -1,13 +1,19 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Search, Hash, Minus, Square, FileText, AlertCircle, X, Download, ChevronDown, Package } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Plus, Search, Hash, Minus, Square, FileText, AlertCircle, X, Download, ChevronDown, Package, RefreshCw, Check, ArrowRight } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import type { DBTenderTakeoffItem } from './takeoffTypes';
 import type { MeasurementType, TakeoffLineType } from './takeoffTypes';
+import type { Tender, EstimateItem } from '../../data/types';
 import { DISCIPLINES } from './drawingTypes';
 import { finalQuantity, calcTakeoffCosts, signedTakeoffCosts, formatCurrency } from './takeoffCalculations';
 import { exportInternalTakeoffPDF, exportClientTakeoffPDF } from './TakeoffSchedulePDF';
 import { exportMaterialPricingPDF, type MaterialEnquiryData } from './MaterialPricingEnquiryPDF';
 import { exportMaterialPricingXLSX, type MaterialEnquiryXLSXData } from './MaterialPricingEnquiryXLSX';
+import {
+  buildSyncReview, createEstimateLineFromTakeoff, updateEstimateLineFromTakeoff,
+  getSyncStatus, takeoffCostRate,
+  type SyncReviewItem, type SyncStatus,
+} from './TakeoffEstimateSync';
 
 interface Props {
   tenderId: string;
@@ -15,6 +21,8 @@ interface Props {
   tenderRef: string;
   tenderClient: string;
   tenderLocation: string;
+  tender: Tender;
+  onUpdate: (t: Tender) => void;
 }
 
 const TYPE_ICONS: Record<MeasurementType, typeof Hash> = {
@@ -27,7 +35,7 @@ const LINE_TYPE_BADGES: Record<TakeoffLineType, string> = {
   omission: 'bg-red-900/60 text-red-400',
 };
 
-export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tenderClient, tenderLocation }: Props) {
+export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tenderClient, tenderLocation, tender, onUpdate }: Props) {
   const store = useAppStore();
   const perms = usePermissions();
   const isAdmin = store.currentUser?.role === 'Admin';
@@ -47,6 +55,21 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
   const [enquiryDiscipline, setEnquiryDiscipline] = useState('all');
   const [enquiryIncludeOmissions, setEnquiryIncludeOmissions] = useState(false);
   const [enquiryShowScope, setEnquiryShowScope] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncReview, setSyncReview] = useState<SyncReviewItem[]>([]);
+  const [syncSelection, setSyncSelection] = useState<Set<string>>(new Set());
+  const [syncing, setSyncing] = useState(false);
+
+  const estimateItems = tender.estimateItems ?? [];
+  const allTakeoffItems = store.tenderTakeoffItems.filter(i => i.tender_id === tenderId);
+
+  const syncStatusMap = useMemo(() => {
+    const m = new Map<string, SyncStatus>();
+    for (const item of allTakeoffItems) {
+      m.set(item.id, getSyncStatus(item, estimateItems));
+    }
+    return m;
+  }, [allTakeoffItems, estimateItems]);
 
   useEffect(() => {
     store.loadTenderTakeoffItems(tenderId);
@@ -158,6 +181,56 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
     }
   }
 
+  function openSyncModal() {
+    if (!canViewFinancials) { setError('Financial permission required to sync to Estimate.'); return; }
+    const review = buildSyncReview(allTakeoffItems, estimateItems);
+    setSyncReview(review);
+    const selected = new Set<string>();
+    for (const r of review) {
+      if (r.status === 'not_synced' || r.status === 'changed') selected.add(r.takeoffItem.id);
+    }
+    setSyncSelection(selected);
+    setShowSyncModal(true);
+  }
+
+  function toggleSyncSelection(id: string) {
+    setSyncSelection(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function handleApplySync() {
+    setSyncing(true);
+    try {
+      const currentItems = [...(tender.estimateItems ?? [])];
+      let updated = [...currentItems];
+
+      for (const review of syncReview) {
+        if (!syncSelection.has(review.takeoffItem.id)) continue;
+
+        if (review.status === 'not_synced') {
+          const newLine = createEstimateLineFromTakeoff(review.takeoffItem, updated.length + 1);
+          updated.push(newLine);
+        } else if (review.status === 'changed' && review.estimateLine) {
+          const idx = updated.findIndex(e => e.id === review.estimateLine!.id);
+          if (idx >= 0) {
+            updated[idx] = updateEstimateLineFromTakeoff(updated[idx], review.takeoffItem);
+          }
+        }
+      }
+
+      updated = updated.map((it, i) => ({ ...it, lineNo: i + 1 }));
+      onUpdate({ ...tender, estimateItems: updated });
+      setShowSyncModal(false);
+    } catch (e) {
+      setError('Sync failed — Estimate was not updated.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {error && (
@@ -196,6 +269,11 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
         <button onClick={() => setShowAddManual(true)} className="flex items-center gap-2 px-3 py-2 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">
           <Plus size={14} />Manual Item
         </button>
+        {canViewFinancials && (
+          <button onClick={openSyncModal} disabled={allTakeoffItems.length === 0} className="flex items-center gap-2 px-3 py-2 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-300 hover:bg-[#1e2d4a] hover:text-white disabled:opacity-30 transition-colors">
+            <RefreshCw size={14} />Sync to Estimate
+          </button>
+        )}
         <div className="relative" ref={exportBtnRef}>
           <button onClick={() => {
             if (!showExportMenu && exportBtnRef.current) {
@@ -282,7 +360,7 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
           <table className="w-full">
             <thead>
               <tr className="border-b border-[#1e2d4a]">
-                {['Label', 'Drawing', 'Pg', 'Discipline', 'Type', 'Measured', 'Adj', 'Final', 'Unit', 'Line', 'Source', ...(canViewFinancials ? ['Mat Rate', 'Mat Cost', 'Labour Cost', 'Effect'] : [])].map(h => (
+                {['Label', 'Drawing', 'Pg', 'Discipline', 'Type', 'Measured', 'Adj', 'Final', 'Unit', 'Line', 'Source', ...(canViewFinancials ? ['Mat Rate', 'Mat Cost', 'Labour Cost', 'Effect'] : []), ...(canViewFinancials ? ['Sync'] : [])].map(h => (
                   <th key={h} className="text-left text-[10px] font-bold text-slate-600 uppercase tracking-wider pb-3 pt-3 px-3 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -315,6 +393,15 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
                           <td className={`py-2.5 px-3 text-xs font-mono font-semibold whitespace-nowrap ${signed.lineType === 'omission' ? 'text-red-400' : 'text-[#f97316]'}`}>{signed.lineType === 'omission' ? '−' : ''}{formatCurrency(costs.totalCost)}</td>
                         </>
                       );
+                    })()}
+                    {canViewFinancials && (() => {
+                      const status = syncStatusMap.get(item.id) ?? 'not_synced';
+                      const badgeCls = status === 'synced' ? 'bg-emerald-900/50 text-emerald-400'
+                        : status === 'changed' ? 'bg-amber-900/50 text-amber-400'
+                        : status === 'zero_qty' ? 'bg-slate-800 text-slate-600'
+                        : 'bg-slate-800 text-slate-500';
+                      const label = status === 'synced' ? 'Synced' : status === 'changed' ? 'Changed' : status === 'zero_qty' ? 'Zero' : 'Not Synced';
+                      return <td className="py-2.5 px-3"><span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${badgeCls}`}>{label}</span></td>;
                     })()}
                   </tr>
                 );
@@ -417,6 +504,135 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
                   <Package size={14} />
                   {exporting ? 'Generating...' : `Export ${showEnquiryModal === 'pdf' ? 'PDF' : 'Excel'}`}
                 </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Sync to Estimate modal */}
+      {showSyncModal && (() => {
+        const newItems = syncReview.filter(r => r.status === 'not_synced');
+        const changedItems = syncReview.filter(r => r.status === 'changed');
+        const syncedItems = syncReview.filter(r => r.status === 'synced');
+        const zeroQtyItems = syncReview.filter(r => r.status === 'zero_qty');
+        const selectedCount = syncSelection.size;
+
+        return (
+          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+            <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-3xl flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-5 border-b border-[#1e2d4a]">
+                <div>
+                  <p className="text-sm font-bold text-white">Sync Take-Off to Estimate</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Review items below. New items will create Estimate lines; changed items can be updated.</p>
+                </div>
+                <button onClick={() => setShowSyncModal(null)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-[#1e2d4a]"><X size={18} /></button>
+              </div>
+
+              <div className="p-5 flex-1 overflow-y-auto space-y-4">
+                {/* New items */}
+                {newItems.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold text-emerald-400 uppercase mb-2">New Items ({newItems.length})</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-[#1e2d4a]">
+                            <th className="text-left text-[9px] font-bold text-slate-600 uppercase pb-2 px-2 w-8"></th>
+                            <th className="text-left text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">Description</th>
+                            <th className="text-right text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">Qty</th>
+                            <th className="text-left text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">Unit</th>
+                            <th className="text-right text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">Cost Rate</th>
+                            <th className="text-left text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">Scope</th>
+                            <th className="text-left text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#0d1628]">
+                          {newItems.map(r => (
+                            <tr key={r.takeoffItem.id}>
+                              <td className="py-2 px-2">
+                                <input type="checkbox" checked={syncSelection.has(r.takeoffItem.id)} onChange={() => toggleSyncSelection(r.takeoffItem.id)} className="accent-[#f97316]" />
+                              </td>
+                              <td className="py-2 px-2 text-xs text-slate-200 font-medium">{r.takeoffItem.label || 'Untitled'}</td>
+                              <td className="py-2 px-2 text-xs text-slate-300 font-mono text-right">{r.takeoffQuantity.toFixed(2)}</td>
+                              <td className="py-2 px-2 text-xs text-slate-400">{r.takeoffItem.unit}</td>
+                              <td className="py-2 px-2 text-xs text-slate-300 font-mono text-right">{formatCurrency(r.takeoffCostRate)}</td>
+                              <td className="py-2 px-2"><span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${r.takeoffLineType === 'addition' ? 'bg-emerald-900/60 text-emerald-400' : r.takeoffLineType === 'omission' ? 'bg-red-900/60 text-red-400' : 'bg-slate-700 text-slate-400'}`}>{r.takeoffLineType}</span></td>
+                              <td className="py-2 px-2 text-[10px] text-emerald-400 font-semibold">Ready</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Changed items */}
+                {changedItems.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold text-amber-400 uppercase mb-2">Changed Items ({changedItems.length})</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-[#1e2d4a]">
+                            <th className="text-left text-[9px] font-bold text-slate-600 uppercase pb-2 px-2 w-8"></th>
+                            <th className="text-left text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">Description</th>
+                            <th className="text-right text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">Est. Qty</th>
+                            <th className="text-right text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">TO Qty</th>
+                            <th className="text-right text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">Est. Rate</th>
+                            <th className="text-right text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">TO Rate</th>
+                            <th className="text-left text-[9px] font-bold text-slate-600 uppercase pb-2 px-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#0d1628]">
+                          {changedItems.map(r => (
+                            <tr key={r.takeoffItem.id}>
+                              <td className="py-2 px-2">
+                                <input type="checkbox" checked={syncSelection.has(r.takeoffItem.id)} onChange={() => toggleSyncSelection(r.takeoffItem.id)} className="accent-[#f97316]" />
+                              </td>
+                              <td className="py-2 px-2 text-xs text-slate-200 font-medium">{r.takeoffItem.label || 'Untitled'}</td>
+                              <td className="py-2 px-2 text-xs text-slate-400 font-mono text-right">{r.estimateQuantity?.toFixed(2)}</td>
+                              <td className="py-2 px-2 text-xs text-amber-400 font-mono text-right">{r.takeoffQuantity.toFixed(2)}</td>
+                              <td className="py-2 px-2 text-xs text-slate-400 font-mono text-right">{formatCurrency(r.estimateCostRate ?? 0)}</td>
+                              <td className="py-2 px-2 text-xs text-amber-400 font-mono text-right">{formatCurrency(r.takeoffCostRate)}</td>
+                              <td className="py-2 px-2 text-[10px] text-amber-400 font-semibold">Changed</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Synced items summary */}
+                {syncedItems.length > 0 && (
+                  <p className="text-[10px] text-slate-500">{syncedItems.length} item{syncedItems.length !== 1 ? 's' : ''} already synced — no changes detected.</p>
+                )}
+                {zeroQtyItems.length > 0 && (
+                  <p className="text-[10px] text-slate-600">{zeroQtyItems.length} item{zeroQtyItems.length !== 1 ? 's' : ''} with zero quantity — excluded from sync.</p>
+                )}
+                {newItems.length === 0 && changedItems.length === 0 && (
+                  <div className="text-center py-8">
+                    <Check size={28} className="text-emerald-400 mx-auto mb-2" />
+                    <p className="text-sm text-slate-300">All Take-Off items are synced.</p>
+                    <p className="text-xs text-slate-500 mt-1">No new or changed items to review.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between p-5 border-t border-[#1e2d4a]">
+                <span className="text-xs text-slate-500">{selectedCount} item{selectedCount !== 1 ? 's' : ''} selected</span>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowSyncModal(false)} className="px-4 py-2 text-sm font-semibold text-slate-400 hover:text-white border border-[#1e2d4a] rounded-lg hover:bg-[#1e2d4a] transition-colors">Cancel</button>
+                  <button
+                    onClick={handleApplySync}
+                    disabled={syncing || selectedCount === 0}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#f97316] rounded-lg hover:bg-orange-600 disabled:opacity-40 transition-colors"
+                  >
+                    <ArrowRight size={14} />
+                    {syncing ? 'Syncing...' : `Apply Sync (${selectedCount})`}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
