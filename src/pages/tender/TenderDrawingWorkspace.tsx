@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize, Ruler, Check, X, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize, Ruler, Check, X, AlertCircle, MoveHorizontal } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import type { DBTenderDrawing, DBTenderDrawingCalibration, CalibrationPoint, CalibrationMethod } from './drawingTypes';
 import { PRESET_SCALES } from './drawingTypes';
@@ -57,6 +57,8 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
   const [draftPoints, setDraftPoints] = useState<NormPoint[]>([]);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [showItemCreator, setShowItemCreator] = useState<MeasurementType | null>(null);
+  const [isSpacePanning, setIsSpacePanning] = useState(false);
+  const toolBeforeSpacePanRef = useRef<Tool>('select');
 
   // Refs for high-frequency operations
   const draftPointsRef = useRef<NormPoint[]>([]);
@@ -133,6 +135,30 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
   useEffect(() => {
     if (pdfDocRef.current) renderPage(pdfDocRef.current, currentPage, zoom);
   }, [currentPage, zoom]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Space key for temporary pan
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+      if (e.code === 'Space' && !isSpacePanning) {
+        e.preventDefault();
+        toolBeforeSpacePanRef.current = tool;
+        setIsSpacePanning(true);
+        cancelDraft();
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && isSpacePanning) {
+        e.preventDefault();
+        setIsSpacePanning(false);
+        isPanningRef.current = false;
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
+  }, [isSpacePanning, tool]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist current page
   useEffect(() => {
@@ -215,10 +241,10 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
   const needsCalibration = (tool === 'linear' || tool === 'area') && (!pageCalibration || !pageCalibration.scale_factor);
 
   // ── Pan handlers ──────────────────────────────────────────────────────────
+  const effectiveTool = isSpacePanning ? 'pan' : tool;
   const handleContainerPointerDown = (e: React.PointerEvent) => {
-    if (tool === 'pan' || (tool === 'select' && !isDraggingVertexRef.current && e.button === 1) || showCalibration) {
-      // Pan mode or middle-click pan
-      if (tool === 'pan' || e.button === 1 || showCalibration) {
+    if (effectiveTool === 'pan' || (effectiveTool === 'select' && !isDraggingVertexRef.current && e.button === 1) || showCalibration) {
+      if (effectiveTool === 'pan' || e.button === 1 || showCalibration) {
         isPanningRef.current = true;
         panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -253,8 +279,51 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
     }
   };
 
-  // ── Click on the page wrapper (the canvas + overlay container) ───────────
+  // ── Mouse-wheel / trackpad zoom (pointer-centered) ───────────────────────
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+
+    // Determine zoom delta — trackpad pinch gives ctrlKey, mouse wheel gives deltaY
+    const delta = e.ctrlKey
+      ? -e.deltaY * 0.01  // pinch zoom: smaller increments
+      : -e.deltaY * 0.001; // mouse wheel: smooth
+    const factor = Math.exp(delta);
+    const newZoom = Math.max(0.25, Math.min(8, zoom * factor));
+    if (newZoom === zoom) return;
+
+    // Pointer position relative to container
+    const containerRect = container.getBoundingClientRect();
+    const px = e.clientX - containerRect.left;
+    const py = e.clientY - containerRect.top;
+
+    // Current page wrapper center relative to container
+    const wrapperRect = canvas.getBoundingClientRect();
+    const pageLeft = wrapperRect.left - containerRect.left;
+    const pageTop = wrapperRect.top - containerRect.top;
+    const pageW = wrapperRect.width;
+    const pageH = wrapperRect.height;
+
+    // Pointer position within the page (0..1)
+    const normX = (px - pageLeft) / pageW;
+    const normY = (py - pageTop) / pageH;
+
+    // After zoom, page size changes. Adjust pan so pointer stays on same spot.
+    const scaleRatio = newZoom / zoom;
+    const newPageW = pageW * scaleRatio;
+    const newPageH = pageH * scaleRatio;
+    // Adjust pan by the delta of the pointer within the page
+    const dx = (normX - 0.5) * (newPageW - pageW);
+    const dy = (normY - 0.5) * (newPageH - pageH);
+
+    setZoom(newZoom);
+    setPan({ x: pan.x - dx, y: pan.y - dy });
+  }, [zoom, pan]);
   const handlePageClick = (e: React.MouseEvent) => {
+    // Don't create measurements while space-panning
+    if (isSpacePanning) return;
     // Calibration click
     if (showCalibration && calibrationMode === 'manual') {
       const norm = screenToNorm(e.clientX, e.clientY);
@@ -577,7 +646,23 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
 
   const handleZoomIn = () => setZoom(z => Math.min(z + 0.25, 8));
   const handleZoomOut = () => setZoom(z => Math.max(z - 0.25, 0.25));
-  const handleFit = () => { setZoom(1.0); setPan({ x: 0, y: 0 }); };
+  const handleFit = () => {
+    if (!containerRef.current || !pdfViewport) { setZoom(1.0); setPan({ x: 0, y: 0 }); return; }
+    const cw = containerRef.current.clientWidth;
+    const ch = containerRef.current.clientHeight;
+    const fitW = cw / pdfViewport.width;
+    const fitH = ch / pdfViewport.height;
+    const fit = Math.min(fitW, fitH);
+    setZoom(fit);
+    setPan({ x: 0, y: 0 });
+  };
+  const handleFitWidth = () => {
+    if (!containerRef.current || !pdfViewport) { setZoom(1.0); setPan({ x: 0, y: 0 }); return; }
+    const cw = containerRef.current.clientWidth;
+    const fitW = cw / pdfViewport.width;
+    setZoom(Math.max(0.25, Math.min(8, fitW)));
+    setPan({ x: 0, y: 0 });
+  };
 
   // ── Item creation ────────────────────────────────────────────────────────
   const handleCreateItem = async (type: MeasurementType, data: { label: string; discipline: string; category: string; colour: string; lineType: string }) => {
@@ -613,10 +698,11 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
   };
 
   // ── Render ───────────────────────────────────────────────────────────────
-  const cursor = showCalibration && calibrationMode === 'manual' ? 'crosshair'
-    : tool === 'pan' ? (isPanningRef.current ? 'grabbing' : 'grab')
-    : tool === 'count' ? 'crosshair'
-    : tool === 'linear' || tool === 'area' ? 'crosshair'
+  const cursor = isSpacePanning ? (isPanningRef.current ? 'grabbing' : 'grab') :
+    showCalibration && calibrationMode === 'manual' ? 'crosshair'
+    : effectiveTool === 'pan' ? (isPanningRef.current ? 'grabbing' : 'grab')
+    : effectiveTool === 'count' ? 'crosshair'
+    : effectiveTool === 'linear' || effectiveTool === 'area' ? 'crosshair'
     : 'default';
 
   return (
@@ -642,7 +728,8 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
             <button onClick={handleZoomOut} disabled={zoom <= 0.25} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a] disabled:opacity-30 transition-colors"><ZoomOut size={16} /></button>
             <span className="text-xs text-slate-400 font-mono w-12 text-center">{(zoom * 100).toFixed(0)}%</span>
             <button onClick={handleZoomIn} disabled={zoom >= 8} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a] disabled:opacity-30 transition-colors"><ZoomIn size={16} /></button>
-            <button onClick={handleFit} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a] transition-colors" title="Fit / Reset"><Maximize size={16} /></button>
+            <button onClick={handleFit} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a] transition-colors" title="Fit Page"><Maximize size={16} /></button>
+            <button onClick={handleFitWidth} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-[#1e2d4a] transition-colors" title="Fit Width"><MoveHorizontal size={16} /></button>
           </div>
           <button onClick={() => { cancelDraft(); setShowCalibration(!showCalibration); }} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${showCalibration ? 'bg-[#f97316] text-white' : 'text-slate-400 border border-[#1e2d4a] hover:bg-[#1e2d4a] hover:text-white'}`}>
             <Ruler size={14} />Calibrate
@@ -692,7 +779,8 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
           onPointerMove={handleContainerPointerMove}
           onPointerUp={handleContainerPointerUp}
           onPointerCancel={handleContainerPointerUp}
-          style={{ cursor }}
+          onWheel={handleWheel}
+          style={{ cursor, touchAction: 'none' }}
         >
           {renderState === 'loading' && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="w-6 h-6 border-2 border-slate-600 border-t-[#f97316] rounded-full animate-spin" /></div>}
           {renderState === 'error' && <div className="flex flex-col items-center justify-center text-center px-6"><AlertCircle size={32} className="text-red-400 mb-3" /><p className="text-sm text-red-300 mb-2">{errorMsg}</p><button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-slate-300 border border-[#1e2d4a] rounded-lg hover:bg-[#1e2d4a] transition-colors">Back to Drawings</button></div>}

@@ -284,12 +284,12 @@ function ItemRow({
                 </select>
               </div>
               <div>
-                <label className="text-[9px] font-bold text-slate-600 uppercase">Line Type</label>
-                <select value={item.line_type} onChange={e => onUpdate({ line_type: e.target.value as TakeoffLineType, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none">
-                  <option value="standard">Standard</option>
-                  <option value="addition">Addition</option>
-                  <option value="omission">Omission</option>
-                </select>
+                <label className="text-[9px] font-bold text-slate-600 uppercase">Type</label>
+                <div className="flex gap-1 mt-0.5">
+                  <button onClick={() => onUpdate({ line_type: 'standard' as TakeoffLineType, updated_at: new Date().toISOString() })} className={`flex-1 py-1 rounded text-[10px] font-bold transition-colors ${item.line_type === 'standard' ? 'bg-slate-600 text-white' : 'text-slate-400 border border-[#1e2d4a] hover:bg-[#0d1628]'}`}>STD</button>
+                  <button onClick={() => onUpdate({ line_type: 'addition' as TakeoffLineType, updated_at: new Date().toISOString() })} className={`flex-1 py-1 rounded text-[10px] font-bold transition-colors ${item.line_type === 'addition' ? 'bg-emerald-600 text-white' : 'text-emerald-400 border border-[#1e2d4a] hover:bg-[#0d1628]'}`}>+ ADD</button>
+                  <button onClick={() => onUpdate({ line_type: 'omission' as TakeoffLineType, updated_at: new Date().toISOString() })} className={`flex-1 py-1 rounded text-[10px] font-bold transition-colors ${item.line_type === 'omission' ? 'bg-red-600 text-white' : 'text-red-400 border border-[#1e2d4a] hover:bg-[#0d1628]'}`}>- OMIT</button>
+                </div>
               </div>
             </div>
             <div>

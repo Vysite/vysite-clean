@@ -126,19 +126,19 @@ function renderLinear(
         <circle cx={segs[segs.length - 1].end.x} cy={segs[segs.length - 1].end.y} r={0.0025} fill={item.colour} pointerEvents="none" />
         {/* Measurement label — subtle when unselected, clearer when selected */}
         {label && (
-          <g pointerEvents="none">
-            {isRunSelected ? (
-              <>
-                <rect x={midX - 0.035} y={midY - 0.006} width={0.07} height={0.012} fill="#0d1628" rx={0.002} opacity={0.9} />
-                <text x={midX} y={midY + 0.001} fontSize={0.005} fill={item.colour} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text>
-              </>
-            ) : (
-              <>
-                <rect x={midX - 0.03} y={midY - 0.005} width={0.06} height={0.01} fill="#0d1628" rx={0.002} opacity={0.55} />
-                <text x={midX} y={midY + 0.001} fontSize={0.004} fill={item.colour} textAnchor="middle" dominantBaseline="middle" fontWeight="normal" opacity={0.85}>{label}</text>
-              </>
-            )}
-          </g>
+          <text
+            x={midX} y={midY + 0.001}
+            fontSize={isRunSelected ? 0.005 : 0.004}
+            fill={item.colour}
+            stroke="#0d1628"
+            strokeWidth={isRunSelected ? 0.0018 : 0.0014}
+            paintOrder="stroke"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontWeight={isRunSelected ? 'bold' : 'normal'}
+            opacity={isRunSelected ? 1 : 0.9}
+            pointerEvents="none"
+          >{label}</text>
         )}
         {/* Vertex handles when run is selected */}
         {isRunSelected && segs.map((seg, si) => [
@@ -196,10 +196,19 @@ function renderArea(
           onClick={(e) => { e.stopPropagation(); onGeometryClick(item.id, 'area', poly.id); }}
         />
         {label && (
-          <g pointerEvents="none">
-            <rect x={cx - 0.035} y={cy - 0.006} width={0.07} height={0.012} fill="#0d1628" rx={0.002} opacity={isPolySelected ? 0.9 : 0.55} />
-            <text x={cx} y={cy + 0.001} fontSize={isPolySelected ? 0.005 : 0.004} fill={item.colour} textAnchor="middle" dominantBaseline="middle" fontWeight={isPolySelected ? 'bold' : 'normal'} opacity={isPolySelected ? 1 : 0.85}>{label}</text>
-          </g>
+          <text
+            x={cx} y={cy + 0.001}
+            fontSize={isPolySelected ? 0.005 : 0.004}
+            fill={item.colour}
+            stroke="#0d1628"
+            strokeWidth={isPolySelected ? 0.0018 : 0.0014}
+            paintOrder="stroke"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontWeight={isPolySelected ? 'bold' : 'normal'}
+            opacity={isPolySelected ? 1 : 0.9}
+            pointerEvents="none"
+          >{label}</text>
         )}
         {isPolySelected && poly.vertices.map((v, vi) => (
           <g key={`${poly.id}-v${vi}`}>
