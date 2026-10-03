@@ -15,7 +15,7 @@ export default function SitesLocations() {
   const sites = store.assetSites ?? [];
   const buildings = store.assetBuildings ?? [];
   const locations = store.assetLocations ?? [];
-  const assets = store.assets ?? [];
+  const assetCounts = store.assetLocationCounts ?? {};
 
   const [expandedSite, setExpandedSite] = useState<string | null>(null);
   const [expandedBuilding, setExpandedBuilding] = useState<string | null>(null);
@@ -26,9 +26,9 @@ export default function SitesLocations() {
   const [showAddBuilding, setShowAddBuilding] = useState<string | null>(null);
   const [showAddLocation, setShowAddLocation] = useState<string | null>(null);
 
-  function assetsAtSite(siteId: string) { return assets.filter(a => a.site_id === siteId).length; }
-  function assetsAtBuilding(bldId: string) { return assets.filter(a => a.building_id === bldId).length; }
-  function assetsAtLocation(locId: string) { return assets.filter(a => a.location_id === locId).length; }
+  function assetsAtSite(siteId: string) { return assetCounts[`site:${siteId}`] ?? 0; }
+  function assetsAtBuilding(bldId: string) { return assetCounts[`building:${bldId}`] ?? 0; }
+  function assetsAtLocation(locId: string) { return assetCounts[`location:${locId}`] ?? 0; }
 
   return (
     <div className="space-y-4">

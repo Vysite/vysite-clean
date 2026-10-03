@@ -1548,6 +1548,17 @@ export interface AppStore {
   assets: DBAsset[];
   assetsLoading: boolean;
   loadAssetData: () => Promise<void>;
+  assetRegisterRows: DBAsset[];
+  assetRegisterTotal: number;
+  assetRegisterPage: number;
+  assetRegisterLoading: boolean;
+  loadAssetRegister: (params: { page: number; pageSize?: number; search?: string; siteId?: string; buildingId?: string; locationId?: string; assetType?: string; status?: string; projectId?: string }) => Promise<void>;
+  assetKPIs: { total: number; active: number; outOfService: number; underRepair: number; decommissioned: number; replaced: number };
+  assetKPIsLoading: boolean;
+  loadAssetKPIs: () => Promise<void>;
+  assetLocationCounts: Record<string, number>;
+  loadAssetLocationCounts: () => Promise<void>;
+  loadAssetDetail: (assetId: string) => Promise<DBAsset | null>;
   addAssetSite: (s: Omit<DBAssetSite, 'id' | 'created_at' | 'updated_at'>) => Promise<string | null>;
   updateAssetSite: (s: Partial<DBAssetSite> & { id: string }) => Promise<void>;
   removeAssetSite: (id: string) => Promise<void>;
@@ -1699,6 +1710,13 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [assetLocations, setAssetLocations] = useState<DBAssetLocation[]>([]);
   const [assets, setAssets] = useState<DBAsset[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
+  const [assetRegisterRows, setAssetRegisterRows] = useState<DBAsset[]>([]);
+  const [assetRegisterTotal, setAssetRegisterTotal] = useState(0);
+  const [assetRegisterPage, setAssetRegisterPage] = useState(1);
+  const [assetRegisterLoading, setAssetRegisterLoading] = useState(false);
+  const [assetKPIs, setAssetKPIs] = useState({ total: 0, active: 0, outOfService: 0, underRepair: 0, decommissioned: 0, replaced: 0 });
+  const [assetKPIsLoading, setAssetKPIsLoading] = useState(false);
+  const [assetLocationCounts, setAssetLocationCounts] = useState<Record<string, number>>({});
   const [assetDocuments, setAssetDocuments] = useState<DBAssetDocument[]>([]);
   const [assetActivity, setAssetActivity] = useState<DBAssetActivity[]>([]);
   const [assetMedia, setAssetMedia] = useState<DBAssetMedia[]>([]);
@@ -1746,6 +1764,11 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setAssetBuildings([]);
       setAssetLocations([]);
       setAssets([]);
+      setAssetRegisterRows([]);
+      setAssetRegisterTotal(0);
+      setAssetRegisterPage(1);
+      setAssetKPIs({ total: 0, active: 0, outOfService: 0, underRepair: 0, decommissioned: 0, replaced: 0 });
+      setAssetLocationCounts({});
       setAssetDocuments([]);
       setAssetActivity([]);
       setAssetMedia([]);
@@ -3250,22 +3273,118 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   }, []);
 
   // ─── Asset Management ────────────────────────────────────────────────────────
+  // Lightweight columns for the Asset Register — excludes notes, public_token, etc.
+  const ASSET_REGISTER_COLS = 'id,asset_tag,name,asset_type,manufacturer,model,serial_number,site_id,building_id,location_id,status,project_id,project_name,updated_at';
+
   const loadAssetData = useCallback(async () => {
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
     setAssetsLoading(true);
-    const [sitesRes, bldRes, locRes, astRes] = await Promise.all([
+    // Only load hierarchy reference data + KPIs at module entry.
+    // The full asset register is loaded separately via loadAssetRegister().
+    const [sitesRes, bldRes, locRes] = await Promise.all([
       supabase.from('vy_asset_sites').select('*').eq('org_id', oid).order('sort_order', { ascending: true }),
       supabase.from('vy_asset_buildings').select('*').eq('org_id', oid).order('sort_order', { ascending: true }),
       supabase.from('vy_asset_locations').select('*').eq('org_id', oid).order('sort_order', { ascending: true }),
-      supabase.from('vy_assets').select('*').eq('org_id', oid).order('updated_at', { ascending: false }),
     ]);
     setAssetSites((sitesRes.data ?? []) as DBAssetSite[]);
     setAssetBuildings((bldRes.data ?? []) as DBAssetBuilding[]);
     setAssetLocations((locRes.data ?? []) as DBAssetLocation[]);
-    setAssets((astRes.data ?? []) as DBAsset[]);
     setAssetsLoading(false);
+    // Load KPIs in the background — non-blocking
+    loadAssetKPIsRef.current?.();
+    loadAssetLocationCountsRef.current?.();
   }, []);
+
+  // Refs to avoid circular dependency between loadAssetData and KPI/count loaders
+  const loadAssetKPIsRef = useRef<(() => Promise<void>) | null>(null);
+  const loadAssetLocationCountsRef = useRef<(() => Promise<void>) | null>(null);
+
+  const loadAssetRegister = useCallback(async (params: { page: number; pageSize?: number; search?: string; siteId?: string; buildingId?: string; locationId?: string; assetType?: string; status?: string; projectId?: string }) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const pageSize = params.pageSize ?? 50;
+    const page = Math.max(1, params.page);
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    setAssetRegisterLoading(true);
+    setAssetRegisterPage(page);
+
+    let q = supabase.from('vy_assets').select(ASSET_REGISTER_COLS, { count: 'exact' }).eq('org_id', oid);
+
+    const search = (params.search ?? '').trim();
+    if (search) {
+      q = q.or(`asset_tag.ilike.%${search}%,name.ilike.%${search}%,manufacturer.ilike.%${search}%,model.ilike.%${search}%,serial_number.ilike.%${search}%`);
+    }
+    if (params.siteId && params.siteId !== 'All') q = q.eq('site_id', params.siteId);
+    if (params.buildingId && params.buildingId !== 'All') q = q.eq('building_id', params.buildingId);
+    if (params.locationId && params.locationId !== 'All') q = q.eq('location_id', params.locationId);
+    if (params.assetType && params.assetType !== 'All') q = q.eq('asset_type', params.assetType);
+    if (params.status && params.status !== 'All') q = q.eq('status', params.status);
+    if (params.projectId && params.projectId !== 'All') q = q.eq('project_id', params.projectId);
+
+    q = q.order('updated_at', { ascending: false }).range(from, to);
+    const { data, count, error } = await q;
+    logWrite('loadAssetRegister', 'vy_assets', error);
+    if (!error) {
+      setAssetRegisterRows((data ?? []) as DBAsset[]);
+      setAssetRegisterTotal(count ?? 0);
+    }
+    setAssetRegisterLoading(false);
+  }, []);
+
+  const loadAssetKPIs = useCallback(async () => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setAssetKPIsLoading(true);
+    const { data, error } = await supabase.from('vy_assets')
+      .select('status')
+      .eq('org_id', oid);
+    logWrite('loadAssetKPIs', 'vy_assets', error);
+    if (!error && data) {
+      const counts = { total: data.length, active: 0, outOfService: 0, underRepair: 0, decommissioned: 0, replaced: 0 };
+      for (const row of data) {
+        const s = (row as { status: string }).status;
+        if (s === 'Active') counts.active++;
+        else if (s === 'Out of Service') counts.outOfService++;
+        else if (s === 'Under Repair') counts.underRepair++;
+        else if (s === 'Decommissioned') counts.decommissioned++;
+        else if (s === 'Replaced') counts.replaced++;
+      }
+      setAssetKPIs(counts);
+    }
+    setAssetKPIsLoading(false);
+  }, []);
+
+  const loadAssetLocationCounts = useCallback(async () => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    // Get counts grouped by site_id, building_id, location_id in one query
+    const { data, error } = await supabase.from('vy_assets')
+      .select('site_id,building_id,location_id')
+      .eq('org_id', oid);
+    logWrite('loadAssetLocationCounts', 'vy_assets', error);
+    if (!error && data) {
+      const counts: Record<string, number> = {};
+      for (const row of data as { site_id: string | null; building_id: string | null; location_id: string | null }[]) {
+        if (row.site_id) counts[`site:${row.site_id}`] = (counts[`site:${row.site_id}`] ?? 0) + 1;
+        if (row.building_id) counts[`building:${row.building_id}`] = (counts[`building:${row.building_id}`] ?? 0) + 1;
+        if (row.location_id) counts[`location:${row.location_id}`] = (counts[`location:${row.location_id}`] ?? 0) + 1;
+      }
+      setAssetLocationCounts(counts);
+    }
+  }, []);
+
+  const loadAssetDetail = useCallback(async (assetId: string): Promise<DBAsset | null> => {
+    const { data, error } = await supabase.from('vy_assets').select('*').eq('id', assetId).maybeSingle();
+    logWrite('loadAssetDetail', 'vy_assets', error);
+    if (error || !data) return null;
+    return data as DBAsset;
+  }, []);
+
+  // Wire refs so loadAssetData can call these without circular deps
+  loadAssetKPIsRef.current = loadAssetKPIs;
+  loadAssetLocationCountsRef.current = loadAssetLocationCounts;
 
   const addAssetSite = useCallback(async (s: Omit<DBAssetSite, 'id' | 'created_at' | 'updated_at'>) => {
     const oid = getOrgId(orgIdRef.current);
@@ -3273,9 +3392,10 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     const { data, error } = await supabase.from('vy_asset_sites').insert({ ...s, org_id: oid }).select('id').maybeSingle();
     logWrite('addAssetSite', 'vy_asset_sites', error, data);
     if (error || !data) return null;
-    await loadAssetData();
+    // Local patch — no full reload
+    setAssetSites(prev => [...prev, { ...s, id: data.id, org_id: oid, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as DBAssetSite].sort((a, b) => a.sort_order - b.sort_order));
     return data.id;
-  }, [loadAssetData]);
+  }, []);
 
   const updateAssetSite = useCallback(async (s: Partial<DBAssetSite> & { id: string }) => {
     const { error } = await supabase.from('vy_asset_sites').update({ ...s, updated_at: new Date().toISOString() }).eq('id', s.id);
@@ -3295,9 +3415,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     const { data, error } = await supabase.from('vy_asset_buildings').insert({ ...b, org_id: oid }).select('id').maybeSingle();
     logWrite('addAssetBuilding', 'vy_asset_buildings', error, data);
     if (error || !data) return null;
-    await loadAssetData();
+    setAssetBuildings(prev => [...prev, { ...b, id: data.id, org_id: oid, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as DBAssetBuilding].sort((a, b) => a.sort_order - b.sort_order));
     return data.id;
-  }, [loadAssetData]);
+  }, []);
 
   const updateAssetBuilding = useCallback(async (b: Partial<DBAssetBuilding> & { id: string }) => {
     const { error } = await supabase.from('vy_asset_buildings').update({ ...b, updated_at: new Date().toISOString() }).eq('id', b.id);
@@ -3317,9 +3437,9 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     const { data, error } = await supabase.from('vy_asset_locations').insert({ ...l, org_id: oid }).select('id').maybeSingle();
     logWrite('addAssetLocation', 'vy_asset_locations', error, data);
     if (error || !data) return null;
-    await loadAssetData();
+    setAssetLocations(prev => [...prev, { ...l, id: data.id, org_id: oid, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as DBAssetLocation].sort((a, b) => a.sort_order - b.sort_order));
     return data.id;
-  }, [loadAssetData]);
+  }, []);
 
   const updateAssetLocation = useCallback(async (l: Partial<DBAssetLocation> & { id: string }) => {
     const { error } = await supabase.from('vy_asset_locations').update({ ...l, updated_at: new Date().toISOString() }).eq('id', l.id);
@@ -3339,9 +3459,11 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     const { data, error } = await supabase.from('vy_assets').insert({ ...a, org_id: oid }).select('id').maybeSingle();
     logWrite('addAsset', 'vy_assets', error, data);
     if (error || !data) return null;
-    await loadAssetData();
+    // Refresh KPIs and location counts (lightweight), but don't reload all assets
+    loadAssetKPIsRef.current?.();
+    loadAssetLocationCountsRef.current?.();
     return data.id;
-  }, [loadAssetData]);
+  }, []);
 
   const updateAsset = useCallback(async (a: Partial<DBAsset> & { id: string }) => {
     const { error } = await supabase.from('vy_assets').update({ ...a, updated_at: new Date().toISOString() }).eq('id', a.id);
@@ -3565,6 +3687,10 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     tenderDrawingCalibrations, loadTenderDrawingCalibrations, upsertTenderDrawingCalibration, removeTenderDrawingCalibration,
     tenderTakeoffItems, loadTenderTakeoffItems, loadTenderTakeoffItemsForDrawing, addTenderTakeoffItem, updateTenderTakeoffItem, removeTenderTakeoffItem,
     assetSites, assetBuildings, assetLocations, assets, assetsLoading, loadAssetData,
+    assetRegisterRows, assetRegisterTotal, assetRegisterPage, assetRegisterLoading, loadAssetRegister,
+    assetKPIs, assetKPIsLoading, loadAssetKPIs,
+    assetLocationCounts, loadAssetLocationCounts,
+    loadAssetDetail,
     addAssetSite, updateAssetSite, removeAssetSite,
     addAssetBuilding, updateAssetBuilding, removeAssetBuilding,
     addAssetLocation, updateAssetLocation, removeAssetLocation,

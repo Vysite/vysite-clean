@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
-import { Plus, Search, Package, X, AlertTriangle, ChevronDown, FileDown } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Plus, Search, Package, X, AlertTriangle, ChevronDown, FileDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
+import { supabase } from '../../lib/supabase';
 import type { DBAsset, AssetStatus } from './types';
 import { ASSET_STATUSES, ASSET_TYPES, ASSET_STATUS_COLORS } from './types';
 import { exportAssetRegisterPDF } from './AssetRegisterPDF';
@@ -11,6 +12,7 @@ interface Props {
 
 const inputCls = 'w-full bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600';
 const labelCls = 'text-xs font-semibold text-slate-500 uppercase tracking-wider';
+const PAGE_SIZE = 50;
 
 export default function AssetRegister({ onSelectAsset }: Props) {
   const store = useAppStore();
@@ -24,45 +26,94 @@ export default function AssetRegister({ onSelectAsset }: Props) {
   const [filterType, setFilterType] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
   const [showCreate, setShowCreate] = useState(false);
+  const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
 
-  const assets = store.assets ?? [];
   const sites = store.assetSites ?? [];
   const buildings = store.assetBuildings ?? [];
   const locations = store.assetLocations ?? [];
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    return assets.filter(a => {
-      if (q && !(
-        a.asset_tag.toLowerCase().includes(q) ||
-        a.name.toLowerCase().includes(q) ||
-        (a.manufacturer ?? '').toLowerCase().includes(q) ||
-        (a.model ?? '').toLowerCase().includes(q) ||
-        (a.serial_number ?? '').toLowerCase().includes(q)
-      )) return false;
-      if (filterSite !== 'All' && a.site_id !== filterSite) return false;
-      if (filterBuilding !== 'All' && a.building_id !== filterBuilding) return false;
-      if (filterType !== 'All' && a.asset_type !== filterType) return false;
-      if (filterStatus !== 'All' && a.status !== filterStatus) return false;
-      return true;
-    });
-  }, [assets, search, filterSite, filterBuilding, filterType, filterStatus]);
-
-  const kpiStats = useMemo(() => ({
-    total: assets.length,
-    active: assets.filter(a => a.status === 'Active').length,
-    outOfService: assets.filter(a => a.status === 'Out of Service').length,
-    underRepair: assets.filter(a => a.status === 'Under Repair').length,
-  }), [assets]);
+  // Build lookup maps for O(1) name resolution
+  const siteMap = useMemo(() => new Map(sites.map(s => [s.id, s.name])), [sites]);
+  const buildingMap = useMemo(() => new Map(buildings.map(b => [b.id, b.name])), [buildings]);
+  const locationMap = useMemo(() => new Map(locations.map(l => [l.id, l.name])), [locations]);
 
   const filteredBuildings = useMemo(() => {
     if (filterSite === 'All') return buildings;
     return buildings.filter(b => b.site_id === filterSite);
   }, [buildings, filterSite]);
 
-  function siteName(id: string | null) { return sites.find(s => s.id === id)?.name ?? '—'; }
-  function buildingName(id: string | null) { return buildings.find(b => b.id === id)?.name ?? '—'; }
-  function locationName(id: string | null) { return locations.find(l => l.id === id)?.name ?? '—'; }
+  // Debounced server-side search + filter
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 300);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [search]);
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, filterSite, filterBuilding, filterType, filterStatus]);
+
+  // Load register data from server whenever params change
+  useEffect(() => {
+    store.loadAssetRegister({
+      page,
+      pageSize: PAGE_SIZE,
+      search: debouncedSearch || undefined,
+      siteId: filterSite,
+      buildingId: filterBuilding,
+      assetType: filterType,
+      status: filterStatus,
+    });
+  }, [page, debouncedSearch, filterSite, filterBuilding, filterType, filterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const rows = store.assetRegisterRows ?? [];
+  const total = store.assetRegisterTotal ?? 0;
+  const loading = store.assetRegisterLoading;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  function siteName(id: string | null) { return id ? (siteMap.get(id) ?? '—') : '—'; }
+  function buildingName(id: string | null) { return id ? (buildingMap.get(id) ?? '—') : '—'; }
+  function locationName(id: string | null) { return id ? (locationMap.get(id) ?? '—') : '—'; }
+
+  async function handleExportPDF() {
+    setExporting(true);
+    try {
+      // Run a dedicated query for PDF export — separate from the paginated register
+      const oid = store.currentOrgId;
+      if (!oid) return;
+      let q = supabase.from('vy_assets').select(ASSET_REGISTER_COLS).eq('org_id', oid);
+      if (debouncedSearch) {
+        q = q.or(`asset_tag.ilike.%${debouncedSearch}%,name.ilike.%${debouncedSearch}%,manufacturer.ilike.%${debouncedSearch}%,model.ilike.%${debouncedSearch}%,serial_number.ilike.%${debouncedSearch}%`);
+      }
+      if (filterSite !== 'All') q = q.eq('site_id', filterSite);
+      if (filterBuilding !== 'All') q = q.eq('building_id', filterBuilding);
+      if (filterType !== 'All') q = q.eq('asset_type', filterType);
+      if (filterStatus !== 'All') q = q.eq('status', filterStatus);
+      q = q.order('updated_at', { ascending: false });
+      const { data } = await q;
+      exportAssetRegisterPDF({
+        assets: (data ?? []) as DBAsset[],
+        sites, buildings, locations,
+        filters: {
+          site: filterSite !== 'All' ? filterSite : null,
+          building: filterBuilding !== 'All' ? filterBuilding : null,
+          type: filterType !== 'All' ? filterType : null,
+          status: filterStatus !== 'All' ? filterStatus : null,
+          search: debouncedSearch || null,
+        },
+        currentUserName: store.currentUser?.name ?? '',
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   function KpiCard({ label, value, color }: { label: string; value: number; color: string }) {
     return (
@@ -75,12 +126,12 @@ export default function AssetRegister({ onSelectAsset }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* KPIs */}
+      {/* KPIs from server-side counts */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard label="Total Assets" value={kpiStats.total} color="text-white" />
-        <KpiCard label="Active" value={kpiStats.active} color="text-emerald-400" />
-        <KpiCard label="Out of Service" value={kpiStats.outOfService} color="text-amber-400" />
-        <KpiCard label="Under Repair" value={kpiStats.underRepair} color="text-orange-400" />
+        <KpiCard label="Total Assets" value={store.assetKPIs.total} color="text-white" />
+        <KpiCard label="Active" value={store.assetKPIs.active} color="text-emerald-400" />
+        <KpiCard label="Out of Service" value={store.assetKPIs.outOfService} color="text-amber-400" />
+        <KpiCard label="Under Repair" value={store.assetKPIs.underRepair} color="text-orange-400" />
       </div>
 
       {/* Toolbar */}
@@ -90,45 +141,32 @@ export default function AssetRegister({ onSelectAsset }: Props) {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tag, name, manufacturer, model, serial..."
             className="bg-transparent text-sm text-slate-300 outline-none flex-1 placeholder:text-slate-600" />
         </div>
-        <FilterSelect value={filterSite} onChange={setFilterSite} options={['All', ...sites.map(s => s.id)]} labels={{ All: 'All Sites' }} renderOpt={id => id === 'All' ? 'All Sites' : siteName(id)} />
-        <FilterSelect value={filterBuilding} onChange={setFilterBuilding} options={['All', ...filteredBuildings.map(b => b.id)]} labels={{ All: 'All Buildings' }} renderOpt={id => id === 'All' ? 'All Buildings' : buildingName(id)} />
-        <FilterSelect value={filterType} onChange={setFilterType} options={['All', ...ASSET_TYPES]} labels={{ All: 'All Types' }} renderOpt={t => t} />
-        <FilterSelect value={filterStatus} onChange={setFilterStatus} options={['All', ...ASSET_STATUSES]} labels={{ All: 'All Statuses' }} renderOpt={s => s} />
+        <FilterSelect value={filterSite} onChange={setFilterSite} options={['All', ...sites.map(s => s.id)]} renderOpt={id => id === 'All' ? 'All Sites' : siteName(id)} />
+        <FilterSelect value={filterBuilding} onChange={setFilterBuilding} options={['All', ...filteredBuildings.map(b => b.id)]} renderOpt={id => id === 'All' ? 'All Buildings' : buildingName(id)} />
+        <FilterSelect value={filterType} onChange={setFilterType} options={['All', ...ASSET_TYPES]} renderOpt={t => t} />
+        <FilterSelect value={filterStatus} onChange={setFilterStatus} options={['All', ...ASSET_STATUSES]} renderOpt={s => s} />
         {canCreate && (
           <button onClick={() => setShowCreate(true)}
             className="flex items-center gap-2 bg-[#f97316] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors shrink-0">
             <Plus size={16} />Add Asset
           </button>
         )}
-        <button onClick={() => exportAssetRegisterPDF({
-          assets: filtered,
-          sites,
-          buildings,
-          locations,
-          filters: {
-            site: filterSite !== 'All' ? filterSite : null,
-            building: filterBuilding !== 'All' ? filterBuilding : null,
-            type: filterType !== 'All' ? filterType : null,
-            status: filterStatus !== 'All' ? filterStatus : null,
-            search: search.trim() || null,
-          },
-          currentUserName: store.currentUser?.name ?? '',
-        })}
-          className="flex items-center gap-2 text-slate-400 hover:text-[#f97316] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm font-semibold hover:border-[#f97316] transition-colors shrink-0">
-          <FileDown size={16} />Export PDF
+        <button onClick={handleExportPDF} disabled={exporting}
+          className="flex items-center gap-2 text-slate-400 hover:text-[#f97316] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm font-semibold hover:border-[#f97316] transition-colors shrink-0 disabled:opacity-60">
+          {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}Export PDF
         </button>
       </div>
 
       {/* Table */}
       <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] overflow-hidden">
-        {store.assetsLoading ? (
+        {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-5 h-5 border-2 border-slate-600 border-t-[#f97316] rounded-full animate-spin" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : rows.length === 0 ? (
           <div className="text-center py-12">
             <Package size={32} className="text-slate-700 mx-auto mb-3" />
-            <p className="text-sm text-slate-500">{assets.length === 0 ? 'No assets registered yet.' : 'No assets match your filters.'}</p>
+            <p className="text-sm text-slate-500">{total === 0 && !debouncedSearch && filterSite === 'All' && filterType === 'All' && filterStatus === 'All' ? 'No assets registered yet.' : 'No assets match your filters.'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -148,7 +186,7 @@ export default function AssetRegister({ onSelectAsset }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#0d1628]">
-                {filtered.map(a => (
+                {rows.map(a => (
                   <tr key={a.id} onClick={() => onSelectAsset(a)}
                     className="hover:bg-[#0d1628] cursor-pointer transition-colors">
                     <td className="px-4 py-3 text-xs font-mono text-[#f97316] font-semibold">{a.asset_tag}</td>
@@ -171,12 +209,35 @@ export default function AssetRegister({ onSelectAsset }: Props) {
         )}
       </div>
 
+      {/* Pagination */}
+      {total > PAGE_SIZE && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-500">
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-400 border border-[#1e2d4a] rounded-lg hover:text-white hover:border-slate-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              <ChevronLeft size={14} />Prev
+            </button>
+            <span className="text-xs text-slate-400 font-medium">Page {page} of {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-400 border border-[#1e2d4a] rounded-lg hover:text-white hover:border-slate-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              Next<ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {showCreate && <CreateAssetModal onClose={() => setShowCreate(false)} />}
     </div>
   );
 }
 
-function FilterSelect({ value, onChange, options, renderOpt }: { value: string; onChange: (v: string) => void; options: string[]; labels: Record<string, string>; renderOpt: (id: string) => string }) {
+// Lightweight columns for register — shared with store
+const ASSET_REGISTER_COLS = 'id,asset_tag,name,asset_type,manufacturer,model,serial_number,site_id,building_id,location_id,status,project_id,project_name,updated_at';
+
+function FilterSelect({ value, onChange, options, renderOpt }: { value: string; onChange: (v: string) => void; options: string[]; renderOpt: (id: string) => string }) {
   return (
     <div className="relative">
       <select value={value} onChange={e => onChange(e.target.value)}
@@ -229,8 +290,13 @@ function CreateAssetModal({ onClose }: { onClose: () => void }) {
     const site = sites.find(s => s.id === form.site_id);
     const tagPrefix = site ? site.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() : 'AST';
     const typeAbbr = form.asset_type.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase();
-    const existingCount = store.assets.filter(a => a.asset_tag.startsWith(`${tagPrefix}-${typeAbbr}-`)).length;
-    const autoTag = `${tagPrefix}-${typeAbbr}-${String(existingCount + 1).padStart(4, '0')}`;
+    // Use server-side count for tag sequence instead of scanning local array
+    const { count } = await supabase.from('vy_assets')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', store.currentOrgId ?? '')
+      .like('asset_tag', `${tagPrefix}-${typeAbbr}-%`);
+    const nextNum = (count ?? 0) + 1;
+    const autoTag = `${tagPrefix}-${typeAbbr}-${String(nextNum).padStart(4, '0')}`;
 
     const project = projects.find(p => p.id === form.project_id);
 

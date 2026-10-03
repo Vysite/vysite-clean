@@ -13,12 +13,26 @@ export default function AssetManagement() {
   const store = useAppStore();
   const [tab, setTab] = useState<Tab>('overview');
   const [selectedAsset, setSelectedAsset] = useState<DBAsset | null>(null);
+  const [loadingAsset, setLoadingAsset] = useState(false);
 
   const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
     store.loadAssetData().then(() => setDataLoaded(true));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSelectAsset(a: { id: string } | DBAsset) {
+    // If the object already has enough fields (from register), use it directly
+    if ('asset_tag' in a && 'name' in a && 'status' in a) {
+      setSelectedAsset(a as DBAsset);
+      return;
+    }
+    // Otherwise load the full asset detail from server
+    setLoadingAsset(true);
+    const full = await store.loadAssetDetail(a.id);
+    setLoadingAsset(false);
+    if (full) setSelectedAsset(full);
+  }
 
   if (selectedAsset) {
     return (
@@ -28,6 +42,15 @@ export default function AssetManagement() {
           onBack={() => setSelectedAsset(null)}
           onAssetUpdated={(updated) => setSelectedAsset(updated)}
         />
+      </div>
+    );
+  }
+
+  if (loadingAsset) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 size={24} className="text-[#f97316] animate-spin mb-3" />
+        <p className="text-sm text-slate-500">Loading asset...</p>
       </div>
     );
   }
@@ -72,8 +95,8 @@ export default function AssetManagement() {
         </button>
       </div>
 
-      {tab === 'overview' && <AssetOverview onSwitchToAssets={() => setTab('assets')} onSelectAsset={(a) => setSelectedAsset(a)} />}
-      {tab === 'assets' && <AssetRegister onSelectAsset={(a) => setSelectedAsset(a)} />}
+      {tab === 'overview' && <AssetOverview onSwitchToAssets={() => setTab('assets')} onSelectAsset={(a) => handleSelectAsset(a)} />}
+      {tab === 'assets' && <AssetRegister onSelectAsset={(a) => handleSelectAsset(a)} />}
       {tab === 'sites' && <SitesLocations />}
         </>
       )}

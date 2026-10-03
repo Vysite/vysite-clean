@@ -1,30 +1,30 @@
-import { useMemo } from 'react';
+import { useEffect } from 'react';
 import { Package, CheckCircle2, AlertTriangle, Wrench, ArrowRight, MapPin } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
-import type { DBAsset } from './types';
 import { ASSET_STATUS_COLORS } from './types';
 
 interface Props {
   onSwitchToAssets: () => void;
-  onSelectAsset: (a: DBAsset) => void;
+  onSelectAsset: (a: { id: string }) => void;
 }
 
 export default function AssetOverview({ onSwitchToAssets, onSelectAsset }: Props) {
   const store = useAppStore();
-  const assets = store.assets ?? [];
   const sites = store.assetSites ?? [];
   const buildings = store.assetBuildings ?? [];
   const locations = store.assetLocations ?? [];
 
-  const stats = useMemo(() => {
-    const active = assets.filter(a => a.status === 'Active').length;
-    const outOfService = assets.filter(a => a.status === 'Out of Service').length;
-    const underRepair = assets.filter(a => a.status === 'Under Repair').length;
-    const decommissioned = assets.filter(a => a.status === 'Decommissioned').length;
-    return { total: assets.length, active, outOfService, underRepair, decommissioned };
-  }, [assets]);
+  // Load first page of register (provides recent assets) if not already loaded
+  useEffect(() => {
+    if (store.assetRegisterRows.length === 0 && !store.assetRegisterLoading) {
+      store.loadAssetRegister({ page: 1, pageSize: 5 });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const recentAssets = useMemo(() => assets.slice(0, 5), [assets]);
+  const recentAssets = store.assetRegisterRows.slice(0, 5);
+  const kpis = store.assetKPIs;
+
+  function siteName(id: string | null) { return sites.find(s => s.id === id)?.name ?? '—'; }
 
   function KpiCard({ label, value, icon: Icon, color }: { label: string; value: number; icon: typeof Package; color: string }) {
     return (
@@ -41,11 +41,11 @@ export default function AssetOverview({ onSwitchToAssets, onSelectAsset }: Props
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard label="Total Assets" value={stats.total} icon={Package} color="text-[#f97316]" />
-        <KpiCard label="Active" value={stats.active} icon={CheckCircle2} color="text-emerald-400" />
-        <KpiCard label="Out of Service" value={stats.outOfService} icon={AlertTriangle} color="text-amber-400" />
-        <KpiCard label="Under Repair" value={stats.underRepair} icon={Wrench} color="text-orange-400" />
-        <KpiCard label="Decommissioned" value={stats.decommissioned} icon={Package} color="text-slate-500" />
+        <KpiCard label="Total Assets" value={kpis.total} icon={Package} color="text-[#f97316]" />
+        <KpiCard label="Active" value={kpis.active} icon={CheckCircle2} color="text-emerald-400" />
+        <KpiCard label="Out of Service" value={kpis.outOfService} icon={AlertTriangle} color="text-amber-400" />
+        <KpiCard label="Under Repair" value={kpis.underRepair} icon={Wrench} color="text-orange-400" />
+        <KpiCard label="Decommissioned" value={kpis.decommissioned} icon={Package} color="text-slate-500" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -72,22 +72,19 @@ export default function AssetOverview({ onSwitchToAssets, onSelectAsset }: Props
             <p className="text-xs text-slate-600 italic py-4">No assets registered yet.</p>
           ) : (
             <div className="space-y-1">
-              {recentAssets.map(a => {
-                const site = sites.find(s => s.id === a.site_id);
-                return (
-                  <button key={a.id} onClick={() => onSelectAsset(a)}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#0d1628] transition-colors text-left">
-                    <div className="w-8 h-8 rounded-lg bg-[#0d1628] border border-[#1e2d4a] flex items-center justify-center shrink-0">
-                      <Package size={14} className="text-[#f97316]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-200 truncate">{a.name}</p>
-                      <p className="text-[10px] text-slate-600 font-mono">{a.asset_tag}</p>
-                    </div>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${ASSET_STATUS_COLORS[a.status as keyof typeof ASSET_STATUS_COLORS] ?? 'bg-slate-700 text-slate-400'}`}>{a.status}</span>
-                  </button>
-                );
-              })}
+              {recentAssets.map(a => (
+                <button key={a.id} onClick={() => onSelectAsset({ id: a.id })}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#0d1628] transition-colors text-left">
+                  <div className="w-8 h-8 rounded-lg bg-[#0d1628] border border-[#1e2d4a] flex items-center justify-center shrink-0">
+                    <Package size={14} className="text-[#f97316]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-200 truncate">{a.name}</p>
+                    <p className="text-[10px] text-slate-600 font-mono">{a.asset_tag}</p>
+                  </div>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${ASSET_STATUS_COLORS[a.status as keyof typeof ASSET_STATUS_COLORS] ?? 'bg-slate-700 text-slate-400'}`}>{a.status}</span>
+                </button>
+              ))}
             </div>
           )}
         </div>
