@@ -703,13 +703,17 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
   const handleExportDrawingPDF = useCallback(async () => {
     if (isExporting) return;
     setIsExporting(true);
+    setErrorMsg(null);
     try {
+      if (!drawing.storage_path) { setErrorMsg('Export failed: Drawing has no stored file path.'); return; }
       const url = await store.getTenderDrawingSignedUrl(drawing.storage_path);
-      if (!url) { setErrorMsg('Failed to get drawing file for export.'); return; }
+      if (!url) { setErrorMsg('Export failed: Unable to generate signed drawing URL.'); return; }
       const response = await fetch(url);
-      if (!response.ok) { setErrorMsg(`Failed to download drawing: HTTP ${response.status}`); return; }
+      if (!response.ok) { setErrorMsg(`Export failed: Source PDF returned HTTP ${response.status}.`); return; }
       const arrayBuffer = await response.arrayBuffer();
+      if (arrayBuffer.byteLength === 0) { setErrorMsg('Export failed: Source PDF is empty (0 bytes).'); return; }
       const drawingItems = store.tenderTakeoffItems.filter(i => i.drawing_id === drawing.id);
+      if (drawingItems.length === 0) { setErrorMsg('Export failed: No Take-Off items for this drawing.'); return; }
       await exportMarkedUpDrawingPDF({
         drawing,
         items: drawingItems,
@@ -720,7 +724,14 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
         internal: canViewFinancials,
       });
     } catch (err) {
-      setErrorMsg(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('red') && msg.includes('number')) {
+        setErrorMsg('Export failed: Invalid annotation colour encountered. Check item colours and retry.');
+      } else if (msg.includes('PDFDocument') || msg.includes('load')) {
+        setErrorMsg('Export failed: Unable to load source PDF file.');
+      } else {
+        setErrorMsg(`Export failed: ${msg}`);
+      }
     } finally {
       setIsExporting(false);
     }
@@ -897,6 +908,12 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
           }}
           onCreateItem={(type) => setShowItemCreator(type)}
           onUpdateItem={handleUpdateItem}
+          onFlushSaveItem={async (id) => {
+            if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+            const item = store.tenderTakeoffItems.find(i => i.id === id);
+            if (!item) return false;
+            return store.updateTenderTakeoffItem({ id, updated_at: new Date().toISOString() });
+          }}
           onDeleteItem={handleDeleteItem}
           onUndo={handleUndo}
           onRedo={handleRedo}

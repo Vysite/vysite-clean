@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MousePointer2, Plus, Hash, Minus, Square, Eye, EyeOff, Trash2, ChevronDown, ChevronRight, Undo2, Redo2, Layers } from 'lucide-react';
+import { MousePointer2, Plus, Hash, Minus, Square, Eye, EyeOff, Trash2, ChevronDown, ChevronRight, Undo2, Redo2, Layers, Check } from 'lucide-react';
 import type { DBTenderTakeoffItem } from './takeoffTypes';
 import type { MeasurementType, TakeoffLineType } from './takeoffTypes';
 import { TAKEOFF_COLOURS } from './takeoffTypes';
@@ -27,6 +27,7 @@ interface Props {
   onItemSelect: (itemId: string) => void;
   onCreateItem: (type: MeasurementType) => void;
   onUpdateItem: (id: string, updates: Partial<DBTenderTakeoffItem>) => void;
+  onFlushSaveItem: (id: string) => Promise<boolean>;
   onDeleteItem: (id: string) => void;
   onGeometrySelect: (geometryId: string) => void;
   canViewFinancials: boolean;
@@ -52,7 +53,7 @@ const LINE_TYPE_COLORS: Record<TakeoffLineType, string> = {
 export default function TakeoffSidebar({
   items, activeItemId, selectedGeometryId, tool, canUndo, canRedo, saveStatus, needsCalibration,
   calibration, pageWidth, pageHeight, canViewFinancials,
-  onToolChange, onItemSelect, onCreateItem, onUpdateItem, onDeleteItem, onGeometrySelect, onUndo, onRedo, onDeleteSelectedGeometry,
+  onToolChange, onItemSelect, onCreateItem, onUpdateItem, onFlushSaveItem, onDeleteItem, onGeometrySelect, onUndo, onRedo, onDeleteSelectedGeometry,
 }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -147,7 +148,7 @@ export default function TakeoffSidebar({
                   onUpdate={(updates) => onUpdateItem(item.id, updates)}
                   onDelete={() => onDeleteItem(item.id)}
                   onCollapse={() => setExpandedId(null)}
-                  onFlushSave={() => onUpdateItem(item.id, { updated_at: new Date().toISOString() })}
+                  onFlushSave={() => onFlushSaveItem(item.id)}
                 />
               ))}
             </div>
@@ -182,10 +183,12 @@ function ItemRow({
   onUpdate: (updates: Partial<DBTenderTakeoffItem>) => void;
   onDelete: () => void;
   onCollapse: () => void;
-  onFlushSave: () => void;
+  onFlushSave: () => Promise<boolean>;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [quickDeleteTarget, setQuickDeleteTarget] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const fq = finalQuantity(item);
   const measuredQty = item.source === 'manual' ? item.manual_quantity : item.quantity;
 
@@ -340,9 +343,16 @@ function ItemRow({
               <CostBuildUpSection item={item} onUpdate={onUpdate} />
             )}
             {/* Save + Delete actions */}
+            {saveError && <p className="text-[9px] text-red-400 font-semibold">{saveError}</p>}
             <div className="flex items-center justify-between pt-1">
-              <button onClick={() => { onFlushSave(); onCollapse(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold text-white bg-emerald-600 rounded hover:bg-emerald-700 transition-colors">
-                <Check size={12} />Save
+              <button onClick={async () => {
+                setIsSaving(true);
+                setSaveError(null);
+                const ok = await onFlushSave();
+                setIsSaving(false);
+                if (ok) { onCollapse(); } else { setSaveError('Save failed — check connection and retry.'); }
+              }} disabled={isSaving} className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold text-white bg-emerald-600 rounded hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+                <Check size={12} />{isSaving ? 'Saving...' : 'Save'}
               </button>
               {!confirmDelete ? (
                 <button onClick={() => setConfirmDelete(true)} className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-semibold text-red-400 hover:text-red-300 border border-red-900/50 rounded hover:bg-red-900/20 transition-colors">

@@ -16,11 +16,15 @@ export interface DrawingExportData {
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const FALLBACK = { r: 0.976, g: 0.451, b: 0.133 };
+  if (!hex || typeof hex !== 'string' || hex.length < 7) return FALLBACK;
   const clean = hex.replace('#', '');
-  const r = parseInt(clean.substring(0, 2), 16) / 255;
-  const g = parseInt(clean.substring(2, 4), 16) / 255;
-  const b = parseInt(clean.substring(4, 6), 16) / 255;
-  return { r: isNaN(r) ? 0.976 : r, g: isNaN(g) ? 0.451 : g, b: isNaN(b) ? 0.133 : b };
+  if (clean.length < 6) return FALLBACK;
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return FALLBACK;
+  return { r: r / 255, g: g / 255, b: b / 255 };
 }
 
 const LINE_LABELS: Record<string, string> = { standard: 'STD', addition: '+ ADD', omission: '\u2212 OMIT' };

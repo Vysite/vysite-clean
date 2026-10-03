@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Search, Hash, Minus, Square, FileText, AlertCircle, X, Download, ChevronDown } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import type { DBTenderTakeoffItem } from './takeoffTypes';
@@ -37,6 +37,8 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
   const [view, setView] = useState<'byDrawing' | 'list'>('list');
   const [showAddManual, setShowAddManual] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportMenuPos, setExportMenuPos] = useState({ top: 0, right: 0 });
+  const exportBtnRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -143,14 +145,20 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
         <button onClick={() => setShowAddManual(true)} className="flex items-center gap-2 px-3 py-2 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">
           <Plus size={14} />Manual Item
         </button>
-        <div className="relative">
-          <button onClick={() => setShowExportMenu(!showExportMenu)} disabled={exporting || store.tenderTakeoffItems.length === 0} className="flex items-center gap-2 px-3 py-2 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-300 hover:bg-[#1e2d4a] hover:text-white disabled:opacity-30 transition-colors">
+        <div className="relative" ref={exportBtnRef}>
+          <button onClick={() => {
+            if (!showExportMenu && exportBtnRef.current) {
+              const rect = exportBtnRef.current.getBoundingClientRect();
+              setExportMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+            }
+            setShowExportMenu(!showExportMenu);
+          }} disabled={exporting || store.tenderTakeoffItems.length === 0} className="flex items-center gap-2 px-3 py-2 border border-[#1e2d4a] rounded-lg text-sm font-semibold text-slate-300 hover:bg-[#1e2d4a] hover:text-white disabled:opacity-30 transition-colors">
             <Download size={14} />Export PDF <ChevronDown size={12} />
           </button>
           {showExportMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
-              <div className="absolute right-0 top-full mt-1 z-50 w-56 bg-[#1a2236] border border-[#1e2d4a] rounded-lg shadow-2xl overflow-hidden">
+              <div className="fixed z-50 w-56 bg-[#1a2236] border border-[#1e2d4a] rounded-lg shadow-2xl" style={{ top: exportMenuPos.top, right: exportMenuPos.right }}>
                 {canViewFinancials && (
                   <button onClick={() => { setShowExportMenu(false); handleExportInternal(); }} className="w-full flex items-center gap-3 px-4 py-3 text-xs text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left">
                     <FileText size={14} />Internal Take-Off

@@ -1517,7 +1517,7 @@ export interface AppStore {
   loadTenderTakeoffItems: (tenderId: string) => Promise<void>;
   loadTenderTakeoffItemsForDrawing: (drawingId: string) => Promise<void>;
   addTenderTakeoffItem: (item: DBTenderTakeoffItem) => Promise<string | null>;
-  updateTenderTakeoffItem: (item: Partial<DBTenderTakeoffItem> & { id: string }) => Promise<void>;
+  updateTenderTakeoffItem: (item: Partial<DBTenderTakeoffItem> & { id: string }) => Promise<boolean>;
   removeTenderTakeoffItem: (id: string) => Promise<void>;
 }
 
@@ -3157,11 +3157,12 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     return error ? error.message : null;
   }, []);
 
-  const updateTenderTakeoffItem = useCallback(async (item: Partial<DBTenderTakeoffItem> & { id: string }) => {
+  const updateTenderTakeoffItem = useCallback(async (item: Partial<DBTenderTakeoffItem> & { id: string }): Promise<boolean> => {
     setTenderTakeoffItems(prev => prev.map(x => x.id === item.id ? { ...x, ...item } : x));
     const { id, ...rest } = item;
     const { error } = await supabase.from('vy_tender_takeoff_items').update(rest).eq('id', id);
     logWrite('updateTenderTakeoffItem', 'vy_tender_takeoff_items', error);
+    return !error;
   }, []);
 
   const removeTenderTakeoffItem = useCallback(async (id: string) => {
