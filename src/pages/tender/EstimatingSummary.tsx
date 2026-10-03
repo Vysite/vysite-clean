@@ -1,9 +1,11 @@
-import React, { useMemo } from 'react';
-import { FileImage, Ruler, Calculator, RefreshCw, TrendingUp, AlertCircle, CheckCircle2, Package, Wrench } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { FileImage, Ruler, Calculator, RefreshCw, TrendingUp, AlertCircle, CheckCircle2, Package, Wrench, ChevronDown, Download } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
-import type { Tender, EstimateItem } from '../../data/types';
-import { finalQuantity, calcTakeoffCosts, signedTakeoffCosts, formatCurrency } from './takeoffCalculations';
+import type { Tender } from '../../data/types';
+import { finalQuantity, calcTakeoffCosts, signedTakeoffCosts } from './takeoffCalculations';
 import { getSyncStatus } from './TakeoffEstimateSync';
+import { computeEstimateSummary, calcLine, fmtNum, fmtC, fmtDeduction } from './estimateCalculations';
+import { exportInternalSummary, exportExternalSummary } from './SummaryPDF';
 
 interface Props {
   tender: Tender;
@@ -16,61 +18,27 @@ export default function EstimatingSummary({ tender, onSwitchToTakeOff }: Props) 
   const isAdmin = store.currentUser?.role === 'Admin';
   const canViewFinancials = perms['tender.view_financials'] || isAdmin;
 
+  const [dataLoading, setDataLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDataLoading(true);
+    Promise.all([
+      store.loadTenderDrawings(tender.id),
+      store.loadTenderTakeoffItems(tender.id),
+    ]).then(() => {
+      if (!cancelled) setDataLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [tender.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
   const drawings = store.tenderDrawings.filter(d => d.tender_id === tender.id);
   const takeoffItems = store.tenderTakeoffItems.filter(i => i.tender_id === tender.id);
   const estimateItems = tender.estimateItems ?? [];
 
-  // ── Estimate calculations (reuse exact same helpers as EstimatingTab) ──
-  function calcLine(item: EstimateItem) {
-    const costTotal = item.quantity * item.costRate;
-    const saleRate = item.costRate * (1 + item.markupPct / 100);
-    const saleTotal = item.quantity * saleRate;
-    const profit = saleTotal - costTotal;
-    return { costTotal, saleRate, saleTotal, profit };
-  }
-  function lineSign(item: EstimateItem): number {
-    return item.sourceLineType === 'omission' ? -1 : 1;
-  }
-  function calcLineSigned(item: EstimateItem) {
-    const { costTotal, saleRate, saleTotal, profit } = calcLine(item);
-    const sign = lineSign(item);
-    return { costTotal, saleRate, saleTotal, profit, signedCostTotal: costTotal * sign, signedSaleTotal: saleTotal * sign, signedProfit: profit * sign };
-  }
-  function getLineType(item: EstimateItem) { return item.lineType ?? 'works'; }
-  function isIncluded(item: EstimateItem) { return item.includedInTenderSum ?? true; }
-
-  const worksItems = estimateItems.filter(it => getLineType(it) === 'works');
-  const prelimItems = estimateItems.filter(it => getLineType(it) === 'preliminaries');
-  const optionalItems = estimateItems.filter(it => getLineType(it) === 'optional');
-  const allowanceItems = estimateItems.filter(it => getLineType(it) === 'allowance');
-  const optionalIncluded = optionalItems.filter(it => isIncluded(it));
-
-  function groupTotals(arr: EstimateItem[]) {
-    return arr.reduce((acc, it) => {
-      const { signedCostTotal, signedSaleTotal, signedProfit } = calcLineSigned(it);
-      return { cost: acc.cost + signedCostTotal, sale: acc.sale + signedSaleTotal, profit: acc.profit + signedProfit };
-    }, { cost: 0, sale: 0, profit: 0 });
-  }
-
-  const worksTotals = groupTotals(worksItems);
-  const prelimTotals = groupTotals(prelimItems);
-  const optIncludedTotals = groupTotals(optionalIncluded);
-  const allowanceTotals = groupTotals(allowanceItems);
-
-  const includedCost = worksTotals.cost + prelimTotals.cost + optIncludedTotals.cost + allowanceTotals.cost;
-  const tenderValueBeforeMcd = worksTotals.sale + prelimTotals.sale + optIncludedTotals.sale + allowanceTotals.sale;
-
-  const mcdType = tender.mcdType ?? 'none';
-  const mcdPct = tender.mcdPct ?? 0;
-  const mcdFixedValue = tender.mcdFixedValue ?? 0;
-  const mcdValue = mcdType === 'percentage' ? tenderValueBeforeMcd * mcdPct / 100 : mcdType === 'fixed' ? mcdFixedValue : 0;
-  const finalTenderSum = tenderValueBeforeMcd - mcdValue;
-  const profitAfterMcd = finalTenderSum - includedCost;
-  const marginAfterMcd = finalTenderSum > 0 ? (profitAfterMcd / finalTenderSum) * 100 : 0;
-
-  const fmt = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtC = (n: number) => `£${fmt(n)}`;
-  const fmtDeduction = (n: number) => `(${fmtC(Math.abs(n))})`;
+  const est = computeEstimateSummary(tender);
 
   // ── Take-Off calculations (reuse existing helpers) ──
   const takeoffSigned = takeoffItems.map(i => signedTakeoffCosts(i));
@@ -127,10 +95,8 @@ export default function EstimatingSummary({ tender, onSwitchToTakeOff }: Props) 
   // ── Estimate omissions/additions ──
   const estimateOmissions = estimateItems.filter(it => it.sourceLineType === 'omission');
   const estimateAdditions = estimateItems.filter(it => it.sourceLineType === 'addition');
-  const estimateStd = estimateItems.filter(it => !it.sourceLineType || it.sourceLineType === 'standard');
   const estimateOmissionSale = estimateOmissions.reduce((s, it) => s + calcLine(it).saleTotal, 0);
   const estimateAdditionSale = estimateAdditions.reduce((s, it) => s + calcLine(it).saleTotal, 0);
-  const estimateStdSale = estimateStd.reduce((s, it) => s + calcLine(it).saleTotal, 0);
 
   // ── KPI card component ──
   function KpiCard({ label, value, icon: Icon, accent }: { label: string; value: string; icon: typeof FileImage; accent?: boolean }) {
@@ -145,7 +111,6 @@ export default function EstimatingSummary({ tender, onSwitchToTakeOff }: Props) 
     );
   }
 
-  // ── Section wrapper ──
   function Section({ title, icon: Icon, children }: { title: string; icon: typeof FileImage; children: React.ReactNode }) {
     return (
       <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5">
@@ -158,19 +123,67 @@ export default function EstimatingSummary({ tender, onSwitchToTakeOff }: Props) 
     );
   }
 
+  // ── Loading state ──
+  if (dataLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-6 h-6 border-2 border-slate-600 border-t-[#f97316] rounded-full animate-spin" />
+          <p className="text-xs text-slate-500">Loading estimating summary...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const pdfData = { tender, drawings, takeoffItems, canViewFinancials };
+  const logoUrl = store.settings?.logo_data_url;
+
   return (
     <div className="space-y-5">
+      {/* ── Export control ── */}
+      <div className="flex justify-end">
+        <div className="relative">
+          <button
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            className="flex items-center gap-2 px-4 py-2 bg-[#1a2236] border border-[#1e2d4a] text-slate-300 rounded-lg text-sm font-semibold hover:border-[#f97316] hover:text-[#f97316] transition-colors"
+          >
+            <Download size={14} />Export PDF<ChevronDown size={12} />
+          </button>
+          {showExportMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+              <div className="absolute right-0 top-full mt-1 z-20 bg-[#1a2236] border border-[#1e2d4a] rounded-lg shadow-xl py-1 min-w-[180px]">
+                {canViewFinancials && (
+                  <button
+                    onClick={() => { setShowExportMenu(false); exportInternalSummary(pdfData, logoUrl); }}
+                    className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-[#0d1628] hover:text-[#f97316] transition-colors"
+                  >
+                    Internal Summary
+                  </button>
+                )}
+                <button
+                  onClick={() => { setShowExportMenu(false); exportExternalSummary(pdfData, logoUrl); }}
+                  className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-[#0d1628] hover:text-[#f97316] transition-colors"
+                >
+                  External Summary
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         <KpiCard label="Drawings" value={String(drawings.length)} icon={FileImage} />
         <KpiCard label="Take-Off Items" value={String(takeoffItems.length)} icon={Ruler} />
         {canViewFinancials && <KpiCard label="Material Cost" value={fmtC(totalMaterial)} icon={Package} />}
         {canViewFinancials && <KpiCard label="Labour Cost" value={fmtC(totalLabour)} icon={Wrench} />}
-        <KpiCard label="Total Labour" value={`${fmt(totalLabourHours)} hrs`} icon={Wrench} />
-        {canViewFinancials && <KpiCard label="Estimate Cost" value={fmtC(includedCost)} icon={Calculator} />}
-        {canViewFinancials && <KpiCard label="Tender Value" value={fmtC(tenderValueBeforeMcd)} icon={TrendingUp} />}
-        {canViewFinancials && <KpiCard label="Final Tender Sum" value={fmtC(finalTenderSum)} icon={TrendingUp} accent />}
-        {canViewFinancials && <KpiCard label="Margin" value={`${marginAfterMcd.toFixed(1)}%`} icon={TrendingUp} />}
+        <KpiCard label="Total Labour" value={`${fmtNum(totalLabourHours)} hrs`} icon={Wrench} />
+        {canViewFinancials && <KpiCard label="Estimate Cost" value={fmtC(est.includedCost)} icon={Calculator} />}
+        {canViewFinancials && <KpiCard label="Tender Value" value={fmtC(est.tenderValueBeforeMcd)} icon={TrendingUp} />}
+        {canViewFinancials && <KpiCard label="Final Tender Sum" value={fmtC(est.finalTenderSum)} icon={TrendingUp} accent />}
+        {canViewFinancials && <KpiCard label="Margin" value={`${est.marginAfterMcd.toFixed(1)}%`} icon={TrendingUp} />}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -228,7 +241,7 @@ export default function EstimatingSummary({ tender, onSwitchToTakeOff }: Props) 
             )}
             <div className="flex justify-between text-xs">
               <span className="text-slate-400">Total Labour</span>
-              <span className="text-slate-200 font-semibold">{fmt(totalLabourHours)} hrs</span>
+              <span className="text-slate-200 font-semibold">{fmtNum(totalLabourHours)} hrs</span>
             </div>
             {canViewFinancials && (
               <>
@@ -378,24 +391,24 @@ export default function EstimatingSummary({ tender, onSwitchToTakeOff }: Props) 
             <div className="space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="text-slate-400">Works</span>
-                <span className="text-slate-200 font-mono">{fmtC(worksTotals.sale)}</span>
+                <span className="text-slate-200 font-mono">{fmtC(est.worksTotals.sale)}</span>
               </div>
-              {prelimItems.length > 0 && (
+              {est.prelimItems.length > 0 && (
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-400">Preliminaries</span>
-                  <span className="text-slate-200 font-mono">{fmtC(prelimTotals.sale)}</span>
+                  <span className="text-slate-200 font-mono">{fmtC(est.prelimTotals.sale)}</span>
                 </div>
               )}
-              {optionalIncluded.length > 0 && (
+              {est.optionalIncluded.length > 0 && (
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-400">Included Options</span>
-                  <span className="text-slate-200 font-mono">{fmtC(optIncludedTotals.sale)}</span>
+                  <span className="text-slate-200 font-mono">{fmtC(est.optIncludedTotals.sale)}</span>
                 </div>
               )}
-              {allowanceItems.length > 0 && (
+              {est.allowanceItems.length > 0 && (
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-400">Internal Allowances</span>
-                  <span className="text-slate-200 font-mono">{fmtC(allowanceTotals.sale)}</span>
+                  <span className="text-slate-200 font-mono">{fmtC(est.allowanceTotals.sale)}</span>
                 </div>
               )}
               {estimateAdditions.length > 0 && (
@@ -414,29 +427,29 @@ export default function EstimatingSummary({ tender, onSwitchToTakeOff }: Props) 
             <div className="space-y-2">
               <div className="flex justify-between text-xs border-b border-[#1e2d4a] pb-2">
                 <span className="text-slate-300 font-semibold">Total Included Cost</span>
-                <span className="text-slate-200 font-mono">{fmtC(includedCost)}</span>
+                <span className="text-slate-200 font-mono">{fmtC(est.includedCost)}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-slate-300 font-semibold">Tender Value Before MCD</span>
-                <span className="text-slate-200 font-mono font-semibold">{fmtC(tenderValueBeforeMcd)}</span>
+                <span className="text-slate-200 font-mono font-semibold">{fmtC(est.tenderValueBeforeMcd)}</span>
               </div>
-              {mcdType !== 'none' && (
+              {est.mcdType !== 'none' && (
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">{mcdType === 'percentage' ? `MCD (${mcdPct}%)` : 'MCD'}</span>
-                  <span className="text-red-400 font-mono">{fmtDeduction(mcdValue)}</span>
+                  <span className="text-slate-400">{est.mcdType === 'percentage' ? `MCD (${est.mcdPct}%)` : 'MCD'}</span>
+                  <span className="text-red-400 font-mono">{fmtDeduction(est.mcdValue)}</span>
                 </div>
               )}
               <div className="flex justify-between text-xs bg-[#0f172a] rounded-lg px-3 py-2 border-t-2 border-[#f97316]">
                 <span className="text-white font-bold">FINAL TENDER SUM</span>
-                <span className="text-white font-mono font-bold">{fmtC(finalTenderSum)}</span>
+                <span className="text-white font-mono font-bold">{fmtC(est.finalTenderSum)}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Profit {mcdType !== 'none' ? 'After MCD' : ''}</span>
-                <span className={`font-mono ${profitAfterMcd >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtC(profitAfterMcd)}</span>
+                <span className="text-slate-400">Profit {est.mcdType !== 'none' ? 'After MCD' : ''}</span>
+                <span className={`font-mono ${est.profitAfterMcd >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtC(est.profitAfterMcd)}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Margin {mcdType !== 'none' ? 'After MCD' : ''}</span>
-                <span className={`font-mono ${marginAfterMcd >= 15 ? 'text-emerald-400' : marginAfterMcd >= 8 ? 'text-amber-400' : 'text-red-400'}`}>{marginAfterMcd.toFixed(1)}%</span>
+                <span className="text-slate-400">Margin {est.mcdType !== 'none' ? 'After MCD' : ''}</span>
+                <span className={`font-mono ${est.marginAfterMcd >= 15 ? 'text-emerald-400' : est.marginAfterMcd >= 8 ? 'text-amber-400' : 'text-red-400'}`}>{est.marginAfterMcd.toFixed(1)}%</span>
               </div>
             </div>
           </div>

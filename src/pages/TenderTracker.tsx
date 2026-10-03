@@ -29,6 +29,7 @@ import AITenderAssistant from '../components/AITenderAssistant';
 import AIContractReview from '../components/AIContractReview';
 import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
 import EstimatingWorkspace from './tender/EstimatingWorkspace';
+import { calcLine, lineSign, calcLineSigned, getLineType, isIncluded, groupTotals, computeEstimateSummary, fmtNum, fmtC, fmtDeduction } from './tender/estimateCalculations';
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 
@@ -2156,30 +2157,8 @@ function TenderExportModal({ tender, companyName, logoUrl, onClose }: TenderExpo
 
 const UNITS = ['Item', 'hr', 'day', 'wk', 'm', 'm²', 'm³', 'nr', 'sum', 'tonne', 'kg', 'l', 'set'];
 
-function calcLine(item: EstimateItem) {
-  const costTotal = item.quantity * item.costRate;
-  const saleRate = item.costRate * (1 + item.markupPct / 100);
-  const saleTotal = item.quantity * saleRate;
-  const profit = saleTotal - costTotal;
-  return { costTotal, saleRate, saleTotal, profit };
-}
-
-function lineSign(item: EstimateItem): number {
-  return item.sourceLineType === 'omission' ? -1 : 1;
-}
-
-function calcLineSigned(item: EstimateItem) {
-  const { costTotal, saleRate, saleTotal, profit } = calcLine(item);
-  const sign = lineSign(item);
-  return { costTotal, saleRate, saleTotal, profit, signedCostTotal: costTotal * sign, signedSaleTotal: saleTotal * sign, signedProfit: profit * sign };
-}
-
-function getLineType(item: EstimateItem): EstimateLineType {
-  return item.lineType ?? 'works';
-}
-function isIncluded(item: EstimateItem): boolean {
-  return item.includedInTenderSum ?? true;
-}
+// calcLine, lineSign, calcLineSigned, getLineType, isIncluded, groupTotals
+// are now imported from ./tender/estimateCalculations
 
 const BLANK_LINE = (lineType: EstimateLineType = 'works'): EstimateItem => ({
   id: crypto.randomUUID(),
@@ -2291,13 +2270,7 @@ export function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   const optionalIncluded = optionalItems.filter(it => isIncluded(it));
   const optionalExcluded = optionalItems.filter(it => !isIncluded(it));
 
-  // Grouped calculations
-  function groupTotals(arr: EstimateItem[]) {
-    return arr.reduce((acc, it) => {
-      const { signedCostTotal, signedSaleTotal, signedProfit } = calcLineSigned(it);
-      return { cost: acc.cost + signedCostTotal, sale: acc.sale + signedSaleTotal, profit: acc.profit + signedProfit };
-    }, { cost: 0, sale: 0, profit: 0 });
-  }
+  // Grouped calculations (using shared helper from estimateCalculations.ts)
 
   const worksTotals = groupTotals(worksItems);
   const prelimTotals = groupTotals(prelimItems);
@@ -2323,8 +2296,7 @@ export function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   const totals = { cost: includedCost, sale: tenderValueBeforeMcd, profit: profitAfterMcd };
   const overallMarginPct = marginAfterMcd;
 
-  const fmt = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtC = (n: number) => `£${fmt(n)}`;
+  // fmt, fmtC are imported from estimateCalculations.ts
 
   // PDF print handlers — Phase 3: extended to show all estimating sections.
   // Internal PDF: full commercial detail including allowances, cost, markup, profit, margin.
