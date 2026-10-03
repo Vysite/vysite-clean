@@ -12,10 +12,10 @@ export default function SitesLocations() {
   const isAdmin = store.currentUser?.role === 'Admin';
   const canEdit = perms['asset.edit'] || isAdmin;
 
-  const sites = store.assetSites;
-  const buildings = store.assetBuildings;
-  const locations = store.assetLocations;
-  const assets = store.assets;
+  const sites = store.assetSites ?? [];
+  const buildings = store.assetBuildings ?? [];
+  const locations = store.assetLocations ?? [];
+  const assets = store.assets ?? [];
 
   const [expandedSite, setExpandedSite] = useState<string | null>(null);
   const [expandedBuilding, setExpandedBuilding] = useState<string | null>(null);

@@ -1727,6 +1727,12 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setSupplierTrades([]);
       setSupplierSpecialisms([]);
       setSupplierLabourRateTypes([]);
+      setAssetSites([]);
+      setAssetBuildings([]);
+      setAssetLocations([]);
+      setAssets([]);
+      setAssetDocuments([]);
+      setAssetActivity([]);
       // Keep platformUsers/settings as-is — they load below with org filter
       setLoading(false);
       setModulesLoading(false);

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Package, FileText, MessageSquare, Edit3, X, Save, Plus, Trash2, Download, Paperclip } from 'lucide-react';
+import { ArrowLeft, Package, FileText, MessageSquare, Edit3, Save, Plus, Trash2, Download, Paperclip } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import FileUpload, { type UploadedFile } from '../../components/FileUpload';
 import type { DBAsset, AssetStatus, DBAssetDocument, DBAssetActivity } from './types';
-import { ASSET_STATUSES, ASSET_TYPES, ASSET_STATUS_COLORS, ASSET_DOC_CATEGORIES } from './types';
+import { ASSET_STATUSES, ASSET_TYPES, ASSET_STATUS_COLORS } from './types';
 
 interface Props {
   asset: DBAsset;
@@ -25,9 +25,9 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
   const [tab, setTab] = useState<Tab>('overview');
   const [editing, setEditing] = useState(false);
 
-  const sites = store.assetSites;
-  const buildings = store.assetBuildings;
-  const locations = store.assetLocations;
+  const sites = store.assetSites ?? [];
+  const buildings = store.assetBuildings ?? [];
+  const locations = store.assetLocations ?? [];
 
   function siteName(id: string | null) { return sites.find(s => s.id === id)?.name ?? '—'; }
   function buildingName(id: string | null) { return buildings.find(b => b.id === id)?.name ?? '—'; }
@@ -134,9 +134,9 @@ function OverviewTab({ asset, canEdit, editing, setEditing, siteName, buildingNa
 
 function EditAssetForm({ asset, onCancel, onSave }: { asset: DBAsset; onCancel: () => void; onSave: (a: DBAsset) => void }) {
   const store = useAppStore();
-  const sites = store.assetSites;
-  const buildings = store.assetBuildings.filter(b => b.site_id === asset.site_id);
-  const locations = store.assetLocations.filter(l => l.building_id === asset.building_id);
+  const sites = store.assetSites ?? [];
+  const buildings = (store.assetBuildings ?? []).filter(b => b.site_id === asset.site_id);
+  const locations = (store.assetLocations ?? []).filter(l => l.building_id === asset.building_id);
   const [form, setForm] = useState({
     name: asset.name, asset_type: asset.asset_type, manufacturer: asset.manufacturer ?? '', model: asset.model ?? '',
     serial_number: asset.serial_number ?? '', site_id: asset.site_id ?? '', building_id: asset.building_id ?? '',
@@ -200,7 +200,7 @@ function EditAssetForm({ asset, onCancel, onSave }: { asset: DBAsset; onCancel: 
         <div><label className={labelCls}>Model</label><input className={inputCls + ' mt-1.5'} value={form.model} onChange={set('model')} /></div>
         <div><label className={labelCls}>Serial Number</label><input className={inputCls + ' mt-1.5'} value={form.serial_number} onChange={set('serial_number')} onBlur={handleSerialBlur} />{serialWarn && <p className="mt-1 text-[10px] text-amber-400">Serial number already exists in this organisation</p>}</div>
         <div><label className={labelCls}>Status</label><select className={inputCls + ' mt-1.5'} value={form.status} onChange={set('status')}>{ASSET_STATUSES.map(s => <option key={s}>{s}</option>)}</select></div>
-        <div><label className={labelCls}>Site</label><select className={inputCls + ' mt-1.5'} value={form.site_id} onChange={e => setForm(f => ({ ...f, site_id: e.target.value, building_id: '', location_id: '' }))}><option value="">—</option>{store.assetSites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+        <div><label className={labelCls}>Site</label><select className={inputCls + ' mt-1.5'} value={form.site_id} onChange={e => setForm(f => ({ ...f, site_id: e.target.value, building_id: '', location_id: '' }))}><option value="">—</option>{sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
         <div><label className={labelCls}>Building</label><select className={inputCls + ' mt-1.5'} value={form.building_id} onChange={e => setForm(f => ({ ...f, building_id: e.target.value, location_id: '' }))} disabled={!form.site_id}><option value="">—</option>{buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
         <div><label className={labelCls}>Location</label><select className={inputCls + ' mt-1.5'} value={form.location_id} onChange={set('location_id')} disabled={!form.building_id}><option value="">—</option>{locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
         <div><label className={labelCls}>Installation Date</label><input type="date" className={inputCls + ' mt-1.5'} value={form.installation_date} onChange={set('installation_date')} /></div>
@@ -223,7 +223,7 @@ function DocumentsTab({ asset, canUpload, canDelete }: { asset: DBAsset; canUplo
   }, [asset.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    setDocs(store.assetDocuments);
+    setDocs(store.assetDocuments ?? []);
   }, [store.assetDocuments]);
 
   const fmtSize = (n: number) => n < 1024 ? `${n}B` : n < 1048576 ? `${(n / 1024).toFixed(0)}KB` : `${(n / 1048576).toFixed(1)}MB`;
@@ -306,7 +306,7 @@ function ActivityTab({ asset, canComment }: { asset: DBAsset; canComment: boolea
   }, [asset.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    setActivity(store.assetActivity);
+    setActivity(store.assetActivity ?? []);
   }, [store.assetActivity]);
 
   async function handleAddComment() {

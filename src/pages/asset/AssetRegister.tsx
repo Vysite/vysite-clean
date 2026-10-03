@@ -16,7 +16,6 @@ export default function AssetRegister({ onSelectAsset }: Props) {
   const perms = usePermissions();
   const isAdmin = store.currentUser?.role === 'Admin';
   const canCreate = perms['asset.create'] || isAdmin;
-  const canEdit = perms['asset.edit'] || isAdmin;
 
   const [search, setSearch] = useState('');
   const [filterSite, setFilterSite] = useState('All');
@@ -25,10 +24,10 @@ export default function AssetRegister({ onSelectAsset }: Props) {
   const [filterStatus, setFilterStatus] = useState('All');
   const [showCreate, setShowCreate] = useState(false);
 
-  const assets = store.assets;
-  const sites = store.assetSites;
-  const buildings = store.assetBuildings;
-  const locations = store.assetLocations;
+  const assets = store.assets ?? [];
+  const sites = store.assetSites ?? [];
+  const buildings = store.assetBuildings ?? [];
+  const locations = store.assetLocations ?? [];
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -173,10 +172,10 @@ function FilterSelect({ value, onChange, options, renderOpt }: { value: string; 
 
 function CreateAssetModal({ onClose }: { onClose: () => void }) {
   const store = useAppStore();
-  const sites = store.assetSites;
-  const buildings = store.assetBuildings;
-  const locations = store.assetLocations;
-  const projects = store.projects;
+  const sites = store.assetSites ?? [];
+  const buildings = store.assetBuildings ?? [];
+  const locations = store.assetLocations ?? [];
+  const projects = store.projects ?? [];
 
   const [form, setForm] = useState({
     name: '', asset_type: 'Other', manufacturer: '', model: '', serial_number: '',

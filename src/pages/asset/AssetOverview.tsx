@@ -11,10 +11,10 @@ interface Props {
 
 export default function AssetOverview({ onSwitchToAssets, onSelectAsset }: Props) {
   const store = useAppStore();
-  const assets = store.assets;
-  const sites = store.assetSites;
-  const buildings = store.assetBuildings;
-  const locations = store.assetLocations;
+  const assets = store.assets ?? [];
+  const sites = store.assetSites ?? [];
+  const buildings = store.assetBuildings ?? [];
+  const locations = store.assetLocations ?? [];
 
   const stats = useMemo(() => {
     const active = assets.filter(a => a.status === 'Active').length;

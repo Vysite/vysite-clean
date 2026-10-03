@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, List, MapPin, BarChart3, ArrowLeft } from 'lucide-react';
+import { Package, List, MapPin, BarChart3, ArrowLeft, Loader2 } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import AssetRegister from './AssetRegister';
 import AssetDetail from './AssetDetail';
@@ -14,8 +14,10 @@ export default function AssetManagement() {
   const [tab, setTab] = useState<Tab>('overview');
   const [selectedAsset, setSelectedAsset] = useState<DBAsset | null>(null);
 
+  const [dataLoaded, setDataLoaded] = useState(false);
+
   useEffect(() => {
-    store.loadAssetData();
+    store.loadAssetData().then(() => setDataLoaded(true));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (selectedAsset) {
@@ -49,6 +51,15 @@ export default function AssetManagement() {
         </div>
       </div>
 
+      {!dataLoaded ? (
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 size={24} className="text-[#f97316] animate-spin mb-3" />
+          <p className="text-sm text-slate-500">Loading Asset Management...</p>
+        </div>
+      ) : null}
+
+      {dataLoaded && (
+        <>
       <div className="flex gap-1 bg-[#1a2236] border border-[#1e2d4a] rounded-lg p-1 mb-5 overflow-x-auto">
         <button className={tabCls('overview')} onClick={() => setTab('overview')}>
           <BarChart3 size={15} />Overview
@@ -64,6 +75,8 @@ export default function AssetManagement() {
       {tab === 'overview' && <AssetOverview onSwitchToAssets={() => setTab('assets')} onSelectAsset={(a) => setSelectedAsset(a)} />}
       {tab === 'assets' && <AssetRegister onSelectAsset={(a) => setSelectedAsset(a)} />}
       {tab === 'sites' && <SitesLocations />}
+        </>
+      )}
     </div>
   );
 }
