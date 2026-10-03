@@ -63,9 +63,26 @@ function parseTakeoffPdfColour(value: unknown, itemLabel?: string): Color {
   return FALLBACK_COLOR;
 }
 
-const LINE_LABELS: Record<string, string> = { standard: 'STD', addition: '+ ADD', omission: '\u2212 OMIT' };
-const TYPE_SYMBOLS: Record<string, string> = { count: '\u25CF', linear: '\u2014', area: '\u25A0' };
+const LINE_LABELS: Record<string, string> = { standard: 'STD', addition: '+ ADD', omission: '- OMIT' };
 const TYPE_LABELS: Record<string, string> = { count: 'Count', linear: 'Linear', area: 'Area' };
+
+function sanitizePdfText(value: string): string {
+  return value
+    .replace(/\u2212/g, '-')
+    .replace(/\u2013/g, '-')
+    .replace(/\u2014/g, '-')
+    .replace(/\u2026/g, '...')
+    .replace(/\u00B2/g, '2')
+    .replace(/\u00B3/g, '3')
+    .replace(/\u00B7/g, '-')
+    .replace(/\u2022/g, '')
+    .replace(/\u25CF/g, '')
+    .replace(/\u25A0/g, '')
+    .replace(/\u201C/g, '"')
+    .replace(/\u201D/g, '"')
+    .replace(/\u2018/g, "'")
+    .replace(/\u2019/g, "'");
+}
 
 function calForPage(calibrations: DBTenderDrawingCalibration[], drawingId: string, pageNum: number): DBTenderDrawingCalibration | null {
   return calibrations.find(c => c.drawing_id === drawingId && c.page_number === pageNum) ?? null;
@@ -217,7 +234,7 @@ function renderAreaPDF(page: PDFPage, geo: AreaGeometry, color: Color, font: PDF
       ? areaPolygonQuantity(poly, cal, pw, ph)
       : 0;
     if (area > 0) {
-      const label = `${area.toFixed(2)} ${cal?.unit ?? ''}\u00B2`.trim();
+      const label = sanitizePdfText(`${area.toFixed(2)} ${cal?.unit ?? ''}2`.trim());
       drawTextWithHalo(page, label, cx, cy, fontSize, color, font);
     }
   }
@@ -285,15 +302,22 @@ function drawLegendPDF(page: PDFPage, items: DBTenderTakeoffItem[], font: PDFFon
     const rowY = panelY + panelH - 44 - i * rowH;
     const label = item.label || 'Untitled';
 
-    // Symbol
-    const sym = TYPE_SYMBOLS[item.measurement_type] || '\u25CF';
-    page.drawText(sym, { x: colSym, y: rowY, size: 10, color, font: fontBold });
+    // Symbol — drawn as PDF primitive, not text (WinAnsi can't encode Unicode shapes)
+    const symSize = 6;
+    const symY = rowY + 2;
+    if (item.measurement_type === 'count') {
+      page.drawCircle({ x: colSym + symSize / 2, y: symY, size: symSize / 2, color });
+    } else if (item.measurement_type === 'linear') {
+      page.drawLine({ start: { x: colSym, y: symY }, end: { x: colSym + symSize, y: symY }, thickness: 1.5, color });
+    } else if (item.measurement_type === 'area') {
+      page.drawRectangle({ x: colSym, y: symY - symSize / 2, width: symSize, height: symSize, color });
+    }
 
     // Description (truncate if long)
     const maxDescW = colType - colDesc - 6;
-    let desc = label;
+    let desc = sanitizePdfText(label);
     while (font.widthOfTextAtSize(desc, 8) > maxDescW && desc.length > 3) desc = desc.substring(0, desc.length - 1);
-    if (desc !== label) desc = desc.substring(0, desc.length - 1) + '\u2026';
+    if (desc !== sanitizePdfText(label)) desc = desc.substring(0, desc.length - 1) + '...';
     page.drawText(desc, { x: colDesc, y: rowY, size: 8, color: rgb(0.11, 0.16, 0.27), font });
 
     // Type
@@ -302,14 +326,14 @@ function drawLegendPDF(page: PDFPage, items: DBTenderTakeoffItem[], font: PDFFon
     // Quantity
     const fq = item.source === 'manual' ? item.manual_quantity + item.adjustment_quantity : item.quantity + item.adjustment_quantity;
     const qtyStr = fq.toFixed(item.measurement_type === 'count' ? 0 : 2);
-    page.drawText(`${qtyStr} ${item.unit}`, { x: colQty, y: rowY, size: 7, color: rgb(0.11, 0.16, 0.27), font });
+    page.drawText(sanitizePdfText(`${qtyStr} ${item.unit}`), { x: colQty, y: rowY, size: 7, color: rgb(0.11, 0.16, 0.27), font });
 
     // Line type
     const lineLabel = LINE_LABELS[item.line_type] || item.line_type;
     let lineColor = rgb(0.4, 0.45, 0.55);
     if (item.line_type === 'addition') lineColor = rgb(0.02, 0.6, 0.41);
     if (item.line_type === 'omission') lineColor = rgb(0.86, 0.15, 0.15);
-    page.drawText(lineLabel, { x: colLine, y: rowY, size: 7, color: lineColor, font: fontBold });
+    page.drawText(sanitizePdfText(lineLabel), { x: colLine, y: rowY, size: 7, color: lineColor, font: fontBold });
   }
 }
 
@@ -327,14 +351,14 @@ function drawMetadataPage(pdfDoc: PDFDocument, font: PDFFont, fontBold: PDFFont,
   page.drawText('Construction Management Platform', { x: margin, y: ph - 52, size: 8, color: rgb(1, 1, 1), font });
 
   // Title
-  page.drawText(internal ? 'Marked-Up Drawing \u2014 Internal' : 'Marked-Up Drawing', { x: pw - margin, y: ph - 38, size: 14, color: rgb(1, 1, 1), font: fontBold });
+  const titleText = sanitizePdfText(internal ? 'Marked-Up Drawing - Internal' : 'Marked-Up Drawing');
+  page.drawText(titleText, { x: pw - margin, y: ph - 38, size: 14, color: rgb(1, 1, 1), font: fontBold });
   // Right-align
-  const titleW = fontBold.widthOfTextAtSize(internal ? 'Marked-Up Drawing \u2014 Internal' : 'Marked-Up Drawing', 14);
+  const titleW = fontBold.widthOfTextAtSize(titleText, 14);
   // Redraw right-aligned
   page.drawRectangle({ x: 0, y: ph - 60, width: pw, height: 60, color: rgb(0.976, 0.451, 0.133) });
   page.drawText('VYSITE', { x: margin, y: ph - 38, size: 22, color: rgb(1, 1, 1), font: fontBold });
   page.drawText('Construction Management Platform', { x: margin, y: ph - 52, size: 8, color: rgb(1, 1, 1), font });
-  const titleText = internal ? 'Marked-Up Drawing \u2014 Internal' : 'Marked-Up Drawing';
   page.drawText(titleText, { x: pw - margin - titleW, y: ph - 38, size: 14, color: rgb(1, 1, 1), font: fontBold });
 
   // Metadata box
@@ -355,18 +379,18 @@ function drawMetadataPage(pdfDoc: PDFDocument, font: PDFFont, fontBold: PDFFont,
     page.drawText(val, { x, y: yPos - 12, size: 11, color: valColorOverride ?? valColor, font });
   }
 
-  metaRow(y, 'Tender Name', tenderName, colL); metaRow(y, 'Drawing Number', drawing.drawing_number || '\u2014', colR, orangeColor); y -= rowGap;
-  metaRow(y, 'Tender Reference', tenderRef, colL, orangeColor); metaRow(y, 'Drawing Title', drawing.title, colR); y -= rowGap;
-  metaRow(y, 'Drawing Revision', drawing.revision, colL); metaRow(y, 'Discipline', drawing.discipline, colR); y -= rowGap;
+  metaRow(y, 'Tender Name', sanitizePdfText(tenderName), colL); metaRow(y, 'Drawing Number', sanitizePdfText(drawing.drawing_number || '-'), colR, orangeColor); y -= rowGap;
+  metaRow(y, 'Tender Reference', sanitizePdfText(tenderRef), colL, orangeColor); metaRow(y, 'Drawing Title', sanitizePdfText(drawing.title), colR); y -= rowGap;
+  metaRow(y, 'Drawing Revision', sanitizePdfText(drawing.revision), colL); metaRow(y, 'Discipline', sanitizePdfText(drawing.discipline), colR); y -= rowGap;
   metaRow(y, 'Export Date', exportDate, colL); metaRow(y, 'Page Count', String(drawing.page_count), colR); y -= rowGap;
   metaRow(y, 'Take-Off Items', String(items.length), colL); metaRow(y, 'Visible Items', String(items.filter(i => i.is_visible).length), colR);
 
   // Footer
   page.drawLine({ start: { x: margin, y: 50 }, end: { x: pw - margin, y: 50 }, thickness: 0.5, color: rgb(0.89, 0.91, 0.94) });
   page.drawText('Powered by VYSITE', { x: margin, y: 36, size: 10, color: orangeColor, font: fontBold });
-  page.drawText(`Generated ${exportDate} \u00B7 ${tenderRef}`, { x: margin, y: 22, size: 8, color: rgb(0.38, 0.43, 0.53), font });
+  page.drawText(sanitizePdfText(`Generated ${exportDate} - ${tenderRef}`), { x: margin, y: 22, size: 8, color: rgb(0.38, 0.43, 0.53), font });
   if (internal) {
-    const confText = 'Commercially Sensitive \u2014 Internal Only';
+    const confText = sanitizePdfText('Commercially Sensitive - Internal Only');
     const confW = fontBold.widthOfTextAtSize(confText, 8);
     page.drawText(confText, { x: pw - margin - confW, y: 36, size: 8, color: rgb(0.86, 0.15, 0.15), font: fontBold });
   }
