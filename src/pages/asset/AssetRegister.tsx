@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, Package, X, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Plus, Search, Package, X, AlertTriangle, ChevronDown, FileDown } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import type { DBAsset, AssetStatus } from './types';
 import { ASSET_STATUSES, ASSET_TYPES, ASSET_STATUS_COLORS } from './types';
+import { exportAssetRegisterPDF } from './AssetRegisterPDF';
 
 interface Props {
   onSelectAsset: (a: DBAsset) => void;
@@ -99,6 +100,23 @@ export default function AssetRegister({ onSelectAsset }: Props) {
             <Plus size={16} />Add Asset
           </button>
         )}
+        <button onClick={() => exportAssetRegisterPDF({
+          assets: filtered,
+          sites,
+          buildings,
+          locations,
+          filters: {
+            site: filterSite !== 'All' ? filterSite : null,
+            building: filterBuilding !== 'All' ? filterBuilding : null,
+            type: filterType !== 'All' ? filterType : null,
+            status: filterStatus !== 'All' ? filterStatus : null,
+            search: search.trim() || null,
+          },
+          currentUserName: store.currentUser?.name ?? '',
+        })}
+          className="flex items-center gap-2 text-slate-400 hover:text-[#f97316] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm font-semibold hover:border-[#f97316] transition-colors shrink-0">
+          <FileDown size={16} />Export PDF
+        </button>
       </div>
 
       {/* Table */}

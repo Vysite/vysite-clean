@@ -112,3 +112,17 @@ export interface DBAssetActivity {
   user_name: string | null;
   created_at: string;
 }
+
+export interface DBAssetMedia {
+  id: string;
+  org_id: string;
+  asset_id: string;
+  file_name: string;
+  storage_path: string;
+  mime_type: string | null;
+  file_size: number;
+  is_primary: boolean;
+  caption: string | null;
+  uploaded_by: string | null;
+  created_at: string;
+}

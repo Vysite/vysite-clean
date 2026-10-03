@@ -11,7 +11,7 @@ import type {
   DBTenderDrawing, DBTenderDrawingCalibration,
 } from '../pages/tender/drawingTypes';
 import type { DBTenderTakeoffItem } from '../pages/tender/takeoffTypes';
-import type { DBAssetSite, DBAssetBuilding, DBAssetLocation, DBAsset, DBAssetDocument, DBAssetActivity } from '../pages/asset/types';
+import type { DBAssetSite, DBAssetBuilding, DBAssetLocation, DBAsset, DBAssetDocument, DBAssetActivity, DBAssetMedia } from '../pages/asset/types';
 
 // ─── Types for DB rows ────────────────────────────────────────────────────────
 
@@ -1567,6 +1567,12 @@ export interface AppStore {
   removeAssetDocument: (id: string) => Promise<void>;
   addAssetActivity: (a: Omit<DBAssetActivity, 'id' | 'created_at'>) => Promise<void>;
   checkSerialDuplicate: (serial: string, excludeAssetId?: string) => Promise<boolean>;
+  assetMedia: DBAssetMedia[];
+  loadAssetMedia: (assetId: string) => Promise<void>;
+  uploadAssetImage: (assetId: string, file: File, caption?: string) => Promise<string | null>;
+  setPrimaryAssetImage: (mediaId: string, assetId: string) => Promise<void>;
+  removeAssetImage: (mediaId: string) => Promise<void>;
+  getAssetMediaSignedUrl: (storagePath: string) => Promise<string | null>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1688,6 +1694,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [assetDocuments, setAssetDocuments] = useState<DBAssetDocument[]>([]);
   const [assetActivity, setAssetActivity] = useState<DBAssetActivity[]>([]);
+  const [assetMedia, setAssetMedia] = useState<DBAssetMedia[]>([]);
 
   // Keep a stable ref to orgId so callbacks always read the latest value
   // without needing to be re-created (avoids cascading re-renders).
@@ -1733,6 +1740,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setAssets([]);
       setAssetDocuments([]);
       setAssetActivity([]);
+      setAssetMedia([]);
       // Keep platformUsers/settings as-is — they load below with org filter
       setLoading(false);
       setModulesLoading(false);
@@ -3384,6 +3392,69 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     return (count ?? 0) > 0;
   }, []);
 
+  const loadAssetMedia = useCallback(async (assetId: string) => {
+    const { data, error } = await supabase.from('vy_asset_media').select('*').eq('asset_id', assetId).order('created_at', { ascending: false });
+    logWrite('loadAssetMedia', 'vy_asset_media', error);
+    if (!error) setAssetMedia((data ?? []) as DBAssetMedia[]);
+  }, []);
+
+  const getAssetMediaSignedUrl = useCallback(async (storagePath: string): Promise<string | null> => {
+    const { data, error } = await supabase.storage.from('asset-images').createSignedUrl(storagePath, 3600);
+    if (error) { logWrite('getAssetMediaSignedUrl', 'asset-images', error); return null; }
+    return data?.signedUrl ?? null;
+  }, []);
+
+  const uploadAssetImage = useCallback(async (assetId: string, file: File, caption?: string): Promise<string | null> => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return null;
+    const mediaId = crypto.randomUUID();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `${oid}/${assetId}/${mediaId}/${safeName}`;
+    const { error: uploadErr } = await supabase.storage.from('asset-images').upload(storagePath, file, { contentType: file.type || 'image/jpeg', upsert: false });
+    if (uploadErr) {
+      logWrite('uploadAssetImage', 'asset-images', uploadErr);
+      return null;
+    }
+    const { data, error } = await supabase.from('vy_asset_media').insert({
+      org_id: oid, asset_id: assetId, file_name: file.name, storage_path: storagePath,
+      mime_type: file.type, file_size: file.size, is_primary: false,
+      caption: caption || null, uploaded_by: null,
+    }).select('*').maybeSingle();
+    logWrite('uploadAssetImage', 'vy_asset_media', error, data);
+    if (error || !data) {
+      await supabase.storage.from('asset-images').remove([storagePath]);
+      return null;
+    }
+    const newMedia = data as DBAssetMedia;
+    setAssetMedia(prev => [newMedia, ...prev]);
+    return newMedia.id;
+  }, []);
+
+  const setPrimaryAssetImage = useCallback(async (mediaId: string, assetId: string) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const { error: clearErr } = await supabase.from('vy_asset_media')
+      .update({ is_primary: false }).eq('asset_id', assetId).eq('is_primary', true);
+    logWrite('setPrimaryAssetImage-clear', 'vy_asset_media', clearErr);
+    const { error: setErr } = await supabase.from('vy_asset_media')
+      .update({ is_primary: true }).eq('id', mediaId);
+    logWrite('setPrimaryAssetImage-set', 'vy_asset_media', setErr);
+    if (!setErr) setAssetMedia(prev => prev.map(m => ({ ...m, is_primary: m.id === mediaId })));
+  }, []);
+
+  const removeAssetImage = useCallback(async (mediaId: string) => {
+    const media = assetMedia.find(m => m.id === mediaId);
+    if (!media) return;
+    const { error } = await supabase.from('vy_asset_media').delete().eq('id', mediaId);
+    logWrite('removeAssetImage', 'vy_asset_media', error);
+    if (!error) {
+      if (media.storage_path) {
+        await supabase.storage.from('asset-images').remove([media.storage_path]);
+      }
+      setAssetMedia(prev => prev.filter(m => m.id !== mediaId));
+    }
+  }, [assetMedia]);
+
   return {
     actions, snags, snaggingReports, siteForms, tenders, tcRecords, maintenanceJobs, programmes, programmeTasks, keyDates,
     platformUsers, notifications,
@@ -3456,5 +3527,6 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addAsset, updateAsset, removeAsset,
     assetDocuments, assetActivity, loadAssetDocuments, loadAssetActivity,
     addAssetDocument, removeAssetDocument, addAssetActivity, checkSerialDuplicate,
+    assetMedia, loadAssetMedia, uploadAssetImage, setPrimaryAssetImage, removeAssetImage, getAssetMediaSignedUrl,
   };
 }

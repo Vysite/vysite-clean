@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Package, FileText, MessageSquare, Edit3, Save, Plus, Trash2, Download, Paperclip } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { ArrowLeft, Package, FileText, MessageSquare, Edit3, Save, Plus, Trash2, Download, Paperclip, FileDown, Image as ImageIcon, Star, X, Loader2 } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import FileUpload, { type UploadedFile } from '../../components/FileUpload';
-import type { DBAsset, AssetStatus, DBAssetDocument, DBAssetActivity } from './types';
+import type { DBAsset, AssetStatus, DBAssetDocument, DBAssetActivity, DBAssetMedia } from './types';
 import { ASSET_STATUSES, ASSET_TYPES, ASSET_STATUS_COLORS, ASSET_DOC_CATEGORIES } from './types';
+import { exportAssetPDF } from './AssetPDF';
 
 interface Props {
   asset: DBAsset;
@@ -21,9 +22,11 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
   const canDelete = perms['asset.delete'] || isAdmin;
   const canComment = perms['asset.comment'] || isAdmin;
   const canUpload = perms['asset.upload'] || isAdmin;
+  const canView = perms['asset.view'] || isAdmin;
 
   const [tab, setTab] = useState<Tab>('overview');
   const [editing, setEditing] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const sites = store.assetSites ?? [];
   const buildings = store.assetBuildings ?? [];
@@ -32,6 +35,34 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
   function siteName(id: string | null) { return sites.find(s => s.id === id)?.name ?? '—'; }
   function buildingName(id: string | null) { return buildings.find(b => b.id === id)?.name ?? '—'; }
   function locationName(id: string | null) { return locations.find(l => l.id === id)?.name ?? '—'; }
+
+  const handleExportPDF = useCallback(async () => {
+    setExporting(true);
+    try {
+      await store.loadAssetDocuments(asset.id);
+      await store.loadAssetActivity(asset.id);
+      await store.loadAssetMedia(asset.id);
+
+      let primaryImageUrl: string | null = null;
+      const primary = (store.assetMedia ?? []).find(m => m.is_primary);
+      if (primary) {
+        primaryImageUrl = await store.getAssetMediaSignedUrl(primary.storage_path);
+      }
+
+      exportAssetPDF({
+        asset,
+        siteName: siteName(asset.site_id),
+        buildingName: buildingName(asset.building_id),
+        locationName: locationName(asset.location_id),
+        documents: store.assetDocuments ?? [],
+        activity: store.assetActivity ?? [],
+        primaryImageUrl,
+        currentUserName: store.currentUser?.name ?? '',
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [asset, store]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tabCls = (t: Tab) =>
     `flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
@@ -53,6 +84,12 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
             <p className="text-sm text-slate-500 font-mono">{asset.asset_tag}</p>
           </div>
         </div>
+        {canView && (
+          <button onClick={handleExportPDF} disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-[#f97316] border border-[#1e2d4a] rounded-lg hover:border-[#f97316] transition-colors disabled:opacity-60">
+            {exporting ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}Export PDF
+          </button>
+        )}
         <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${ASSET_STATUS_COLORS[asset.status as keyof typeof ASSET_STATUS_COLORS] ?? 'bg-slate-700 text-slate-400'}`}>{asset.status}</span>
       </div>
 
@@ -63,7 +100,7 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
       </div>
 
       {tab === 'overview' && (
-        <OverviewTab asset={asset} canEdit={canEdit} editing={editing} setEditing={setEditing}
+        <OverviewTab asset={asset} canEdit={canEdit} canUpload={canUpload} editing={editing} setEditing={setEditing}
           siteName={siteName} buildingName={buildingName} locationName={locationName}
           onAssetUpdated={onAssetUpdated} />
       )}
@@ -77,8 +114,8 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
   );
 }
 
-function OverviewTab({ asset, canEdit, editing, setEditing, siteName, buildingName, locationName, onAssetUpdated }: {
-  asset: DBAsset; canEdit: boolean; editing: boolean; setEditing: (b: boolean) => void;
+function OverviewTab({ asset, canEdit, canUpload, editing, setEditing, siteName, buildingName, locationName, onAssetUpdated }: {
+  asset: DBAsset; canEdit: boolean; canUpload: boolean; editing: boolean; setEditing: (b: boolean) => void;
   siteName: (id: string | null) => string; buildingName: (id: string | null) => string; locationName: (id: string | null) => string;
   onAssetUpdated: (a: DBAsset) => void;
 }) {
@@ -98,34 +135,195 @@ function OverviewTab({ asset, canEdit, editing, setEditing, siteName, buildingNa
   }
 
   return (
+    <div className="space-y-4">
+      <ImageSection asset={asset} canUpload={canUpload} />
+      <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5">
+        <div className="flex justify-end mb-4">
+          {canEdit && <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-[#f97316] border border-[#1e2d4a] rounded-lg hover:border-[#f97316] transition-colors"><Edit3 size={12} />Edit Asset</button>}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+          <div>
+            <Row label="Asset Tag" value={asset.asset_tag} />
+            <Row label="Asset Name" value={asset.name} />
+            <Row label="Type" value={asset.asset_type} />
+            <Row label="Status" value={asset.status} />
+            <Row label="Manufacturer" value={asset.manufacturer} />
+            <Row label="Model" value={asset.model} />
+            <Row label="Serial Number" value={asset.serial_number} />
+          </div>
+          <div>
+            <Row label="Site" value={siteName(asset.site_id)} />
+            <Row label="Building" value={buildingName(asset.building_id)} />
+            <Row label="Location" value={locationName(asset.location_id)} />
+            <Row label="Installation Date" value={asset.installation_date} />
+            <Row label="Commissioning Date" value={asset.commissioning_date} />
+            <Row label="Warranty Expiry" value={asset.warranty_expiry} />
+            <Row label="Project Reference" value={asset.project_name} />
+          </div>
+        </div>
+        {asset.notes && (
+          <div className="mt-4 pt-4 border-t border-[#1e2d4a]">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Notes</p>
+            <p className="text-sm text-slate-300 whitespace-pre-wrap">{asset.notes}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ImageSection({ asset, canUpload }: { asset: DBAsset; canUpload: boolean }) {
+  const store = useAppStore();
+  const [media, setMedia] = useState<DBAssetMedia[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showUpload, setShowUpload] = useState(false);
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [caption, setCaption] = useState('');
+
+  useEffect(() => {
+    store.loadAssetMedia(asset.id).then(() => setLoading(false));
+  }, [asset.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setMedia(store.assetMedia ?? []);
+  }, [store.assetMedia]);
+
+  useEffect(() => {
+    const primary = media.find(m => m.is_primary);
+    const others = media.filter(m => !m.is_primary);
+    const all = [primary, ...others].filter(Boolean) as DBAssetMedia[];
+    all.forEach(async (m) => {
+      if (!imageUrls[m.id]) {
+        const url = await store.getAssetMediaSignedUrl(m.storage_path);
+        if (url) setImageUrls(prev => ({ ...prev, [m.id]: url }));
+      }
+    });
+  }, [media]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const primary = media.find(m => m.is_primary);
+  const others = media.filter(m => !m.is_primary);
+  const primaryUrl = primary ? imageUrls[primary.id] : undefined;
+
+  async function handleUpload() {
+    if (!selectedFile) return;
+    setUploading(true);
+    const id = await store.uploadAssetImage(asset.id, selectedFile, caption || undefined);
+    if (id) {
+      const isOnlyImage = media.length === 0;
+      if (isOnlyImage) {
+        await store.setPrimaryAssetImage(id, asset.id);
+      }
+      await store.addAssetActivity({ org_id: store.currentOrgId ?? '', asset_id: asset.id, type: 'image_upload', text: `Image uploaded: ${selectedFile.name}`, user_name: store.currentUser?.name ?? '' });
+      await store.loadAssetMedia(asset.id);
+    }
+    setUploading(false);
+    setSelectedFile(null);
+    setCaption('');
+    setShowUpload(false);
+  }
+
+  async function handleSetPrimary(mediaId: string) {
+    await store.setPrimaryAssetImage(mediaId, asset.id);
+    await store.addAssetActivity({ org_id: store.currentOrgId ?? '', asset_id: asset.id, type: 'primary_changed', text: 'Primary image changed', user_name: store.currentUser?.name ?? '' });
+    await store.loadAssetMedia(asset.id);
+  }
+
+  async function handleRemoveImage(m: DBAssetMedia) {
+    await store.removeAssetImage(m.id);
+    await store.addAssetActivity({ org_id: store.currentOrgId ?? '', asset_id: asset.id, type: 'image_removed', text: `Image removed: ${m.file_name}`, user_name: store.currentUser?.name ?? '' });
+    await store.loadAssetMedia(asset.id);
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5 flex justify-center">
+        <Loader2 size={20} className="text-slate-600 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
     <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] p-5">
-      <div className="flex justify-end mb-4">
-        {canEdit && <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-[#f97316] border border-[#1e2d4a] rounded-lg hover:border-[#f97316] transition-colors"><Edit3 size={12} />Edit Asset</button>}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-bold text-white">Asset Images</h3>
+        {canUpload && !showUpload && (
+          <button onClick={() => setShowUpload(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#f97316] border border-[#f97316]/30 rounded-lg hover:bg-[#f97316]/10 transition-colors">
+            <Plus size={12} />Add Image
+          </button>
+        )}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-        <div>
-          <Row label="Asset Tag" value={asset.asset_tag} />
-          <Row label="Asset Name" value={asset.name} />
-          <Row label="Type" value={asset.asset_type} />
-          <Row label="Status" value={asset.status} />
-          <Row label="Manufacturer" value={asset.manufacturer} />
-          <Row label="Model" value={asset.model} />
-          <Row label="Serial Number" value={asset.serial_number} />
+
+      {showUpload && (
+        <div className="mb-4 bg-[#0d1628] border border-[#1e2d4a] rounded-lg p-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Image File</label>
+              <input type="file" accept="image/*" onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+                className="w-full mt-1.5 text-sm text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-[#f97316] file:text-white file:text-xs file:font-semibold hover:file:bg-orange-600 cursor-pointer" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Caption (optional)</label>
+              <input value={caption} onChange={e => setCaption(e.target.value)} placeholder="e.g. Main plant room view"
+                className="w-full mt-1.5 bg-[#1a2236] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-[#f97316] placeholder:text-slate-600" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => { setShowUpload(false); setSelectedFile(null); setCaption(''); }} className="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors">Cancel</button>
+            <button onClick={handleUpload} disabled={!selectedFile || uploading}
+              className="flex items-center gap-1.5 bg-[#f97316] text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-orange-600 transition-colors disabled:opacity-60">
+              {uploading ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}Upload
+            </button>
+          </div>
         </div>
-        <div>
-          <Row label="Site" value={siteName(asset.site_id)} />
-          <Row label="Building" value={buildingName(asset.building_id)} />
-          <Row label="Location" value={locationName(asset.location_id)} />
-          <Row label="Installation Date" value={asset.installation_date} />
-          <Row label="Commissioning Date" value={asset.commissioning_date} />
-          <Row label="Warranty Expiry" value={asset.warranty_expiry} />
-          <Row label="Project Reference" value={asset.project_name} />
+      )}
+
+      {media.length === 0 && !showUpload ? (
+        <div className="text-center py-8">
+          <ImageIcon size={32} className="text-slate-700 mx-auto mb-2" />
+          <p className="text-sm text-slate-500 mb-3">No asset image uploaded</p>
+          {canUpload && (
+            <button onClick={() => setShowUpload(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#f97316] border border-[#f97316]/30 rounded-lg hover:bg-[#f97316]/10 transition-colors">
+              <Plus size={12} />Add Image
+            </button>
+          )}
         </div>
-      </div>
-      {asset.notes && (
-        <div className="mt-4 pt-4 border-t border-[#1e2d4a]">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Notes</p>
-          <p className="text-sm text-slate-300 whitespace-pre-wrap">{asset.notes}</p>
+      ) : (
+        <div className="space-y-3">
+          {primary && (
+            <div className="relative rounded-lg overflow-hidden border border-[#1e2d4a] bg-[#0d1628]">
+              {primaryUrl ? (
+                <img src={primaryUrl} alt={primary.caption || primary.file_name} className="w-full max-h-80 object-contain" />
+              ) : (
+                <div className="w-full h-48 flex items-center justify-center"><Loader2 size={20} className="text-slate-600 animate-spin" /></div>
+              )}
+              <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#f97316] text-white text-[10px] font-semibold">
+                <Star size={10} className="fill-white" />Primary
+              </div>
+              {primary.caption && <p className="absolute bottom-0 left-0 right-0 px-3 py-1.5 text-xs text-white bg-black/60">{primary.caption}</p>}
+            </div>
+          )}
+          {others.length > 0 && (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+              {others.map(m => (
+                <div key={m.id} className="relative group rounded-lg overflow-hidden border border-[#1e2d4a] bg-[#0d1628] aspect-square">
+                  {imageUrls[m.id] ? (
+                    <img src={imageUrls[m.id]} alt={m.caption || m.file_name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center"><Loader2 size={14} className="text-slate-600 animate-spin" /></div>
+                  )}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
+                    {canUpload && <button onClick={() => handleSetPrimary(m.id)} title="Set as Primary" className="p-1.5 rounded bg-black/70 text-amber-400 hover:text-amber-300 transition-colors"><Star size={12} /></button>}
+                    {canUpload && <button onClick={() => handleRemoveImage(m)} title="Remove" className="p-1.5 rounded bg-black/70 text-red-400 hover:text-red-300 transition-colors"><Trash2 size={12} /></button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {primary && canUpload && others.length > 0 && (
+            <p className="text-[10px] text-slate-600">Hover over additional photos for Set as Primary / Remove options.</p>
+          )}
         </div>
       )}
     </div>
@@ -168,7 +366,7 @@ function EditAssetForm({ asset, onCancel, onSave }: { asset: DBAsset; onCancel: 
     };
     await store.updateAsset(updates);
     if (form.status !== prevStatus) {
-      await store.addAssetActivity({ org_id: store.currentOrgId ?? '', asset_id: asset.id, type: 'status_change', text: `Status changed: ${prevStatus} → ${form.status}`, user_name: store.currentUser?.name ?? '' });
+      await store.addAssetActivity({ org_id: store.currentOrgId ?? '', asset_id: asset.id, type: 'status_change', text: `Status changed: ${prevStatus} \u2192 ${form.status}`, user_name: store.currentUser?.name ?? '' });
     } else {
       await store.addAssetActivity({ org_id: store.currentOrgId ?? '', asset_id: asset.id, type: 'updated', text: 'Asset details updated', user_name: store.currentUser?.name ?? '' });
     }
@@ -359,6 +557,7 @@ function ActivityTab({ asset, canComment }: { asset: DBAsset; canComment: boolea
     if (type === 'created') return <Plus size={12} className="text-emerald-400" />;
     if (type === 'status_change') return <Edit3 size={12} className="text-amber-400" />;
     if (type === 'document_upload' || type === 'document_removed') return <FileText size={12} className="text-blue-400" />;
+    if (type === 'image_upload' || type === 'image_removed' || type === 'primary_changed') return <ImageIcon size={12} className="text-orange-400" />;
     return <MessageSquare size={12} className="text-slate-500" />;
   }
 
