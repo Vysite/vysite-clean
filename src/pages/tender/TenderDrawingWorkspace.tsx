@@ -372,15 +372,16 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
     const geo = activeItem.geometry as LinearGeometry | null;
     if (!geo) return;
     const pts = draftPointsRef.current;
+    const runId = genId();
     const newSegments: LinearSegment[] = [];
     for (let i = 0; i < pts.length - 1; i++) {
-      newSegments.push({ id: genId(), start: pts[i], end: pts[i + 1] });
+      newSegments.push({ id: genId(), runId, start: pts[i], end: pts[i + 1] });
     }
     pushUndo(activeItem.id, activeItem.geometry!, activeItem.quantity);
     const newGeo: LinearGeometry = { ...geo, segments: [...geo.segments, ...newSegments] };
     commitItemGeometry(activeItem.id, newGeo);
     cancelDraft();
-    if (newSegments.length > 0) setSelectedGeometryId(newSegments[newSegments.length - 1].id);
+    setSelectedGeometryId(runId);
   };
 
   // ── Area: finish polygon ─────────────────────────────────────────────────
@@ -456,7 +457,8 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
       const newGeo: CountGeometry = { ...geo, points: geo.points.filter(p => p.id !== selectedGeometryId) };
       commitItemGeometry(activeItem.id, newGeo);
     } else if (isLinearGeometry(geo)) {
-      const newGeo: LinearGeometry = { ...geo, segments: geo.segments.filter(s => s.id !== selectedGeometryId) };
+      // Delete all segments belonging to the same run
+      const newGeo: LinearGeometry = { ...geo, segments: geo.segments.filter(s => s.runId !== selectedGeometryId && s.id !== selectedGeometryId) };
       commitItemGeometry(activeItem.id, newGeo);
     } else if (isAreaGeometry(geo)) {
       const newGeo: AreaGeometry = { ...geo, polygons: geo.polygons.filter(p => p.id !== selectedGeometryId) };
@@ -753,6 +755,9 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
           canRedo={undoStackRef.current.canRedo()}
           saveStatus={saveStatus}
           needsCalibration={needsCalibration}
+          calibration={pageCalibration}
+          pageWidth={pdfViewport?.width ?? 1}
+          pageHeight={pdfViewport?.height ?? 1}
           onToolChange={handleToolChange}
           onItemSelect={(id) => {
             const clickedItem = pageItems.find(i => i.id === id);
@@ -763,6 +768,9 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
               cancelDraft();
               setTool(matchingTool);
             }
+          }}
+          onGeometrySelect={(geometryId) => {
+            setSelectedGeometryId(geometryId);
           }}
           onCreateItem={(type) => setShowItemCreator(type)}
           onUpdateItem={handleUpdateItem}

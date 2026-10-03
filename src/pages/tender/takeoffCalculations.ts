@@ -1,5 +1,5 @@
 import type { NormPoint } from './takeoffGeometry';
-import type { TakeoffGeometry, CountGeometry, LinearGeometry, AreaGeometry } from './takeoffGeometry';
+import type { TakeoffGeometry, CountGeometry, LinearGeometry, AreaGeometry, LinearSegment, AreaPolygon } from './takeoffGeometry';
 import { isCountGeometry, isLinearGeometry, isAreaGeometry } from './takeoffGeometry';
 import type { DBTenderDrawingCalibration } from './drawingTypes';
 
@@ -86,4 +86,46 @@ export function finalQuantity(item: {
     return item.manual_quantity + item.adjustment_quantity;
   }
   return item.quantity + item.adjustment_quantity;
+}
+
+// ── Linear run helpers ────────────────────────────────────────────────────
+
+export interface LinearRun {
+  runId: string;
+  segments: LinearSegment[];
+  quantity: number;
+}
+
+export function groupLinearRuns(
+  geo: LinearGeometry,
+  calibration: DBTenderDrawingCalibration | null,
+  pageWidth: number,
+  pageHeight: number,
+): LinearRun[] {
+  const byRun = new Map<string, LinearSegment[]>();
+  for (const seg of geo.segments) {
+    const key = seg.runId || seg.id;
+    if (!byRun.has(key)) byRun.set(key, []);
+    byRun.get(key)!.push(seg);
+  }
+  const runs: LinearRun[] = [];
+  for (const [runId, segs] of byRun) {
+    let pdfPts = 0;
+    for (const s of segs) {
+      pdfPts += distanceInPdfPoints(s.start, s.end, pageWidth, pageHeight);
+    }
+    const qty = calibration?.scale_factor ? pdfPts * calibration.scale_factor : 0;
+    runs.push({ runId, segments: segs, quantity: Math.round(qty * 10000) / 10000 });
+  }
+  return runs;
+}
+
+export function areaPolygonQuantity(
+  poly: AreaPolygon,
+  calibration: DBTenderDrawingCalibration | null,
+  pageWidth: number,
+  pageHeight: number,
+): number {
+  if (!calibration?.scale_factor) return 0;
+  return polygonAreaPdfPoints(poly.vertices, pageWidth, pageHeight) * calibration.scale_factor * calibration.scale_factor;
 }

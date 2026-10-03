@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MousePointer2, Plus, Hash, Minus, Square, Eye, EyeOff, Trash2, ChevronDown, ChevronRight, Undo2, Redo2, Layers } from 'lucide-react';
 import type { DBTenderTakeoffItem } from './takeoffTypes';
 import type { MeasurementType, TakeoffLineType } from './takeoffTypes';
-import { TAKEOFF_COLOURS, DEFAULT_UNIT_FOR_TYPE } from './takeoffTypes';
+import { TAKEOFF_COLOURS } from './takeoffTypes';
 import { DISCIPLINES } from './drawingTypes';
-import { finalQuantity } from './takeoffCalculations';
+import { finalQuantity, groupLinearRuns, areaPolygonQuantity } from './takeoffCalculations';
+import type { DBTenderDrawingCalibration } from './drawingTypes';
+import type { LinearGeometry, AreaGeometry } from './takeoffGeometry';
 
 export type Tool = 'select' | 'pan' | 'count' | 'linear' | 'area';
 
@@ -17,11 +19,15 @@ interface Props {
   canRedo: boolean;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
   needsCalibration: boolean;
+  calibration: DBTenderDrawingCalibration | null;
+  pageWidth: number;
+  pageHeight: number;
   onToolChange: (tool: Tool) => void;
   onItemSelect: (itemId: string) => void;
   onCreateItem: (type: MeasurementType) => void;
   onUpdateItem: (id: string, updates: Partial<DBTenderTakeoffItem>) => void;
   onDeleteItem: (id: string) => void;
+  onGeometrySelect: (geometryId: string) => void;
   onUndo: () => void;
   onRedo: () => void;
   onDeleteSelectedGeometry: () => void;
@@ -43,9 +49,15 @@ const LINE_TYPE_COLORS: Record<TakeoffLineType, string> = {
 
 export default function TakeoffSidebar({
   items, activeItemId, selectedGeometryId, tool, canUndo, canRedo, saveStatus, needsCalibration,
-  onToolChange, onItemSelect, onCreateItem, onUpdateItem, onDeleteItem, onUndo, onRedo, onDeleteSelectedGeometry,
+  calibration, pageWidth, pageHeight,
+  onToolChange, onItemSelect, onCreateItem, onUpdateItem, onDeleteItem, onGeometrySelect, onUndo, onRedo, onDeleteSelectedGeometry,
 }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Auto-expand the active item so the user sees its breakdown
+  useEffect(() => {
+    if (activeItemId) setExpandedId(activeItemId);
+  }, [activeItemId]);
 
   const grouped = {
     count: items.filter(i => i.measurement_type === 'count'),
@@ -122,8 +134,13 @@ export default function TakeoffSidebar({
                   item={item}
                   isActive={activeItemId === item.id}
                   isExpanded={expandedId === item.id}
+                  selectedGeometryId={selectedGeometryId}
+                  calibration={calibration}
+                  pageWidth={pageWidth}
+                  pageHeight={pageHeight}
                   onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
                   onSelect={() => onItemSelect(item.id)}
+                  onGeometrySelect={onGeometrySelect}
                   onUpdate={(updates) => onUpdateItem(item.id, updates)}
                   onDelete={() => onDeleteItem(item.id)}
                 />
@@ -143,18 +160,43 @@ export default function TakeoffSidebar({
 }
 
 function ItemRow({
-  item, isActive, isExpanded, onToggle, onSelect, onUpdate, onDelete,
+  item, isActive, isExpanded, selectedGeometryId, calibration, pageWidth, pageHeight,
+  onToggle, onSelect, onGeometrySelect, onUpdate, onDelete,
 }: {
   item: DBTenderTakeoffItem;
   isActive: boolean;
   isExpanded: boolean;
+  selectedGeometryId: string | null;
+  calibration: DBTenderDrawingCalibration | null;
+  pageWidth: number;
+  pageHeight: number;
   onToggle: () => void;
   onSelect: () => void;
+  onGeometrySelect: (geometryId: string) => void;
   onUpdate: (updates: Partial<DBTenderTakeoffItem>) => void;
   onDelete: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const fq = finalQuantity(item);
+  const measuredQty = item.source === 'manual' ? item.manual_quantity : item.quantity;
+
+  // Build measurement breakdown
+  const measurements: { id: string; label: string; qty: number }[] = [];
+  if (item.geometry && item.measurement_type === 'linear') {
+    const geo = item.geometry as LinearGeometry;
+    const runs = groupLinearRuns(geo, calibration, pageWidth, pageHeight);
+    runs.forEach((run, i) => {
+      measurements.push({ id: run.runId, label: `Run ${String(i + 1).padStart(2, '0')}`, qty: run.quantity });
+    });
+  } else if (item.geometry && item.measurement_type === 'area') {
+    const geo = item.geometry as AreaGeometry;
+    geo.polygons.forEach((poly, i) => {
+      const q = areaPolygonQuantity(poly, calibration, pageWidth, pageHeight);
+      measurements.push({ id: poly.id, label: `Area ${String(i + 1).padStart(2, '0')}`, qty: Math.round(q * 10000) / 10000 });
+    });
+  } else if (item.geometry && item.measurement_type === 'count') {
+    // Count: no per-point breakdown unless many points — just show total
+  }
 
   return (
     <div className={`border-t border-[#0d1628] ${isActive ? 'bg-[#f97316]/10 border-l-2 border-l-[#f97316]' : 'border-l-2 border-l-transparent'}`}>
@@ -171,64 +213,114 @@ function ItemRow({
           {item.is_visible ? <Eye size={13} /> : <EyeOff size={13} />}
         </button>
       </div>
+
       {isExpanded && (
-        <div className="px-3 pb-3 space-y-2 bg-[#0d1628]/30">
-          <div>
-            <label className="text-[9px] font-bold text-slate-600 uppercase">Label</label>
-            <input value={item.label} onChange={e => onUpdate({ label: e.target.value, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50" />
-          </div>
-          <div>
-            <label className="text-[9px] font-bold text-slate-600 uppercase">Description</label>
-            <input value={item.description} onChange={e => onUpdate({ description: e.target.value, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50" />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[9px] font-bold text-slate-600 uppercase">Discipline</label>
-              <select value={item.discipline} onChange={e => onUpdate({ discipline: e.target.value, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none">
-                {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[9px] font-bold text-slate-600 uppercase">Line Type</label>
-              <select value={item.line_type} onChange={e => onUpdate({ line_type: e.target.value as TakeoffLineType, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none">
-                <option value="standard">Standard</option>
-                <option value="addition">Addition</option>
-                <option value="omission">Omission</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="text-[9px] font-bold text-slate-600 uppercase">Colour</label>
-            <div className="flex gap-1 mt-0.5 flex-wrap">
-              {TAKEOFF_COLOURS.map(c => (
-                <button key={c} onClick={() => onUpdate({ colour: c, updated_at: new Date().toISOString() })} className={`w-5 h-5 rounded ${item.colour === c ? 'ring-2 ring-white' : ''}`} style={{ background: c }} />
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[9px] font-bold text-slate-600 uppercase">Adjustment</label>
-              <input type="number" step="any" value={item.adjustment_quantity} onChange={e => onUpdate({ adjustment_quantity: parseFloat(e.target.value) || 0, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50" />
-            </div>
-            <div>
-              <label className="text-[9px] font-bold text-slate-600 uppercase">Unit</label>
-              <input value={item.unit} onChange={e => onUpdate({ unit: e.target.value, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50" />
-            </div>
-          </div>
-          <div>
-            <label className="text-[9px] font-bold text-slate-600 uppercase">Notes</label>
-            <input value={item.notes} onChange={e => onUpdate({ notes: e.target.value, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50" />
-          </div>
-          {!confirmDelete ? (
-            <button onClick={() => setConfirmDelete(true)} className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-red-400 hover:text-red-300 border border-red-900/50 rounded hover:bg-red-900/20 transition-colors">
-              <Trash2 size={11} />Delete Item
-            </button>
-          ) : (
-            <div className="flex gap-2">
-              <button onClick={onDelete} className="px-2 py-1 text-[10px] font-semibold text-white bg-red-600 rounded hover:bg-red-700 transition-colors">Confirm Delete</button>
-              <button onClick={() => setConfirmDelete(false)} className="px-2 py-1 text-[10px] font-semibold text-slate-400 border border-[#1e2d4a] rounded hover:bg-[#1e2d4a] transition-colors">Cancel</button>
+        <div className="bg-[#0d1628]/30">
+          {/* Measurement breakdown */}
+          {measurements.length > 0 && (
+            <div className="px-3 pt-2 pb-1">
+              <p className="text-[9px] font-bold text-slate-600 uppercase mb-1">Measurements</p>
+              <div className="space-y-0.5">
+                {measurements.map((m, i) => {
+                  const isMeasSelected = selectedGeometryId === m.id;
+                  return (
+                    <div
+                      key={m.id}
+                      className={`flex items-center gap-1.5 px-1.5 py-1 rounded cursor-pointer text-[10px] transition-colors ${isMeasSelected ? 'bg-[#f97316]/20 text-[#f97316]' : 'text-slate-400 hover:bg-[#1e2d4a]'}`}
+                      onClick={() => onGeometrySelect(m.id)}
+                    >
+                      <span className="flex-1 font-mono">{m.label}</span>
+                      <span className="font-semibold">{m.qty.toFixed(2)} {item.unit}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onGeometrySelect(m.id); }}
+                        className="p-0.5 text-slate-600 hover:text-red-400 transition-colors"
+                        title="Select then use Del key or toolbar delete"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Total row */}
+              <div className="flex items-center gap-1.5 px-1.5 pt-1 mt-1 border-t border-[#1e2d4a]">
+                <span className="flex-1 text-[10px] font-bold text-slate-500">Total</span>
+                <span className="text-[10px] font-bold text-slate-300">{measuredQty.toFixed(2)} {item.unit}</span>
+              </div>
+              {item.adjustment_quantity !== 0 && (
+                <div className="flex items-center gap-1.5 px-1.5 pt-0.5">
+                  <span className="flex-1 text-[10px] text-slate-600">Adjustment</span>
+                  <span className="text-[10px] text-slate-400">{item.adjustment_quantity > 0 ? '+' : ''}{item.adjustment_quantity.toFixed(2)}</span>
+                </div>
+              )}
+              {item.adjustment_quantity !== 0 && (
+                <div className="flex items-center gap-1.5 px-1.5 pt-0.5">
+                  <span className="flex-1 text-[10px] font-bold text-slate-500">Final</span>
+                  <span className="text-[10px] font-bold text-[#f97316]">{fq.toFixed(2)} {item.unit}</span>
+                </div>
+              )}
             </div>
           )}
+
+          {/* Item properties */}
+          <div className="px-3 pb-3 space-y-2">
+            <div>
+              <label className="text-[9px] font-bold text-slate-600 uppercase">Label</label>
+              <input value={item.label} onChange={e => onUpdate({ label: e.target.value, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50" />
+            </div>
+            <div>
+              <label className="text-[9px] font-bold text-slate-600 uppercase">Description</label>
+              <input value={item.description} onChange={e => onUpdate({ description: e.target.value, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase">Discipline</label>
+                <select value={item.discipline} onChange={e => onUpdate({ discipline: e.target.value, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none">
+                  {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase">Line Type</label>
+                <select value={item.line_type} onChange={e => onUpdate({ line_type: e.target.value as TakeoffLineType, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none">
+                  <option value="standard">Standard</option>
+                  <option value="addition">Addition</option>
+                  <option value="omission">Omission</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-[9px] font-bold text-slate-600 uppercase">Colour</label>
+              <div className="flex gap-1 mt-0.5 flex-wrap">
+                {TAKEOFF_COLOURS.map(c => (
+                  <button key={c} onClick={() => onUpdate({ colour: c, updated_at: new Date().toISOString() })} className={`w-5 h-5 rounded ${item.colour === c ? 'ring-2 ring-white' : ''}`} style={{ background: c }} />
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase">Adjustment</label>
+                <input type="number" step="any" value={item.adjustment_quantity} onChange={e => onUpdate({ adjustment_quantity: parseFloat(e.target.value) || 0, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50" />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase">Unit</label>
+                <input value={item.unit} onChange={e => onUpdate({ unit: e.target.value, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50" />
+              </div>
+            </div>
+            <div>
+              <label className="text-[9px] font-bold text-slate-600 uppercase">Notes</label>
+              <input value={item.notes} onChange={e => onUpdate({ notes: e.target.value, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50" />
+            </div>
+            {!confirmDelete ? (
+              <button onClick={() => setConfirmDelete(true)} className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-red-400 hover:text-red-300 border border-red-900/50 rounded hover:bg-red-900/20 transition-colors">
+                <Trash2 size={11} />Delete Item
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={onDelete} className="px-2 py-1 text-[10px] font-semibold text-white bg-red-600 rounded hover:bg-red-700 transition-colors">Confirm Delete</button>
+                <button onClick={() => setConfirmDelete(false)} className="px-2 py-1 text-[10px] font-semibold text-slate-400 border border-[#1e2d4a] rounded hover:bg-[#1e2d4a] transition-colors">Cancel</button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

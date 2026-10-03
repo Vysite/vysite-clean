@@ -13,6 +13,7 @@ export interface CountPoint {
 
 export interface LinearSegment {
   id: string;
+  runId: string;
   start: NormPoint;
   end: NormPoint;
 }
