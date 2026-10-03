@@ -651,7 +651,7 @@ function ExportSummaryPDF({ asset, records, calc, canViewFinancials }: {
       const buildingName = buildings.find(b => b.id === asset.building_id)?.name ?? '\u2014';
       const locationName = locations.find(l => l.id === asset.location_id)?.name ?? '\u2014';
 
-      exportAssetSummaryPDF({
+      await exportAssetSummaryPDF({
         asset,
         records,
         calc,

@@ -294,7 +294,7 @@ function ExportServicePDF({ asset, record, linkedDocs, canViewFinancials }: {
 
       const docs = (store.assetDocuments ?? []).filter(d => d.service_record_id === record.id);
 
-      exportServiceRecordPDF({
+      await exportServiceRecordPDF({
         asset,
         record,
         siteName,

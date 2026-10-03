@@ -1,4 +1,4 @@
-import { openPrintTab, vysiteLogoUrl } from '../../lib/printTab';
+import { openPrintTab, vysiteLogoDataUrl } from '../../lib/printTab';
 import type { DBAsset, DBAssetServiceRecord } from './types';
 import type { SummaryCalc, ReviewStatus } from './AssetSummary';
 
@@ -184,11 +184,12 @@ interface AssetSummaryPDFData {
   currentUserName: string;
 }
 
-export function exportAssetSummaryPDF(data: AssetSummaryPDFData): void {
+export async function exportAssetSummaryPDF(data: AssetSummaryPDFData): Promise<void> {
   const { asset, records, calc, siteName, buildingName, locationName, primaryImageUrl, internal, currentUserName } = data;
   const today = todayStr();
   const docTypeLabel = internal ? 'Internal Lifecycle Summary' : 'Asset Lifecycle Summary';
   const footerLabel = internal ? 'Confidential \u2014 VYSITE Internal Lifecycle Summary' : 'Powered by VYSITE';
+  const logoDataUrl = await vysiteLogoDataUrl();
   const reviewColor = reviewColors[calc.review.status];
   const reviewLabel = reviewLabels[calc.review.status];
   const ndu = nextDueColors[calc.nextDueStatus];
@@ -296,7 +297,7 @@ export function exportAssetSummaryPDF(data: AssetSummaryPDFData): void {
   const page1 = `
 <div class="doc-head">
   <div>
-    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
+    ${logoDataUrl ? `<img class="doc-logo" src="${logoDataUrl}" alt="VYSITE" />` : ''}
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>
@@ -350,7 +351,7 @@ ${operationalKPIs}
 <div class="page-break"></div>
 <div class="doc-head">
   <div>
-    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
+    ${logoDataUrl ? `<img class="doc-logo" src="${logoDataUrl}" alt="VYSITE" />` : ''}
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>
@@ -395,7 +396,7 @@ ${operationalKPIs}
 <div class="page-break"></div>
 <div class="doc-head">
   <div>
-    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
+    ${logoDataUrl ? `<img class="doc-logo" src="${logoDataUrl}" alt="VYSITE" />` : ''}
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>

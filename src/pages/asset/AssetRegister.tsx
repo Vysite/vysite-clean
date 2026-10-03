@@ -98,7 +98,7 @@ export default function AssetRegister({ onSelectAsset }: Props) {
       if (filterStatus !== 'All') q = q.eq('status', filterStatus);
       q = q.order('updated_at', { ascending: false });
       const { data } = await q;
-      exportAssetRegisterPDF({
+      await exportAssetRegisterPDF({
         assets: (data ?? []) as DBAsset[],
         sites, buildings, locations,
         filters: {

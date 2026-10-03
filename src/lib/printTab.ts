@@ -1,7 +1,24 @@
-// Returns an absolute URL to the official VYSITE logo, usable from print tabs
-// whose base is a blob: URL (where relative paths would not resolve).
-export function vysiteLogoUrl(): string {
-  return `${window.location.origin}/VYSITE_Logo_Long.png`;
+// Fetches the official VYSITE logo and returns it as a base64 data URL so it
+// renders inside blob:-based print tabs where relative/absolute HTTP paths fail.
+// Cached after the first successful fetch.
+let _logoCache: string | null = null;
+
+export async function vysiteLogoDataUrl(): Promise<string> {
+  if (_logoCache) return _logoCache;
+  try {
+    const res = await fetch('/VYSITE_Logo_Long.png');
+    if (!res.ok) throw new Error(`logo fetch failed: ${res.status}`);
+    const blob = await res.blob();
+    _logoCache = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+    return _logoCache;
+  } catch {
+    return ''; // callers handle empty string — no broken img icon
+  }
 }
 
 // Opens a self-contained HTML string in a new browser tab and auto-triggers the

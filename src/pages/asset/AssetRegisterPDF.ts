@@ -1,4 +1,4 @@
-import { openPrintTab, vysiteLogoUrl } from '../../lib/printTab';
+import { openPrintTab, vysiteLogoDataUrl } from '../../lib/printTab';
 import type { DBAsset, DBAssetSite, DBAssetBuilding, DBAssetLocation } from './types';
 
 function esc(v: unknown): string {
@@ -76,9 +76,10 @@ interface RegisterPDFData {
   currentUserName: string;
 }
 
-export function exportAssetRegisterPDF(data: RegisterPDFData): void {
+export async function exportAssetRegisterPDF(data: RegisterPDFData): Promise<void> {
   const { assets, sites, buildings, locations, filters, currentUserName } = data;
   const today = todayStr();
+  const logoDataUrl = await vysiteLogoDataUrl();
 
   function siteName(id: string | null) { return id ? sites.find(s => s.id === id)?.name ?? '\u2014' : '\u2014'; }
   function buildingName(id: string | null) { return id ? buildings.find(b => b.id === id)?.name ?? '\u2014' : '\u2014'; }
@@ -115,7 +116,7 @@ export function exportAssetRegisterPDF(data: RegisterPDFData): void {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Asset Register</title><style>${REGISTER_CSS}</style><script>window.onload=function(){window.print();};<\/script></head><body><div class="page">
 <div class="doc-head">
   <div>
-    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
+    ${logoDataUrl ? `<img class="doc-logo" src="${logoDataUrl}" alt="VYSITE" />` : ''}
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>

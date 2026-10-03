@@ -53,7 +53,7 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
         primaryImageUrl = await store.getAssetMediaSignedUrl(primary.storage_path);
       }
 
-      exportAssetPDF({
+      await exportAssetPDF({
         asset,
         siteName: siteName(asset.site_id),
         buildingName: buildingName(asset.building_id),

@@ -1,4 +1,4 @@
-import { openPrintTab, vysiteLogoUrl } from '../../lib/printTab';
+import { openPrintTab, vysiteLogoDataUrl } from '../../lib/printTab';
 import type { DBAsset, DBAssetServiceRecord, DBAssetDocument } from './types';
 
 function esc(v: unknown): string {
@@ -125,12 +125,13 @@ interface ServiceRecordPDFData {
   currentUserName: string;
 }
 
-export function exportServiceRecordPDF(data: ServiceRecordPDFData): void {
+export async function exportServiceRecordPDF(data: ServiceRecordPDFData): Promise<void> {
   const { asset, record, siteName, buildingName, locationName, linkedDocuments, primaryImageUrl, internal, currentUserName } = data;
   const today = todayStr();
   const ref = serviceRef(record, asset);
   const docTypeLabel = internal ? 'Internal Service Record' : 'Service & Maintenance Record';
   const footerLabel = internal ? 'Confidential \u2014 VYSITE Internal Service Record' : 'Powered by VYSITE';
+  const logoDataUrl = await vysiteLogoDataUrl();
 
   const condTag = record.condition
     ? `<span class="cond-tag cond-${record.condition.replace(/\\s+/g, '-')}">${esc(record.condition)}</span>`
@@ -181,7 +182,7 @@ export function exportServiceRecordPDF(data: ServiceRecordPDFData): void {
   const page1 = `
 <div class="doc-head">
   <div>
-    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
+    ${logoDataUrl ? `<img class="doc-logo" src="${logoDataUrl}" alt="VYSITE" />` : ''}
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>
@@ -245,7 +246,7 @@ ${notesSection}
 <div class="page-break"></div>
 <div class="doc-head">
   <div>
-    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
+    ${logoDataUrl ? `<img class="doc-logo" src="${logoDataUrl}" alt="VYSITE" />` : ''}
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>

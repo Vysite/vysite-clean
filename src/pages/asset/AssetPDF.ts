@@ -1,4 +1,4 @@
-import { openPrintTab, vysiteLogoUrl } from '../../lib/printTab';
+import { openPrintTab, vysiteLogoDataUrl } from '../../lib/printTab';
 import type { DBAsset, DBAssetSite, DBAssetBuilding, DBAssetLocation, DBAssetDocument, DBAssetActivity, DBAssetServiceRecord } from './types';
 
 function esc(v: unknown): string {
@@ -140,9 +140,10 @@ interface AssetPDFData {
   currentUserName: string;
 }
 
-export function exportAssetPDF(data: AssetPDFData): void {
+export async function exportAssetPDF(data: AssetPDFData): Promise<void> {
   const { asset, siteName, buildingName, locationName, documents, activity, serviceRecords, primaryImageUrl, currentUserName } = data;
   const today = todayStr();
+  const logoDataUrl = await vysiteLogoDataUrl();
 
   const imageHtml = primaryImageUrl
     ? `<img src="${primaryImageUrl}" alt="${esc(asset.name)}" />`
@@ -152,7 +153,7 @@ export function exportAssetPDF(data: AssetPDFData): void {
   const page1 = `
 <div class="doc-head">
   <div>
-    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
+    ${logoDataUrl ? `<img class="doc-logo" src="${logoDataUrl}" alt="VYSITE" />` : ''}
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>
@@ -223,7 +224,7 @@ ${asset.notes ? `<div class="section-label">Notes</div><div class="notes-box">${
 <div class="page-break"></div>
 <div class="doc-head">
   <div>
-    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
+    ${logoDataUrl ? `<img class="doc-logo" src="${logoDataUrl}" alt="VYSITE" />` : ''}
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>
