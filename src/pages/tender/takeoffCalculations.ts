@@ -206,3 +206,37 @@ export function formatCurrency(n: number): string {
   if (isNaN(n) || !isFinite(n)) return '£0.00';
   return n.toLocaleString('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+// ── Signed cost helpers (ADD/OMIT commercial effect) ──────────────────────
+
+export interface SignedTakeoffCosts extends TakeoffCosts {
+  lineType: 'standard' | 'addition' | 'omission';
+  signedMaterialCost: number;
+  signedLabourCost: number;
+  signedTotalCost: number;
+}
+
+export function signedTakeoffCosts(item: {
+  quantity: number;
+  adjustment_quantity: number;
+  manual_quantity: number;
+  source: string;
+  unit: string;
+  line_type?: 'standard' | 'addition' | 'omission';
+  material_cost_rate?: number;
+  labour_basis?: 'per_unit' | 'lump_sum';
+  labour_minutes_per_unit?: number;
+  labour_minutes_lump_sum?: number;
+  labour_rate?: number;
+}): SignedTakeoffCosts {
+  const base = calcTakeoffCosts(item);
+  const lineType = item.line_type ?? 'standard';
+  const sign = lineType === 'omission' ? -1 : 1;
+  return {
+    ...base,
+    lineType,
+    signedMaterialCost: base.materialCostTotal * sign,
+    signedLabourCost: base.labourCostTotal * sign,
+    signedTotalCost: base.totalCost * sign,
+  };
+}

@@ -4,7 +4,7 @@ import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import type { DBTenderTakeoffItem } from './takeoffTypes';
 import type { MeasurementType, TakeoffLineType } from './takeoffTypes';
 import { DISCIPLINES } from './drawingTypes';
-import { finalQuantity, calcTakeoffCosts, formatCurrency } from './takeoffCalculations';
+import { finalQuantity, calcTakeoffCosts, signedTakeoffCosts, formatCurrency } from './takeoffCalculations';
 
 interface Props {
   tenderId: string;
@@ -132,9 +132,10 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
           );
         })()}
         {canViewFinancials && filtered.length > 0 && (() => {
-          const totalMaterial = filtered.reduce((s, i) => s + calcTakeoffCosts(i).materialCostTotal, 0);
-          const totalLabour = filtered.reduce((s, i) => s + calcTakeoffCosts(i).labourCostTotal, 0);
-          const totalCost = totalMaterial + totalLabour;
+          const signed = filtered.map(i => signedTakeoffCosts(i));
+          const totalMaterial = signed.reduce((s, c) => s + c.signedMaterialCost, 0);
+          const totalLabour = signed.reduce((s, c) => s + c.signedLabourCost, 0);
+          const totalCost = signed.reduce((s, c) => s + c.signedTotalCost, 0);
           return (
             <span className="ml-auto text-slate-300">
               Material: <span className="text-slate-200 font-semibold">{formatCurrency(totalMaterial)}</span>
@@ -164,7 +165,7 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
           <table className="w-full">
             <thead>
               <tr className="border-b border-[#1e2d4a]">
-                {['Label', 'Drawing', 'Pg', 'Discipline', 'Type', 'Measured', 'Adj', 'Final', 'Unit', 'Line', 'Source', ...(canViewFinancials ? ['Mat Rate', 'Mat Cost', 'Labour Cost', 'Total Cost'] : [])].map(h => (
+                {['Label', 'Drawing', 'Pg', 'Discipline', 'Type', 'Measured', 'Adj', 'Final', 'Unit', 'Line', 'Source', ...(canViewFinancials ? ['Mat Rate', 'Mat Cost', 'Labour Cost', 'Effect'] : [])].map(h => (
                   <th key={h} className="text-left text-[10px] font-bold text-slate-600 uppercase tracking-wider pb-3 pt-3 px-3 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -187,14 +188,17 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
                     <td className="py-2.5 px-3 text-xs text-slate-400">{item.unit}</td>
                     <td className="py-2.5 px-3"><span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${LINE_TYPE_BADGES[item.line_type]}`}>{item.line_type}</span></td>
                     <td className="py-2.5 px-3 text-[10px] text-slate-500">{item.source}</td>
-                    {canViewFinancials && costs && (
-                      <>
-                        <td className="py-2.5 px-3 text-xs text-slate-400 font-mono whitespace-nowrap">{formatCurrency(costs.materialCostRate)}</td>
-                        <td className="py-2.5 px-3 text-xs text-slate-300 font-mono whitespace-nowrap">{formatCurrency(costs.materialCostTotal)}</td>
-                        <td className="py-2.5 px-3 text-xs text-slate-300 font-mono whitespace-nowrap">{formatCurrency(costs.labourCostTotal)}</td>
-                        <td className="py-2.5 px-3 text-xs text-[#f97316] font-mono font-semibold whitespace-nowrap">{formatCurrency(costs.totalCost)}</td>
-                      </>
-                    )}
+                    {canViewFinancials && costs && (() => {
+                      const signed = signedTakeoffCosts(item);
+                      return (
+                        <>
+                          <td className="py-2.5 px-3 text-xs text-slate-400 font-mono whitespace-nowrap">{formatCurrency(costs.materialCostRate)}</td>
+                          <td className="py-2.5 px-3 text-xs text-slate-300 font-mono whitespace-nowrap">{formatCurrency(costs.materialCostTotal)}</td>
+                          <td className="py-2.5 px-3 text-xs text-slate-300 font-mono whitespace-nowrap">{formatCurrency(costs.labourCostTotal)}</td>
+                          <td className={`py-2.5 px-3 text-xs font-mono font-semibold whitespace-nowrap ${signed.lineType === 'omission' ? 'text-red-400' : 'text-[#f97316]'}`}>{signed.lineType === 'omission' ? '−' : ''}{formatCurrency(costs.totalCost)}</td>
+                        </>
+                      );
+                    })()}
                   </tr>
                 );
               })}

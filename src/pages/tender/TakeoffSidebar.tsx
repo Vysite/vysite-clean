@@ -4,7 +4,7 @@ import type { DBTenderTakeoffItem } from './takeoffTypes';
 import type { MeasurementType, TakeoffLineType } from './takeoffTypes';
 import { TAKEOFF_COLOURS } from './takeoffTypes';
 import { DISCIPLINES } from './drawingTypes';
-import { finalQuantity, groupLinearRuns, areaPolygonQuantity, calcTakeoffCosts, formatDuration, formatCurrency } from './takeoffCalculations';
+import { finalQuantity, groupLinearRuns, areaPolygonQuantity, calcTakeoffCosts, signedTakeoffCosts, formatDuration, formatCurrency } from './takeoffCalculations';
 import type { LabourBasis } from './takeoffTypes';
 import type { DBTenderDrawingCalibration } from './drawingTypes';
 import type { LinearGeometry, AreaGeometry } from './takeoffGeometry';
@@ -340,6 +340,7 @@ function CostBuildUpSection({ item, onUpdate }: {
   onUpdate: (updates: Partial<DBTenderTakeoffItem>) => void;
 }) {
   const costs = calcTakeoffCosts(item);
+  const signed = signedTakeoffCosts(item);
   const labourBasis = item.labour_basis ?? 'per_unit';
   const labelCls = 'text-[9px] font-bold text-slate-600 uppercase';
   const inputCls = 'w-full px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50 font-mono';
@@ -481,6 +482,13 @@ function CostBuildUpSection({ item, onUpdate }: {
         <span className="text-[10px] font-bold text-slate-400">Total Cost</span>
         <span className={totalCls}>{formatCurrency(costs.totalCost)}</span>
       </div>
+      {/* Commercial Effect (signed by line_type) */}
+      {signed.lineType === 'omission' && (
+        <div className="flex items-center justify-between px-1 pt-1 border-t border-[#1e2d4a]/50">
+          <span className="text-[10px] font-bold text-red-400">Commercial Effect</span>
+          <span className="text-[10px] font-bold text-red-400 font-mono">−{formatCurrency(costs.totalCost)}</span>
+        </div>
+      )}
     </div>
   );
 }
