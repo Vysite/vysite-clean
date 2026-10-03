@@ -3337,21 +3337,17 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
     setAssetKPIsLoading(true);
-    const { data, error } = await supabase.from('vy_assets')
-      .select('status')
-      .eq('org_id', oid);
-    logWrite('loadAssetKPIs', 'vy_assets', error);
+    const { data, error } = await supabase.rpc('get_asset_kpis', { org_uuid: oid });
+    logWrite('loadAssetKPIs', 'get_asset_kpis', error);
     if (!error && data) {
-      const counts = { total: data.length, active: 0, outOfService: 0, underRepair: 0, decommissioned: 0, replaced: 0 };
-      for (const row of data) {
-        const s = (row as { status: string }).status;
-        if (s === 'Active') counts.active++;
-        else if (s === 'Out of Service') counts.outOfService++;
-        else if (s === 'Under Repair') counts.underRepair++;
-        else if (s === 'Decommissioned') counts.decommissioned++;
-        else if (s === 'Replaced') counts.replaced++;
-      }
-      setAssetKPIs(counts);
+      setAssetKPIs({
+        total: data.total ?? 0,
+        active: data.active ?? 0,
+        outOfService: data.outOfService ?? 0,
+        underRepair: data.underRepair ?? 0,
+        decommissioned: data.decommissioned ?? 0,
+        replaced: data.replaced ?? 0,
+      });
     }
     setAssetKPIsLoading(false);
   }, []);
@@ -3359,19 +3355,10 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const loadAssetLocationCounts = useCallback(async () => {
     const oid = getOrgId(orgIdRef.current);
     if (!oid) return;
-    // Get counts grouped by site_id, building_id, location_id in one query
-    const { data, error } = await supabase.from('vy_assets')
-      .select('site_id,building_id,location_id')
-      .eq('org_id', oid);
-    logWrite('loadAssetLocationCounts', 'vy_assets', error);
+    const { data, error } = await supabase.rpc('get_asset_location_counts', { org_uuid: oid });
+    logWrite('loadAssetLocationCounts', 'get_asset_location_counts', error);
     if (!error && data) {
-      const counts: Record<string, number> = {};
-      for (const row of data as { site_id: string | null; building_id: string | null; location_id: string | null }[]) {
-        if (row.site_id) counts[`site:${row.site_id}`] = (counts[`site:${row.site_id}`] ?? 0) + 1;
-        if (row.building_id) counts[`building:${row.building_id}`] = (counts[`building:${row.building_id}`] ?? 0) + 1;
-        if (row.location_id) counts[`location:${row.location_id}`] = (counts[`location:${row.location_id}`] ?? 0) + 1;
-      }
-      setAssetLocationCounts(counts);
+      setAssetLocationCounts(data as Record<string, number>);
     }
   }, []);
 
