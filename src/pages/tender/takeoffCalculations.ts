@@ -3,6 +3,26 @@ import type { TakeoffGeometry, CountGeometry, LinearGeometry, AreaGeometry } fro
 import { isCountGeometry, isLinearGeometry, isAreaGeometry } from './takeoffGeometry';
 import type { DBTenderDrawingCalibration } from './drawingTypes';
 
+// 1 PDF point = 1/72 inch = 25.4/72 mm on paper.
+// At scale 1:N, 1 PDF point represents N × (25.4/72) mm in the real world.
+const MM_PER_PDF_POINT = 25.4 / 72;
+
+const UNIT_TO_MM: Record<string, number> = {
+  mm: 1,
+  cm: 10,
+  m: 1000,
+};
+
+/**
+ * Compute the scale factor (real-world units per PDF point) for a preset scale.
+ * Formula: (MM_PER_PDF_POINT × scaleRatio) / UNIT_TO_MM[unit]
+ * This is independent of paper size — PDF points are a fixed physical unit.
+ */
+export function presetScaleFactor(scaleRatio: number, unit: string): number {
+  const unitMm = UNIT_TO_MM[unit] ?? 1000;
+  return (MM_PER_PDF_POINT * scaleRatio) / unitMm;
+}
+
 export function distanceInPdfPoints(a: NormPoint, b: NormPoint, pageWidth: number, pageHeight: number): number {
   const dx = (b.x - a.x) * pageWidth;
   const dy = (b.y - a.y) * pageHeight;

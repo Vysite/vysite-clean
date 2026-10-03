@@ -9,7 +9,7 @@ import { DEFAULT_UNIT_FOR_TYPE, TAKEOFF_COLOURS } from './takeoffTypes';
 import { DISCIPLINES } from './drawingTypes';
 import type { NormPoint, TakeoffGeometry, CountPoint, LinearSegment, AreaPolygon, CountGeometry, LinearGeometry, AreaGeometry } from './takeoffGeometry';
 import { emptyGeometry, cloneGeometry, genId, isCountGeometry, isLinearGeometry, isAreaGeometry } from './takeoffGeometry';
-import { calcQuantity, finalQuantity } from './takeoffCalculations';
+import { calcQuantity, finalQuantity, presetScaleFactor, distanceInPdfPoints } from './takeoffCalculations';
 import { UndoStack } from './takeoffUndoRedo';
 import { TakeoffAnnotationLayer } from './TakeoffAnnotationLayer';
 import { TakeoffCountHitOverlay } from './TakeoffCountHitOverlay';
@@ -292,9 +292,22 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
 
   // ── Double click to finish linear/area ───────────────────────────────────
   const handlePageDoubleClick = (e: React.MouseEvent) => {
-    if (draftPointsRef.current.length < 2) return;
+    if (draftPointsRef.current.length < 2) { cancelDraft(); return; }
     if (tool === 'linear') finishLinear();
     else if (tool === 'area') finishArea();
+  };
+
+  // ── Right-click to finish linear/area (prevents context menu) ───────────
+  const handlePageContextMenu = (e: React.MouseEvent) => {
+    if (tool === 'linear' || tool === 'area') {
+      e.preventDefault();
+      if (draftPointsRef.current.length >= 2) {
+        if (tool === 'linear') finishLinear();
+        else finishArea();
+      } else {
+        cancelDraft();
+      }
+    }
   };
 
   // ── Keyboard ─────────────────────────────────────────────────────────────
@@ -311,8 +324,15 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
         if (tool === 'linear') finishLinear();
         else finishArea();
       } else if (e.key === 'Escape') {
-        cancelDraft();
-        setSelectedGeometryId(null);
+        if (draftPointsRef.current.length >= 2 && (tool === 'linear' || tool === 'area')) {
+          // Escape with valid draft: finish it
+          if (tool === 'linear') finishLinear();
+          else finishArea();
+        } else {
+          // Escape with insufficient draft: cancel cleanly
+          cancelDraft();
+          setSelectedGeometryId(null);
+        }
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault(); handleUndo();
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
@@ -489,19 +509,15 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
     }
   };
 
-  // ── Calibration (unchanged from Stage B) ─────────────────────────────────
-  const calcPixelDistance = (pts: CalibrationPoint[], viewport: { width: number; height: number }): number => {
-    if (pts.length < 2) return 0;
-    const dx = (pts[1].x - pts[0].x) * viewport.width * zoom;
-    const dy = (pts[1].y - pts[0].y) * viewport.height * zoom;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-
+  // ── Calibration ─────────────────────────────────────────────────────────
   const savePresetCalibration = async () => {
     if (!selectedPreset) return;
     const preset = PRESET_SCALES.find(p => p.ratio === selectedPreset);
     if (!preset) return;
-    const scaleFactor = preset.value / 1000;
+    // Correct formula: (25.4/72 × N) / unitToMm
+    // 1 PDF point = 25.4/72 mm on paper. At 1:N, real-world mm per PDF point = N × 25.4/72.
+    // Paper size does NOT matter — PDF points are a fixed physical unit regardless of paper size.
+    const scaleFactor = presetScaleFactor(preset.value, calibUnit);
     const cal: DBTenderDrawingCalibration = {
       id: pageCalibration?.id ?? crypto.randomUUID(), org_id: store.currentOrgId ?? '', tender_id: tenderId,
       drawing_id: drawing.id, page_number: currentPage, method: 'preset', scale_ratio: preset.ratio,
@@ -518,14 +534,19 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
     if (calibPoints.length < 2 || !knownDistance || !pdfViewport) return;
     const dist = parseFloat(knownDistance);
     if (!dist || dist <= 0) return;
-    const pixelDist = calcPixelDistance(calibPoints, pdfViewport);
-    if (pixelDist <= 0) return;
-    const normDist = pixelDist / zoom;
-    const scaleFactor = dist / normDist;
+    // Use PDF-point distance (actual page dimensions at scale 1), not canvas pixels.
+    // This is zoom-independent.
+    const pdfPtDist = distanceInPdfPoints(
+      { x: calibPoints[0].x, y: calibPoints[0].y },
+      { x: calibPoints[1].x, y: calibPoints[1].y },
+      pdfViewport.width, pdfViewport.height
+    );
+    if (pdfPtDist <= 0) return;
+    const scaleFactor = dist / pdfPtDist;
     const cal: DBTenderDrawingCalibration = {
       id: pageCalibration?.id ?? crypto.randomUUID(), org_id: store.currentOrgId ?? '', tender_id: tenderId,
       drawing_id: drawing.id, page_number: currentPage, method: 'manual', scale_ratio: null, scale_value: null,
-      unit: calibUnit, reference_distance: dist, pixel_distance: pixelDist / zoom,
+      unit: calibUnit, reference_distance: dist, pixel_distance: pdfPtDist,
       scale_factor: scaleFactor, calibration_points: calibPoints,
       created_at: pageCalibration?.created_at ?? new Date().toISOString(), updated_at: new Date().toISOString(),
     };
@@ -674,6 +695,7 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
             style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, transition: isPanningRef.current ? 'none' : 'transform 0.05s' }}
             onClick={handlePageClick}
             onDoubleClick={handlePageDoubleClick}
+            onContextMenu={handlePageContextMenu}
             className="relative"
           >
             <canvas ref={canvasRef} className="shadow-2xl block" />
@@ -686,6 +708,9 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
                 selectedGeometryId={selectedGeometryId}
                 draftPoints={draftPoints}
                 tool={tool}
+                calibration={pageCalibration}
+                pageWidth={pdfViewport.width}
+                pageHeight={pdfViewport.height}
                 onGeometryClick={handleGeometryClick}
                 onVertexMouseDown={handleVertexMouseDown}
               />

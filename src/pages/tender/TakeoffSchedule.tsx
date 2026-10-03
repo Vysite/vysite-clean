@@ -62,8 +62,6 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
     return true;
   });
 
-  const totalFinal = filtered.reduce((sum, i) => sum + finalQuantity(i), 0);
-
   // Group by drawing
   const byDrawing = filtered.reduce<Record<string, DBTenderTakeoffItem[]>>((acc, item) => {
     const key = item.drawing_id ?? 'manual';
@@ -112,11 +110,24 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
         </button>
       </div>
 
-      {/* Summary */}
-      <div className="flex items-center gap-4 px-4 py-2.5 bg-[#1a2236] rounded-lg border border-[#1e2d4a] text-xs">
-        <span className="text-slate-500">{filtered.length} items</span>
-        <span className="text-slate-600">|</span>
-        <span className="text-slate-300 font-semibold">Total Final: <span className="text-[#f97316]">{totalFinal.toFixed(2)}</span></span>
+      {/* Summary — no mixed-unit totals */}
+      <div className="flex items-center gap-4 px-4 py-2.5 bg-[#1a2236] rounded-lg border border-[#1e2d4a] text-xs flex-wrap">
+        <span className="text-slate-500">{filtered.length} Take-Off Items</span>
+        {(() => {
+          const counted = filtered.filter(i => i.measurement_type === 'count');
+          const linear = filtered.filter(i => i.measurement_type === 'linear');
+          const area = filtered.filter(i => i.measurement_type === 'area');
+          const countTotal = counted.reduce((s, i) => s + finalQuantity(i), 0);
+          const linearTotal = linear.reduce((s, i) => s + finalQuantity(i), 0);
+          const areaTotal = area.reduce((s, i) => s + finalQuantity(i), 0);
+          return (
+            <>
+              {counted.length > 0 && <span className="text-slate-300">Counted: <span className="text-[#f97316] font-semibold">{countTotal.toFixed(0)} nr</span></span>}
+              {linear.length > 0 && <span className="text-slate-300">Linear: <span className="text-[#f97316] font-semibold">{linearTotal.toFixed(2)} m</span></span>}
+              {area.length > 0 && <span className="text-slate-300">Area: <span className="text-[#f97316] font-semibold">{areaTotal.toFixed(2)} m²</span></span>}
+            </>
+          );
+        })()}
       </div>
 
       {/* Loading */}
