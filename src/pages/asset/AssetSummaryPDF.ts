@@ -1,4 +1,4 @@
-import { openPrintTab } from '../../lib/printTab';
+import { openPrintTab, vysiteLogoUrl } from '../../lib/printTab';
 import type { DBAsset, DBAssetServiceRecord } from './types';
 import type { SummaryCalc, ReviewStatus } from './AssetSummary';
 
@@ -98,6 +98,7 @@ body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 9
 .doc-head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px; }
 .doc-brand { font-size: 18pt; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; }
 .doc-brand-sub { font-size: 8pt; color: #64748b; margin-top: 2px; }
+.doc-logo { height: 28px; width: auto; object-fit: contain; display: block; }
 .doc-type { font-size: 8pt; font-weight: 700; color: #ea6c00; text-transform: uppercase; letter-spacing: 1px; text-align: right; }
 .doc-title { font-size: 14pt; font-weight: 700; color: #0f172a; margin-top: 2px; text-align: right; }
 .doc-date { font-size: 8pt; color: #64748b; margin-top: 4px; text-align: right; }
@@ -295,7 +296,7 @@ export function exportAssetSummaryPDF(data: AssetSummaryPDFData): void {
   const page1 = `
 <div class="doc-head">
   <div>
-    <div class="doc-brand">VYSITE</div>
+    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>
@@ -349,7 +350,7 @@ ${operationalKPIs}
 <div class="page-break"></div>
 <div class="doc-head">
   <div>
-    <div class="doc-brand">VYSITE</div>
+    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>
@@ -394,7 +395,7 @@ ${operationalKPIs}
 <div class="page-break"></div>
 <div class="doc-head">
   <div>
-    <div class="doc-brand">VYSITE</div>
+    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>

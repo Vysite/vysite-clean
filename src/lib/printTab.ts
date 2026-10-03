@@ -1,3 +1,9 @@
+// Returns an absolute URL to the official VYSITE logo, usable from print tabs
+// whose base is a blob: URL (where relative paths would not resolve).
+export function vysiteLogoUrl(): string {
+  return `${window.location.origin}/VYSITE_Logo_Long.png`;
+}
+
 // Opens a self-contained HTML string in a new browser tab and auto-triggers the
 // browser's native print dialog inside that tab. The current page is never touched,
 // so React state, Supabase auth listeners, and focus/visibility events are

@@ -1,4 +1,4 @@
-import { openPrintTab } from '../../lib/printTab';
+import { openPrintTab, vysiteLogoUrl } from '../../lib/printTab';
 import type { DBAsset, DBAssetSite, DBAssetBuilding, DBAssetLocation } from './types';
 
 function esc(v: unknown): string {
@@ -31,6 +31,7 @@ body {
 .doc-head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 16px; }
 .doc-brand { font-size: 16pt; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; }
 .doc-brand-sub { font-size: 7.5pt; color: #64748b; margin-top: 2px; }
+.doc-logo { height: 24px; width: auto; object-fit: contain; display: block; }
 .doc-type { font-size: 7.5pt; font-weight: 700; color: #ea6c00; text-transform: uppercase; letter-spacing: 1px; text-align: right; }
 .doc-title { font-size: 13pt; font-weight: 700; color: #0f172a; margin-top: 2px; text-align: right; }
 .doc-date { font-size: 7.5pt; color: #64748b; margin-top: 4px; text-align: right; }
@@ -114,7 +115,7 @@ export function exportAssetRegisterPDF(data: RegisterPDFData): void {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Asset Register</title><style>${REGISTER_CSS}</style><script>window.onload=function(){window.print();};<\/script></head><body><div class="page">
 <div class="doc-head">
   <div>
-    <div class="doc-brand">VYSITE</div>
+    <img class="doc-logo" src="${vysiteLogoUrl()}" alt="VYSITE" />
     <div class="doc-brand-sub">Construction Operating System</div>
   </div>
   <div>
