@@ -700,20 +700,23 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
 
   // ── Export Marked-Up Drawing PDF ────────────────────────────────────────
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportSuccess, setExportSuccess] = useState(false);
   const handleExportDrawingPDF = useCallback(async () => {
     if (isExporting) return;
     setIsExporting(true);
-    setErrorMsg(null);
+    setExportError(null);
+    setExportSuccess(false);
     try {
-      if (!drawing.storage_path) { setErrorMsg('Export failed: Drawing has no stored file path.'); return; }
+      if (!drawing.storage_path) { setExportError('Export failed: Drawing has no stored file path.'); return; }
       const url = await store.getTenderDrawingSignedUrl(drawing.storage_path);
-      if (!url) { setErrorMsg('Export failed: Unable to generate signed drawing URL.'); return; }
+      if (!url) { setExportError('Export failed: Unable to generate signed drawing URL.'); return; }
       const response = await fetch(url);
-      if (!response.ok) { setErrorMsg(`Export failed: Source PDF returned HTTP ${response.status}.`); return; }
+      if (!response.ok) { setExportError(`Export failed: Source drawing returned HTTP ${response.status}.`); return; }
       const arrayBuffer = await response.arrayBuffer();
-      if (arrayBuffer.byteLength === 0) { setErrorMsg('Export failed: Source PDF is empty (0 bytes).'); return; }
+      if (arrayBuffer.byteLength === 0) { setExportError('Export failed: Source drawing is empty (0 bytes).'); return; }
       const drawingItems = store.tenderTakeoffItems.filter(i => i.drawing_id === drawing.id);
-      if (drawingItems.length === 0) { setErrorMsg('Export failed: No Take-Off items for this drawing.'); return; }
+      if (drawingItems.length === 0) { setExportError('Export failed: No Take-Off items for this drawing.'); return; }
       await exportMarkedUpDrawingPDF({
         drawing,
         items: drawingItems,
@@ -723,14 +726,16 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
         tenderRef: drawing.drawing_number || drawing.title,
         internal: canViewFinancials,
       });
+      setExportSuccess(true);
+      setTimeout(() => setExportSuccess(false), 4000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('red') && msg.includes('number')) {
-        setErrorMsg('Export failed: Invalid annotation colour encountered. Check item colours and retry.');
-      } else if (msg.includes('PDFDocument') || msg.includes('load')) {
-        setErrorMsg('Export failed: Unable to load source PDF file.');
+        setExportError('Export failed: Invalid annotation colour encountered. Check item colours and retry.');
+      } else if (msg.includes('PDFDocument') || msg.includes('load') || msg.includes('Invalid PDF') || msg.includes('structure')) {
+        setExportError('Export failed: Source file could not be loaded as a PDF. The drawing may be an image format.');
       } else {
-        setErrorMsg(`Export failed: ${msg}`);
+        setExportError(`Export failed: ${msg}`);
       }
     } finally {
       setIsExporting(false);
@@ -779,6 +784,21 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
           </button>
         </div>
       </div>
+
+      {/* Export status banner */}
+      {exportError && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-red-900/30 border-b border-red-800/50 text-xs text-red-300">
+          <AlertCircle size={14} className="shrink-0" />
+          <span className="flex-1">{exportError}</span>
+          <button onClick={() => setExportError(null)} className="p-0.5 hover:text-red-200"><X size={12} /></button>
+        </div>
+      )}
+      {exportSuccess && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-900/30 border-b border-emerald-800/50 text-xs text-emerald-300">
+          <Check size={14} className="shrink-0" />
+          <span>Marked-up PDF downloaded successfully.</span>
+        </div>
+      )}
 
       {/* Calibration panel */}
       {showCalibration && (

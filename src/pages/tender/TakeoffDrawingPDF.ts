@@ -81,9 +81,14 @@ export async function exportMarkedUpDrawingPDF(data: DrawingExportData): Promise
   const pdfBytesOut = await pdfDoc.save();
   const blob = new Blob([pdfBytesOut], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
+
+  // Sanitize filename: drawing number + title, strip unsafe chars
+  const safeName = (drawing.drawing_number || 'DWG') + '_' + (drawing.title || 'Drawing');
+  const sanitized = safeName.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_').substring(0, 80);
+
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${drawing.drawing_number || drawing.title}_TakeOff.pdf`;
+  a.download = `VYSITE_${sanitized}_Marked_Up.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
