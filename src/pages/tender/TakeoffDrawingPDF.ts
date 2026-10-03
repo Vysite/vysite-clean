@@ -102,6 +102,7 @@ export async function exportMarkedUpDrawingPDF(data: DrawingExportData): Promise
     const pageNum = pageIdx + 1;
     const page = pages[pageIdx];
     const { width: pw, height: ph } = page.getSize();
+    const rotation = page.getRotation().angle;
     const cal = calForPage(calibrations, drawing.id, pageNum);
     const pageItems = visibleItems.filter(i => i.drawing_id === drawing.id && i.page_number === pageNum);
 
@@ -112,11 +113,11 @@ export async function exportMarkedUpDrawingPDF(data: DrawingExportData): Promise
       const color = parseTakeoffPdfColour(item.colour, item.label);
 
       if (isCountGeometry(geo)) {
-        renderCountPDF(page, geo as CountGeometry, color, font, pw, ph);
+        renderCountPDF(page, geo as CountGeometry, color, font, pw, ph, rotation);
       } else if (isLinearGeometry(geo)) {
-        renderLinearPDF(page, geo as LinearGeometry, color, font, cal, pw, ph);
+        renderLinearPDF(page, geo as LinearGeometry, color, font, cal, pw, ph, rotation);
       } else if (isAreaGeometry(geo)) {
-        renderAreaPDF(page, geo as AreaGeometry, color, font, cal, pw, ph);
+        renderAreaPDF(page, geo as AreaGeometry, color, font, cal, pw, ph, rotation);
       }
     }
 
@@ -147,22 +148,39 @@ export async function exportMarkedUpDrawingPDF(data: DrawingExportData): Promise
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-// ── PDF coordinate mapping ─────────────────────────────────────────────────
-// Normalized coords: x,y in 0..1 where (0,0) = top-left of the rendered page.
-// PDF coords: (0,0) = bottom-left. So PDF_y = pageHeight * (1 - normY).
+// ── Rotation-aware PDF coordinate mapping ──────────────────────────────────
+// Normalized coords: x,y in 0..1 where (0,0) = top-left of the RENDERED (rotated) page.
+// PDF coords: (0,0) = bottom-left of the UNROTATED page.
+// pdf.js applies /Rotate automatically, so normalized coords are in rotated space.
+// pdf-lib draws in unrotated space, so we must undo the rotation.
+//
+// For each rotation, the inverse transform from normalized (rotated view) to
+// PDF coords (unrotated, bottom-left origin) is:
+//   0°:   pdf_x = nx * W,           pdf_y = H * (1 - ny)
+//   90°:  pdf_x = W * ny,            pdf_y = H * nx
+//   180°: pdf_x = W * (1 - nx),      pdf_y = H * ny
+//   270°: pdf_x = W * (1 - ny),      pdf_y = H * (1 - nx)
 
-function nx(normX: number, pw: number): number { return normX * pw; }
-function ny(normY: number, ph: number): number { return ph * (1 - normY); }
+function normToPdf(normX: number, normY: number, rotation: number, W: number, H: number): { x: number; y: number } {
+  switch (((rotation % 360) + 360) % 360) {
+    case 90:
+      return { x: W * normY, y: H * normX };
+    case 180:
+      return { x: W * (1 - normX), y: H * normY };
+    case 270:
+      return { x: W * (1 - normY), y: H * (1 - normX) };
+    default:
+      return { x: normX * W, y: H * (1 - normY) };
+  }
+}
 
 // ── Count markers ──────────────────────────────────────────────────────────
 
-function renderCountPDF(page: PDFPage, geo: CountGeometry, color: Color, font: PDFFont, pw: number, ph: number): void {
-  // Physical marker size: ~3mm radius regardless of page size
+function renderCountPDF(page: PDFPage, geo: CountGeometry, color: Color, font: PDFFont, pw: number, ph: number, rotation: number): void {
   const markerRadius = Math.min(pw, ph) * 0.006;
   for (let i = 0; i < geo.points.length; i++) {
     const pt = geo.points[i];
-    const px = nx(pt.x, pw);
-    const py = ny(pt.y, ph);
+    const { x: px, y: py } = normToPdf(pt.x, pt.y, rotation, pw, ph);
     page.drawCircle({ x: px, y: py, size: markerRadius, color, borderColor: rgb(1, 1, 1), borderWidth: 0.5 });
     const label = String(i + 1);
     const textW = font.widthOfTextAtSize(label, markerRadius * 1.1);
@@ -172,34 +190,33 @@ function renderCountPDF(page: PDFPage, geo: CountGeometry, color: Color, font: P
 
 // ── Linear runs ────────────────────────────────────────────────────────────
 
-function renderLinearPDF(page: PDFPage, geo: LinearGeometry, color: Color, font: PDFFont, cal: DBTenderDrawingCalibration | null, pw: number, ph: number): void {
+function renderLinearPDF(page: PDFPage, geo: LinearGeometry, color: Color, font: PDFFont, cal: DBTenderDrawingCalibration | null, pw: number, ph: number, rotation: number): void {
   const runs = groupLinearRuns(geo, cal, pw, ph);
   const lineWidth = Math.min(pw, ph) * 0.0012;
   const fontSize = Math.min(pw, ph) * 0.008;
 
   for (const run of runs) {
     const segs = run.segments;
-    // Draw all segments
     for (const seg of segs) {
-      page.drawLine({
-        start: { x: nx(seg.start.x, pw), y: ny(seg.start.y, ph) },
-        end: { x: nx(seg.end.x, pw), y: ny(seg.end.y, ph) },
-        thickness: lineWidth,
-        color,
-      });
+      const s = normToPdf(seg.start.x, seg.start.y, rotation, pw, ph);
+      const e = normToPdf(seg.end.x, seg.end.y, rotation, pw, ph);
+      page.drawLine({ start: s, end: e, thickness: lineWidth, color });
     }
 
     // Endpoint markers
     const startPt = segs[0].start;
     const endPt = segs[segs.length - 1].end;
     const endR = Math.min(pw, ph) * 0.0025;
-    page.drawCircle({ x: nx(startPt.x, pw), y: ny(startPt.y, ph), size: endR, color });
-    page.drawCircle({ x: nx(endPt.x, pw), y: ny(endPt.y, ph), size: endR, color });
+    const sp = normToPdf(startPt.x, startPt.y, rotation, pw, ph);
+    const ep = normToPdf(endPt.x, endPt.y, rotation, pw, ph);
+    page.drawCircle({ x: sp.x, y: sp.y, size: endR, color });
+    page.drawCircle({ x: ep.x, y: ep.y, size: endR, color });
 
     // Measurement label at midpoint of middle segment
     const midSeg = segs[Math.floor(segs.length / 2)];
-    const midX = nx((midSeg.start.x + midSeg.end.x) / 2, pw);
-    const midY = ny((midSeg.start.y + midSeg.end.y) / 2, ph);
+    const mid = normToPdf((midSeg.start.x + midSeg.end.x) / 2, (midSeg.start.y + midSeg.end.y) / 2, rotation, pw, ph);
+    const midX = mid.x;
+    const midY = mid.y;
 
     const totalPdfPts = segs.reduce((sum, s) => sum + distanceInPdfPoints(s.start, s.end, pw, ph), 0);
     const realDist = cal?.scale_factor ? totalPdfPts * cal.scale_factor : 0;
@@ -212,23 +229,26 @@ function renderLinearPDF(page: PDFPage, geo: LinearGeometry, color: Color, font:
 
 // ── Area polygons ──────────────────────────────────────────────────────────
 
-function renderAreaPDF(page: PDFPage, geo: AreaGeometry, color: Color, font: PDFFont, cal: DBTenderDrawingCalibration | null, pw: number, ph: number): void {
+function renderAreaPDF(page: PDFPage, geo: AreaGeometry, color: Color, font: PDFFont, cal: DBTenderDrawingCalibration | null, pw: number, ph: number, rotation: number): void {
   const lineWidth = Math.min(pw, ph) * 0.0015;
   const fontSize = Math.min(pw, ph) * 0.008;
 
   for (const poly of geo.polygons) {
-    // Outline + fill via SVG path (pdf-lib has no drawPolygonPoints)
-    const pts = poly.vertices.map(v => ({ x: nx(v.x, pw), y: ny(v.y, ph) }));
+    // Outline + fill via SVG path
+    const pts = poly.vertices.map(v => normToPdf(v.x, v.y, rotation, pw, ph));
     if (pts.length >= 2) {
       const svgPath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ') + ' Z';
       page.drawSvgPath(svgPath, { borderColor: color, borderWidth: lineWidth, color, opacity: 0.15 });
     }
 
-    // Area value at centroid
-    let cx = 0, cy = 0;
-    for (const v of poly.vertices) { cx += v.x; cy += v.y; }
-    cx = nx(cx / poly.vertices.length, pw);
-    cy = ny(cy / poly.vertices.length, ph);
+    // Area value at centroid (in normalized space, then mapped)
+    let ncx = 0, ncy = 0;
+    for (const v of poly.vertices) { ncx += v.x; ncy += v.y; }
+    ncx /= poly.vertices.length;
+    ncy /= poly.vertices.length;
+    const c = normToPdf(ncx, ncy, rotation, pw, ph);
+    const cx = c.x;
+    const cy = c.y;
 
     const area = cal?.scale_factor
       ? areaPolygonQuantity(poly, cal, pw, ph)
