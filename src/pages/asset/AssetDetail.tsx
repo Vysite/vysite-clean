@@ -110,7 +110,7 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
           onAssetUpdated={onAssetUpdated} />
       )}
       {tab === 'service' && (
-        <ServiceTab asset={asset} canEdit={canEdit} canCreate={canCreate} canDelete={canDelete} />
+        <ServiceTab asset={asset} canEdit={canEdit} canCreate={canCreate} canDelete={canDelete} canView={canView} canViewFinancials={canViewFinancials} />
       )}
       {tab === 'documents' && (
         <DocumentsTab asset={asset} canUpload={canUpload} canDelete={canDelete} />

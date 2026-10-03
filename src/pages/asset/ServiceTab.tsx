@@ -1,17 +1,20 @@
-import { useState, useEffect } from 'react';
-import { Plus, Wrench, Edit3, Save, Trash2, X, FileText, ChevronDown, ChevronRight, Paperclip, Download, Calendar, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Plus, Wrench, Edit3, Save, Trash2, X, FileText, ChevronDown, ChevronRight, Paperclip, Download, Calendar, AlertTriangle, FileDown, Loader2 } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import type { DBAsset, DBAssetDocument, DBAssetServiceRecord, ServiceRecordStatus, ServiceCondition } from './types';
 import { SERVICE_TYPES, SERVICE_STATUSES, SERVICE_CONDITIONS, SERVICE_STATUS_COLORS, SERVICE_CONDITION_COLORS } from './types';
+import { exportServiceRecordPDF, exportServiceRecordFileName } from './ServiceRecordPDF';
 
 interface Props {
   asset: DBAsset;
   canEdit: boolean;
   canCreate: boolean;
   canDelete: boolean;
+  canView: boolean;
+  canViewFinancials: boolean;
 }
 
-export default function ServiceTab({ asset, canEdit, canCreate, canDelete }: Props) {
+export default function ServiceTab({ asset, canEdit, canCreate, canDelete, canView, canViewFinancials }: Props) {
   const store = useAppStore();
   const [records, setRecords] = useState<DBAssetServiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,6 +124,7 @@ export default function ServiceTab({ asset, canEdit, canCreate, canDelete }: Pro
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${SERVICE_STATUS_COLORS[rec.status as ServiceRecordStatus] ?? 'bg-slate-800 text-slate-400'}`}>{rec.status}</span>
                   </div>
                   {canEdit && <button onClick={e => { e.stopPropagation(); setEditingRecord(rec); setShowForm(true); }} className="p-1 text-slate-500 hover:text-[#f97316] transition-colors"><Edit3 size={13} /></button>}
+                  {canView && <ExportServicePDF asset={asset} record={rec} linkedDocs={linkedDocs} canViewFinancials={canViewFinancials} />}
                 </div>
                 {isExpanded && (
                   <div className="border-t border-[#0d1628] p-4 bg-[#0d1628]/50 space-y-3">
@@ -224,6 +228,85 @@ function LinkDocumentButton({ asset, serviceRecordId }: { asset: DBAsset; servic
         </div>
       )}
     </>
+  );
+}
+
+function ExportServicePDF({ asset, record, linkedDocs, canViewFinancials }: {
+  asset: DBAsset; record: DBAssetServiceRecord; linkedDocs: DBAssetDocument[]; canViewFinancials: boolean;
+}) {
+  const store = useAppStore();
+  const [open, setOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  async function handleExport(internal: boolean) {
+    setExporting(true);
+    setOpen(false);
+    try {
+      await store.loadAssetDocuments(asset.id);
+      await store.loadAssetMedia(asset.id);
+
+      let primaryImageUrl: string | null = null;
+      const primary = (store.assetMedia ?? []).find(m => m.is_primary);
+      if (primary) {
+        primaryImageUrl = await store.getAssetMediaSignedUrl(primary.storage_path);
+      }
+
+      const sites = store.assetSites ?? [];
+      const buildings = store.assetBuildings ?? [];
+      const locations = store.assetLocations ?? [];
+      const siteName = sites.find(s => s.id === asset.site_id)?.name ?? '\u2014';
+      const buildingName = buildings.find(b => b.id === asset.building_id)?.name ?? '\u2014';
+      const locationName = locations.find(l => l.id === asset.location_id)?.name ?? '\u2014';
+
+      const docs = (store.assetDocuments ?? []).filter(d => d.service_record_id === record.id);
+
+      exportServiceRecordPDF({
+        asset,
+        record,
+        siteName,
+        buildingName,
+        locationName,
+        linkedDocuments: docs,
+        primaryImageUrl,
+        internal,
+        currentUserName: store.currentUser?.name ?? '',
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={e => { e.stopPropagation(); setOpen(!open); }} disabled={exporting}
+        className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-slate-400 hover:text-[#f97316] border border-[#1e2d4a] rounded-lg hover:border-[#f97316] transition-colors disabled:opacity-60">
+        {exporting ? <Loader2 size={11} className="animate-spin" /> : <FileDown size={11} />}Export PDF
+        <ChevronDown size={10} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-20 bg-[#1a2236] border border-[#1e2d4a] rounded-lg shadow-xl py-1 min-w-[170px]">
+          <button onClick={e => { e.stopPropagation(); handleExport(false); }}
+            className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-[#0d1628] transition-colors">
+            Client Service Record
+          </button>
+          {canViewFinancials && (
+            <button onClick={e => { e.stopPropagation(); handleExport(true); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-[#0d1628] transition-colors">
+              Internal Service Record
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
