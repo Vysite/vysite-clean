@@ -129,3 +129,80 @@ export function areaPolygonQuantity(
   if (!calibration?.scale_factor) return 0;
   return polygonAreaPdfPoints(poly.vertices, pageWidth, pageHeight) * calibration.scale_factor * calibration.scale_factor;
 }
+
+// ── Cost build-up helpers (Stage D) ───────────────────────────────────────
+
+export interface TakeoffCosts {
+  finalQty: number;
+  materialCostRate: number;
+  materialCostTotal: number;
+  labourBasis: 'per_unit' | 'lump_sum';
+  labourMinutesPerUnit: number;
+  labourMinutesLumpSum: number;
+  labourRate: number;
+  totalLabourMinutes: number;
+  totalLabourHours: number;
+  labourCostTotal: number;
+  totalCost: number;
+  costRate: number; // totalCost / finalQty — for future Estimate sync mapping
+}
+
+export function calcTakeoffCosts(item: {
+  quantity: number;
+  adjustment_quantity: number;
+  manual_quantity: number;
+  source: string;
+  unit: string;
+  material_cost_rate?: number;
+  labour_basis?: 'per_unit' | 'lump_sum';
+  labour_minutes_per_unit?: number;
+  labour_minutes_lump_sum?: number;
+  labour_rate?: number;
+}): TakeoffCosts {
+  const fq = finalQuantity(item);
+  const materialCostRate = item.material_cost_rate ?? 0;
+  const labourBasis = item.labour_basis ?? 'per_unit';
+  const labourMinutesPerUnit = item.labour_minutes_per_unit ?? 0;
+  const labourMinutesLumpSum = item.labour_minutes_lump_sum ?? 0;
+  const labourRate = item.labour_rate ?? 0;
+
+  const materialCostTotal = fq * materialCostRate;
+
+  const totalLabourMinutes = labourBasis === 'per_unit'
+    ? fq * labourMinutesPerUnit
+    : labourMinutesLumpSum;
+
+  const totalLabourHours = totalLabourMinutes / 60;
+  const labourCostTotal = totalLabourHours * labourRate;
+
+  const totalCost = materialCostTotal + labourCostTotal;
+  const costRate = fq > 0 ? totalCost / fq : 0;
+
+  return {
+    finalQty: fq,
+    materialCostRate,
+    materialCostTotal,
+    labourBasis,
+    labourMinutesPerUnit,
+    labourMinutesLumpSum,
+    labourRate,
+    totalLabourMinutes,
+    totalLabourHours,
+    labourCostTotal,
+    totalCost,
+    costRate,
+  };
+}
+
+export function formatDuration(totalMinutes: number): string {
+  if (totalMinutes <= 0) return '0h 0m';
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = Math.round(totalMinutes % 60);
+  if (hours === 0) return `${minutes}m`;
+  return `${hours}h ${minutes}m`;
+}
+
+export function formatCurrency(n: number): string {
+  if (isNaN(n) || !isFinite(n)) return '£0.00';
+  return n.toLocaleString('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}

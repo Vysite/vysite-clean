@@ -4,7 +4,8 @@ import type { DBTenderTakeoffItem } from './takeoffTypes';
 import type { MeasurementType, TakeoffLineType } from './takeoffTypes';
 import { TAKEOFF_COLOURS } from './takeoffTypes';
 import { DISCIPLINES } from './drawingTypes';
-import { finalQuantity, groupLinearRuns, areaPolygonQuantity } from './takeoffCalculations';
+import { finalQuantity, groupLinearRuns, areaPolygonQuantity, calcTakeoffCosts, formatDuration, formatCurrency } from './takeoffCalculations';
+import type { LabourBasis } from './takeoffTypes';
 import type { DBTenderDrawingCalibration } from './drawingTypes';
 import type { LinearGeometry, AreaGeometry } from './takeoffGeometry';
 
@@ -28,6 +29,7 @@ interface Props {
   onUpdateItem: (id: string, updates: Partial<DBTenderTakeoffItem>) => void;
   onDeleteItem: (id: string) => void;
   onGeometrySelect: (geometryId: string) => void;
+  canViewFinancials: boolean;
   onUndo: () => void;
   onRedo: () => void;
   onDeleteSelectedGeometry: () => void;
@@ -49,7 +51,7 @@ const LINE_TYPE_COLORS: Record<TakeoffLineType, string> = {
 
 export default function TakeoffSidebar({
   items, activeItemId, selectedGeometryId, tool, canUndo, canRedo, saveStatus, needsCalibration,
-  calibration, pageWidth, pageHeight,
+  calibration, pageWidth, pageHeight, canViewFinancials,
   onToolChange, onItemSelect, onCreateItem, onUpdateItem, onDeleteItem, onGeometrySelect, onUndo, onRedo, onDeleteSelectedGeometry,
 }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -141,6 +143,7 @@ export default function TakeoffSidebar({
                   onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
                   onSelect={() => onItemSelect(item.id)}
                   onGeometrySelect={onGeometrySelect}
+                  canViewFinancials={canViewFinancials}
                   onUpdate={(updates) => onUpdateItem(item.id, updates)}
                   onDelete={() => onDeleteItem(item.id)}
                 />
@@ -160,7 +163,7 @@ export default function TakeoffSidebar({
 }
 
 function ItemRow({
-  item, isActive, isExpanded, selectedGeometryId, calibration, pageWidth, pageHeight,
+  item, isActive, isExpanded, selectedGeometryId, calibration, pageWidth, pageHeight, canViewFinancials,
   onToggle, onSelect, onGeometrySelect, onUpdate, onDelete,
 }: {
   item: DBTenderTakeoffItem;
@@ -170,6 +173,7 @@ function ItemRow({
   calibration: DBTenderDrawingCalibration | null;
   pageWidth: number;
   pageHeight: number;
+  canViewFinancials: boolean;
   onToggle: () => void;
   onSelect: () => void;
   onGeometrySelect: (geometryId: string) => void;
@@ -310,6 +314,10 @@ function ItemRow({
               <label className="text-[9px] font-bold text-slate-600 uppercase">Notes</label>
               <input value={item.notes} onChange={e => onUpdate({ notes: e.target.value, updated_at: new Date().toISOString() })} className="w-full mt-0.5 px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50" />
             </div>
+            {/* Cost Build-Up */}
+            {canViewFinancials && (
+              <CostBuildUpSection item={item} onUpdate={onUpdate} />
+            )}
             {!confirmDelete ? (
               <button onClick={() => setConfirmDelete(true)} className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-red-400 hover:text-red-300 border border-red-900/50 rounded hover:bg-red-900/20 transition-colors">
                 <Trash2 size={11} />Delete Item
@@ -323,6 +331,156 @@ function ItemRow({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CostBuildUpSection({ item, onUpdate }: {
+  item: DBTenderTakeoffItem;
+  onUpdate: (updates: Partial<DBTenderTakeoffItem>) => void;
+}) {
+  const costs = calcTakeoffCosts(item);
+  const labourBasis = item.labour_basis ?? 'per_unit';
+  const labelCls = 'text-[9px] font-bold text-slate-600 uppercase';
+  const inputCls = 'w-full px-2 py-1 bg-[#0d1628] border border-[#1e2d4a] rounded text-xs text-slate-200 focus:outline-none focus:border-[#f97316]/50 font-mono';
+  const valCls = 'text-[10px] text-slate-300 font-mono';
+  const totalCls = 'text-[10px] font-bold text-[#f97316] font-mono';
+
+  const perUnitMins = item.labour_minutes_per_unit ?? 0;
+  const lumpSumMins = item.labour_minutes_lump_sum ?? 0;
+
+  return (
+    <div className="mt-2 pt-2 border-t border-[#1e2d4a] space-y-2">
+      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Cost Build-Up</p>
+
+      {/* Material */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <label className={`${labelCls} w-20 shrink-0`}>Material Rate</label>
+          <div className="flex items-center gap-1 flex-1">
+            <span className="text-[10px] text-slate-500">£</span>
+            <input
+              type="number" step="any" min="0"
+              value={item.material_cost_rate ?? 0}
+              onChange={e => onUpdate({ material_cost_rate: parseFloat(e.target.value) || 0, updated_at: new Date().toISOString() })}
+              className={inputCls}
+            />
+            <span className="text-[10px] text-slate-500 whitespace-nowrap">/ {item.unit}</span>
+          </div>
+        </div>
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[9px] text-slate-600">Material Cost</span>
+          <span className={valCls}>{formatCurrency(costs.materialCostTotal)}</span>
+        </div>
+      </div>
+
+      {/* Labour */}
+      <div className="space-y-1 pt-1 border-t border-[#1e2d4a]/50">
+        <div className="flex items-center gap-2">
+          <label className={`${labelCls} w-20 shrink-0`}>Labour Basis</label>
+          <div className="flex gap-1 flex-1">
+            <button
+              onClick={() => onUpdate({ labour_basis: 'per_unit' as LabourBasis, updated_at: new Date().toISOString() })}
+              className={`px-2 py-1 rounded text-[10px] font-semibold transition-colors ${labourBasis === 'per_unit' ? 'bg-[#f97316] text-white' : 'text-slate-400 border border-[#1e2d4a] hover:bg-[#0d1628]'}`}
+            >Per Unit</button>
+            <button
+              onClick={() => onUpdate({ labour_basis: 'lump_sum' as LabourBasis, updated_at: new Date().toISOString() })}
+              className={`px-2 py-1 rounded text-[10px] font-semibold transition-colors ${labourBasis === 'lump_sum' ? 'bg-[#f97316] text-white' : 'text-slate-400 border border-[#1e2d4a] hover:bg-[#0d1628]'}`}
+            >Lump Sum</button>
+          </div>
+        </div>
+
+        {labourBasis === 'per_unit' ? (
+          <div className="flex items-center gap-2">
+            <label className={`${labelCls} w-20 shrink-0`}>Labour / {item.unit}</label>
+            <div className="flex items-center gap-1 flex-1">
+              <input
+                type="number" min="0"
+                value={Math.floor(perUnitMins / 60)}
+                onChange={e => {
+                  const h = parseInt(e.target.value) || 0;
+                  const m = perUnitMins % 60;
+                  onUpdate({ labour_minutes_per_unit: h * 60 + m, updated_at: new Date().toISOString() });
+                }}
+                className={`${inputCls} w-14`}
+                placeholder="hrs"
+              />
+              <span className="text-[10px] text-slate-500">h</span>
+              <input
+                type="number" min="0" max="59"
+                value={perUnitMins % 60}
+                onChange={e => {
+                  const m = parseInt(e.target.value) || 0;
+                  const h = Math.floor(perUnitMins / 60);
+                  onUpdate({ labour_minutes_per_unit: h * 60 + m, updated_at: new Date().toISOString() });
+                }}
+                className={`${inputCls} w-14`}
+                placeholder="min"
+              />
+              <span className="text-[10px] text-slate-500">m</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <label className={`${labelCls} w-20 shrink-0`}>Total Labour</label>
+            <div className="flex items-center gap-1 flex-1">
+              <input
+                type="number" min="0"
+                value={Math.floor(lumpSumMins / 60)}
+                onChange={e => {
+                  const h = parseInt(e.target.value) || 0;
+                  const m = lumpSumMins % 60;
+                  onUpdate({ labour_minutes_lump_sum: h * 60 + m, updated_at: new Date().toISOString() });
+                }}
+                className={`${inputCls} w-14`}
+                placeholder="hrs"
+              />
+              <span className="text-[10px] text-slate-500">h</span>
+              <input
+                type="number" min="0" max="59"
+                value={lumpSumMins % 60}
+                onChange={e => {
+                  const m = parseInt(e.target.value) || 0;
+                  const h = Math.floor(lumpSumMins / 60);
+                  onUpdate({ labour_minutes_lump_sum: h * 60 + m, updated_at: new Date().toISOString() });
+                }}
+                className={`${inputCls} w-14`}
+                placeholder="min"
+              />
+              <span className="text-[10px] text-slate-500">m</span>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <label className={`${labelCls} w-20 shrink-0`}>Labour Rate</label>
+          <div className="flex items-center gap-1 flex-1">
+            <span className="text-[10px] text-slate-500">£</span>
+            <input
+              type="number" step="any" min="0"
+              value={item.labour_rate ?? 0}
+              onChange={e => onUpdate({ labour_rate: parseFloat(e.target.value) || 0, updated_at: new Date().toISOString() })}
+              className={inputCls}
+            />
+            <span className="text-[10px] text-slate-500 whitespace-nowrap">/ hr</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[9px] text-slate-600">Total Labour</span>
+          <span className={valCls}>{formatDuration(costs.totalLabourMinutes)}</span>
+        </div>
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[9px] text-slate-600">Labour Cost</span>
+          <span className={valCls}>{formatCurrency(costs.labourCostTotal)}</span>
+        </div>
+      </div>
+
+      {/* Total */}
+      <div className="flex items-center justify-between px-1 pt-1 border-t border-[#1e2d4a]">
+        <span className="text-[10px] font-bold text-slate-400">Total Cost</span>
+        <span className={totalCls}>{formatCurrency(costs.totalCost)}</span>
+      </div>
     </div>
   );
 }

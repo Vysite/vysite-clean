@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize, Ruler, Check, X, AlertCircle } from 'lucide-react';
-import { useAppStore } from '../../lib/StoreContext';
+import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import type { DBTenderDrawing, DBTenderDrawingCalibration, CalibrationPoint, CalibrationMethod } from './drawingTypes';
 import { PRESET_SCALES } from './drawingTypes';
 import type { DBTenderTakeoffItem } from './takeoffTypes';
@@ -26,6 +26,9 @@ type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: Props) {
   const store = useAppStore();
+  const perms = usePermissions();
+  const isAdmin = store.currentUser?.role === 'Admin';
+  const canViewFinancials = perms['tender.view_financials'] || isAdmin;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pdfDocRef = useRef<unknown>(null);
@@ -778,6 +781,7 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
           onUndo={handleUndo}
           onRedo={handleRedo}
           onDeleteSelectedGeometry={deleteSelectedGeometry}
+          canViewFinancials={canViewFinancials}
         />
       </div>
 

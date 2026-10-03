@@ -1,6 +1,7 @@
 export type MeasurementType = 'count' | 'linear' | 'area';
 export type TakeoffSource = 'drawing' | 'manual';
 export type TakeoffLineType = 'standard' | 'addition' | 'omission';
+export type LabourBasis = 'per_unit' | 'lump_sum';
 
 export interface DBTenderTakeoffItem {
   id: string;
@@ -24,6 +25,12 @@ export interface DBTenderTakeoffItem {
   manual_quantity: number;
   adjustment_quantity: number;
   line_type: TakeoffLineType;
+  // Cost build-up (Stage D)
+  material_cost_rate?: number;
+  labour_basis?: LabourBasis;
+  labour_minutes_per_unit?: number;
+  labour_minutes_lump_sum?: number;
+  labour_rate?: number;
   created_by: string;
   created_at: string;
   updated_at: string;

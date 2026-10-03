@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Hash, Minus, Square, FileText, AlertCircle, X } from 'lucide-react';
-import { useAppStore } from '../../lib/StoreContext';
+import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import type { DBTenderTakeoffItem } from './takeoffTypes';
 import type { MeasurementType, TakeoffLineType } from './takeoffTypes';
 import { DISCIPLINES } from './drawingTypes';
-import { finalQuantity } from './takeoffCalculations';
+import { finalQuantity, calcTakeoffCosts, formatCurrency } from './takeoffCalculations';
 
 interface Props {
   tenderId: string;
@@ -23,6 +23,9 @@ const LINE_TYPE_BADGES: Record<TakeoffLineType, string> = {
 
 export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
   const store = useAppStore();
+  const perms = usePermissions();
+  const isAdmin = store.currentUser?.role === 'Admin';
+  const canViewFinancials = perms['tender.view_financials'] || isAdmin;
   const [search, setSearch] = useState('');
   const [disciplineFilter, setDisciplineFilter] = useState('all');
   const [lineTypeFilter, setLineTypeFilter] = useState('all');
@@ -128,6 +131,20 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
             </>
           );
         })()}
+        {canViewFinancials && filtered.length > 0 && (() => {
+          const totalMaterial = filtered.reduce((s, i) => s + calcTakeoffCosts(i).materialCostTotal, 0);
+          const totalLabour = filtered.reduce((s, i) => s + calcTakeoffCosts(i).labourCostTotal, 0);
+          const totalCost = totalMaterial + totalLabour;
+          return (
+            <span className="ml-auto text-slate-300">
+              Material: <span className="text-slate-200 font-semibold">{formatCurrency(totalMaterial)}</span>
+              <span className="text-slate-600 mx-2">·</span>
+              Labour: <span className="text-slate-200 font-semibold">{formatCurrency(totalLabour)}</span>
+              <span className="text-slate-600 mx-2">·</span>
+              <span className="text-[#f97316] font-bold">{formatCurrency(totalCost)}</span>
+            </span>
+          );
+        })()}
       </div>
 
       {/* Loading */}
@@ -147,8 +164,8 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
           <table className="w-full">
             <thead>
               <tr className="border-b border-[#1e2d4a]">
-                {['Label', 'Drawing', 'Pg', 'Discipline', 'Type', 'Measured', 'Adj', 'Final', 'Unit', 'Line', 'Source'].map(h => (
-                  <th key={h} className="text-left text-[10px] font-bold text-slate-600 uppercase tracking-wider pb-3 pt-3 px-3">{h}</th>
+                {['Label', 'Drawing', 'Pg', 'Discipline', 'Type', 'Measured', 'Adj', 'Final', 'Unit', 'Line', 'Source', ...(canViewFinancials ? ['Mat Rate', 'Mat Cost', 'Labour Cost', 'Total Cost'] : [])].map(h => (
+                  <th key={h} className="text-left text-[10px] font-bold text-slate-600 uppercase tracking-wider pb-3 pt-3 px-3 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -156,6 +173,7 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
               {filtered.map(item => {
                 const Icon = TYPE_ICONS[item.measurement_type];
                 const fq = finalQuantity(item);
+                const costs = canViewFinancials ? calcTakeoffCosts(item) : null;
                 return (
                   <tr key={item.id} className="hover:bg-[#0d1628]/40 transition-colors">
                     <td className="py-2.5 px-3 text-sm text-slate-200 font-medium max-w-[200px] truncate">{item.label || 'Untitled'}</td>
@@ -169,6 +187,14 @@ export default function TakeoffSchedule({ tenderId, tenderName }: Props) {
                     <td className="py-2.5 px-3 text-xs text-slate-400">{item.unit}</td>
                     <td className="py-2.5 px-3"><span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${LINE_TYPE_BADGES[item.line_type]}`}>{item.line_type}</span></td>
                     <td className="py-2.5 px-3 text-[10px] text-slate-500">{item.source}</td>
+                    {canViewFinancials && costs && (
+                      <>
+                        <td className="py-2.5 px-3 text-xs text-slate-400 font-mono whitespace-nowrap">{formatCurrency(costs.materialCostRate)}</td>
+                        <td className="py-2.5 px-3 text-xs text-slate-300 font-mono whitespace-nowrap">{formatCurrency(costs.materialCostTotal)}</td>
+                        <td className="py-2.5 px-3 text-xs text-slate-300 font-mono whitespace-nowrap">{formatCurrency(costs.labourCostTotal)}</td>
+                        <td className="py-2.5 px-3 text-xs text-[#f97316] font-mono font-semibold whitespace-nowrap">{formatCurrency(costs.totalCost)}</td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
