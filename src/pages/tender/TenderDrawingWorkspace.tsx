@@ -590,6 +590,9 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
     };
     await store.addTenderTakeoffItem(item);
     setActiveItemId(item.id);
+    const matchingTool = type as Tool;
+    cancelDraft();
+    setTool(matchingTool);
     setShowItemCreator(null);
   };
 
@@ -751,7 +754,16 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
           saveStatus={saveStatus}
           needsCalibration={needsCalibration}
           onToolChange={handleToolChange}
-          onItemSelect={(id) => { setActiveItemId(id); setSelectedGeometryId(null); }}
+          onItemSelect={(id) => {
+            const clickedItem = pageItems.find(i => i.id === id);
+            setActiveItemId(id);
+            setSelectedGeometryId(null);
+            if (clickedItem) {
+              const matchingTool = clickedItem.measurement_type as Tool;
+              cancelDraft();
+              setTool(matchingTool);
+            }
+          }}
           onCreateItem={(type) => setShowItemCreator(type)}
           onUpdateItem={handleUpdateItem}
           onDeleteItem={handleDeleteItem}
@@ -766,6 +778,7 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
         <ItemCreatorModal
           type={showItemCreator}
           onClose={() => setShowItemCreator(null)}
+          existingItemCount={pageItems.filter(i => i.measurement_type === showItemCreator).length}
           onCreate={handleCreateItem}
         />
       )}
@@ -775,15 +788,20 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
 
 // ─── Item Creator Modal ────────────────────────────────────────────────────
 
-function ItemCreatorModal({ type, onClose, onCreate }: {
+function ItemCreatorModal({ type, onClose, onCreate, existingItemCount = 0 }: {
   type: MeasurementType;
   onClose: () => void;
   onCreate: (type: MeasurementType, data: { label: string; discipline: string; category: string; colour: string; lineType: string }) => void;
+  existingItemCount?: number;
 }) {
   const [label, setLabel] = useState('');
   const [discipline, setDiscipline] = useState('General');
   const [category, setCategory] = useState('');
-  const [colour, setColour] = useState(TAKEOFF_COLOURS[0]);
+  const [colour, setColour] = useState(() => {
+    // Pick a sensible next colour based on existing items count
+    const existingCount = existingItemCount;
+    return TAKEOFF_COLOURS[existingCount % TAKEOFF_COLOURS.length];
+  });
   const [lineType, setLineType] = useState('standard');
 
   const handleCreate = () => {

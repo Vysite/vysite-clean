@@ -112,8 +112,8 @@ export default function TakeoffSidebar({
               <div className="px-3 py-2 flex items-center gap-2">
                 <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">{typeLabel}</span>
                 {group.length > 0 && <span className="text-[9px] text-slate-700">{group.length}</span>}
-                <button onClick={() => onCreateItem(type)} className="ml-auto flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 hover:text-[#f97316] border border-[#1e2d4a] rounded hover:bg-[#0d1628] transition-colors">
-                  <Plus size={11} />New
+                <button onClick={() => onCreateItem(type)} className="ml-auto flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-[#f97316] border border-[#f97316]/40 rounded-md hover:bg-[#f97316]/10 transition-colors">
+                  <Plus size={12} />New
                 </button>
               </div>
               {group.map(item => (
@@ -157,14 +157,14 @@ function ItemRow({
   const fq = finalQuantity(item);
 
   return (
-    <div className={`border-t border-[#0d1628] ${isActive ? 'bg-orange-950/10' : ''}`}>
+    <div className={`border-t border-[#0d1628] ${isActive ? 'bg-[#f97316]/10 border-l-2 border-l-[#f97316]' : 'border-l-2 border-l-transparent'}`}>
       <div className="flex items-center gap-1.5 px-3 py-2 cursor-pointer hover:bg-[#0d1628]/50 transition-colors" onClick={onSelect}>
         <button onClick={(e) => { e.stopPropagation(); onToggle(); }} className="p-0.5 text-slate-600 hover:text-slate-400">
           {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
         <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: item.colour }} />
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-slate-200 truncate">{item.label || 'Untitled'}</p>
+          <p className={`text-xs font-semibold truncate ${isActive ? 'text-[#f97316]' : 'text-slate-200'}`}>{item.label || 'Untitled'}{isActive && <span className="ml-1.5 text-[8px] font-bold text-[#f97316] bg-[#f97316]/20 px-1 py-0.5 rounded">ACTIVE</span>}</p>
           <p className="text-[9px] text-slate-500">{fq.toFixed(2)} {item.unit} · <span className={LINE_TYPE_COLORS[item.line_type]}>{item.line_type}</span></p>
         </div>
         <button onClick={(e) => { e.stopPropagation(); onUpdate({ is_visible: !item.is_visible }); }} className="p-0.5 text-slate-600 hover:text-slate-400 transition-colors">
