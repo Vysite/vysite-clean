@@ -22,12 +22,8 @@ export default function AssetManagement() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSelectAsset(a: { id: string } | DBAsset) {
-    // If the object already has enough fields (from register), use it directly
-    if ('asset_tag' in a && 'name' in a && 'status' in a) {
-      setSelectedAsset(a as DBAsset);
-      return;
-    }
-    // Otherwise load the full asset detail from server
+    // Always load the full asset detail from server — the register row is
+    // intentionally lightweight and does not include all fields (e.g. cost values).
     setLoadingAsset(true);
     const full = await store.loadAssetDetail(a.id);
     setLoadingAsset(false);
