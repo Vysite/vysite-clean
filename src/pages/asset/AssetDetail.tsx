@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Package, FileText, MessageSquare, Edit3, Save, Plus, Trash2, Download, Paperclip, FileDown, Image as ImageIcon, Star, X, Loader2 } from 'lucide-react';
+import { ArrowLeft, Package, FileText, MessageSquare, Edit3, Save, Plus, Trash2, Download, Paperclip, FileDown, Image as ImageIcon, Star, X, Loader2, Wrench } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import FileUpload, { type UploadedFile } from '../../components/FileUpload';
 import type { DBAsset, AssetStatus, DBAssetDocument, DBAssetActivity, DBAssetMedia } from './types';
 import { ASSET_STATUSES, ASSET_TYPES, ASSET_STATUS_COLORS, ASSET_DOC_CATEGORIES } from './types';
 import { exportAssetPDF } from './AssetPDF';
+import ServiceTab from './ServiceTab';
 
 interface Props {
   asset: DBAsset;
@@ -12,7 +13,7 @@ interface Props {
   onAssetUpdated: (a: DBAsset) => void;
 }
 
-type Tab = 'overview' | 'documents' | 'activity';
+type Tab = 'overview' | 'service' | 'documents' | 'activity';
 
 export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
   const store = useAppStore();
@@ -22,6 +23,7 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
   const canDelete = perms['asset.delete'] || isAdmin;
   const canComment = perms['asset.comment'] || isAdmin;
   const canUpload = perms['asset.upload'] || isAdmin;
+  const canCreate = perms['asset.create'] || isAdmin;
   const canView = perms['asset.view'] || isAdmin;
 
   const [tab, setTab] = useState<Tab>('overview');
@@ -56,6 +58,7 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
         locationName: locationName(asset.location_id),
         documents: store.assetDocuments ?? [],
         activity: store.assetActivity ?? [],
+        serviceRecords: store.assetServiceRecords ?? [],
         primaryImageUrl,
         currentUserName: store.currentUser?.name ?? '',
       });
@@ -95,6 +98,7 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
 
       <div className="flex gap-1 bg-[#1a2236] border border-[#1e2d4a] rounded-lg p-1 overflow-x-auto">
         <button className={tabCls('overview')} onClick={() => setTab('overview')}><Package size={15} />Overview</button>
+        <button className={tabCls('service')} onClick={() => setTab('service')}><Wrench size={15} />Service & Maintenance</button>
         <button className={tabCls('documents')} onClick={() => setTab('documents')}><FileText size={15} />Documents</button>
         <button className={tabCls('activity')} onClick={() => setTab('activity')}><MessageSquare size={15} />Activity</button>
       </div>
@@ -103,6 +107,9 @@ export default function AssetDetail({ asset, onBack, onAssetUpdated }: Props) {
         <OverviewTab asset={asset} canEdit={canEdit} canUpload={canUpload} editing={editing} setEditing={setEditing}
           siteName={siteName} buildingName={buildingName} locationName={locationName}
           onAssetUpdated={onAssetUpdated} />
+      )}
+      {tab === 'service' && (
+        <ServiceTab asset={asset} canEdit={canEdit} canCreate={canCreate} canDelete={canDelete} />
       )}
       {tab === 'documents' && (
         <DocumentsTab asset={asset} canUpload={canUpload} canDelete={canDelete} />
@@ -558,6 +565,7 @@ function ActivityTab({ asset, canComment }: { asset: DBAsset; canComment: boolea
     if (type === 'status_change') return <Edit3 size={12} className="text-amber-400" />;
     if (type === 'document_upload' || type === 'document_removed') return <FileText size={12} className="text-blue-400" />;
     if (type === 'image_upload' || type === 'image_removed' || type === 'primary_changed') return <ImageIcon size={12} className="text-orange-400" />;
+    if (type.startsWith('service_')) return <Wrench size={12} className="text-sky-400" />;
     return <MessageSquare size={12} className="text-slate-500" />;
   }
 

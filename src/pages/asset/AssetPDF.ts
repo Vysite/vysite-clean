@@ -1,5 +1,5 @@
 import { openPrintTab } from '../../lib/printTab';
-import type { DBAsset, DBAssetSite, DBAssetBuilding, DBAssetLocation, DBAssetDocument, DBAssetActivity } from './types';
+import type { DBAsset, DBAssetSite, DBAssetBuilding, DBAssetLocation, DBAssetDocument, DBAssetActivity, DBAssetServiceRecord } from './types';
 
 function esc(v: unknown): string {
   const s = v == null ? '' : String(v);
@@ -95,6 +95,24 @@ body {
 .act-type-status_change { color: #b45309; }
 .act-type-document_upload, .act-type-document_removed { color: #1d4ed8; }
 .act-type-image_upload, .act-type-image_removed, .act-type-primary_changed { color: #c2410c; }
+.act-type-service_created, .act-type-service_updated, .act-type-service_deleted, .act-type-service_doc_linked { color: #0284c7; }
+
+/* Service table */
+.svc-table { width: 100%; border-collapse: collapse; font-size: 8pt; }
+.svc-table th { text-align: left; padding: 6px 8px; background: #0f172a; color: white; font-weight: 600; font-size: 7.5pt; }
+.svc-table td { padding: 4px 8px; border-bottom: 1px solid #e2e8f0; color: #334155; vertical-align: top; }
+.svc-table tr:nth-child(even) td { background: #f8fafc; }
+.svc-cond { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 7pt; font-weight: 600; }
+.svc-cond-Good { background: #dcfce7; color: #15803d; }
+.svc-cond-Satisfactory { background: #dbeafe; color: #1d4ed8; }
+.svc-cond-Poor { background: #fef3c7; color: #b45309; }
+.svc-cond-Critical { background: #fee2e2; color: #991b1b; }
+.svc-cond-Not-Assessed { background: #e2e8f0; color: #64748b; }
+.svc-status { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 7pt; font-weight: 600; }
+.svc-status-Completed { background: #dcfce7; color: #15803d; }
+.svc-status-Open { background: #dbeafe; color: #1d4ed8; }
+.svc-status-Follow-Up-Required { background: #fef3c7; color: #b45309; }
+.svc-status-Awaiting-Parts { background: #ffedd5; color: #c2410c; }
 
 /* Footer */
 .doc-footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 7.5pt; color: #94a3b8; }
@@ -116,12 +134,13 @@ interface AssetPDFData {
   locationName: string;
   documents: DBAssetDocument[];
   activity: DBAssetActivity[];
+  serviceRecords: DBAssetServiceRecord[];
   primaryImageUrl: string | null;
   currentUserName: string;
 }
 
 export function exportAssetPDF(data: AssetPDFData): void {
-  const { asset, siteName, buildingName, locationName, documents, activity, primaryImageUrl, currentUserName } = data;
+  const { asset, siteName, buildingName, locationName, documents, activity, serviceRecords, primaryImageUrl, currentUserName } = data;
   const today = todayStr();
 
   const imageHtml = primaryImageUrl
@@ -211,6 +230,28 @@ ${asset.notes ? `<div class="section-label">Notes</div><div class="notes-box">${
   <thead><tr><th>Document</th><th>Category</th><th>Upload Date</th><th>Uploaded By</th></tr></thead>
   <tbody>${docRows}</tbody>
 </table>
+
+<div class="section-label">Service &amp; Maintenance History</div>
+${serviceRecords.length > 0 ? `
+<table class="svc-table">
+  <thead><tr><th>Date</th><th>Type</th><th>Engineer / Company</th><th>Condition</th><th>Status</th><th>Next Due</th><th>Cost</th><th>Work Summary</th></tr></thead>
+  <tbody>${serviceRecords.map(s => {
+    const condCls = 'svc-cond-' + (s.condition || 'Not-Assessed').replace(/\s+/g, '-');
+    const statusCls = 'svc-status-' + (s.status || 'Completed').replace(/\s+/g, '-');
+    const workSummary = (s.work_carried_out || '').length > 100 ? (s.work_carried_out || '').substring(0, 100) + '\u2026' : (s.work_carried_out || '');
+    const engCo = [s.engineer_name, s.company].filter(Boolean).join(' / ') || '\u2014';
+    return `<tr>
+      <td>${fmtD(s.service_date)}</td>
+      <td>${esc(s.service_type)}</td>
+      <td>${esc(engCo)}</td>
+      <td>${s.condition ? `<span class="svc-cond ${condCls}">${esc(s.condition)}</span>` : '\u2014'}</td>
+      <td><span class="svc-status ${statusCls}">${esc(s.status)}</span></td>
+      <td>${fmtD(s.next_service_due)}</td>
+      <td>${s.cost != null ? '\u00a3' + s.cost.toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '\u2014'}</td>
+      <td>${esc(workSummary)}</td>
+    </tr>`;
+  }).join('')}</tbody>
+</table>` : '<div class="empty-notice">No service records.</div>'}
 
 <div class="section-label">Activity / History</div>
 <table class="list-table">

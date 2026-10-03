@@ -11,7 +11,7 @@ import type {
   DBTenderDrawing, DBTenderDrawingCalibration,
 } from '../pages/tender/drawingTypes';
 import type { DBTenderTakeoffItem } from '../pages/tender/takeoffTypes';
-import type { DBAssetSite, DBAssetBuilding, DBAssetLocation, DBAsset, DBAssetDocument, DBAssetActivity, DBAssetMedia } from '../pages/asset/types';
+import type { DBAssetSite, DBAssetBuilding, DBAssetLocation, DBAsset, DBAssetDocument, DBAssetActivity, DBAssetMedia, DBAssetServiceRecord } from '../pages/asset/types';
 
 // ─── Types for DB rows ────────────────────────────────────────────────────────
 
@@ -1573,6 +1573,12 @@ export interface AppStore {
   setPrimaryAssetImage: (mediaId: string, assetId: string) => Promise<void>;
   removeAssetImage: (mediaId: string) => Promise<void>;
   getAssetMediaSignedUrl: (storagePath: string) => Promise<string | null>;
+  assetServiceRecords: DBAssetServiceRecord[];
+  loadAssetServiceRecords: (assetId: string) => Promise<void>;
+  addAssetServiceRecord: (r: Omit<DBAssetServiceRecord, 'id' | 'created_at' | 'updated_at'>) => Promise<string | null>;
+  updateAssetServiceRecord: (r: Partial<DBAssetServiceRecord> & { id: string }) => Promise<void>;
+  removeAssetServiceRecord: (id: string) => Promise<void>;
+  linkDocumentToServiceRecord: (documentId: string, serviceRecordId: string | null) => Promise<void>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1695,6 +1701,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [assetDocuments, setAssetDocuments] = useState<DBAssetDocument[]>([]);
   const [assetActivity, setAssetActivity] = useState<DBAssetActivity[]>([]);
   const [assetMedia, setAssetMedia] = useState<DBAssetMedia[]>([]);
+  const [assetServiceRecords, setAssetServiceRecords] = useState<DBAssetServiceRecord[]>([]);
 
   // Keep a stable ref to orgId so callbacks always read the latest value
   // without needing to be re-created (avoids cascading re-renders).
@@ -1741,6 +1748,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
       setAssetDocuments([]);
       setAssetActivity([]);
       setAssetMedia([]);
+      setAssetServiceRecords([]);
       // Keep platformUsers/settings as-is — they load below with org filter
       setLoading(false);
       setModulesLoading(false);
@@ -3455,6 +3463,41 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     }
   }, [assetMedia]);
 
+  const loadAssetServiceRecords = useCallback(async (assetId: string) => {
+    const { data, error } = await supabase.from('vy_asset_service_records').select('*').eq('asset_id', assetId).order('service_date', { ascending: false });
+    logWrite('loadAssetServiceRecords', 'vy_asset_service_records', error);
+    if (!error) setAssetServiceRecords((data ?? []) as DBAssetServiceRecord[]);
+  }, []);
+
+  const addAssetServiceRecord = useCallback(async (r: Omit<DBAssetServiceRecord, 'id' | 'created_at' | 'updated_at'>): Promise<string | null> => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return null;
+    const { data, error } = await supabase.from('vy_asset_service_records').insert({ ...r, org_id: oid }).select('id').maybeSingle();
+    logWrite('addAssetServiceRecord', 'vy_asset_service_records', error, data);
+    if (error || !data) return null;
+    const newRec: DBAssetServiceRecord = { ...r, id: data.id, org_id: oid, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    setAssetServiceRecords(prev => [newRec, ...prev]);
+    return data.id;
+  }, []);
+
+  const updateAssetServiceRecord = useCallback(async (r: Partial<DBAssetServiceRecord> & { id: string }) => {
+    const { error } = await supabase.from('vy_asset_service_records').update({ ...r, updated_at: new Date().toISOString() }).eq('id', r.id);
+    logWrite('updateAssetServiceRecord', 'vy_asset_service_records', error);
+    if (!error) setAssetServiceRecords(prev => prev.map(s => s.id === r.id ? { ...s, ...r, updated_at: new Date().toISOString() } as DBAssetServiceRecord : s));
+  }, []);
+
+  const removeAssetServiceRecord = useCallback(async (id: string) => {
+    const { error } = await supabase.from('vy_asset_service_records').delete().eq('id', id);
+    logWrite('removeAssetServiceRecord', 'vy_asset_service_records', error);
+    if (!error) setAssetServiceRecords(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  const linkDocumentToServiceRecord = useCallback(async (documentId: string, serviceRecordId: string | null) => {
+    const { error } = await supabase.from('vy_asset_documents').update({ service_record_id: serviceRecordId }).eq('id', documentId);
+    logWrite('linkDocumentToServiceRecord', 'vy_asset_documents', error);
+    if (!error) setAssetDocuments(prev => prev.map(d => d.id === documentId ? { ...d, service_record_id: serviceRecordId } as DBAssetDocument : d));
+  }, []);
+
   return {
     actions, snags, snaggingReports, siteForms, tenders, tcRecords, maintenanceJobs, programmes, programmeTasks, keyDates,
     platformUsers, notifications,
@@ -3528,5 +3571,6 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     assetDocuments, assetActivity, loadAssetDocuments, loadAssetActivity,
     addAssetDocument, removeAssetDocument, addAssetActivity, checkSerialDuplicate,
     assetMedia, loadAssetMedia, uploadAssetImage, setPrimaryAssetImage, removeAssetImage, getAssetMediaSignedUrl,
+    assetServiceRecords, loadAssetServiceRecords, addAssetServiceRecord, updateAssetServiceRecord, removeAssetServiceRecord, linkDocumentToServiceRecord,
   };
 }

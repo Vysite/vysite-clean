@@ -101,6 +101,7 @@ export interface DBAssetDocument {
   notes: string | null;
   uploaded_by: string | null;
   created_at: string;
+  service_record_id?: string | null;
 }
 
 export interface DBAssetActivity {
@@ -125,4 +126,56 @@ export interface DBAssetMedia {
   caption: string | null;
   uploaded_by: string | null;
   created_at: string;
+}
+
+export type ServiceRecordStatus = 'Completed' | 'Open' | 'Follow-Up Required' | 'Awaiting Parts';
+export type ServiceCondition = 'Good' | 'Satisfactory' | 'Poor' | 'Critical' | 'Not Assessed';
+
+export const SERVICE_TYPES: string[] = [
+  'Planned Service', 'Reactive Maintenance', 'Inspection', 'Repair',
+  'Breakdown', 'Commissioning', 'Warranty Visit', 'Other',
+];
+
+export const SERVICE_STATUSES: ServiceRecordStatus[] = [
+  'Completed', 'Open', 'Follow-Up Required', 'Awaiting Parts',
+];
+
+export const SERVICE_CONDITIONS: ServiceCondition[] = [
+  'Good', 'Satisfactory', 'Poor', 'Critical', 'Not Assessed',
+];
+
+export const SERVICE_STATUS_COLORS: Record<ServiceRecordStatus, string> = {
+  'Completed':           'bg-emerald-900/60 text-emerald-400',
+  'Open':                'bg-sky-900/60 text-sky-400',
+  'Follow-Up Required':  'bg-amber-900/60 text-amber-400',
+  'Awaiting Parts':      'bg-orange-900/60 text-orange-400',
+};
+
+export const SERVICE_CONDITION_COLORS: Record<ServiceCondition, string> = {
+  'Good':          'bg-emerald-900/60 text-emerald-400',
+  'Satisfactory':  'bg-sky-900/60 text-sky-400',
+  'Poor':          'bg-amber-900/60 text-amber-400',
+  'Critical':      'bg-red-900/60 text-red-400',
+  'Not Assessed':  'bg-slate-800 text-slate-500',
+};
+
+export interface DBAssetServiceRecord {
+  id: string;
+  org_id: string;
+  asset_id: string;
+  service_date: string;
+  service_type: string;
+  engineer_name: string | null;
+  company: string | null;
+  work_carried_out: string;
+  condition: string | null;
+  parts_replaced: string | null;
+  recommendations: string | null;
+  next_service_due: string | null;
+  cost: number | null;
+  status: string;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
