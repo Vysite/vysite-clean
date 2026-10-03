@@ -1495,6 +1495,7 @@ export interface AppStore {
   removeSupplierLabourRateType: (id: string) => Promise<void>;
 
   // Project Costs (on-demand, per-project)
+  projectCosts: DBProjectCost[];
   loadProjectCosts: (projectId: string) => Promise<void>;
   loadProjectCostSummary: (projectId: string) => Promise<Record<string, number>>;
   addProjectCost: (c: DBProjectCost) => Promise<string | null>;
@@ -3508,7 +3509,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     switchUser,
     settings,
     updateSettings,
-    projects, addProject, updateProject, removeProject,
+    projects, projectDocuments, attachments, addProject, updateProject, removeProject,
     addProjectDocument, removeProjectDocument,
     addAttachment, removeAttachment, fetchAttachmentData,
     addAction, updateAction, removeAction,
