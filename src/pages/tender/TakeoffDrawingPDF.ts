@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage, type Color } from 'pdf-lib';
 import type { DBTenderTakeoffItem } from './takeoffTypes';
 import type { DBTenderDrawing, DBTenderDrawingCalibration } from './drawingTypes';
 import type { CountGeometry, LinearGeometry, AreaGeometry } from './takeoffGeometry';
@@ -15,16 +15,52 @@ export interface DrawingExportData {
   internal: boolean;
 }
 
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const FALLBACK = { r: 0.976, g: 0.451, b: 0.133 };
-  if (!hex || typeof hex !== 'string' || hex.length < 7) return FALLBACK;
-  const clean = hex.replace('#', '');
-  if (clean.length < 6) return FALLBACK;
-  const r = parseInt(clean.substring(0, 2), 16);
-  const g = parseInt(clean.substring(2, 4), 16);
-  const b = parseInt(clean.substring(4, 6), 16);
-  if (isNaN(r) || isNaN(g) || isNaN(b)) return FALLBACK;
-  return { r: r / 255, g: g / 255, b: b / 255 };
+const FALLBACK_COLOR: Color = rgb(0.976, 0.451, 0.133);
+
+function clamp01(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(0, Math.min(1, v));
+}
+
+function parseTakeoffPdfColour(value: unknown, itemLabel?: string): Color {
+  if (typeof value === 'string') {
+    const s = value.trim();
+
+    // #RRGGBB or #RGB
+    const hexMatch = s.match(/^#?([0-9a-fA-F]{6})$/);
+    if (hexMatch) {
+      const h = hexMatch[1];
+      return rgb(
+        clamp01(parseInt(h.substring(0, 2), 16) / 255),
+        clamp01(parseInt(h.substring(2, 4), 16) / 255),
+        clamp01(parseInt(h.substring(4, 6), 16) / 255),
+      );
+    }
+    const hexShort = s.match(/^#?([0-9a-fA-F]{3})$/);
+    if (hexShort) {
+      const h = hexShort[1];
+      return rgb(
+        clamp01(parseInt(h[0] + h[0], 16) / 255),
+        clamp01(parseInt(h[1] + h[1], 16) / 255),
+        clamp01(parseInt(h[2] + h[2], 16) / 255),
+      );
+    }
+
+    // rgb(r, g, b) / rgba(r, g, b, a) with values 0-255
+    const rgbMatch = s.match(/^rgba?\(\s*(\d+\.?\d*)\s*,\s*(\d+\.?\d*)\s*,\s*(\d+\.?\d*)/);
+    if (rgbMatch) {
+      return rgb(
+        clamp01(parseFloat(rgbMatch[1]) / 255),
+        clamp01(parseFloat(rgbMatch[2]) / 255),
+        clamp01(parseFloat(rgbMatch[3]) / 255),
+      );
+    }
+  }
+
+  if (itemLabel) {
+    console.warn('[Takeoff PDF] Colour fallback:', { item: itemLabel, storedColour: value });
+  }
+  return FALLBACK_COLOR;
 }
 
 const LINE_LABELS: Record<string, string> = { standard: 'STD', addition: '+ ADD', omission: '\u2212 OMIT' };
@@ -56,8 +92,7 @@ export async function exportMarkedUpDrawingPDF(data: DrawingExportData): Promise
 
     for (const item of pageItems) {
       const geo = item.geometry!;
-      const { r, g, b } = hexToRgb(item.colour);
-      const color = rgb(r, g, b);
+      const color = parseTakeoffPdfColour(item.colour, item.label);
 
       if (isCountGeometry(geo)) {
         renderCountPDF(page, geo as CountGeometry, color, font, pw, ph);
@@ -104,7 +139,7 @@ function ny(normY: number, ph: number): number { return ph * (1 - normY); }
 
 // ── Count markers ──────────────────────────────────────────────────────────
 
-function renderCountPDF(page: PDFPage, geo: CountGeometry, color: { r: number; g: number; b: number }, font: PDFFont, pw: number, ph: number): void {
+function renderCountPDF(page: PDFPage, geo: CountGeometry, color: Color, font: PDFFont, pw: number, ph: number): void {
   // Physical marker size: ~3mm radius regardless of page size
   const markerRadius = Math.min(pw, ph) * 0.006;
   for (let i = 0; i < geo.points.length; i++) {
@@ -120,7 +155,7 @@ function renderCountPDF(page: PDFPage, geo: CountGeometry, color: { r: number; g
 
 // ── Linear runs ────────────────────────────────────────────────────────────
 
-function renderLinearPDF(page: PDFPage, geo: LinearGeometry, color: { r: number; g: number; b: number }, font: PDFFont, cal: DBTenderDrawingCalibration | null, pw: number, ph: number): void {
+function renderLinearPDF(page: PDFPage, geo: LinearGeometry, color: Color, font: PDFFont, cal: DBTenderDrawingCalibration | null, pw: number, ph: number): void {
   const runs = groupLinearRuns(geo, cal, pw, ph);
   const lineWidth = Math.min(pw, ph) * 0.0012;
   const fontSize = Math.min(pw, ph) * 0.008;
@@ -160,14 +195,14 @@ function renderLinearPDF(page: PDFPage, geo: LinearGeometry, color: { r: number;
 
 // ── Area polygons ──────────────────────────────────────────────────────────
 
-function renderAreaPDF(page: PDFPage, geo: AreaGeometry, color: { r: number; g: number; b: number }, font: PDFFont, cal: DBTenderDrawingCalibration | null, pw: number, ph: number): void {
+function renderAreaPDF(page: PDFPage, geo: AreaGeometry, color: Color, font: PDFFont, cal: DBTenderDrawingCalibration | null, pw: number, ph: number): void {
   const lineWidth = Math.min(pw, ph) * 0.0015;
   const fontSize = Math.min(pw, ph) * 0.008;
 
   for (const poly of geo.polygons) {
     // Outline
     const pts = poly.vertices.map(v => ({ x: nx(v.x, pw), y: ny(v.y, ph) }));
-    page.drawPolygonPoints({ points: pts, borderColor: color, borderWidth: lineWidth, color: rgb(color.r, color.g, color.b) });
+    page.drawPolygonPoints({ points: pts, borderColor: color, borderWidth: lineWidth, color });
 
     // Area value at centroid
     let cx = 0, cy = 0;
@@ -187,7 +222,7 @@ function renderAreaPDF(page: PDFPage, geo: AreaGeometry, color: { r: number; g: 
 
 // ── Text with halo (stroke effect) ─────────────────────────────────────────
 
-function drawTextWithHalo(page: PDFPage, text: string, x: number, y: number, size: number, color: { r: number; g: number; b: number }, font: PDFFont): void {
+function drawTextWithHalo(page: PDFPage, text: string, x: number, y: number, size: number, color: Color, font: PDFFont): void {
   const textW = font.widthOfTextAtSize(text, size);
   const textH = size;
   // Draw a white background rectangle with slight padding
@@ -243,8 +278,7 @@ function drawLegendPDF(page: PDFPage, items: DBTenderTakeoffItem[], font: PDFFon
   // Rows
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    const { r, g, b } = hexToRgb(item.colour);
-    const color = rgb(r, g, b);
+    const color = parseTakeoffPdfColour(item.colour, item.label);
     const rowY = panelY + panelH - 44 - i * rowH;
     const label = item.label || 'Untitled';
 

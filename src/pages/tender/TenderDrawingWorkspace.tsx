@@ -730,9 +730,7 @@ export default function TenderDrawingWorkspace({ drawing, tenderId, onClose }: P
       setTimeout(() => setExportSuccess(false), 4000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('red') && msg.includes('number')) {
-        setExportError('Export failed: Invalid annotation colour encountered. Check item colours and retry.');
-      } else if (msg.includes('PDFDocument') || msg.includes('load') || msg.includes('Invalid PDF') || msg.includes('structure')) {
+      if (msg.includes('PDFDocument') || msg.includes('load') || msg.includes('Invalid PDF') || msg.includes('structure')) {
         setExportError('Export failed: Source file could not be loaded as a PDF. The drawing may be an image format.');
       } else {
         setExportError(`Export failed: ${msg}`);
