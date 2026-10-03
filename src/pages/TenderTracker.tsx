@@ -28,6 +28,7 @@ import { nextRef as getNextRef } from '../lib/refSequence';
 import AITenderAssistant from '../components/AITenderAssistant';
 import AIContractReview from '../components/AIContractReview';
 import { logActivity, buildDiff, type FieldSpec } from '../lib/activityLog';
+import EstimatingWorkspace from './tender/EstimatingWorkspace';
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 
@@ -2187,7 +2188,7 @@ interface EstimatingTabProps {
   onUpdate: (t: Tender) => void;
 }
 
-function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
+export function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   const store = useAppStore();
   const perms = usePermissions();
   const isAdmin = store.currentUser?.role === 'Admin';
@@ -3691,7 +3692,7 @@ function TenderDetail({ tender, onBack, onUpdate, onConvertToProject, convertLoa
 
       {/* ── ESTIMATING ── */}
       {activeTab === 'Estimating' && (
-        <EstimatingTab tender={tender} onUpdate={onUpdate} />
+        <EstimatingWorkspace tender={tender} onUpdate={onUpdate} EstimatingTab={EstimatingTab} />
       )}
 
       {/* ── SCOPE ── */}
