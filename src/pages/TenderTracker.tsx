@@ -2164,6 +2164,16 @@ function calcLine(item: EstimateItem) {
   return { costTotal, saleRate, saleTotal, profit };
 }
 
+function lineSign(item: EstimateItem): number {
+  return item.sourceLineType === 'omission' ? -1 : 1;
+}
+
+function calcLineSigned(item: EstimateItem) {
+  const { costTotal, saleRate, saleTotal, profit } = calcLine(item);
+  const sign = lineSign(item);
+  return { costTotal, saleRate, saleTotal, profit, signedCostTotal: costTotal * sign, signedSaleTotal: saleTotal * sign, signedProfit: profit * sign };
+}
+
 function getLineType(item: EstimateItem): EstimateLineType {
   return item.lineType ?? 'works';
 }
@@ -2284,8 +2294,8 @@ export function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
   // Grouped calculations
   function groupTotals(arr: EstimateItem[]) {
     return arr.reduce((acc, it) => {
-      const { costTotal, saleTotal, profit } = calcLine(it);
-      return { cost: acc.cost + costTotal, sale: acc.sale + saleTotal, profit: acc.profit + profit };
+      const { signedCostTotal, signedSaleTotal, signedProfit } = calcLineSigned(it);
+      return { cost: acc.cost + signedCostTotal, sale: acc.sale + signedSaleTotal, profit: acc.profit + signedProfit };
     }, { cost: 0, sale: 0, profit: 0 });
   }
 
@@ -2333,17 +2343,23 @@ export function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
     function internalRows(arr: EstimateItem[]) {
       return arr.map(item => {
         const { costTotal, saleRate, saleTotal, profit } = calcLine(item);
+        const sign = lineSign(item);
+        const isOmit = sign < 0;
+        const scopeBadge = item.sourceLineType === 'omission' ? ' <span style="font-size:8px;font-weight:700;color:#dc2626;border:1px solid #dc2626;padding:1px 4px;border-radius:3px;margin-left:4px">OMIT</span>' : item.sourceLineType === 'addition' ? ' <span style="font-size:8px;font-weight:700;color:#059669;border:1px solid #059669;padding:1px 4px;border-radius:3px;margin-left:4px">ADD</span>' : '';
+        const saleDisplay = isOmit ? `(${fmtC(saleTotal)})` : fmtC(saleTotal);
+        const saleColor = isOmit ? '#dc2626' : '#1e293b';
+        const profitDisplay = isOmit ? `(${fmtC(profit)})` : fmtC(profit);
         return `<tr>
           <td style="font-family:monospace;color:#94a3b8">${String(item.lineNo).padStart(2,'0')}</td>
-          <td>${item.description}</td>
+          <td>${item.description}${scopeBadge}</td>
           <td>${item.unit}</td>
           <td class="num">${fmt(item.quantity)}</td>
           <td class="num">${fmtC(item.costRate)}</td>
           <td class="num">${fmtC(costTotal)}</td>
           <td class="num">${item.markupPct}%</td>
           <td class="num">${fmtC(saleRate)}</td>
-          <td class="num">${fmtC(saleTotal)}</td>
-          <td class="num" style="color:${profit>=0?'#059669':'#dc2626'}">${fmtC(profit)}</td>
+          <td class="num" style="color:${saleColor};font-weight:${isOmit?'700':'400'}">${saleDisplay}</td>
+          <td class="num" style="color:${isOmit?'#dc2626':profit>=0?'#059669':'#dc2626'}">${profitDisplay}</td>
         </tr>`;
       }).join('');
     }
@@ -2463,13 +2479,18 @@ export function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
     function clientRows(arr: EstimateItem[]) {
       return arr.map(item => {
         const { saleRate, saleTotal } = calcLine(item);
+        const sign = lineSign(item);
+        const isOmit = sign < 0;
+        const scopeBadge = item.sourceLineType === 'omission' ? ' <span style="font-size:8px;font-weight:700;color:#dc2626;border:1px solid #dc2626;padding:1px 4px;border-radius:3px;margin-left:4px">OMIT</span>' : item.sourceLineType === 'addition' ? ' <span style="font-size:8px;font-weight:700;color:#059669;border:1px solid #059669;padding:1px 4px;border-radius:3px;margin-left:4px">ADD</span>' : '';
+        const totalDisplay = isOmit ? `(${fmtC(saleTotal)})` : fmtC(saleTotal);
+        const totalColor = isOmit ? 'color:#dc2626;font-weight:700' : '';
         return `<tr>
           <td style="font-family:monospace;color:#94a3b8">${String(item.lineNo).padStart(2,'0')}</td>
-          <td>${item.description}</td>
+          <td>${item.description}${scopeBadge}</td>
           <td>${item.unit}</td>
           <td class="num">${fmt(item.quantity)}</td>
           <td class="num">${fmtC(saleRate)}</td>
-          <td class="num">${fmtC(saleTotal)}</td>
+          <td class="num" style="${totalColor}">${totalDisplay}</td>
         </tr>`;
       }).join('');
     }
@@ -2666,6 +2687,12 @@ export function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
                         <Ruler size={8} />TO
                       </span>
                     )}
+                    {item.sourceLineType === 'omission' && (
+                      <span className="ml-1.5 text-[8px] font-bold text-red-400 bg-red-900/40 px-1 py-0.5 rounded align-middle">OMIT</span>
+                    )}
+                    {item.sourceLineType === 'addition' && (
+                      <span className="ml-1.5 text-[8px] font-bold text-emerald-400 bg-emerald-900/40 px-1 py-0.5 rounded align-middle">ADD</span>
+                    )}
                   </td>
                   <td className={tdCls}>{item.unit}</td>
                   <td className={tdNumCls}>{fmt(item.quantity)}</td>
@@ -2673,8 +2700,8 @@ export function EstimatingTab({ tender, onUpdate }: EstimatingTabProps) {
                   <td className={tdNumCls}>{fmtC(costTotal)}</td>
                   <td className={`${tdNumCls} text-amber-400`}>{item.markupPct}%</td>
                   <td className={tdNumCls}>{fmtC(saleRate)}</td>
-                  <td className={`${tdNumCls} text-white font-semibold`}>{fmtC(saleTotal)}</td>
-                  <td className={`${tdNumCls} ${profit >= 0 ? 'text-emerald-400' : 'text-red-400'} font-semibold`}>{fmtC(profit)}</td>
+                  <td className={`${tdNumCls} ${lineSign(item) < 0 ? 'text-red-400 font-bold' : 'text-white font-semibold'}`}>{lineSign(item) < 0 ? `(${fmtC(saleTotal)})` : fmtC(saleTotal)}</td>
+                  <td className={`${tdNumCls} ${lineSign(item) < 0 ? 'text-red-400' : profit >= 0 ? 'text-emerald-400' : 'text-red-400'} font-semibold`}>{lineSign(item) < 0 ? `(${fmtC(profit)})` : fmtC(profit)}</td>
                   {isOptional && (
                     <td className={tdCls} onClick={e => e.stopPropagation()}>
                       <button

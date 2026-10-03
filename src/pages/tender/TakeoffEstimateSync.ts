@@ -111,6 +111,7 @@ export function createEstimateLineFromTakeoff(
     sourceTakeoffItemId: item.id,
     sourceTakeoffSyncHash: takeoffSyncHash(item),
     sourceTakeoffSyncedAt: new Date().toISOString(),
+    sourceLineType: item.line_type,
   };
 }
 
@@ -129,6 +130,7 @@ export function updateEstimateLineFromTakeoff(
     lineType: mapLineType(item.line_type),
     sourceTakeoffSyncHash: takeoffSyncHash(item),
     sourceTakeoffSyncedAt: new Date().toISOString(),
+    sourceLineType: item.line_type,
   };
 }
 

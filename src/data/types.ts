@@ -230,6 +230,7 @@ export interface EstimateItem {
   sourceTakeoffItemId?: string;
   sourceTakeoffSyncHash?: string;
   sourceTakeoffSyncedAt?: string;
+  sourceLineType?: 'standard' | 'addition' | 'omission';
 }
 
 // ─── Commercial Module ────────────────────────────────────────────────────────
