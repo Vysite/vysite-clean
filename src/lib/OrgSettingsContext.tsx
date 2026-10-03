@@ -39,6 +39,7 @@ const ALL_MODULES_ON: Record<string, boolean> = {
   reports: true,
   commercial: true,
   'supply-chain': true,
+  'asset-management': true,
 };
 
 const DEFAULT_ORG_SETTINGS: OrgSettings = {

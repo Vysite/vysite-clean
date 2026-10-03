@@ -11,6 +11,7 @@ import type {
   DBTenderDrawing, DBTenderDrawingCalibration,
 } from '../pages/tender/drawingTypes';
 import type { DBTenderTakeoffItem } from '../pages/tender/takeoffTypes';
+import type { DBAssetSite, DBAssetBuilding, DBAssetLocation, DBAsset, DBAssetDocument, DBAssetActivity } from '../pages/asset/types';
 
 // ─── Types for DB rows ────────────────────────────────────────────────────────
 
@@ -138,7 +139,15 @@ export type PermissionKey =
   // Supply Chain
   | 'modules.supply_chain'
   | 'supply_chain.view'
-  | 'supply_chain.create_edit';
+  | 'supply_chain.create_edit'
+  // Asset Management
+  | 'modules.assets'
+  | 'asset.view'
+  | 'asset.create'
+  | 'asset.edit'
+  | 'asset.delete'
+  | 'asset.comment'
+  | 'asset.upload';
 
 export interface DBPlatformUser {
   id: string;
@@ -185,6 +194,8 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': true, 'programmes.export': true,
     'modules.commercial': true, 'commercial.create': true, 'commercial.edit': true, 'commercial.delete': true,
     'modules.supply_chain': true, 'supply_chain.view': true, 'supply_chain.create_edit': true,
+    'modules.assets': true, 'asset.view': true, 'asset.create': true, 'asset.edit': true, 'asset.delete': true,
+    'asset.comment': true, 'asset.upload': true,
   },
   'Commercial Lead': {
     'projects.view_all': true, 'projects.view_assigned': true,
@@ -209,6 +220,8 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': true, 'programmes.export': true,
     'modules.commercial': true, 'commercial.create': true, 'commercial.edit': true, 'commercial.delete': true,
     'modules.supply_chain': true, 'supply_chain.view': true,
+    'modules.assets': true, 'asset.view': true, 'asset.create': true, 'asset.edit': true, 'asset.delete': false,
+    'asset.comment': true, 'asset.upload': true,
   },
   'Project Manager': {
     'projects.view_assigned': true, 'projects.edit': true,
@@ -225,6 +238,8 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.view': true, 'maintenance.create': true, 'maintenance.edit': true, 'maintenance.delete': false,
     'maintenance.assign': true, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
     'programmes.view': true, 'programmes.create': true, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
+    'modules.assets': true, 'asset.view': true, 'asset.create': true, 'asset.edit': true, 'asset.delete': false,
+    'asset.comment': true, 'asset.upload': true,
   },
   'Site Manager': {
     'projects.view_assigned': true,
@@ -240,6 +255,8 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.view': true, 'maintenance.create': false, 'maintenance.edit': true, 'maintenance.delete': false,
     'maintenance.assign': false, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
     'programmes.view': true, 'programmes.create': false, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
+    'modules.assets': true, 'asset.view': true, 'asset.create': false, 'asset.edit': true, 'asset.delete': false,
+    'asset.comment': true, 'asset.upload': true,
   },
   Engineer: {
     'projects.view_assigned': true,
@@ -254,6 +271,8 @@ export const ROLE_PERMISSIONS: Record<PlatformUserRole, Partial<Record<Permissio
     'maintenance.view': true, 'maintenance.create': false, 'maintenance.edit': true, 'maintenance.delete': false,
     'maintenance.assign': false, 'maintenance.export': true, 'maintenance.comment': true, 'maintenance.upload': true, 'maintenance.complete': true,
     'programmes.view': true, 'programmes.create': false, 'programmes.edit': true, 'programmes.delete': false, 'programmes.export': true,
+    'modules.assets': true, 'asset.view': true, 'asset.create': false, 'asset.edit': true, 'asset.delete': false,
+    'asset.comment': true, 'asset.upload': true,
   },
   'Estimator / QS': {
     'projects.view_assigned': true,
@@ -385,6 +404,7 @@ export function resolvePermissions(user: DBPlatformUser): Record<PermissionKey, 
     'modules.commercial','commercial.create','commercial.edit','commercial.delete',
     'admin.view_activity_register',
     'modules.supply_chain','supply_chain.view','supply_chain.create_edit',
+    'modules.assets','asset.view','asset.create','asset.edit','asset.delete','asset.comment','asset.upload',
   ];
   for (const key of allKeys) {
     all[key] = key in overrides ? (overrides[key] ?? false) : (defaults[key] ?? false);
@@ -1519,6 +1539,34 @@ export interface AppStore {
   addTenderTakeoffItem: (item: DBTenderTakeoffItem) => Promise<string | null>;
   updateTenderTakeoffItem: (item: Partial<DBTenderTakeoffItem> & { id: string }) => Promise<boolean>;
   removeTenderTakeoffItem: (id: string) => Promise<void>;
+
+  // Asset Management (on-demand)
+  assetSites: DBAssetSite[];
+  assetBuildings: DBAssetBuilding[];
+  assetLocations: DBAssetLocation[];
+  assets: DBAsset[];
+  assetsLoading: boolean;
+  loadAssetData: () => Promise<void>;
+  addAssetSite: (s: Omit<DBAssetSite, 'id' | 'created_at' | 'updated_at'>) => Promise<string | null>;
+  updateAssetSite: (s: Partial<DBAssetSite> & { id: string }) => Promise<void>;
+  removeAssetSite: (id: string) => Promise<void>;
+  addAssetBuilding: (b: Omit<DBAssetBuilding, 'id' | 'created_at' | 'updated_at'>) => Promise<string | null>;
+  updateAssetBuilding: (b: Partial<DBAssetBuilding> & { id: string }) => Promise<void>;
+  removeAssetBuilding: (id: string) => Promise<void>;
+  addAssetLocation: (l: Omit<DBAssetLocation, 'id' | 'created_at' | 'updated_at'>) => Promise<string | null>;
+  updateAssetLocation: (l: Partial<DBAssetLocation> & { id: string }) => Promise<void>;
+  removeAssetLocation: (id: string) => Promise<void>;
+  addAsset: (a: Omit<DBAsset, 'id' | 'created_at' | 'updated_at'>) => Promise<string | null>;
+  updateAsset: (a: Partial<DBAsset> & { id: string }) => Promise<void>;
+  removeAsset: (id: string) => Promise<void>;
+  assetDocuments: DBAssetDocument[];
+  assetActivity: DBAssetActivity[];
+  loadAssetDocuments: (assetId: string) => Promise<void>;
+  loadAssetActivity: (assetId: string) => Promise<void>;
+  addAssetDocument: (d: Omit<DBAssetDocument, 'id' | 'created_at'>) => Promise<string | null>;
+  removeAssetDocument: (id: string) => Promise<void>;
+  addAssetActivity: (a: Omit<DBAssetActivity, 'id' | 'created_at'>) => Promise<void>;
+  checkSerialDuplicate: (serial: string, excludeAssetId?: string) => Promise<boolean>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1633,6 +1681,13 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [tenderDrawingsLoading, setTenderDrawingsLoading] = useState(false);
   const [tenderDrawingCalibrations, setTenderDrawingCalibrations] = useState<DBTenderDrawingCalibration[]>([]);
   const [tenderTakeoffItems, setTenderTakeoffItems] = useState<DBTenderTakeoffItem[]>([]);
+  const [assetSites, setAssetSites] = useState<DBAssetSite[]>([]);
+  const [assetBuildings, setAssetBuildings] = useState<DBAssetBuilding[]>([]);
+  const [assetLocations, setAssetLocations] = useState<DBAssetLocation[]>([]);
+  const [assets, setAssets] = useState<DBAsset[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
+  const [assetDocuments, setAssetDocuments] = useState<DBAssetDocument[]>([]);
+  const [assetActivity, setAssetActivity] = useState<DBAssetActivity[]>([]);
 
   // Keep a stable ref to orgId so callbacks always read the latest value
   // without needing to be re-created (avoids cascading re-renders).
@@ -3171,8 +3226,159 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('removeTenderTakeoffItem', 'vy_tender_takeoff_items', error);
   }, []);
 
+  // ─── Asset Management ────────────────────────────────────────────────────────
+  const loadAssetData = useCallback(async () => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    setAssetsLoading(true);
+    const [sitesRes, bldRes, locRes, astRes] = await Promise.all([
+      supabase.from('vy_asset_sites').select('*').eq('org_id', oid).order('sort_order', { ascending: true }),
+      supabase.from('vy_asset_buildings').select('*').eq('org_id', oid).order('sort_order', { ascending: true }),
+      supabase.from('vy_asset_locations').select('*').eq('org_id', oid).order('sort_order', { ascending: true }),
+      supabase.from('vy_assets').select('*').eq('org_id', oid).order('updated_at', { ascending: false }),
+    ]);
+    setAssetSites((sitesRes.data ?? []) as DBAssetSite[]);
+    setAssetBuildings((bldRes.data ?? []) as DBAssetBuilding[]);
+    setAssetLocations((locRes.data ?? []) as DBAssetLocation[]);
+    setAssets((astRes.data ?? []) as DBAsset[]);
+    setAssetsLoading(false);
+  }, []);
+
+  const addAssetSite = useCallback(async (s: Omit<DBAssetSite, 'id' | 'created_at' | 'updated_at'>) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return null;
+    const { data, error } = await supabase.from('vy_asset_sites').insert({ ...s, org_id: oid }).select('id').maybeSingle();
+    logWrite('addAssetSite', 'vy_asset_sites', error, data);
+    if (error || !data) return null;
+    await loadAssetData();
+    return data.id;
+  }, [loadAssetData]);
+
+  const updateAssetSite = useCallback(async (s: Partial<DBAssetSite> & { id: string }) => {
+    const { error } = await supabase.from('vy_asset_sites').update({ ...s, updated_at: new Date().toISOString() }).eq('id', s.id);
+    logWrite('updateAssetSite', 'vy_asset_sites', error);
+    if (!error) setAssetSites(prev => prev.map(x => x.id === s.id ? { ...x, ...s } : x));
+  }, []);
+
+  const removeAssetSite = useCallback(async (id: string) => {
+    const { error } = await supabase.from('vy_asset_sites').delete().eq('id', id);
+    logWrite('removeAssetSite', 'vy_asset_sites', error);
+    if (!error) setAssetSites(prev => prev.filter(x => x.id !== id));
+  }, []);
+
+  const addAssetBuilding = useCallback(async (b: Omit<DBAssetBuilding, 'id' | 'created_at' | 'updated_at'>) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return null;
+    const { data, error } = await supabase.from('vy_asset_buildings').insert({ ...b, org_id: oid }).select('id').maybeSingle();
+    logWrite('addAssetBuilding', 'vy_asset_buildings', error, data);
+    if (error || !data) return null;
+    await loadAssetData();
+    return data.id;
+  }, [loadAssetData]);
+
+  const updateAssetBuilding = useCallback(async (b: Partial<DBAssetBuilding> & { id: string }) => {
+    const { error } = await supabase.from('vy_asset_buildings').update({ ...b, updated_at: new Date().toISOString() }).eq('id', b.id);
+    logWrite('updateAssetBuilding', 'vy_asset_buildings', error);
+    if (!error) setAssetBuildings(prev => prev.map(x => x.id === b.id ? { ...x, ...b } : x));
+  }, []);
+
+  const removeAssetBuilding = useCallback(async (id: string) => {
+    const { error } = await supabase.from('vy_asset_buildings').delete().eq('id', id);
+    logWrite('removeAssetBuilding', 'vy_asset_buildings', error);
+    if (!error) setAssetBuildings(prev => prev.filter(x => x.id !== id));
+  }, []);
+
+  const addAssetLocation = useCallback(async (l: Omit<DBAssetLocation, 'id' | 'created_at' | 'updated_at'>) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return null;
+    const { data, error } = await supabase.from('vy_asset_locations').insert({ ...l, org_id: oid }).select('id').maybeSingle();
+    logWrite('addAssetLocation', 'vy_asset_locations', error, data);
+    if (error || !data) return null;
+    await loadAssetData();
+    return data.id;
+  }, [loadAssetData]);
+
+  const updateAssetLocation = useCallback(async (l: Partial<DBAssetLocation> & { id: string }) => {
+    const { error } = await supabase.from('vy_asset_locations').update({ ...l, updated_at: new Date().toISOString() }).eq('id', l.id);
+    logWrite('updateAssetLocation', 'vy_asset_locations', error);
+    if (!error) setAssetLocations(prev => prev.map(x => x.id === l.id ? { ...x, ...l } : x));
+  }, []);
+
+  const removeAssetLocation = useCallback(async (id: string) => {
+    const { error } = await supabase.from('vy_asset_locations').delete().eq('id', id);
+    logWrite('removeAssetLocation', 'vy_asset_locations', error);
+    if (!error) setAssetLocations(prev => prev.filter(x => x.id !== id));
+  }, []);
+
+  const addAsset = useCallback(async (a: Omit<DBAsset, 'id' | 'created_at' | 'updated_at'>) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return null;
+    const { data, error } = await supabase.from('vy_assets').insert({ ...a, org_id: oid }).select('id').maybeSingle();
+    logWrite('addAsset', 'vy_assets', error, data);
+    if (error || !data) return null;
+    await loadAssetData();
+    return data.id;
+  }, [loadAssetData]);
+
+  const updateAsset = useCallback(async (a: Partial<DBAsset> & { id: string }) => {
+    const { error } = await supabase.from('vy_assets').update({ ...a, updated_at: new Date().toISOString() }).eq('id', a.id);
+    logWrite('updateAsset', 'vy_assets', error);
+    if (!error) setAssets(prev => prev.map(x => x.id === a.id ? { ...x, ...a } : x));
+  }, []);
+
+  const removeAsset = useCallback(async (id: string) => {
+    const { error } = await supabase.from('vy_assets').delete().eq('id', id);
+    logWrite('removeAsset', 'vy_assets', error);
+    if (!error) setAssets(prev => prev.filter(x => x.id !== id));
+  }, []);
+
+  const loadAssetDocuments = useCallback(async (assetId: string) => {
+    const { data, error } = await supabase.from('vy_asset_documents').select('*').eq('asset_id', assetId).order('created_at', { ascending: false });
+    logWrite('loadAssetDocuments', 'vy_asset_documents', error);
+    if (!error) setAssetDocuments((data ?? []) as DBAssetDocument[]);
+  }, []);
+
+  const loadAssetActivity = useCallback(async (assetId: string) => {
+    const { data, error } = await supabase.from('vy_asset_activity').select('*').eq('asset_id', assetId).order('created_at', { ascending: false });
+    logWrite('loadAssetActivity', 'vy_asset_activity', error);
+    if (!error) setAssetActivity((data ?? []) as DBAssetActivity[]);
+  }, []);
+
+  const addAssetDocument = useCallback(async (d: Omit<DBAssetDocument, 'id' | 'created_at'>) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return null;
+    const { data, error } = await supabase.from('vy_asset_documents').insert({ ...d, org_id: oid }).select('id').maybeSingle();
+    logWrite('addAssetDocument', 'vy_asset_documents', error, data);
+    if (error || !data) return null;
+    setAssetDocuments(prev => [{ ...d, id: data.id, org_id: oid, created_at: new Date().toISOString() } as DBAssetDocument, ...prev]);
+    return data.id;
+  }, []);
+
+  const removeAssetDocument = useCallback(async (id: string) => {
+    const { error } = await supabase.from('vy_asset_documents').delete().eq('id', id);
+    logWrite('removeAssetDocument', 'vy_asset_documents', error);
+    if (!error) setAssetDocuments(prev => prev.filter(x => x.id !== id));
+  }, []);
+
+  const addAssetActivity = useCallback(async (a: Omit<DBAssetActivity, 'id' | 'created_at'>) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const { error } = await supabase.from('vy_asset_activity').insert({ ...a, org_id: oid });
+    logWrite('addAssetActivity', 'vy_asset_activity', error);
+    if (!error) setAssetActivity(prev => [{ ...a, id: `act${Date.now()}`, org_id: oid, created_at: new Date().toISOString() } as DBAssetActivity, ...prev]);
+  }, []);
+
+  const checkSerialDuplicate = useCallback(async (serial: string, excludeAssetId?: string) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid || !serial.trim()) return false;
+    let q = supabase.from('vy_assets').select('id', { count: 'exact', head: true }).eq('org_id', oid).eq('serial_number', serial.trim());
+    if (excludeAssetId) q = q.neq('id', excludeAssetId);
+    const { count, error } = await q;
+    if (error) { logWrite('checkSerialDuplicate', 'vy_assets', error); return false; }
+    return (count ?? 0) > 0;
+  }, []);
+
   return {
-    projects, projectDocuments, attachments,
     actions, snags, snaggingReports, siteForms, tenders, tcRecords, maintenanceJobs, programmes, programmeTasks, keyDates,
     platformUsers, notifications,
     loading, modulesLoading,
@@ -3237,5 +3443,12 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     tenderDrawings, tenderDrawingsLoading, loadTenderDrawings, addTenderDrawing, updateTenderDrawing, removeTenderDrawing, getTenderDrawingSignedUrl,
     tenderDrawingCalibrations, loadTenderDrawingCalibrations, upsertTenderDrawingCalibration, removeTenderDrawingCalibration,
     tenderTakeoffItems, loadTenderTakeoffItems, loadTenderTakeoffItemsForDrawing, addTenderTakeoffItem, updateTenderTakeoffItem, removeTenderTakeoffItem,
+    assetSites, assetBuildings, assetLocations, assets, assetsLoading, loadAssetData,
+    addAssetSite, updateAssetSite, removeAssetSite,
+    addAssetBuilding, updateAssetBuilding, removeAssetBuilding,
+    addAssetLocation, updateAssetLocation, removeAssetLocation,
+    addAsset, updateAsset, removeAsset,
+    assetDocuments, assetActivity, loadAssetDocuments, loadAssetActivity,
+    addAssetDocument, removeAssetDocument, addAssetActivity, checkSerialDuplicate,
   };
 }

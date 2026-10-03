@@ -16,6 +16,7 @@ import Settings from './pages/Settings';
 import TestingCommissioning from './pages/TestingCommissioning';
 import OAndMManual from './pages/OAndMManual';
 import MaintenanceServicing from './pages/MaintenanceServicing';
+import AssetManagement from './pages/asset/AssetManagement';
 import Commercial from './pages/Commercial';
 import SupplyChain from './pages/SupplyChain';
 import Login from './pages/Login';
@@ -86,6 +87,10 @@ function AppPages({ activePage, navigateTo, pendingOpen, setPendingOpen, pending
       return guard(perms['maintenance.view'] && isModuleEnabled('maintenance'),
         <MaintenanceServicing />,
         'Maintenance & Servicing');
+    case 'asset-management':
+      return guard(perms['modules.assets'] && perms['asset.view'] && isModuleEnabled('asset-management'),
+        <AssetManagement />,
+        'Asset Management');
     case 'site-forms':
       return guard(perms['modules.site_forms'] && isModuleEnabled('site-forms'),
         <SiteForms pendingOpen={pendingOpen} onPendingOpenConsumed={() => setPendingOpen(null)} pendingFilter={pendingFilter} onPendingFilterConsumed={() => setPendingFilter(null)} />,

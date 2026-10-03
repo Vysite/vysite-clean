@@ -2,7 +2,7 @@ import {
   LayoutDashboard, FileText, FolderKanban, ClipboardList,
   AlertOctagon, Zap, BookOpen, BarChart2,
   Settings, MessageSquare, Wrench, ChevronLeft,
-  ChevronRight, X, TrendingUp, Network, CheckSquare,
+  ChevronRight, X, TrendingUp, Network, CheckSquare, Package,
 } from 'lucide-react';
 
 export type Page =
@@ -21,6 +21,7 @@ export type Page =
   | 'beta-feedback'
   | 'settings'
   | 'super-admin'
+  | 'asset-management'
   | 'super-admin-orgs';
 
 interface NavItem {
@@ -36,8 +37,9 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'tenders',       label: 'Tender & Estimating', icon: <FileText size={18} />,        moduleKey: 'tenders' },
   { page: 'projects',      label: 'Projects',            icon: <FolderKanban size={18} />,    moduleKey: 'projects' },
   { page: 'commercial',    label: 'Commercial',          icon: <TrendingUp size={18} />,      moduleKey: 'commercial' },
-  { page: 'maintenance',   label: 'Maintenance',         icon: <Wrench size={18} />,          moduleKey: 'maintenance' },
-  { page: 'site-forms',    label: 'Site Forms',          icon: <ClipboardList size={18} />,   moduleKey: 'site-forms' },
+  { page: 'maintenance',      label: 'Maintenance',         icon: <Wrench size={18} />,          moduleKey: 'maintenance' },
+  { page: 'asset-management', label: 'Asset Management',    icon: <Package size={18} />,         moduleKey: 'asset-management' },
+  { page: 'site-forms',       label: 'Site Forms',          icon: <ClipboardList size={18} />,   moduleKey: 'site-forms' },
   { page: 'snagging',      label: 'Snagging',            icon: <AlertOctagon size={18} />,    moduleKey: 'snagging' },
   { page: 'actions',       label: 'Actions',             icon: <Zap size={18} />,             moduleKey: 'actions' },
   { page: 'my-work',       label: 'My Work',             icon: <CheckSquare size={18} /> },
