@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FileImage, Ruler, Calculator, ClipboardList } from 'lucide-react';
 import type { Tender } from '../../data/types';
 import TenderDrawingsTab from './TenderDrawingsTab';
+import TakeoffSchedule from './TakeoffSchedule';
 
 interface EstimatingTabProps {
   tender: Tender;
@@ -57,11 +58,7 @@ export default function EstimatingWorkspace({ tender, onUpdate, EstimatingTab }:
       )}
 
       {subTab === 'Take-Off' && (
-        <PlaceholderPanel
-          title="Take-Off"
-          description="Measurement tools — Count, Linear, Area, and Smart Count — will be available here once configured. This workspace is not yet set up."
-          icon={Ruler}
-        />
+        <TakeoffSchedule tenderId={tender.id} tenderName={tender.name} />
       )}
 
       {subTab === 'Estimate' && (

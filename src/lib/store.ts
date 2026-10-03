@@ -10,6 +10,7 @@ import type {
 import type {
   DBTenderDrawing, DBTenderDrawingCalibration,
 } from '../pages/tender/drawingTypes';
+import type { DBTenderTakeoffItem } from '../pages/tender/takeoffTypes';
 
 // ─── Types for DB rows ────────────────────────────────────────────────────────
 
@@ -1510,6 +1511,14 @@ export interface AppStore {
   loadTenderDrawingCalibrations: (drawingId: string) => Promise<void>;
   upsertTenderDrawingCalibration: (c: DBTenderDrawingCalibration) => Promise<void>;
   removeTenderDrawingCalibration: (id: string) => Promise<void>;
+
+  // Tender Take-Off Items (on-demand)
+  tenderTakeoffItems: DBTenderTakeoffItem[];
+  loadTenderTakeoffItems: (tenderId: string) => Promise<void>;
+  loadTenderTakeoffItemsForDrawing: (drawingId: string) => Promise<void>;
+  addTenderTakeoffItem: (item: DBTenderTakeoffItem) => Promise<string | null>;
+  updateTenderTakeoffItem: (item: Partial<DBTenderTakeoffItem> & { id: string }) => Promise<void>;
+  removeTenderTakeoffItem: (id: string) => Promise<void>;
 }
 
 // Legacy localStorage user-switching — kept for UI compatibility, no longer
@@ -1623,6 +1632,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
   const [tenderDrawings, setTenderDrawings] = useState<DBTenderDrawing[]>([]);
   const [tenderDrawingsLoading, setTenderDrawingsLoading] = useState(false);
   const [tenderDrawingCalibrations, setTenderDrawingCalibrations] = useState<DBTenderDrawingCalibration[]>([]);
+  const [tenderTakeoffItems, setTenderTakeoffItems] = useState<DBTenderTakeoffItem[]>([]);
 
   // Keep a stable ref to orgId so callbacks always read the latest value
   // without needing to be re-created (avoids cascading re-renders).
@@ -3111,6 +3121,55 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('removeTenderDrawingCalibration', 'vy_tender_drawing_calibrations', error);
   }, []);
 
+  // ── Tender Take-Off Items (on-demand) ──────────────────────────────────────
+  const loadTenderTakeoffItems = useCallback(async (tenderId: string) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const { data, error } = await supabase
+      .from('vy_tender_takeoff_items')
+      .select('*')
+      .eq('org_id', oid)
+      .eq('tender_id', tenderId)
+      .order('sort_order', { ascending: true });
+    if (error) { logWrite('loadTenderTakeoffItems', 'vy_tender_takeoff_items', error); }
+    setTenderTakeoffItems((data ?? []) as DBTenderTakeoffItem[]);
+  }, []);
+
+  const loadTenderTakeoffItemsForDrawing = useCallback(async (drawingId: string) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const { data, error } = await supabase
+      .from('vy_tender_takeoff_items')
+      .select('*')
+      .eq('org_id', oid)
+      .eq('drawing_id', drawingId)
+      .order('sort_order', { ascending: true });
+    if (error) { logWrite('loadTenderTakeoffItemsForDrawing', 'vy_tender_takeoff_items', error); }
+    setTenderTakeoffItems((data ?? []) as DBTenderTakeoffItem[]);
+  }, []);
+
+  const addTenderTakeoffItem = useCallback(async (item: DBTenderTakeoffItem): Promise<string | null> => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return 'No organisation context.';
+    setTenderTakeoffItems(prev => [...prev, item]);
+    const { error } = await supabase.from('vy_tender_takeoff_items').insert({ ...item, org_id: oid });
+    logWrite('addTenderTakeoffItem', 'vy_tender_takeoff_items', error);
+    return error ? error.message : null;
+  }, []);
+
+  const updateTenderTakeoffItem = useCallback(async (item: Partial<DBTenderTakeoffItem> & { id: string }) => {
+    setTenderTakeoffItems(prev => prev.map(x => x.id === item.id ? { ...x, ...item } : x));
+    const { id, ...rest } = item;
+    const { error } = await supabase.from('vy_tender_takeoff_items').update(rest).eq('id', id);
+    logWrite('updateTenderTakeoffItem', 'vy_tender_takeoff_items', error);
+  }, []);
+
+  const removeTenderTakeoffItem = useCallback(async (id: string) => {
+    setTenderTakeoffItems(prev => prev.filter(x => x.id !== id));
+    const { error } = await supabase.from('vy_tender_takeoff_items').delete().eq('id', id);
+    logWrite('removeTenderTakeoffItem', 'vy_tender_takeoff_items', error);
+  }, []);
+
   return {
     projects, projectDocuments, attachments,
     actions, snags, snaggingReports, siteForms, tenders, tcRecords, maintenanceJobs, programmes, programmeTasks, keyDates,
@@ -3176,5 +3235,6 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     myWorkNotes, myWorkNoteCounts, loadMyWorkNotes, loadAllMyWorkNoteCounts, addMyWorkNote, updateMyWorkNote, removeMyWorkNote,
     tenderDrawings, tenderDrawingsLoading, loadTenderDrawings, addTenderDrawing, updateTenderDrawing, removeTenderDrawing, getTenderDrawingSignedUrl,
     tenderDrawingCalibrations, loadTenderDrawingCalibrations, upsertTenderDrawingCalibration, removeTenderDrawingCalibration,
+    tenderTakeoffItems, loadTenderTakeoffItems, loadTenderTakeoffItemsForDrawing, addTenderTakeoffItem, updateTenderTakeoffItem, removeTenderTakeoffItem,
   };
 }
