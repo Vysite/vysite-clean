@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, AlertTriangle, CheckCircle, Clock, Wrench, Calendar, Activity, ShieldCheck, Gauge, PoundSterling, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { TrendingUp, AlertTriangle, CheckCircle, Clock, Wrench, Calendar, Activity, ShieldCheck, Gauge, PoundSterling, ArrowUpRight, ArrowDownRight, Minus, FileDown, ChevronDown, Loader2 } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import type { DBAsset, DBAssetServiceRecord, ServiceCondition } from './types';
 import { SERVICE_CONDITION_COLORS, SERVICE_STATUS_COLORS, SERVICE_TYPES } from './types';
+import { exportAssetSummaryPDF, exportSummaryFileName } from './AssetSummaryPDF';
 
 interface Props {
   asset: DBAsset;
@@ -40,9 +42,9 @@ function fmtAge(d: string | null | undefined): string {
 
 // ─── Lifecycle review logic ───
 
-type ReviewStatus = 'normal' | 'monitor' | 'review';
+export type ReviewStatus = 'normal' | 'monitor' | 'review';
 
-interface ReviewResult {
+export interface ReviewResult {
   status: ReviewStatus;
   reasons: string[];
 }
@@ -164,6 +166,29 @@ function SpendTrendChart({ annualSpend }: { annualSpend: { year: number; total: 
 
 // ─── Main component ───
 
+export interface SummaryCalc {
+  lifetimeSpend: number;
+  last12Spend: number;
+  prev12Spend: number;
+  spendVsReplacement: number | null;
+  reactiveCount12m: number;
+  breakdownCount12m: number;
+  costBreakdown: { type: string; total: number; count: number }[];
+  annualSpend: { year: number; total: number }[];
+  latestCondition: string | null;
+  lastService: DBAssetServiceRecord | null;
+  nextServiceDue: string | null;
+  nextDueStatus: 'up_to_date' | 'due_soon' | 'overdue' | 'not_scheduled';
+  ageDate: string | null;
+  warrantyStatus: 'under' | 'expired' | 'not_recorded';
+  dataFields: { label: string; present: boolean }[];
+  dataComplete: number;
+  dataTotal: number;
+  trendPct: number | null;
+  review: ReviewResult;
+  totalRecords: number;
+}
+
 export default function AssetSummary({ asset, canViewFinancials }: Props) {
   const store = useAppStore();
   const [records, setRecords] = useState<DBAssetServiceRecord[]>([]);
@@ -177,7 +202,7 @@ export default function AssetSummary({ asset, canViewFinancials }: Props) {
     setRecords(store.assetServiceRecords ?? []);
   }, [store.assetServiceRecords]);
 
-  const calc = useMemo(() => {
+  const calc: SummaryCalc = useMemo(() => {
     const now = new Date();
     const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
     const twentyFourMonthsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
@@ -345,6 +370,10 @@ export default function AssetSummary({ asset, canViewFinancials }: Props) {
 
   return (
     <div className="space-y-5">
+      <div className="flex justify-end">
+        <ExportSummaryPDF asset={asset} records={records} calc={calc} canViewFinancials={canViewFinancials} />
+      </div>
+
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {canViewFinancials ? (
@@ -566,6 +595,103 @@ export default function AssetSummary({ asset, canViewFinancials }: Props) {
         )}
       </div>
     </div>
+  );
+}
+
+function ExportSummaryPDF({ asset, records, calc, canViewFinancials }: {
+  asset: DBAsset; records: DBAssetServiceRecord[]; calc: SummaryCalc; canViewFinancials: boolean;
+}) {
+  const store = useAppStore();
+  const [open, setOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuPos = useRef<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 180 });
+
+  useLayoutEffect(() => {
+    if (open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const menuWidth = 180;
+      const left = Math.min(r.right - menuWidth, window.innerWidth - menuWidth - 8);
+      menuPos.current = { top: r.bottom + 4, left: Math.max(8, left), width: menuWidth };
+    }
+  }, [open]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (btnRef.current && btnRef.current.contains(e.target as Node)) return;
+      setOpen(false);
+    }
+    function handleScroll() { if (open) setOpen(false); }
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('scroll', handleScroll, true);
+      window.addEventListener('resize', handleScroll);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [open]);
+
+  async function handleExport(internal: boolean) {
+    setExporting(true);
+    setOpen(false);
+    try {
+      await store.loadAssetMedia(asset.id);
+      let primaryImageUrl: string | null = null;
+      const primary = (store.assetMedia ?? []).find(m => m.is_primary);
+      if (primary) {
+        primaryImageUrl = await store.getAssetMediaSignedUrl(primary.storage_path);
+      }
+      const sites = store.assetSites ?? [];
+      const buildings = store.assetBuildings ?? [];
+      const locations = store.assetLocations ?? [];
+      const siteName = sites.find(s => s.id === asset.site_id)?.name ?? '\u2014';
+      const buildingName = buildings.find(b => b.id === asset.building_id)?.name ?? '\u2014';
+      const locationName = locations.find(l => l.id === asset.location_id)?.name ?? '\u2014';
+
+      exportAssetSummaryPDF({
+        asset,
+        records,
+        calc,
+        siteName,
+        buildingName,
+        locationName,
+        primaryImageUrl,
+        internal,
+        currentUserName: store.currentUser?.name ?? '',
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  return (
+    <>
+      <button ref={btnRef} onClick={() => setOpen(!open)} disabled={exporting}
+        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-[#f97316] border border-[#1e2d4a] rounded-lg hover:border-[#f97316] transition-colors disabled:opacity-60">
+        {exporting ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}Export PDF
+        <ChevronDown size={10} />
+      </button>
+      {open && createPortal(
+        <div style={{ position: 'fixed', top: menuPos.current.top, left: menuPos.current.left, width: menuPos.current.width, zIndex: 9999 }}
+          className="bg-[#1a2236] border border-[#1e2d4a] rounded-lg shadow-xl py-1"
+          onMouseDown={e => e.stopPropagation()}>
+          <button onClick={() => handleExport(false)}
+            className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-[#0d1628] transition-colors">
+            Client Lifecycle Summary
+          </button>
+          {canViewFinancials && (
+            <button onClick={() => handleExport(true)}
+              className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-[#0d1628] transition-colors">
+              Internal Lifecycle Summary
+            </button>
+          )}
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
