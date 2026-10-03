@@ -6,7 +6,6 @@ import type { MeasurementType, TakeoffLineType } from './takeoffTypes';
 import { DISCIPLINES } from './drawingTypes';
 import { finalQuantity, calcTakeoffCosts, signedTakeoffCosts, formatCurrency } from './takeoffCalculations';
 import { exportInternalTakeoffPDF, exportClientTakeoffPDF } from './TakeoffSchedulePDF';
-import { exportMarkedUpDrawingPDF } from './TakeoffDrawingPDF';
 
 interface Props {
   tenderId: string;
@@ -106,37 +105,6 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
     exportClientTakeoffPDF(data);
   }
 
-  async function handleExportDrawing() {
-    const data = buildPDFData();
-    const drawingItems = data.items.filter(i => i.drawing_id !== null);
-    if (drawingItems.length === 0) { setError('No drawing-linked Take-Off items to export.'); return; }
-    const drawingIds = [...new Set(drawingItems.map(i => i.drawing_id!))];
-    setExporting(true);
-    try {
-      for (const drawingId of drawingIds) {
-        const drawing = data.drawings.find(d => d.id === drawingId);
-        if (!drawing) continue;
-        const url = await store.getTenderDrawingSignedUrl(drawing.storage_path);
-        if (!url) continue;
-        const response = await fetch(url);
-        if (!response.ok) continue;
-        const arrayBuffer = await response.arrayBuffer();
-        await exportMarkedUpDrawingPDF({
-          drawing,
-          items: data.items.filter(i => i.drawing_id === drawingId),
-          calibrations: data.calibrations,
-          pdfBytes: arrayBuffer,
-          tenderName, tenderRef,
-          internal: canViewFinancials,
-        });
-      }
-    } catch (err) {
-      setError(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setExporting(false);
-    }
-  }
-
   return (
     <div className="space-y-4">
       {error && (
@@ -190,9 +158,6 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
                 )}
                 <button onClick={() => { setShowExportMenu(false); handleExportClient(); }} className="w-full flex items-center gap-3 px-4 py-3 text-xs text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left border-t border-[#1e2d4a]">
                   <FileText size={14} />Client Take-Off
-                </button>
-                <button onClick={() => { setShowExportMenu(false); handleExportDrawing(); }} disabled={drawings.length === 0} className="w-full flex items-center gap-3 px-4 py-3 text-xs text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left border-t border-[#1e2d4a] disabled:opacity-30">
-                  <FileText size={14} />Marked-Up Drawing
                 </button>
               </div>
             </>

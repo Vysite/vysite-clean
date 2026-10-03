@@ -146,6 +146,8 @@ export default function TakeoffSidebar({
                   canViewFinancials={canViewFinancials}
                   onUpdate={(updates) => onUpdateItem(item.id, updates)}
                   onDelete={() => onDeleteItem(item.id)}
+                  onCollapse={() => setExpandedId(null)}
+                  onFlushSave={() => onUpdateItem(item.id, { updated_at: new Date().toISOString() })}
                 />
               ))}
             </div>
@@ -164,7 +166,7 @@ export default function TakeoffSidebar({
 
 function ItemRow({
   item, isActive, isExpanded, selectedGeometryId, calibration, pageWidth, pageHeight, canViewFinancials,
-  onToggle, onSelect, onGeometrySelect, onUpdate, onDelete,
+  onToggle, onSelect, onGeometrySelect, onUpdate, onDelete, onCollapse, onFlushSave,
 }: {
   item: DBTenderTakeoffItem;
   isActive: boolean;
@@ -179,8 +181,11 @@ function ItemRow({
   onGeometrySelect: (geometryId: string) => void;
   onUpdate: (updates: Partial<DBTenderTakeoffItem>) => void;
   onDelete: () => void;
+  onCollapse: () => void;
+  onFlushSave: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [quickDeleteTarget, setQuickDeleteTarget] = useState(false);
   const fq = finalQuantity(item);
   const measuredQty = item.source === 'manual' ? item.manual_quantity : item.quantity;
 
@@ -216,7 +221,23 @@ function ItemRow({
         <button onClick={(e) => { e.stopPropagation(); onUpdate({ is_visible: !item.is_visible }); }} className="p-0.5 text-slate-600 hover:text-slate-400 transition-colors">
           {item.is_visible ? <Eye size={13} /> : <EyeOff size={13} />}
         </button>
+        <button onClick={(e) => { e.stopPropagation(); setQuickDeleteTarget(true); }} className="p-0.5 text-slate-600 hover:text-red-400 transition-colors" title="Delete item">
+          <Trash2 size={13} />
+        </button>
       </div>
+
+      {quickDeleteTarget && (
+        <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4" onClick={() => setQuickDeleteTarget(false)}>
+          <div className="bg-[#1a2236] rounded-xl border border-[#1e2d4a] shadow-2xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-bold text-white mb-1">Delete "{item.label || 'Untitled'}"?</p>
+            <p className="text-xs text-slate-400 mb-4">This will remove the Take-Off item and its associated measurement geometry.</p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setQuickDeleteTarget(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-400 border border-[#1e2d4a] rounded hover:bg-[#1e2d4a] transition-colors">Cancel</button>
+              <button onClick={() => { setQuickDeleteTarget(false); onDelete(); }} className="px-3 py-1.5 text-xs font-semibold text-white bg-red-600 rounded hover:bg-red-700 transition-colors">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isExpanded && (
         <div className="bg-[#0d1628]/30">
@@ -318,16 +339,22 @@ function ItemRow({
             {canViewFinancials && (
               <CostBuildUpSection item={item} onUpdate={onUpdate} />
             )}
-            {!confirmDelete ? (
-              <button onClick={() => setConfirmDelete(true)} className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-red-400 hover:text-red-300 border border-red-900/50 rounded hover:bg-red-900/20 transition-colors">
-                <Trash2 size={11} />Delete Item
+            {/* Save + Delete actions */}
+            <div className="flex items-center justify-between pt-1">
+              <button onClick={() => { onFlushSave(); onCollapse(); }} className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold text-white bg-emerald-600 rounded hover:bg-emerald-700 transition-colors">
+                <Check size={12} />Save
               </button>
-            ) : (
-              <div className="flex gap-2">
-                <button onClick={onDelete} className="px-2 py-1 text-[10px] font-semibold text-white bg-red-600 rounded hover:bg-red-700 transition-colors">Confirm Delete</button>
-                <button onClick={() => setConfirmDelete(false)} className="px-2 py-1 text-[10px] font-semibold text-slate-400 border border-[#1e2d4a] rounded hover:bg-[#1e2d4a] transition-colors">Cancel</button>
-              </div>
-            )}
+              {!confirmDelete ? (
+                <button onClick={() => setConfirmDelete(true)} className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-semibold text-red-400 hover:text-red-300 border border-red-900/50 rounded hover:bg-red-900/20 transition-colors">
+                  <Trash2 size={11} />Delete Item
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={onDelete} className="px-2 py-1 text-[10px] font-semibold text-white bg-red-600 rounded hover:bg-red-700 transition-colors">Confirm Delete</button>
+                  <button onClick={() => setConfirmDelete(false)} className="px-2 py-1 text-[10px] font-semibold text-slate-400 border border-[#1e2d4a] rounded hover:bg-[#1e2d4a] transition-colors">Cancel</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
