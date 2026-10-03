@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Search, Hash, Minus, Square, FileText, AlertCircle, X, Download, ChevronDown } from 'lucide-react';
+import { Plus, Search, Hash, Minus, Square, FileText, AlertCircle, X, Download, ChevronDown, Package } from 'lucide-react';
 import { useAppStore, usePermissions } from '../../lib/StoreContext';
 import type { DBTenderTakeoffItem } from './takeoffTypes';
 import type { MeasurementType, TakeoffLineType } from './takeoffTypes';
 import { DISCIPLINES } from './drawingTypes';
 import { finalQuantity, calcTakeoffCosts, signedTakeoffCosts, formatCurrency } from './takeoffCalculations';
 import { exportInternalTakeoffPDF, exportClientTakeoffPDF } from './TakeoffSchedulePDF';
+import { exportMaterialPricingPDF, type MaterialEnquiryData } from './MaterialPricingEnquiryPDF';
+import { exportMaterialPricingXLSX, type MaterialEnquiryXLSXData } from './MaterialPricingEnquiryXLSX';
 
 interface Props {
   tenderId: string;
@@ -41,6 +43,10 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
   const exportBtnRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showEnquiryModal, setShowEnquiryModal] = useState<'pdf' | 'xlsx' | null>(null);
+  const [enquiryDiscipline, setEnquiryDiscipline] = useState('all');
+  const [enquiryIncludeOmissions, setEnquiryIncludeOmissions] = useState(false);
+  const [enquiryShowScope, setEnquiryShowScope] = useState(false);
 
   useEffect(() => {
     store.loadTenderTakeoffItems(tenderId);
@@ -107,6 +113,51 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
     exportClientTakeoffPDF(data);
   }
 
+  function buildEnquiryItems() {
+    return store.tenderTakeoffItems.filter(i => {
+      if (i.tender_id !== tenderId) return false;
+      if (enquiryDiscipline !== 'all' && i.discipline !== enquiryDiscipline) return false;
+      if (!enquiryIncludeOmissions && i.line_type === 'omission') return false;
+      const fq = finalQuantity(i);
+      if (fq <= 0) return false;
+      return true;
+    });
+  }
+
+  function handleExportMaterialPDF() {
+    const items = buildEnquiryItems();
+    if (items.length === 0) { setError('No items match the enquiry filters.'); return; }
+    const disciplineLabel = enquiryDiscipline === 'all' ? 'All Disciplines' : enquiryDiscipline;
+    const data: MaterialEnquiryData = {
+      tenderName, tenderRef, client: tenderClient, location: tenderLocation,
+      exportDate, logoDataUrl,
+      items, drawings,
+      disciplineLabel, includeOmissions: enquiryIncludeOmissions, showScope: enquiryShowScope,
+    };
+    exportMaterialPricingPDF(data);
+    setShowEnquiryModal(null);
+  }
+
+  async function handleExportMaterialXLSX() {
+    const items = buildEnquiryItems();
+    if (items.length === 0) { setError('No items match the enquiry filters.'); return; }
+    const disciplineLabel = enquiryDiscipline === 'all' ? 'All Disciplines' : enquiryDiscipline;
+    const data: MaterialEnquiryXLSXData = {
+      tenderName, tenderRef, client: tenderClient, location: tenderLocation,
+      items, drawings,
+      disciplineLabel, includeOmissions: enquiryIncludeOmissions, showScope: enquiryShowScope,
+    };
+    setExporting(true);
+    try {
+      await exportMaterialPricingXLSX(data);
+      setShowEnquiryModal(null);
+    } catch (e) {
+      setError('Failed to generate Excel enquiry.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {error && (
@@ -166,6 +217,12 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
                 )}
                 <button onClick={() => { setShowExportMenu(false); handleExportClient(); }} className="w-full flex items-center gap-3 px-4 py-3 text-xs text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left border-t border-[#1e2d4a]">
                   <FileText size={14} />Client Take-Off
+                </button>
+                <button onClick={() => { setShowExportMenu(false); setShowEnquiryModal('pdf'); }} className="w-full flex items-center gap-3 px-4 py-3 text-xs text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left border-t border-[#1e2d4a]">
+                  <Package size={14} />Material Pricing PDF
+                </button>
+                <button onClick={() => { setShowExportMenu(false); setShowEnquiryModal('xlsx'); }} className="w-full flex items-center gap-3 px-4 py-3 text-xs text-slate-300 hover:bg-[#1e2d4a] hover:text-white transition-colors text-left border-t border-[#1e2d4a]">
+                  <Package size={14} />Material Pricing Excel
                 </button>
               </div>
             </>
@@ -308,6 +365,63 @@ export default function TakeoffSchedule({ tenderId, tenderName, tenderRef, tende
           ))}
         </div>
       )}
+
+      {/* Material Pricing Enquiry modal */}
+      {showEnquiryModal && (() => {
+        const enquiryItems = buildEnquiryItems();
+        const disciplineLabel = enquiryDiscipline === 'all' ? 'All Disciplines' : enquiryDiscipline;
+        return (
+          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+            <div className="bg-[#1a2236] rounded-2xl border border-[#1e2d4a] shadow-2xl w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-5 border-b border-[#1e2d4a]">
+                <p className="text-sm font-bold text-white">Material Pricing Enquiry</p>
+                <button onClick={() => setShowEnquiryModal(null)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-[#1e2d4a]"><X size={18} /></button>
+              </div>
+              <div className="p-5 space-y-4 flex-1 overflow-y-auto">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 uppercase">Trade / Discipline</label>
+                  <select value={enquiryDiscipline} onChange={e => setEnquiryDiscipline(e.target.value)} className="w-full mt-1 px-3 py-2 bg-[#0d1628] border border-[#1e2d4a] rounded-lg text-sm text-slate-200 focus:outline-none focus:border-[#f97316]/50">
+                    <option value="all">All Disciplines</option>
+                    {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-slate-400">Include Omitted Items</label>
+                  <button onClick={() => setEnquiryIncludeOmissions(!enquiryIncludeOmissions)} className={`relative w-10 h-5 rounded-full transition-colors ${enquiryIncludeOmissions ? 'bg-[#f97316]' : 'bg-[#1e2d4a]'}`}>
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${enquiryIncludeOmissions ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-slate-400">Show Scope Classification (STD/ADD/OMIT)</label>
+                  <button onClick={() => setEnquiryShowScope(!enquiryShowScope)} className={`relative w-10 h-5 rounded-full transition-colors ${enquiryShowScope ? 'bg-[#f97316]' : 'bg-[#1e2d4a]'}`}>
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${enquiryShowScope ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+                <div className="px-4 py-3 bg-[#0d1628] rounded-lg border border-[#1e2d4a]">
+                  <p className="text-[10px] text-slate-600 uppercase font-bold mb-1">Enquiry Summary</p>
+                  <p className="text-sm text-slate-300">Trade: <span className="text-[#f97316] font-semibold">{disciplineLabel}</span></p>
+                  <p className="text-sm text-slate-300">Items: <span className="text-[#f97316] font-semibold">{enquiryItems.length}</span></p>
+                  <p className="text-[10px] text-slate-500 mt-1">Zero-quantity and omitted items are excluded by default.</p>
+                </div>
+                {enquiryItems.length === 0 && (
+                  <p className="text-xs text-amber-400">No items match these filters. Adjust the discipline or omission settings.</p>
+                )}
+              </div>
+              <div className="flex gap-3 justify-end p-5 border-t border-[#1e2d4a]">
+                <button onClick={() => setShowEnquiryModal(null)} className="px-4 py-2 text-sm font-semibold text-slate-400 hover:text-white border border-[#1e2d4a] rounded-lg hover:bg-[#1e2d4a] transition-colors">Cancel</button>
+                <button
+                  onClick={() => showEnquiryModal === 'pdf' ? handleExportMaterialPDF() : handleExportMaterialXLSX()}
+                  disabled={exporting || enquiryItems.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#f97316] rounded-lg hover:bg-orange-600 disabled:opacity-40 transition-colors"
+                >
+                  <Package size={14} />
+                  {exporting ? 'Generating...' : `Export ${showEnquiryModal === 'pdf' ? 'PDF' : 'Excel'}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Add manual item modal */}
       {showAddManual && (
