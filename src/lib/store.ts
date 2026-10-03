@@ -3394,7 +3394,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     switchUser,
     settings,
     updateSettings,
-    addProject, updateProject, removeProject,
+    projects, addProject, updateProject, removeProject,
     addProjectDocument, removeProjectDocument,
     addAttachment, removeAttachment, fetchAttachmentData,
     addAction, updateAction, removeAction,
