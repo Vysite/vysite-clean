@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Wrench, Edit3, Save, Trash2, X, FileText, ChevronDown, ChevronRight, Paperclip, Download, Calendar, AlertTriangle, FileDown, Loader2 } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';
 import type { DBAsset, DBAssetDocument, DBAssetServiceRecord, ServiceRecordStatus, ServiceCondition } from './types';
@@ -237,15 +238,39 @@ function ExportServicePDF({ asset, record, linkedDocs, canViewFinancials }: {
   const store = useAppStore();
   const [open, setOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuPos = useRef<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 170 });
+  const [, forceRender] = useState(0);
+
+  useLayoutEffect(() => {
+    if (open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const menuWidth = 170;
+      const left = Math.min(r.right - menuWidth, window.innerWidth - menuWidth - 8);
+      menuPos.current = { top: r.bottom + 4, left: Math.max(8, left), width: menuWidth };
+      forceRender(n => n + 1);
+    }
+  }, [open]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (btnRef.current && btnRef.current.contains(e.target as Node)) return;
+      setOpen(false);
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    function handleScroll() {
+      if (open) setOpen(false);
+    }
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('scroll', handleScroll, true);
+      window.addEventListener('resize', handleScroll);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [open]);
 
   async function handleExport(internal: boolean) {
     setExporting(true);
@@ -286,27 +311,30 @@ function ExportServicePDF({ asset, record, linkedDocs, canViewFinancials }: {
   }
 
   return (
-    <div ref={ref} className="relative">
-      <button onClick={e => { e.stopPropagation(); setOpen(!open); }} disabled={exporting}
+    <>
+      <button ref={btnRef} onClick={e => { e.stopPropagation(); setOpen(!open); }} disabled={exporting}
         className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-slate-400 hover:text-[#f97316] border border-[#1e2d4a] rounded-lg hover:border-[#f97316] transition-colors disabled:opacity-60">
         {exporting ? <Loader2 size={11} className="animate-spin" /> : <FileDown size={11} />}Export PDF
         <ChevronDown size={10} />
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 bg-[#1a2236] border border-[#1e2d4a] rounded-lg shadow-xl py-1 min-w-[170px]">
-          <button onClick={e => { e.stopPropagation(); handleExport(false); }}
+      {open && createPortal(
+        <div style={{ position: 'fixed', top: menuPos.current.top, left: menuPos.current.left, width: menuPos.current.width, zIndex: 9999 }}
+          className="bg-[#1a2236] border border-[#1e2d4a] rounded-lg shadow-xl py-1"
+          onMouseDown={e => e.stopPropagation()}>
+          <button onClick={() => handleExport(false)}
             className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-[#0d1628] transition-colors">
             Client Service Record
           </button>
           {canViewFinancials && (
-            <button onClick={e => { e.stopPropagation(); handleExport(true); }}
+            <button onClick={() => handleExport(true)}
               className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-[#0d1628] transition-colors">
               Internal Service Record
             </button>
           )}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
