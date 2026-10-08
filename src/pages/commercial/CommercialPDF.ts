@@ -368,14 +368,16 @@ interface PositionData {
   completedNum: number | null;
   variationExposure: number;
   agreedVariations: number;
+  agreedAdditions: number;
+  agreedOmissions: number;
   currentUserName: string;
   logoUrl?: string;
 }
 
 function positionStatementBody(d: PositionData): string {
   const today = todayStr();
-  const forecastContractSum = d.contractNum + d.variationExposure;
   const adjustedContractSum = d.contractNum + d.agreedVariations;
+  const forecastContractSum = adjustedContractSum + d.variationExposure;
   const remainingValue = d.completedNum != null ? adjustedContractSum - d.completedNum : null;
 
   const metaItems: [string, string][] = [
@@ -421,9 +423,11 @@ function positionStatementBody(d: PositionData): string {
     <div class="exposure-value">+${fv(d.variationExposure)}</div>
   </div>` : ''}
 
-  ${d.agreedVariations !== 0 || adjustedContractSum !== forecastContractSum ? `<div style="margin-top:16px;">
+  ${d.agreedAdditions > 0 || d.agreedOmissions > 0 || d.agreedVariations !== 0 || adjustedContractSum !== forecastContractSum ? `<div style="margin-top:16px;">
   ${finStatement([
-    { label: 'Agreed Variations', value: d.agreedVariations !== 0 ? '+' + fv(d.agreedVariations) : fv(0) },
+    ...(d.agreedAdditions > 0 ? [{ label: 'Agreed Additional Variations', value: '+' + fv(d.agreedAdditions) }] : []),
+    ...(d.agreedOmissions > 0 ? [{ label: 'Agreed Omissions / Credits', value: '-' + fv(d.agreedOmissions) }] : []),
+    ...(d.agreedVariations !== 0 ? [{ label: 'Net Agreed Variations', value: (d.agreedVariations > 0 ? '+' : '') + fv(d.agreedVariations) }] : []),
     { label: 'Adjusted Contract Sum', value: d.contractNum > 0 ? fv(adjustedContractSum) : '—', style: 'total' },
   ])}</div>` : ''}
 
@@ -1372,6 +1376,8 @@ interface FullReportData {
   completedNum: number | null;
   variationExposure: number;
   agreedVariations: number;
+  agreedAdditions: number;
+  agreedOmissions: number;
   forecastContractSum: number;
   adjustedContractSum: number;
   vaExposure: number;
@@ -1661,8 +1667,8 @@ function fullReportBody(d: FullReportData): string {
   const today = todayStr();
   const p = d.project;
 
-  const forecastContractSum = d.contractNum + d.variationExposure;
   const adjustedContractSum = d.contractNum + d.agreedVariations;
+  const forecastContractSum = adjustedContractSum + d.variationExposure;
   const remainingValue = d.completedNum != null ? adjustedContractSum - d.completedNum : null;
 
   const appliedToDate   = d.apps.reduce((s, a) => s + a.applied_value, 0);
@@ -1723,8 +1729,12 @@ function fullReportBody(d: FullReportData): string {
   </div>` : ''}
   ${finStatement((() => {
     const rows: StatRow[] = [{ label: 'Original Contract Sum', value: ocs }];
-    if (d.agreedVariations !== 0) rows.push({ label: 'Agreed Variations', value: `+${fv(d.agreedVariations)}` });
+    if (d.agreedAdditions > 0) rows.push({ label: 'Agreed Additional Variations', value: '+' + fv(d.agreedAdditions) });
+    if (d.agreedOmissions > 0) rows.push({ label: 'Agreed Omissions / Credits', value: '-' + fv(d.agreedOmissions) });
+    if (d.agreedVariations !== 0) rows.push({ label: 'Net Agreed Variations', value: (d.agreedVariations > 0 ? '+' : '') + fv(d.agreedVariations) });
     rows.push({ label: 'Adjusted Contract Sum', value: d.contractNum > 0 ? fv(adjustedContractSum) : '—', style: 'total' });
+    if (d.variationExposure > 0) rows.push({ label: 'Outstanding Variation Exposure', value: fv(d.variationExposure) });
+    rows.push({ label: 'Forecast Contract Sum', value: d.contractNum > 0 ? fv(forecastContractSum) : '—', style: 'total' });
     if (d.completedNum != null) rows.push({ label: 'Completed Value', value: fv(d.completedNum) });
     if (remainingValue != null) rows.push({ label: 'Remaining Value', value: fv(remainingValue) });
     return rows;
@@ -1865,8 +1875,8 @@ function fullReportBody(d: FullReportData): string {
     const committedCost = cs.committed ?? 0;
     const forecastCost = cs.forecast ?? 0;
     const forecastFinalCost = actualCost + committedCost + forecastCost;
-    const forecastProfit = forecastContractSum - forecastFinalCost;
-    const forecastMargin = forecastContractSum > 0 ? (forecastProfit / forecastContractSum) * 100 : 0;
+    const forecastProfit = adjustedContractSum - forecastFinalCost;
+    const forecastMargin = adjustedContractSum > 0 ? (forecastProfit / adjustedContractSum) * 100 : 0;
     const profitPositive = forecastProfit >= 0;
     const hasCostData = actualCost > 0 || committedCost > 0 || forecastCost > 0;
     const progress = d.contractNum > 0 && d.completedNum != null
@@ -1921,8 +1931,8 @@ function fullReportBody(d: FullReportData): string {
     const committedCost = cs.committed ?? 0;
     const forecastCost = cs.forecast ?? 0;
     const forecastFinalCost = actualCost + committedCost + forecastCost;
-    const currentForecastProfit = forecastContractSum - forecastFinalCost;
-    const currentMargin = forecastContractSum > 0 ? (currentForecastProfit / forecastContractSum) * 100 : 0;
+    const currentForecastProfit = adjustedContractSum - forecastFinalCost;
+    const currentMargin = adjustedContractSum > 0 ? (currentForecastProfit / adjustedContractSum) * 100 : 0;
     const budgetCost = (d.project as { budgetCost?: number | null }).budgetCost ?? null;
     const hasBudget = budgetCost != null && budgetCost > 0;
     const originalForecastProfit = hasBudget ? d.contractNum - budgetCost : null;

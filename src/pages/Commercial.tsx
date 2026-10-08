@@ -2534,8 +2534,10 @@ export default function Commercial() {
                 const contractNum = bannerProject.value ? parseRawValue(bannerProject.value) : 0;
                 const variationExposure = vaHasItems ? vaMetrics.exposure : (bannerProject.variationsValue ?? 0);
                 const agreedVariations = vaHasItems ? vaMetrics.agreed : 0;
-                const forecastContractSum = contractNum + variationExposure;
+                const agreedAdditions = vaHasItems ? vaMetrics.agreedAdditions : 0;
+                const agreedOmissions = vaHasItems ? vaMetrics.agreedOmissions : 0;
                 const adjustedContractSum = contractNum + agreedVariations;
+                const forecastContractSum = adjustedContractSum + variationExposure;
                 const completedNum = bannerProject.committed ?? null;
                 const projectApps = (store.commercialApplications ?? []).filter(a => a.project_id === bannerProject.id);
                 const buildEventsForPDF = () => {
@@ -2590,6 +2592,8 @@ export default function Commercial() {
                   completedNum,
                   variationExposure,
                   agreedVariations,
+                  agreedAdditions,
+                  agreedOmissions,
                   forecastContractSum,
                   adjustedContractSum,
                   vaExposure: vaMetrics.exposure,
@@ -2655,6 +2659,8 @@ export default function Commercial() {
           currentUserName={store.currentUser?.name ?? ''}
           vaExposure={vaMetrics.exposure}
           vaAgreed={vaMetrics.agreed}
+          vaAgreedAdditions={vaMetrics.agreedAdditions}
+          vaAgreedOmissions={vaMetrics.agreedOmissions}
           vaHasItems={vaHasItems}
           canViewCosts={canViewCosts}
           onProjectChange={(id) => selectProject(id)}
@@ -2731,8 +2737,9 @@ export default function Commercial() {
       )}
       {activeTab === 'applications' && (() => {
         const contractNum = bannerProject?.value ? parseRawValue(bannerProject.value) : 0;
+        const adjustedContractSum = contractNum + (vaHasItems ? vaMetrics.agreed : 0);
         const variationExposure = vaHasItems ? vaMetrics.exposure : (bannerProject?.variationsValue ?? 0);
-        const forecastContractSum = contractNum + variationExposure;
+        const forecastContractSum = adjustedContractSum + variationExposure;
         return (
           <CommercialApplications
             project={bannerProject}

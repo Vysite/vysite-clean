@@ -51,16 +51,17 @@ export function calcVAMetrics(items: DBVariationAccountItem[]) {
   const exposure = items
     .filter(i => EXPOSURE_STATUSES.includes(i.status as VAStatus))
     .reduce((s, i) => s + signedValue(i), 0);
-  const agreed = items
-    .filter(i => AGREED_STATUSES.includes(i.status as VAStatus))
-    .reduce((s, i) => s + signedValue(i), 0);
+  const agreedItems = items.filter(i => AGREED_STATUSES.includes(i.status as VAStatus));
+  const agreed = agreedItems.reduce((s, i) => s + signedValue(i), 0);
+  const agreedAdditions = agreedItems.filter(i => i.is_positive).reduce((s, i) => s + i.value, 0);
+  const agreedOmissions = agreedItems.filter(i => !i.is_positive).reduce((s, i) => s + i.value, 0);
   const rejected = items
     .filter(i => i.status === 'rejected')
     .reduce((s, i) => s + signedValue(i), 0);
   const underReview = items
     .filter(i => i.status === 'under_review')
     .reduce((s, i) => s + signedValue(i), 0);
-  return { exposure, agreed, rejected, underReview };
+  return { exposure, agreed, agreedAdditions, agreedOmissions, rejected, underReview };
 }
 
 // ─── Shared styles ────────────────────────────────────────────────────────────

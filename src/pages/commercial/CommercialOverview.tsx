@@ -23,6 +23,8 @@ interface CommercialOverviewProps {
   // VA metrics — passed from parent so Overview reflects live Variation Account data
   vaExposure: number;
   vaAgreed: number;
+  vaAgreedAdditions: number;
+  vaAgreedOmissions: number;
   vaHasItems: boolean;
   canViewCosts: boolean;
   onProjectChange: (id: string) => void;
@@ -78,7 +80,7 @@ function activityIcon(label: string) {
 
 export default function CommercialOverview({
   project, projects, records, keyDates, canEdit, canCreate,
-  currentUserName, vaExposure, vaAgreed, vaHasItems, canViewCosts,
+  currentUserName, vaExposure, vaAgreed, vaAgreedAdditions, vaAgreedOmissions, vaHasItems, canViewCosts,
   onProjectChange, onAddKeyDate, onUpdateKeyDate,
   onRemoveKeyDate, onUpdateProject, onNewRecord,
 }: CommercialOverviewProps) {
@@ -141,8 +143,10 @@ export default function CommercialOverview({
   // When VA items exist use live calculations; otherwise fall back to manual variationsValue
   const variationExposure   = vaHasItems ? vaExposure : (project.variationsValue ?? 0);
   const agreedVariations    = vaHasItems ? vaAgreed : 0;
-  const forecastContractSum = contractNum + variationExposure;
+  const agreedAdditions     = vaHasItems ? vaAgreedAdditions : 0;
+  const agreedOmissions     = vaHasItems ? vaAgreedOmissions : 0;
   const adjustedContractSum = contractNum + agreedVariations;
+  const forecastContractSum = adjustedContractSum + variationExposure;
   const remainingValue      = completedNum != null ? adjustedContractSum - completedNum : null;
 
   const progress = contractNum > 0 && completedNum != null
@@ -187,6 +191,8 @@ export default function CommercialOverview({
       completedNum,
       variationExposure,
       agreedVariations,
+      agreedAdditions,
+      agreedOmissions,
       currentUserName: currentUserName || '',
       logoUrl: store.settings?.logo_data_url,
     });
@@ -328,10 +334,10 @@ export default function CommercialOverview({
               </span>
             </div>
 
-            {/* Row: Agreed Variations */}
+            {/* Row: Agreed Additional Variations */}
             <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm text-slate-400">Agreed Variations</span>
+                <span className="text-sm text-slate-400">Agreed Additional Variations</span>
                 {vaHasItems && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0d1628] border border-[#1e2d4a] text-slate-500">
                     From Variation Account
@@ -339,6 +345,20 @@ export default function CommercialOverview({
                 )}
               </div>
               <span className="text-sm font-medium text-emerald-400 tabular-nums">
+                {agreedAdditions > 0 ? '+' + fmtCurrency(agreedAdditions) : '—'}
+              </span>
+            </div>
+            {/* Row: Agreed Omissions / Credits */}
+            <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
+              <span className="text-sm text-slate-400">Agreed Omissions / Credits</span>
+              <span className="text-sm font-medium text-red-400 tabular-nums">
+                {agreedOmissions > 0 ? '-' + fmtCurrency(agreedOmissions) : '—'}
+              </span>
+            </div>
+            {/* Row: Net Agreed Variations */}
+            <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
+              <span className="text-sm text-slate-300">Net Agreed Variations</span>
+              <span className={`text-sm font-semibold tabular-nums ${agreedVariations >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {agreedVariations !== 0 ? (agreedVariations > 0 ? '+' : '') + fmtCurrency(agreedVariations) : '—'}
               </span>
             </div>
@@ -394,8 +414,8 @@ export default function CommercialOverview({
             const committedCost = costSummary.committed ?? 0;
             const forecastCost = costSummary.forecast ?? 0;
             const forecastFinalCost = actualCost + committedCost + forecastCost;
-            const forecastProfit = forecastContractSum - forecastFinalCost;
-            const forecastMargin = forecastContractSum > 0 ? (forecastProfit / forecastContractSum) * 100 : 0;
+            const forecastProfit = adjustedContractSum - forecastFinalCost;
+            const forecastMargin = adjustedContractSum > 0 ? (forecastProfit / adjustedContractSum) * 100 : 0;
             const profitPositive = forecastProfit >= 0;
             const hasCostData = canViewCosts && (actualCost > 0 || committedCost > 0 || forecastCost > 0);
             return (
@@ -468,8 +488,8 @@ export default function CommercialOverview({
         const hasBudget = budgetCost != null && budgetCost > 0;
         const originalForecastProfit = hasBudget ? contractNum - budgetCost : null;
         const originalMargin = hasBudget && contractNum > 0 ? ((contractNum - budgetCost) / contractNum) * 100 : null;
-        const currentForecastProfit = forecastContractSum - forecastFinalCost;
-        const currentMargin = forecastContractSum > 0 ? (currentForecastProfit / forecastContractSum) * 100 : 0;
+        const currentForecastProfit = adjustedContractSum - forecastFinalCost;
+        const currentMargin = adjustedContractSum > 0 ? (currentForecastProfit / adjustedContractSum) * 100 : 0;
         const marginMovement = hasBudget && originalMargin != null ? currentMargin - originalMargin : null;
         const marginImproving = marginMovement != null && marginMovement >= 0;
 
