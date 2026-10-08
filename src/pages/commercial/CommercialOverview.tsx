@@ -184,6 +184,9 @@ export default function CommercialOverview({
   const projectKeyDates = keyDates.filter(d => d.project_id === project.id);
 
   function exportPositionStatement() {
+    const actualCost = costSummary.actual ?? 0;
+    const committedCost = costSummary.committed ?? 0;
+    const forecastCost = costSummary.forecast ?? 0;
     exportPositionStatementPDF({
       project,
       keyDates: projectKeyDates,
@@ -195,6 +198,9 @@ export default function CommercialOverview({
       agreedOmissions,
       currentUserName: currentUserName || '',
       logoUrl: store.settings?.logo_data_url,
+      costSummary: canViewCosts && (actualCost > 0 || committedCost > 0 || forecastCost > 0)
+        ? { actual: actualCost, committed: committedCost, forecast: forecastCost }
+        : undefined,
     });
   }
 
@@ -236,7 +242,7 @@ export default function CommercialOverview({
               <button
                 onClick={exportPositionStatement}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-[#f97316] rounded-lg transition-colors"
-                title="Export Commercial Position Statement"
+                title="Export Commercial Overview Report"
               >
                 <FileText size={12} /> Export PDF
               </button>

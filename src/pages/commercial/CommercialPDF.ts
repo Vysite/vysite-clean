@@ -372,6 +372,7 @@ interface PositionData {
   agreedOmissions: number;
   currentUserName: string;
   logoUrl?: string;
+  costSummary?: { actual: number; committed: number; forecast: number };
 }
 
 function positionStatementBody(d: PositionData): string {
@@ -388,8 +389,58 @@ function positionStatementBody(d: PositionData): string {
     ['Status',          d.project.status         || '—'],
   ];
 
+  // Cost & profitability calculations — identical to Commercial Overview
+  const cs = d.costSummary;
+  const actualCost = cs?.actual ?? 0;
+  const committedCost = cs?.committed ?? 0;
+  const forecastCost = cs?.forecast ?? 0;
+  const forecastFinalCost = actualCost + committedCost + forecastCost;
+  const hasCostData = cs != null && (actualCost > 0 || committedCost > 0 || forecastCost > 0);
+  const budgetCost = (d.project as { budgetCost?: number | null }).budgetCost ?? null;
+  const hasBudget = budgetCost != null && budgetCost > 0;
+  const currentForecastProfit = adjustedContractSum - forecastFinalCost;
+  const currentMargin = adjustedContractSum > 0 ? (currentForecastProfit / adjustedContractSum) * 100 : 0;
+  const originalExpectedProfit = hasBudget ? d.contractNum - budgetCost : null;
+  const originalMargin = hasBudget && d.contractNum > 0 ? ((d.contractNum - budgetCost!) / d.contractNum) * 100 : null;
+  const marginMovement = hasBudget && originalMargin != null ? currentMargin - originalMargin : null;
+  const profitPositive = currentForecastProfit >= 0;
+
+  // ── Section 1: Commercial Position ──
+  const positionRows: StatRow[] = [{ label: 'Original Contract Sum', value: d.contractNum > 0 ? fv(d.contractNum) : '—' }];
+  if (d.agreedAdditions > 0) positionRows.push({ label: 'Agreed Additional Variations', value: '+' + fv(d.agreedAdditions) });
+  if (d.agreedOmissions > 0) positionRows.push({ label: 'Agreed Omissions / Credits', value: '-' + fv(d.agreedOmissions) });
+  if (d.agreedVariations !== 0) positionRows.push({ label: 'Net Agreed Variations', value: (d.agreedVariations > 0 ? '+' : '') + fv(d.agreedVariations) });
+  positionRows.push({ label: 'Adjusted Contract Sum', value: d.contractNum > 0 ? fv(adjustedContractSum) : '—', style: 'total' });
+  if (d.variationExposure > 0) positionRows.push({ label: 'Outstanding Variation Exposure', value: fv(d.variationExposure) });
+  positionRows.push({ label: 'Forecast Contract Sum', value: d.contractNum > 0 ? fv(forecastContractSum) : '—', style: 'total' });
+  if (d.completedNum != null) positionRows.push({ label: 'Completed Value', value: fv(d.completedNum) });
+  if (remainingValue != null) positionRows.push({ label: 'Remaining Value', value: fv(remainingValue) });
+
+  // ── Section 2: Project Cost Position ──
+  const costRows: StatRow[] = [
+    { label: 'Original Budget Cost', value: hasBudget ? fv(budgetCost!) : 'Budget required' },
+    { label: 'Actual Cost to Date', value: fv(actualCost) },
+    { label: 'Committed Costs', value: fv(committedCost) },
+    { label: 'Forecast Cost to Complete', value: fv(forecastCost) },
+    { label: 'Forecast Final Cost', value: fv(forecastFinalCost), style: 'total' },
+  ];
+
+  // ── Section 3: Project Profitability ──
+  const profitRows: StatRow[] = [];
+  if (originalExpectedProfit != null) {
+    profitRows.push({ label: 'Original Expected Profit', value: fv(originalExpectedProfit) });
+  }
+  profitRows.push({ label: 'Current Forecast Profit (Agreed Basis)', value: fv(currentForecastProfit) });
+  if (originalMargin != null) {
+    profitRows.push({ label: 'Original Margin %', value: originalMargin.toFixed(1) + '%' });
+  }
+  profitRows.push({ label: 'Current Forecast Margin %', value: currentMargin.toFixed(1) + '%' });
+  if (marginMovement != null) {
+    profitRows.push({ label: 'Margin Movement', value: (marginMovement >= 0 ? '+' : '') + marginMovement.toFixed(1) + '%' });
+  }
+
   return `
-  ${docHeader('Commercial Document', 'Commercial Position Statement', d.project.name, d.project.client, today, d.logoUrl)}
+  ${docHeader('Commercial Document', 'Commercial Overview Report', d.project.name, d.project.client, today, d.logoUrl)}
   <div class="exec-project-band">
     <div>
       <div class="exec-project-name">${esc(d.project.name)}</div>
@@ -401,55 +452,25 @@ function positionStatementBody(d: PositionData): string {
     </div>
   </div>
 
-  <div class="exec-section-label">Commercial Position</div>
+  <div class="exec-section-label">1. Commercial Position</div>
+  ${finStatement(positionRows)}
 
-  <div class="fin-primary-row">
-    <div class="fin-primary-fig">
-      <div class="fin-fig-label">Original Contract Sum</div>
-      <div class="fin-fig-xl">${d.contractNum > 0 ? fv(d.contractNum) : '—'}</div>
-    </div>
-    <div class="fin-primary-fig">
-      <div class="fin-fig-label">Forecast Contract Sum</div>
-      <div class="fin-fig-xl accent">${d.contractNum > 0 ? fv(forecastContractSum) : '—'}</div>
-    </div>
-  </div>
+  ${hasCostData ? `
+  <div class="exec-section-label" style="margin-top:20px;">2. Project Cost Position</div>
+  ${finStatement(costRows)}` : ''}
 
-  ${d.variationExposure > 0 ? `
-  <div class="exposure-band">
-    <div>
-      <div class="exposure-label">Outstanding Variation Exposure</div>
-      <div class="exposure-sub">Submitted &amp; Under Review &mdash; not yet agreed</div>
-    </div>
-    <div class="exposure-value">+${fv(d.variationExposure)}</div>
-  </div>` : ''}
+  ${hasCostData ? `
+  <div class="exec-section-label" style="margin-top:20px;">3. Project Profitability</div>
+  <div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-bottom:8px;">Current Forecast Profit uses the Adjusted Contract Sum and Forecast Final Cost shown above.</div>
+  ${finStatement(profitRows)}` : ''}
 
-  ${d.agreedAdditions > 0 || d.agreedOmissions > 0 || d.agreedVariations !== 0 || adjustedContractSum !== forecastContractSum ? `<div style="margin-top:16px;">
-  ${finStatement([
-    ...(d.agreedAdditions > 0 ? [{ label: 'Agreed Additional Variations', value: '+' + fv(d.agreedAdditions) }] : []),
-    ...(d.agreedOmissions > 0 ? [{ label: 'Agreed Omissions / Credits', value: '-' + fv(d.agreedOmissions) }] : []),
-    ...(d.agreedVariations !== 0 ? [{ label: 'Net Agreed Variations', value: (d.agreedVariations > 0 ? '+' : '') + fv(d.agreedVariations) }] : []),
-    { label: 'Adjusted Contract Sum', value: d.contractNum > 0 ? fv(adjustedContractSum) : '—', style: 'total' },
-  ])}</div>` : ''}
-
-  ${d.completedNum != null ? `
-  <div class="fin-secondary-row" style="margin-top:16px;">
-    <div class="fin-sec-fig">
-      <div class="fin-sec-label">Completed / Certified Value</div>
-      <div class="fin-sec-value">${fv(d.completedNum)}</div>
-    </div>
-    ${remainingValue != null ? `
-    <div class="fin-sec-fig">
-      <div class="fin-sec-label">Remaining Value</div>
-      <div class="fin-sec-value${remainingValue < 0 ? ' warn' : ''}">${fv(remainingValue)}</div>
-    </div>` : ''}
-  </div>` : ''}
-
+  <div class="exec-section-label" style="margin-top:20px;">4. Project Information</div>
   <div class="proj-meta">
     ${metaItems.map(([k, v]) => `<div class="proj-meta-item"><div class="proj-meta-label">${esc(k)}</div><div class="proj-meta-value">${esc(v)}</div></div>`).join('')}
   </div>
 
   ${d.keyDates.length > 0 ? `
-  <div class="exec-section-label">Key Dates</div>
+  <div class="exec-section-label" style="margin-top:20px;">5. Key Dates</div>
   ${keyDatesTable(d.keyDates)}` : ''}
 
   ${docFooter(d.currentUserName, today)}`;
@@ -2706,7 +2727,7 @@ export function exportVAClientPDF(data: VABuildUpData): void {
 }
 
 export function exportPositionStatementPDF(data: PositionData): void {
-  openPrintTab(pageShell(`Commercial Position Statement — ${data.project.name}`, positionStatementBody(data)));
+  openPrintTab(pageShell(`Commercial Overview Report — ${data.project.name}`, positionStatementBody(data)));
 }
 
 export function exportRegisterPDF(data: RegisterData): void {
