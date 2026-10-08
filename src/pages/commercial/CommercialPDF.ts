@@ -66,6 +66,12 @@ html, body {
 .exec-client { font-size: 9.5pt; color: #334155; margin-top: 4px; }
 .exec-report-date { font-size: 7.5pt; color: #475569; text-align: right; line-height: 1.6; }
 
+/* ── Compact project meta strip (in header band) ── */
+.exec-project-meta { display: flex; flex-wrap: wrap; gap: 0 20px; margin-top: 14px; padding-top: 12px; border-top: 0.5px solid #e2e8f0; }
+.exec-pm-item { min-width: 90px; margin-bottom: 6px; }
+.exec-pm-label { font-size: 5.5pt; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #64748b; margin-bottom: 1px; }
+.exec-pm-value { font-size: 8pt; font-weight: 600; color: #1e293b; }
+
 /* ── Section label ── */
 .exec-section-label {
   font-size: 6.5pt; font-weight: 800; letter-spacing: 0.18em;
@@ -518,7 +524,6 @@ function positionStatementBody(d: PositionData): string {
   const originalExpectedProfit = hasBudget ? d.contractNum - budgetCost : null;
   const originalMargin = hasBudget && d.contractNum > 0 ? ((d.contractNum - budgetCost!) / d.contractNum) * 100 : null;
   const marginMovement = hasBudget && originalMargin != null ? currentMargin - originalMargin : null;
-  const profitPositive = currentForecastProfit >= 0;
 
   // ── Section 1: Commercial Position ──
   const positionRows: StatRow[] = [{ label: 'Original Contract Sum', value: d.contractNum > 0 ? fv(d.contractNum) : '—' }];
@@ -557,9 +562,12 @@ function positionStatementBody(d: PositionData): string {
   return `
   ${docHeader('Commercial Document', 'Commercial Overview Report', d.project.name, d.project.client, today, d.logoUrl)}
   <div class="exec-project-band">
-    <div>
+    <div style="flex:1;">
       <div class="exec-project-name">${esc(d.project.name)}</div>
       ${d.project.client ? `<div class="exec-client">${esc(d.project.client)}</div>` : ''}
+      <div class="exec-project-meta">
+        ${metaItems.map(([k, v]) => `<div class="exec-pm-item"><div class="exec-pm-label">${esc(k)}</div><div class="exec-pm-value">${esc(v)}</div></div>`).join('')}
+      </div>
     </div>
     <div class="exec-report-date">
       <div>${today}</div>
@@ -574,29 +582,16 @@ function positionStatementBody(d: PositionData): string {
 
   ${hasCostData ? `
   <div class="pdf-section">
-  <div class="exec-section-label" style="margin-top:20px;">2. Project Cost Position</div>
+  <div class="exec-section-label" style="margin-top:16px;">2. Project Cost Position</div>
   ${finStatement(costRows)}
   </div>` : ''}
 
   ${hasCostData ? `
   <div class="pdf-section">
-  <div class="exec-section-label" style="margin-top:20px;">3. Project Profitability</div>
+  <div class="exec-section-label" style="margin-top:16px;">3. Project Profitability</div>
   <div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-bottom:8px;">Current Forecast Profit uses the Adjusted Contract Sum and Forecast Final Cost shown above.</div>
   ${finStatement(profitRows)}
   ${profitabilityChartHtml(originalExpectedProfit, currentForecastProfit, originalMargin, currentMargin, marginMovement, hasBudget)}
-  </div>` : ''}
-
-  <div class="pdf-section">
-  <div class="exec-section-label" style="margin-top:20px;">4. Project Information</div>
-  <div class="proj-meta">
-    ${metaItems.map(([k, v]) => `<div class="proj-meta-item"><div class="proj-meta-label">${esc(k)}</div><div class="proj-meta-value">${esc(v)}</div></div>`).join('')}
-  </div>
-  </div>
-
-  ${d.keyDates.length > 0 ? `
-  <div class="pdf-section">
-  <div class="exec-section-label" style="margin-top:20px;">5. Key Dates</div>
-  ${keyDatesTable(d.keyDates)}
   </div>` : ''}
 
   ${docFooter(d.currentUserName, today)}`;
