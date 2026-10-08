@@ -219,6 +219,25 @@ html, body {
 /* ── Page break ── */
 .page-break { page-break-before: always; padding-top: 40px; }
 
+/* ── Section keep-together ── */
+.pdf-section { page-break-inside: avoid; break-inside: avoid; }
+
+/* ── Profitability chart (print-friendly, white background) ── */
+.profit-chart-wrap { page-break-inside: avoid; break-inside: avoid; margin: 12px 0 8px; }
+.profit-chart-title { font-size: 7pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #475569; margin-bottom: 8px; }
+.profit-chart-svg { width: 100%; max-width: 480px; display: block; }
+.profit-chart-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 10px; border-top: 0.5px solid #e2e8f0; padding-top: 10px; }
+.profit-chart-legend-item { padding-right: 16px; }
+.profit-chart-legend-item + .profit-chart-legend-item { border-left: 0.5px solid #e2e8f0; padding-left: 16px; padding-right: 0; }
+.profit-chart-legend-label { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #475569; margin-bottom: 3px; }
+.profit-chart-legend-value { font-size: 9pt; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+.profit-chart-legend-value.pos { color: #166534; }
+.profit-chart-legend-value.neg { color: #991b1b; }
+.profit-chart-legend-sub { font-size: 7.5pt; color: #475569; margin-top: 2px; }
+.profit-chart-legend-mv { font-size: 8.5pt; font-weight: 700; font-variant-numeric: tabular-nums; }
+.profit-chart-legend-mv.pos { color: #166534; }
+.profit-chart-legend-mv.neg { color: #991b1b; }
+
 /* ── Full report cover ── */
 .fr-cover { padding-bottom: 28px; border-bottom: 1.5px solid #0f172a; margin-bottom: 28px; }
 .fr-cover-brand { font-size: 10pt; font-weight: 900; letter-spacing: 0.18em; color: #ea6c00; text-transform: uppercase; margin-bottom: 48px; }
@@ -359,6 +378,102 @@ function keyDatesTable(keyDates: DBKeyDate[]): string {
   return `<table class="kd-table">${thead}<tbody>${rows}</tbody></table>`;
 }
 
+// ─── Profitability chart (print-friendly SVG) ──────────────────────────────────
+
+function profitabilityChartHtml(
+  originalProfit: number | null,
+  currentProfit: number,
+  originalMargin: number | null,
+  currentMargin: number,
+  marginMovement: number | null,
+  hasBudget: boolean,
+): string {
+  const chartW = 480;
+  const chartH = 180;
+  const pad = { top: 20, right: 24, bottom: 36, left: 24 };
+  const plotW = chartW - pad.left - pad.right;
+  const plotH = chartH - pad.top - pad.bottom;
+
+  const values: number[] = [];
+  if (originalProfit != null) values.push(originalProfit);
+  values.push(currentProfit);
+
+  const maxVal = Math.max(...values, 0);
+  const minVal = Math.min(...values, 0);
+  const range = maxVal - minVal || 1;
+  const zeroY = pad.top + plotH * (maxVal / range);
+  const barW = 80;
+  const barGap = plotW / 2;
+  const barCenters = [pad.left + barGap * 0.5, pad.left + barGap * 1.5];
+
+  function valToY(v: number): number {
+    return pad.top + plotH * ((maxVal - v) / range);
+  }
+
+  function renderPdfBar(
+    cx: number,
+    value: number | null,
+    label: string,
+    marginPct: number | null,
+    available: boolean,
+    barColor: string,
+  ): string {
+    if (!available || value == null) {
+      return `<g>
+        <rect x="${cx - barW / 2}" y="${zeroY - 10}" width="${barW}" height="20" rx="3"
+          fill="none" stroke="#cbd5e1" stroke-dasharray="3 2" />
+        <text x="${cx}" y="${zeroY + 3}" text-anchor="middle" font-size="7" fill="#94a3b8">Unavailable</text>
+        <text x="${cx}" y="${chartH - 18}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#475569">${esc(label)}</text>
+        <text x="${cx}" y="${chartH - 6}" text-anchor="middle" font-size="6.5" fill="#94a3b8">Budget required</text>
+      </g>`;
+    }
+    const y = valToY(value);
+    const isPos = value >= 0;
+    const barTop = isPos ? y : zeroY;
+    const barH = Math.max(Math.abs(y - zeroY), 2);
+    const valLabel = fv(value);
+    const marginLabel = marginPct != null ? marginPct.toFixed(1) + '% margin' : '';
+
+    return `<g>
+      <rect x="${cx - barW / 2}" y="${barTop}" width="${barW}" height="${barH}" rx="3"
+        fill="${barColor}" fill-opacity="0.82" />
+      <text x="${cx}" y="${isPos ? y - 6 : y + 13}" text-anchor="middle" font-size="7.5" font-weight="700"
+        fill="${isPos ? '#166534' : '#991b1b'}">${esc(valLabel)}</text>
+      <text x="${cx}" y="${chartH - 18}" text-anchor="middle" font-size="7.5" font-weight="600" fill="#1e293b">${esc(label)}</text>
+      ${marginLabel ? `<text x="${cx}" y="${chartH - 6}" text-anchor="middle" font-size="6.5" font-weight="600" fill="${isPos ? '#166534' : '#991b1b'}">${esc(marginLabel)}</text>` : ''}
+    </g>`;
+  }
+
+  const mvPos = marginMovement != null && marginMovement >= 0;
+  const mvLabel = marginMovement != null
+    ? (marginMovement >= 0 ? '+' : '') + marginMovement.toFixed(1) + ' pp'
+    : 'Budget required';
+
+  return `<div class="profit-chart-wrap">
+    <div class="profit-chart-title">Project Profitability Comparison</div>
+    <svg class="profit-chart-svg" viewBox="0 0 ${chartW} ${chartH}" xmlns="http://www.w3.org/2000/svg">
+      <line x1="${pad.left}" y1="${zeroY}" x2="${chartW - pad.right}" y2="${zeroY}"
+        stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 2" />
+      <text x="${pad.left - 3}" y="${zeroY + 3}" text-anchor="end" font-size="6.5" fill="#94a3b8">£0</text>
+      ${renderPdfBar(barCenters[0], originalProfit, 'Original Expected Profit', originalMargin, hasBudget, '#3b82f6')}
+      ${renderPdfBar(barCenters[1], currentProfit, 'Current Forecast Profit', currentMargin, true, currentProfit >= 0 ? '#16a34a' : '#dc2626')}
+    </svg>
+    <div class="profit-chart-legend">
+      <div class="profit-chart-legend-item">
+        <div class="profit-chart-legend-label">Original Expected Profit</div>
+        <div class="profit-chart-legend-value ${originalProfit != null ? (originalProfit >= 0 ? 'pos' : 'neg') : ''}">${originalProfit != null ? fv(originalProfit) : 'Budget required'}</div>
+        ${originalMargin != null ? `<div class="profit-chart-legend-sub">${originalMargin.toFixed(1)}% margin</div>` : ''}
+      </div>
+      <div class="profit-chart-legend-item">
+        <div class="profit-chart-legend-label">Current Forecast Profit</div>
+        <div class="profit-chart-legend-value ${currentProfit >= 0 ? 'pos' : 'neg'}">${fv(currentProfit)}</div>
+        <div class="profit-chart-legend-sub">${currentMargin.toFixed(1)}% margin</div>
+        <div class="profit-chart-legend-sub">Movement: <span class="profit-chart-legend-mv ${mvPos ? 'pos' : 'neg'}">${esc(mvLabel)}</span></div>
+      </div>
+    </div>
+  </div>`;
+}
+
 // ─── Position statement body ──────────────────────────────────────────────────
 
 interface PositionData {
@@ -436,7 +551,7 @@ function positionStatementBody(d: PositionData): string {
   }
   profitRows.push({ label: 'Current Forecast Margin %', value: currentMargin.toFixed(1) + '%' });
   if (marginMovement != null) {
-    profitRows.push({ label: 'Margin Movement', value: (marginMovement >= 0 ? '+' : '') + marginMovement.toFixed(1) + '%' });
+    profitRows.push({ label: 'Margin Movement', value: (marginMovement >= 0 ? '+' : '') + marginMovement.toFixed(1) + ' pp' });
   }
 
   return `
@@ -452,26 +567,37 @@ function positionStatementBody(d: PositionData): string {
     </div>
   </div>
 
+  <div class="pdf-section">
   <div class="exec-section-label">1. Commercial Position</div>
   ${finStatement(positionRows)}
+  </div>
 
   ${hasCostData ? `
+  <div class="pdf-section">
   <div class="exec-section-label" style="margin-top:20px;">2. Project Cost Position</div>
-  ${finStatement(costRows)}` : ''}
+  ${finStatement(costRows)}
+  </div>` : ''}
 
   ${hasCostData ? `
+  <div class="pdf-section">
   <div class="exec-section-label" style="margin-top:20px;">3. Project Profitability</div>
   <div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-bottom:8px;">Current Forecast Profit uses the Adjusted Contract Sum and Forecast Final Cost shown above.</div>
-  ${finStatement(profitRows)}` : ''}
+  ${finStatement(profitRows)}
+  ${profitabilityChartHtml(originalExpectedProfit, currentForecastProfit, originalMargin, currentMargin, marginMovement, hasBudget)}
+  </div>` : ''}
 
+  <div class="pdf-section">
   <div class="exec-section-label" style="margin-top:20px;">4. Project Information</div>
   <div class="proj-meta">
     ${metaItems.map(([k, v]) => `<div class="proj-meta-item"><div class="proj-meta-label">${esc(k)}</div><div class="proj-meta-value">${esc(v)}</div></div>`).join('')}
   </div>
+  </div>
 
   ${d.keyDates.length > 0 ? `
+  <div class="pdf-section">
   <div class="exec-section-label" style="margin-top:20px;">5. Key Dates</div>
-  ${keyDatesTable(d.keyDates)}` : ''}
+  ${keyDatesTable(d.keyDates)}
+  </div>` : ''}
 
   ${docFooter(d.currentUserName, today)}`;
 }
@@ -1974,7 +2100,7 @@ function fullReportBody(d: FullReportData): string {
       costRows.push({ label: 'Original Forecast Profit', value: fv(originalForecastProfit) });
       costRows.push({ label: 'Original Margin', value: originalMargin.toFixed(1) + '%' });
       if (marginMovement != null) {
-        costRows.push({ label: 'Margin Movement', value: (marginMovement >= 0 ? '+' : '') + marginMovement.toFixed(1) + '%' });
+        costRows.push({ label: 'Margin Movement', value: (marginMovement >= 0 ? '+' : '') + marginMovement.toFixed(1) + ' pp' });
       }
     }
 

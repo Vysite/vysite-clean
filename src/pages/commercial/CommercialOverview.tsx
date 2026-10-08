@@ -560,7 +560,7 @@ export default function CommercialOverview({
                   {marginMovement != null ? (
                     <span className={`text-sm font-semibold tabular-nums flex items-center gap-1 ${marginImproving ? 'text-emerald-400' : 'text-red-400'}`}>
                       {marginImproving ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                      {marginMovement >= 0 ? '+' : ''}{marginMovement.toFixed(1)}%
+                      {marginMovement >= 0 ? '+' : ''}{marginMovement.toFixed(1)} pp
                     </span>
                   ) : (
                     <span className="text-sm text-slate-600 italic">Budget required</span>

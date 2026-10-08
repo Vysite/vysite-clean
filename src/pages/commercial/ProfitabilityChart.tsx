@@ -38,9 +38,9 @@ export default function ProfitabilityChart({
   const hasAnyData = hasOriginal || hasCurrent;
 
   // Chart geometry
-  const chartH = 220;
-  const chartW = 600;
-  const padding = { top: 24, right: 24, bottom: 40, left: 24 };
+  const chartH = 280;
+  const chartW = 760;
+  const padding = { top: 28, right: 32, bottom: 44, left: 32 };
   const plotW = chartW - padding.left - padding.right;
   const plotH = chartH - padding.top - padding.bottom;
 
@@ -53,7 +53,7 @@ export default function ProfitabilityChart({
   const range = maxVal - minVal || 1;
 
   const zeroY = padding.top + plotH * (maxVal / range);
-  const barW = 90;
+  const barW = 120;
   const barGap = plotW / 2;
 
   function valToY(v: number): number {
@@ -159,7 +159,7 @@ export default function ProfitabilityChart({
           <>
             {/* SVG bar chart */}
             <div className="w-full overflow-x-auto">
-              <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ minWidth: 320, maxWidth: 640 }}>
+              <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ minWidth: 360, maxWidth: 760 }}>
                 {/* Zero baseline */}
                 <line
                   x1={padding.left}
@@ -198,7 +198,7 @@ export default function ProfitabilityChart({
                 <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Margin Movement</span>
                 <p className={`text-sm font-bold tabular-nums mt-0.5 flex items-center gap-1 ${marginMovement == null ? 'text-slate-600' : marginImproving ? 'text-emerald-400' : 'text-red-400'}`}>
                   {marginMovement != null && (marginImproving ? <TrendingUp size={12} /> : <TrendingDown size={12} />)}
-                  {marginMovement != null ? `${marginMovement >= 0 ? '+' : ''}${marginMovement.toFixed(1)}%` : 'Budget required'}
+                  {marginMovement != null ? `${marginMovement >= 0 ? '+' : ''}${marginMovement.toFixed(1)} pp` : 'Budget required'}
                 </p>
               </div>
               <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-3 py-2.5">
