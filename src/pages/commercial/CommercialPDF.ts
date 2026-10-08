@@ -218,7 +218,7 @@ html, body {
 .tag-slate  { background: #f8fafc; color: #1e293b; }
 
 /* ── Footer ── */
-.doc-footer { margin-top: 44px; padding-top: 10px; border-top: 0.5px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
+.doc-footer { margin-top: 24px; padding-top: 10px; border-top: 0.5px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
 .doc-footer-l { font-size: 7pt; color: #475569; }
 .doc-footer-r { font-size: 7pt; color: #475569; text-align: right; }
 
@@ -229,7 +229,7 @@ html, body {
 .pdf-section { page-break-inside: avoid; break-inside: avoid; }
 
 /* ── Profitability chart (print-friendly, white background) ── */
-.profit-chart-wrap { page-break-inside: avoid; break-inside: avoid; margin: 12px 0 8px; }
+.profit-chart-wrap { page-break-inside: avoid; break-inside: avoid; margin: 10px 0 4px; }
 .profit-chart-title { font-size: 7pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #475569; margin-bottom: 8px; }
 .profit-chart-svg { width: 100%; max-width: 480px; display: block; }
 .profit-chart-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 10px; border-top: 0.5px solid #e2e8f0; padding-top: 10px; }
@@ -587,12 +587,12 @@ function positionStatementBody(d: PositionData): string {
   </div>` : ''}
 
   ${hasCostData ? `
-  <div class="pdf-section">
+  <div style="page-break-inside:avoid;break-inside:avoid;">
   <div class="exec-section-label" style="margin-top:16px;">3. Project Profitability</div>
   <div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-bottom:8px;">Current Forecast Profit uses the Adjusted Contract Sum and Forecast Final Cost shown above.</div>
   ${finStatement(profitRows)}
-  ${profitabilityChartHtml(originalExpectedProfit, currentForecastProfit, originalMargin, currentMargin, marginMovement, hasBudget)}
-  </div>` : ''}
+  </div>
+  ${profitabilityChartHtml(originalExpectedProfit, currentForecastProfit, originalMargin, currentMargin, marginMovement, hasBudget)}` : ''}
 
   ${docFooter(d.currentUserName, today)}`;
 }
