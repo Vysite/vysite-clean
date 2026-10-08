@@ -1,14 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   MapPin, User, Calendar, Save, TrendingUp, Info,
-  FileText, Printer, Clock, CheckCircle2, ChevronRight,
-  AlertCircle, TrendingDown, Wallet,
+  FileText, TrendingDown, Wallet,
 } from 'lucide-react';
-import KeyDatesPanel from '../../components/KeyDatesPanel';
-import { fmtCurrency, parseRawValue, typeInfo, statusInfo } from './types';
+import { fmtCurrency, parseRawValue } from './types';
 import type { CommercialRecord, Project } from './types';
 import type { DBKeyDate } from '../../lib/store';
 import { exportPositionStatementPDF } from './CommercialPDF';
+import ProfitabilityChart from './ProfitabilityChart';
 import { useAppStore } from '../../lib/StoreContext';
 import { supabase } from '../../lib/supabase';
 
@@ -47,42 +46,12 @@ function normaliseInput(v: string): string {
   return v.replace(/[£,\s]/g, '');
 }
 
-// Recent activity derived from register records — last 8 events by date
-function buildRecentActivity(records: CommercialRecord[]): { id: string; label: string; sub: string; date: string }[] {
-  const events: { id: string; label: string; sub: string; date: string; ts: number }[] = [];
-  for (const r of records) {
-    const ref = r.reference ? r.reference + ' — ' : '';
-    const typeName = typeInfo(r.recordType).label;
-    if (r.dateRaised) {
-      events.push({ id: r.id + '-raised', label: `${ref}${typeName} Raised`, sub: r.title, date: r.dateRaised, ts: new Date(r.dateRaised).getTime() });
-    }
-    if (r.dateAgreed && ['agreed', 'added_to_valuation', 'paid', 'complete'].includes(r.status)) {
-      events.push({ id: r.id + '-agreed', label: `${ref}${typeName} Agreed`, sub: r.title, date: r.dateAgreed, ts: new Date(r.dateAgreed).getTime() });
-    }
-    if (r.dateSubmitted && r.status !== 'draft') {
-      events.push({ id: r.id + '-submitted', label: `${ref}${typeName} Submitted`, sub: r.title, date: r.dateSubmitted, ts: new Date(r.dateSubmitted).getTime() });
-    }
-  }
-  return events
-    .sort((a, b) => b.ts - a.ts)
-    .slice(0, 8)
-    .map(({ id, label, sub, date }) => ({ id, label, sub, date }));
-}
-
-function activityIcon(label: string) {
-  if (label.includes('Agreed')) return <CheckCircle2 size={12} className="text-emerald-400 shrink-0 mt-0.5" />;
-  if (label.includes('Submitted')) return <ChevronRight size={12} className="text-sky-400 shrink-0 mt-0.5" />;
-  if (label.includes('Raised')) return <Clock size={12} className="text-amber-400 shrink-0 mt-0.5" />;
-  return <AlertCircle size={12} className="text-slate-400 shrink-0 mt-0.5" />;
-}
-
 // ─── Overview component ───────────────────────────────────────────────────────
 
 export default function CommercialOverview({
-  project, projects, records, keyDates, canEdit, canCreate,
+  project, projects, keyDates, canEdit, canCreate,
   currentUserName, vaExposure, vaAgreed, vaAgreedAdditions, vaAgreedOmissions, vaHasItems, canViewCosts,
-  onProjectChange, onAddKeyDate, onUpdateKeyDate,
-  onRemoveKeyDate, onUpdateProject, onNewRecord,
+  onProjectChange, onUpdateProject, onNewRecord,
 }: CommercialOverviewProps) {
   const store = useAppStore();
   const [contractEdit, setContractEdit] = useState('');
@@ -176,10 +145,6 @@ export default function CommercialOverview({
     });
     setSaving(false);
   }
-
-  const recentActivity = buildRecentActivity(
-    records.filter(r => r.projectId === project.id)
-  );
 
   const projectKeyDates = keyDates.filter(d => d.project_id === project.id);
 
@@ -607,56 +572,35 @@ export default function CommercialOverview({
         );
       })()}
 
-      {/* Two column layout: Key Dates + Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Key Dates */}
-        <div>
-          <KeyDatesPanel
-            project={project}
-            keyDates={projectKeyDates}
-            currentUserName={currentUserName}
-            onAdd={onAddKeyDate}
-            onUpdate={onUpdateKeyDate}
-            onRemove={onRemoveKeyDate}
-            collapsible
+      {/* Project Profitability Chart */}
+      {canViewCosts && (() => {
+        const actualCost = costSummary.actual ?? 0;
+        const committedCost = costSummary.committed ?? 0;
+        const forecastCost = costSummary.forecast ?? 0;
+        const forecastFinalCost = actualCost + committedCost + forecastCost;
+        const budgetCost = project.budgetCost ?? null;
+        const hasBudget = budgetCost != null && budgetCost > 0;
+        const originalForecastProfit = hasBudget ? contractNum - budgetCost! : null;
+        const originalMargin = hasBudget && contractNum > 0 ? ((contractNum - budgetCost!) / contractNum) * 100 : null;
+        const currentForecastProfit = adjustedContractSum - forecastFinalCost;
+        const currentMargin = adjustedContractSum > 0 ? (currentForecastProfit / adjustedContractSum) * 100 : 0;
+        const marginMovement = hasBudget && originalMargin != null ? currentMargin - originalMargin : null;
+        const marginImproving = marginMovement != null && marginMovement >= 0;
+        const hasCostData = actualCost > 0 || committedCost > 0 || forecastCost > 0;
+        const profitDataAvailable = hasBudget && hasCostData;
+
+        return (
+          <ProfitabilityChart
+            originalForecastProfit={originalForecastProfit}
+            currentForecastProfit={profitDataAvailable ? currentForecastProfit : null}
+            originalMargin={originalMargin}
+            currentMargin={profitDataAvailable ? currentMargin : null}
+            marginMovement={marginMovement}
+            marginImproving={marginImproving}
+            loading={costSummaryLoading}
           />
-        </div>
-
-        {/* Recent Commercial Activity */}
-        <div className="bg-[#111827] border border-[#1e2d4a] rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e2d4a]">
-            <h3 className="text-sm font-semibold text-white">Recent Commercial Activity</h3>
-            <span className="text-xs text-slate-500">{recentActivity.length} event{recentActivity.length !== 1 ? 's' : ''}</span>
-          </div>
-
-          {recentActivity.length === 0 ? (
-            <div className="py-10 text-center">
-              <Printer size={24} className="text-slate-700 mx-auto mb-2" />
-              <p className="text-xs text-slate-500">No commercial activity recorded yet</p>
-              {canCreate && (
-                <button onClick={onNewRecord} className="mt-3 text-xs text-[#f97316] hover:underline">
-                  Create your first record
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="divide-y divide-[#1e2d4a]/50">
-              {recentActivity.map(event => (
-                <div key={event.id} className="flex items-start gap-3 px-4 py-2.5">
-                  {activityIcon(event.label)}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-slate-200 truncate">{event.label}</p>
-                    {event.sub && <p className="text-[11px] text-slate-500 truncate">{event.sub}</p>}
-                  </div>
-                  <span className="text-[10px] text-slate-600 shrink-0 mt-0.5">
-                    {new Date(event.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+        );
+      })()}
     </div>
   );
 }
