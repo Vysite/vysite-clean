@@ -218,7 +218,7 @@ html, body {
 .tag-slate  { background: #f8fafc; color: #1e293b; }
 
 /* ── Footer ── */
-.doc-footer { margin-top: 24px; padding-top: 10px; border-top: 0.5px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
+.doc-footer { margin-top: 44px; padding-top: 10px; border-top: 0.5px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
 .doc-footer-l { font-size: 7pt; color: #475569; }
 .doc-footer-r { font-size: 7pt; color: #475569; text-align: right; }
 
@@ -559,7 +559,8 @@ function positionStatementBody(d: PositionData): string {
     profitRows.push({ label: 'Margin Movement', value: (marginMovement >= 0 ? '+' : '') + marginMovement.toFixed(1) + ' pp' });
   }
 
-  return `
+  // Page 1 — Commercial Financial Position
+  const page1 = `
   ${docHeader('Commercial Document', 'Commercial Overview Report', d.project.name, d.project.client, today, d.logoUrl)}
   <div class="exec-project-band">
     <div style="flex:1;">
@@ -575,26 +576,41 @@ function positionStatementBody(d: PositionData): string {
     </div>
   </div>
 
-  <div class="pdf-section">
   <div class="exec-section-label">1. Commercial Position</div>
   ${finStatement(positionRows)}
-  </div>
 
   ${hasCostData ? `
-  <div class="pdf-section">
-  <div class="exec-section-label" style="margin-top:16px;">2. Project Cost Position</div>
-  ${finStatement(costRows)}
-  </div>` : ''}
-
-  ${hasCostData ? `
-  <div style="page-break-inside:avoid;break-inside:avoid;">
-  <div class="exec-section-label" style="margin-top:16px;">3. Project Profitability</div>
-  <div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-bottom:8px;">Current Forecast Profit uses the Adjusted Contract Sum and Forecast Final Cost shown above.</div>
-  ${finStatement(profitRows)}
-  </div>
-  ${profitabilityChartHtml(originalExpectedProfit, currentForecastProfit, originalMargin, currentMargin, marginMovement, hasBudget)}` : ''}
+  <div class="exec-section-label" style="margin-top:20px;">2. Project Cost Position</div>
+  ${finStatement(costRows)}` : ''}
 
   ${docFooter(d.currentUserName, today)}`;
+
+  // Page 2 — Project Profitability
+  const page2 = hasCostData ? `
+  <div class="page-break">
+  ${docHeader('Commercial Document', 'Commercial Overview Report', d.project.name, d.project.client, today, d.logoUrl)}
+  <div class="exec-project-band">
+    <div style="flex:1;">
+      <div class="exec-project-name">${esc(d.project.name)}</div>
+      ${d.project.client ? `<div class="exec-client">${esc(d.project.client)}</div>` : ''}
+    </div>
+    <div class="exec-report-date">
+      <div>${today}</div>
+      <div>Prepared by ${esc(d.currentUserName || 'VYSITE')}</div>
+    </div>
+  </div>
+
+  <div class="pdf-section">
+  <div class="exec-section-label">3. Project Profitability</div>
+  <div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-bottom:8px;">Current Forecast Profit uses the Adjusted Contract Sum and Forecast Final Cost shown on page 1.</div>
+  ${finStatement(profitRows)}
+  ${profitabilityChartHtml(originalExpectedProfit, currentForecastProfit, originalMargin, currentMargin, marginMovement, hasBudget)}
+  </div>
+
+  ${docFooter(d.currentUserName, today)}
+  </div>` : '';
+
+  return page1 + page2;
 }
 
 // ─── Register body ────────────────────────────────────────────────────────────
