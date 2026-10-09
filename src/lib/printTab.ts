@@ -36,6 +36,106 @@ export function openPrintTab(html: string): void {
   }
 }
 
+// Opens a blank print tab synchronously (within the user-gesture) and returns a
+// controller that lets you write the final HTML into it after async work completes.
+// This avoids the browser popup-blocker that triggers when window.open is called
+// after awaits.  The tab shows a loading page immediately, then gets replaced.
+export interface PrintTabController {
+  tab: Window | null;
+  setHTML: (html: string) => void;
+  close: () => void;
+  isOpen: () => boolean;
+}
+
+export function openPrintTabLoading(): PrintTabController {
+  const loadingHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Preparing export…</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0d1628;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.wrap{text-align:center}.spin{width:40px;height:40px;border:3px solid #1e2d4a;border-top-color:#f97316;border-radius:50%;animation:sp 0.8s linear infinite;margin:0 auto 16px}@keyframes sp{to{transform:rotate(360deg)}}
+.label{color:#94a3b8;font-size:14px;font-weight:600}</style></head>
+<body><div class="wrap"><div class="spin"></div><div class="label">Preparing PDF export…</div></div></body></html>`;
+  const blob = new Blob([loadingHTML], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const tab = window.open(url, '_blank');
+  let currentUrl = url;
+
+  const setHTML = (html: string) => {
+    if (!tab || tab.closed) return;
+    const newBlob = new Blob([html], { type: 'text/html' });
+    const newUrl = URL.createObjectURL(newBlob);
+    tab.location.href = newUrl;
+    URL.revokeObjectURL(currentUrl);
+    currentUrl = newUrl;
+    tab.addEventListener('afterprint', () => URL.revokeObjectURL(newUrl), { once: true });
+  };
+
+  const close = () => {
+    if (tab && !tab.closed) tab.close();
+    URL.revokeObjectURL(currentUrl);
+  };
+
+  const isOpen = () => !!tab && !tab.closed;
+
+  if (!tab) {
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  return { tab, setHTML, close, isOpen };
+}
+
+// Fetches full site form records in controlled chunks (limited concurrency).
+// Returns results in the same order as the input IDs.  Uses a single Supabase
+// .in() query per chunk (default 25 IDs) rather than N sequential queries.
+//
+// onProgress is called after each chunk completes with (loaded, total).
+// If any ID fails to fetch, it is reported in the errors array with the ID
+// and reason — it is never silently skipped.
+export interface BatchFetchResult<T> {
+  records: T[];
+  errors: { id: string; reason: string }[];
+}
+
+export async function batchFetchSiteForms<T>(
+  ids: string[],
+  fetchChunk: (chunkIds: string[]) => Promise<{ data: T[] | null; error: { message: string } | null }>,
+  onProgress?: (loaded: number, total: number) => void,
+  chunkSize = 25,
+): Promise<BatchFetchResult<T>> {
+  const records: T[] = [];
+  const errors: { id: string; reason: string }[] = [];
+  const idToIndex = new Map<string, number>();
+  const fetchedMap = new Map<string, T>();
+
+  for (let i = 0; i < ids.length; i++) idToIndex.set(ids[i], i);
+
+  for (let start = 0; start < ids.length; start += chunkSize) {
+    const chunkIds = ids.slice(start, start + chunkSize);
+    const { data, error } = await fetchChunk(chunkIds);
+    if (error) {
+      for (const id of chunkIds) {
+        errors.push({ id, reason: error.message });
+      }
+    } else if (data) {
+      for (const row of data) {
+        const rowId = (row as unknown as { id?: string }).id;
+        if (rowId) fetchedMap.set(rowId, row);
+      }
+      for (const id of chunkIds) {
+        if (!fetchedMap.has(id)) {
+          errors.push({ id, reason: 'Record not found or inaccessible' });
+        }
+      }
+    }
+    if (onProgress) onProgress(Math.min(start + chunkSize, ids.length), ids.length);
+  }
+
+  for (const id of ids) {
+    const rec = fetchedMap.get(id);
+    if (rec) records.push(rec);
+  }
+
+  return { records, errors };
+}
+
 // Wraps arbitrary body HTML in a full print-ready document shell.
 export function buildPrintDocument(title: string, styles: string, body: string): string {
   return `<!DOCTYPE html>

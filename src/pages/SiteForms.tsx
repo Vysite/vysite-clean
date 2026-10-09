@@ -5,10 +5,11 @@ import {
   Plus, Clock, CheckCircle, AlertCircle, TrendingUp, Download,
   Eye, Copy, MoreVertical, RefreshCw, ArrowLeft, FolderOpen,
 } from 'lucide-react';
-import { openPrintTab } from '../lib/printTab';
+import { openPrintTab, openPrintTabLoading, batchFetchSiteForms } from '../lib/printTab';
 import { buildFormPageHTML, FORM_PDF_CSS, renderFormPDF } from '../forms/PDFRenderer';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useAppStore, usePermissions } from '../lib/StoreContext';
+import { supabase } from '../lib/supabase';
 import type { DBSiteForm } from '../lib/store';
 import type { UploadedFile } from '../components/FileUpload';
 import { type ExtendedFormType, type ExtendedFormStatus, type ExtendedSiteForm, TYPE_MAP } from '../forms/types';
@@ -376,6 +377,8 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const [allFormsMode, setAllFormsMode]           = useState(false);
   // Pre-set project for new forms created inside a project workspace
   const [presetProjectName, setPresetProjectName] = useState<string | null>(null);
+  // Bulk export progress: null = idle, {loaded, total} = in progress
+  const [exportProgress, setExportProgress] = useState<{ loaded: number; total: number } | null>(null);
 
   const forms = useMemo(() => {
     const all = (store.siteForms ?? []) as unknown as ExtendedSiteForm[];
@@ -675,26 +678,77 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
   const selectedForms = forms.filter(f => selectedIds.has(f.id));
 
   const handleExportPDF = async () => {
+    if (exportProgress !== null) return;
     if (selectedForms.length === 0) return;
+
+    const tabController = openPrintTabLoading();
+    if (!tabController.isOpen()) {
+      alert('Pop-up blocked. Please allow pop-ups for this site to export site forms, then try again.');
+      return;
+    }
+
+    setExportProgress({ loaded: 0, total: selectedForms.length });
     const orgSettings = { company_name: store.settings?.company_name ?? '', logo_data_url: store.settings?.logo_data_url ?? '' };
-    const fullForms: ExtendedSiteForm[] = [];
-    for (const f of selectedForms) {
-      const full = await resolveFullForm(f);
-      if (!full) {
-        alert(`Unable to load the complete form "${f.type}" (${formRef(f)}) for PDF export. Please try again.`);
+
+    try {
+      // Deduplicate IDs — export each selected record exactly once
+      const seenIds = new Set<string>();
+      const orderedForms = selectedForms
+        .slice()
+        .sort((a, b) => {
+          const aDate = (a.date as string) ?? '';
+          const bDate = (b.date as string) ?? '';
+          if (aDate !== bDate) return aDate.localeCompare(bDate);
+          return a.id.localeCompare(b.id);
+        })
+        .filter(f => {
+          if (seenIds.has(f.id)) return false;
+          seenIds.add(f.id);
+          return true;
+        });
+      const orderedIds = orderedForms.map(f => f.id);
+
+      const { records, errors } = await batchFetchSiteForms<DBSiteForm>(
+        orderedIds,
+        (chunkIds) => supabase.from('vy_site_forms').select('*').in('id', chunkIds),
+        (loaded, total) => setExportProgress({ loaded, total }),
+      );
+
+      if (errors.length > 0) {
+        const errorList = errors.map(e => `${e.id}: ${e.reason}`).join('\n');
+        alert(`Could not fetch ${errors.length} of ${orderedIds.length} record(s):\n\n${errorList}\n\nExport cancelled.`);
+        tabController.close();
         return;
       }
-      fullForms.push(full);
+
+      // Merge fetched DB rows with the already-loaded list-row data
+      const listRowById = new Map(orderedForms.map(f => [f.id, f]));
+      const fullForms: ExtendedSiteForm[] = records.map(dbRow => {
+        const listItem = listRowById.get(dbRow.id);
+        const merged: ExtendedSiteForm = {
+          ...(listItem ?? {}),
+          ...(dbRow.extra_data as Record<string, unknown> ?? {}),
+          form_comments: dbRow.form_comments ?? [],
+          extra_data: dbRow.extra_data,
+        } as unknown as ExtendedSiteForm;
+        return merged;
+      });
+
+      const pages = fullForms.map((f, i) => {
+        const pageHtml = buildFormPageHTML(f, orgSettings);
+        return i < fullForms.length - 1
+          ? `<div style="page-break-after:always;break-after:page;">${pageHtml}</div>`
+          : pageHtml;
+      }).join('');
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Site Forms — VYSITE</title><style>${FORM_PDF_CSS}</style></head><body>${pages}<script>window.onload=function(){window.print();};<\/script></body></html>`;
+      tabController.setHTML(html);
+      logActivity({ orgId, userName, module: 'site_forms', actionType: 'pdf_exported', description: `${userName} exported ${fullForms.length} site form${fullForms.length !== 1 ? 's' : ''} to PDF.`, metadata: { count: fullForms.length, refs: orderedForms.map(f => formRef(f)) } });
+    } catch (err) {
+      alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}. Please try again.`);
+      tabController.close();
+    } finally {
+      setExportProgress(null);
     }
-    const pages = fullForms.map((f, i) => {
-      const pageHtml = buildFormPageHTML(f, orgSettings);
-      return i < fullForms.length - 1
-        ? `<div style="page-break-after:always;break-after:page;">${pageHtml}</div>`
-        : pageHtml;
-    }).join('');
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Site Forms — VYSITE</title><style>${FORM_PDF_CSS}</style></head><body>${pages}<script>window.onload=function(){window.print();};<\/script></body></html>`;
-    openPrintTab(html);
-    logActivity({ orgId, userName, module: 'site_forms', actionType: 'pdf_exported', description: `${userName} exported ${selectedForms.length} site form${selectedForms.length !== 1 ? 's' : ''} to PDF.`, metadata: { count: selectedForms.length, refs: selectedForms.map(f => f.type) } });
   };
 
   // ─── Landing page: project cards + All Forms ─────────────────────────────────
@@ -1037,11 +1091,23 @@ export default function SiteForms(_props: SiteFormsProps = {}) {
           {selectedIds.size > 0 && (
             <div className="w-full flex flex-wrap items-center gap-3 mb-1 bg-[#1a2236] border border-[#1e2d4a] rounded-xl px-4 py-3">
               <span className="text-sm font-semibold text-white">{selectedIds.size} selected</span>
-              <button onClick={handleExportPDF} className="flex items-center gap-2 px-4 py-2 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">
-                <Download size={14} />Export to PDF
-              </button>
-              <button onClick={selectAll} className="px-3 py-2 border border-[#1e2d4a] rounded-lg text-xs font-semibold text-slate-400 hover:bg-[#1e2d4a] hover:text-slate-200 transition-colors">Select All</button>
-              <button onClick={clearSelection} className="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2 transition-colors ml-auto">Clear selection</button>
+              {exportProgress ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-[#0d1628] rounded-lg text-sm font-semibold text-orange-400">
+                    <div className="w-4 h-4 border-2 border-[#1e2d4a] border-t-[#f97316] rounded-full animate-spin" />
+                    Exporting {exportProgress.loaded} / {exportProgress.total}…
+                  </div>
+                  <div className="w-32 h-1.5 bg-[#0d1628] rounded-full overflow-hidden">
+                    <div className="h-full bg-[#f97316] rounded-full transition-all duration-200" style={{ width: `${exportProgress.total > 0 ? (exportProgress.loaded / exportProgress.total) * 100 : 0}%` }} />
+                  </div>
+                </div>
+              ) : (
+                <button onClick={handleExportPDF} className="flex items-center gap-2 px-4 py-2 bg-[#f97316] text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors">
+                  <Download size={14} />Export to PDF
+                </button>
+              )}
+              <button onClick={selectAll} className="px-3 py-2 border border-[#1e2d4a] rounded-lg text-xs font-semibold text-slate-400 hover:bg-[#1e2d4a] hover:text-slate-200 transition-colors" disabled={!!exportProgress}>Select All</button>
+              <button onClick={clearSelection} className="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2 transition-colors ml-auto" disabled={!!exportProgress}>Clear selection</button>
             </div>
           )}
           <div className="relative flex-1 min-w-44">
