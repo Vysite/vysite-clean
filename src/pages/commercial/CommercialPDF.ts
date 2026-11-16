@@ -1807,6 +1807,15 @@ function valuationsSectionHtml(d: FullReportData): string {
     const amountDue    = grossToDate - prevGross;
     const t            = chainFor(v);
 
+    const deductionTotals = hasDeductions ? `
+      <td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(t.mcdAmt)})` : '—'}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.nettToDate)}</td>
+      <td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(t.retentionAmt)})` : '—'}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.grossPaymentToDate)}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${t.prevCertified != null ? fv(t.prevCertified) : '—'}</td>
+      <td class="num" style="font-size:10pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#4ade80' : '#f87171'};">${fv(t.netValuationDue)}</td>`
+      : `<td class="num" style="font-size:10pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#4ade80' : '#f87171'};">${fv(t.netValuationDue)}</td>`;
+
     const totalsRow = `<tr style="background:#0f172a;color:#fff;">
       <td colspan="2" style="font-size:8.5pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:8px 10px;color:#fff;">Total</td>
       <td class="num" style="font-size:8.5pt;color:#475569;">${fv(contractTotal + extrasTotal)}</td>
@@ -1824,14 +1833,6 @@ function valuationsSectionHtml(d: FullReportData): string {
 
     const thisValGross = round2(grossToDate - prevGross);
     const hasExtras = wbExtras.length > 0;
-    const deductionTotals = hasDeductions ? `
-      <td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(t.mcdAmt)})` : '—'}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.nettToDate)}</td>
-      <td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(t.retentionAmt)})` : '—'}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.grossPaymentToDate)}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${t.prevCertified != null ? fv(t.prevCertified) : '—'}</td>
-      <td class="num" style="font-size:10pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#4ade80' : '#f87171'};">${fv(t.netValuationDue)}</td>`
-      : `<td class="num" style="font-size:10pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#4ade80' : '#f87171'};">${fv(t.netValuationDue)}</td>`;
 
     const deductionHeaders2 = hasDeductions
       ? `<th class="num" style="width:76px;">MCD</th><th class="num" style="width:76px;">Nett</th><th class="num" style="width:76px;">Retention</th><th class="num" style="width:76px;">Gross Payment</th><th class="num" style="width:76px;">Prev Certified</th><th class="num" style="width:76px;">Net Due</th>`
