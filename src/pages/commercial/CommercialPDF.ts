@@ -8,7 +8,7 @@ import { openPrintTab } from '../../lib/printTab';
 import type { DBVariationAccountItem, DBCommercialApplication, DBVABuildUpLine, DBVAComment, DBAttachment, DBValuation, DBValuationWorkbook, DBWorkbookLine, DBWorkbookExtra, DBValuationLineEntry, DBValuationExtraEntry } from '../../lib/store';
 import type { CommercialRecord } from './types';
 import { typeInfo, statusInfo, parseRawValue } from './types';
-import { computeValuationTotals, isValuationFrozen, financialProgress, netForecastRevenue, round2 } from './finance';
+import { computeValuationTotals, isValuationFrozen, financialProgress, netForecastRevenue, round2, cumulativeCertifiedPayment } from './finance';
 import type { DBKeyDate, Project } from '../../lib/store';
 
 // ─── Shared utilities ─────────────────────────────────────────────────────────
@@ -1225,7 +1225,7 @@ function applicationsBody(d: ApplicationsData): string {
     grossApplied   = gross;
     appliedPayment = round2(nett - retAmt);
   }
-  const certifiedPayment = latestApp ? (latestApp.certified_payment_to_date ?? latestApp.certified_value) : null;
+  const certifiedPayment = cumulativeCertifiedPayment(d.apps);
   const paidToDate       = countableApps.reduce((s, a) => s + a.paid_value, 0);
   const awaiting         = certifiedPayment != null && appliedPayment != null ? round2(appliedPayment - certifiedPayment) : null;
   const outstanding      = certifiedPayment != null ? round2(certifiedPayment - paidToDate) : null;
@@ -1782,7 +1782,7 @@ function fullReportBody(d: FullReportData): string {
     grossApplied   = gross;
     appliedPayment = round2(nett - retAmt);
   }
-  const certifiedPayment = latestApp ? (latestApp.certified_payment_to_date ?? latestApp.certified_value) : null;
+  const certifiedPayment = cumulativeCertifiedPayment(d.apps);
   const paidToDate       = countableApps.reduce((s, a) => s + a.paid_value, 0);
   const awaiting         = certifiedPayment != null && appliedPayment != null ? round2(appliedPayment - certifiedPayment) : null;
   const outstanding      = certifiedPayment != null ? round2(certifiedPayment - paidToDate) : null;

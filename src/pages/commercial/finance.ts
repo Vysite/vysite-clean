@@ -179,6 +179,35 @@ export interface OverviewPaymentModel {
   retentionHeld: number | null;
 }
 
+// ─── Cumulative certified payment ─────────────────────────────────────────────
+// Single shared rule for Overview, Applications and reports. A minimal input
+// shape keeps this usable with store rows and report data alike.
+
+export interface CertifiedNoticeInput {
+  status: string;
+  app_number: number;
+  /** Period certified amount on this notice. */
+  certified_value: number;
+  /** Stored cumulative certified payment (populated on newer notices). */
+  certified_payment_to_date?: number | null;
+}
+
+/** Notices excluded from financial totals per existing business rules. */
+const INVALID_NOTICE_STATUSES = ['draft', 'withdrawn', 'disputed'];
+
+export function cumulativeCertifiedPayment<T extends CertifiedNoticeInput>(notices: T[]): number | null {
+  const countable = notices
+    .filter(a => !INVALID_NOTICE_STATUSES.includes(a.status))
+    .sort((a, b) => b.app_number - a.app_number);
+  // A cumulative field on any countable notice supersedes all older period
+  // amounts — use the most recent one that is present, never zero.
+  for (const n of countable) {
+    if (n.certified_payment_to_date != null) return round2(n.certified_payment_to_date);
+  }
+  // Legacy notices (cumulative fields all null): sum period certified amounts.
+  return countable.length > 0 ? round2(countable.reduce((s, a) => s + a.certified_value, 0)) : null;
+}
+
 export function computeOverviewPayments(input: OverviewPaymentModelInput): OverviewPaymentModel {
   const applied = input.appliedPaymentToDate;
   const certified = input.certifiedPaymentToDate;

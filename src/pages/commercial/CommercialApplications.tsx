@@ -7,6 +7,7 @@ import { useAppStore } from '../../lib/StoreContext';
 import { exportApplicationsPDF } from './CommercialPDF';
 import { RowActionsMenu } from '../../components/RowActionsMenu';
 import { nextSeqVal } from '../../lib/refSequence';
+import { cumulativeCertifiedPayment, isValuationFrozen, round2 } from './finance';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -484,9 +485,7 @@ export default function CommercialApplications({
   const latestNotice = validNotices[0] ?? null;
   // Cumulative certified figures: prefer the latest notice's stored cumulative fields;
   // only fall back to summing per-notice values when no cumulative figures are recorded.
-  const latestCumCertified = latestNotice
-    ? (latestNotice.certified_payment_to_date ?? (validNotices.reduce((s, a) => s + a.certified_value, 0) || null))
-    : null;
+  const latestCumCertified = useMemo(() => cumulativeCertifiedPayment(items), [items]);
   const latestCumRetention = latestNotice
     ? (latestNotice.cumulative_retention ?? null)
     : null;
@@ -494,7 +493,27 @@ export default function CommercialApplications({
   const certifiedToDate  = latestCumCertified ?? 0;
   const paidToDate       = countable.reduce((s, a) => s + a.paid_value, 0);
   const totalRetention   = latestCumRetention ?? countable.reduce((s, a) => s + a.retention, 0);
-  const awaitingCertification = appliedToDate > 0 && !latestNotice?.certified_value ? appliedToDate - certifiedToDate : Math.max(0, appliedToDate - certifiedToDate);
+  // Awaiting Certification matches the Overview and Full Report: latest submitted
+  // valuation's cumulative applied payment (workbook chain) less cumulative certified.
+  const workbook = store.valuationWorkbooks.find(w => w.project_id === project?.id) ?? null;
+  const valuationsFrozen = store.valuations.filter(v => v.project_id === project?.id && isValuationFrozen(v.status));
+  const latestFrozenVal = valuationsFrozen
+    .slice()
+    .sort((a, b) => (b.valuation_date || '').localeCompare(a.valuation_date || '') || b.ref.localeCompare(a.ref))[0] ?? null;
+  const workbookApplied = useMemo(() => {
+    if (!workbook || !latestFrozenVal) return null;
+    const le = store.valuationLineEntries.filter(e => e.valuation_id === latestFrozenVal.id);
+    const xe = store.valuationExtraEntries.filter(e => e.valuation_id === latestFrozenVal.id);
+    const gross = store.workbookLines.filter(l => l.workbook_id === workbook.id).reduce((s, l) => s + l.contract_value * (le.find(x => x.workbook_line_id === l.id)?.current_pct ?? 0) / 100, 0)
+      + store.workbookExtras.filter(e => e.workbook_id === workbook.id).reduce((s, e) => s + e.agreed_value * (xe.find(x => x.workbook_extra_id === e.id)?.current_pct ?? 0) / 100, 0);
+    const mcd  = round2(gross * (workbook.mcd_pct ?? 0) / 100);
+    const nett = round2(gross - mcd);
+    const ret  = round2(nett * (workbook.retention_pct ?? 0) / 100);
+    return round2(nett - ret);
+  }, [workbook, latestFrozenVal, store.valuationLineEntries, store.valuationExtraEntries, store.workbookLines, store.workbookExtras]);
+  const awaitingCertification = workbookApplied != null && latestCumCertified != null
+    ? Math.max(0, round2(workbookApplied - latestCumCertified))
+    : Math.max(0, appliedToDate - certifiedToDate);
   const certificationShortfall = latestNotice?.certified_value ? Math.max(0, appliedToDate - certifiedToDate) : null;
   const outstanding      = certifiedToDate - paidToDate;
   const remainingContract = forecastContractSum > 0 ? forecastContractSum - appliedToDate : null;

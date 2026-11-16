@@ -19,7 +19,7 @@ import type { DBAttachment, DBCommercialRecordComment } from '../lib/store';
 import CommercialOverview from './commercial/CommercialOverview';
 import CommercialRegister from './commercial/CommercialRegister';
 import VariationAccount, { calcVAMetrics } from './commercial/VariationAccount';
-import { isValuationFrozen } from './commercial/finance';
+import { isValuationFrozen, cumulativeCertifiedPayment } from './commercial/finance';
 import CommercialApplications from './commercial/CommercialApplications';
 import CommercialTimeline from './commercial/CommercialTimeline';
 import CommercialValuations from './commercial/CommercialValuations';
@@ -2676,9 +2676,7 @@ export default function Commercial() {
           const lvRet = Math.round(lvNett * (workbook.retention_pct ?? 0) / 100 * 100) / 100;
           appliedPaymentToDate = Math.round((lvNett - lvRet) * 100) / 100;
         }
-        const certifiedPaymentToDate = latestNotice
-          ? (latestNotice.certified_payment_to_date ?? latestNotice.certified_value)
-          : null;
+        const certifiedPaymentToDate = cumulativeCertifiedPayment(notices);
         const paidToDate = countableNotices.reduce((s, a) => s + a.paid_value, 0);
         const retentionHeld = latestNotice
           ? (latestNotice.cumulative_retention ?? countableNotices.reduce((s, a) => s + a.retention, 0))
