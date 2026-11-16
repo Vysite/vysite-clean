@@ -99,6 +99,10 @@ interface DrawerForm {
   certifiedValue: string;
   paidValue: string;
   retention: string;
+  grossCertifiedToDate: string;
+  cumulativeRetention: string;
+  certifiedPaymentToDate: string;
+  valuationRef: string;
   status: string;
   notes: string;
 }
@@ -113,6 +117,10 @@ const BLANK_FORM: DrawerForm = {
   certifiedValue: '',
   paidValue: '',
   retention: '',
+  grossCertifiedToDate: '',
+  cumulativeRetention: '',
+  certifiedPaymentToDate: '',
+  valuationRef: '',
   status: 'draft',
   notes: '',
 };
@@ -128,6 +136,10 @@ function appToForm(a: DBCommercialApplication): DrawerForm {
     certifiedValue: String(a.certified_value),
     paidValue:      String(a.paid_value),
     retention:      String(a.retention),
+    grossCertifiedToDate: a.gross_certified_to_date != null ? String(a.gross_certified_to_date) : '',
+    cumulativeRetention:  a.cumulative_retention != null ? String(a.cumulative_retention) : '',
+    certifiedPaymentToDate: a.certified_payment_to_date != null ? String(a.certified_payment_to_date) : '',
+    valuationRef:   '',
     status:         a.status,
     notes:          a.notes,
   };
@@ -171,6 +183,16 @@ function ApplicationDrawer({
     const retention  = parseFloat(form.retention)       || 0;
     setSaving(true); setError(null);
     const now = new Date().toISOString();
+    // Resolve the linked valuation from its reference (e.g. VAL 004).
+    let valuationId: string | null = item?.valuation_id ?? null;
+    const refText = form.valuationRef.trim();
+    if (refText) {
+      const match = store.valuations.find(v =>
+        v.project_id === projectId &&
+        (v.ref.toLowerCase() === refText.toLowerCase() || v.ref.toLowerCase().endsWith(refText.toLowerCase()))
+      );
+      valuationId = match ? match.id : valuationId;
+    }
     const row: DBCommercialApplication = {
       id:              item?.id ?? generateId(),
       org_id:          orgId,
@@ -184,6 +206,10 @@ function ApplicationDrawer({
       certified_value: certified,
       paid_value:      paid,
       retention:       retention,
+      valuation_id:    valuationId,
+      gross_certified_to_date: form.grossCertifiedToDate.trim() !== '' ? (parseFloat(form.grossCertifiedToDate) || 0) : (item?.gross_certified_to_date ?? null),
+      cumulative_retention:    form.cumulativeRetention.trim() !== '' ? (parseFloat(form.cumulativeRetention) || 0) : (item?.cumulative_retention ?? null),
+      certified_payment_to_date: form.certifiedPaymentToDate.trim() !== '' ? (parseFloat(form.certifiedPaymentToDate) || 0) : (item?.certified_payment_to_date ?? null),
       status:          form.status,
       notes:           form.notes.trim(),
       created_by:      item?.created_by ?? createdBy,
@@ -276,6 +302,13 @@ function ApplicationDrawer({
               onChange={e => set('paymentRecd', e.target.value)} />
           </div>
 
+          <div>
+            <label className={labelCls}>Linked Valuation Reference</label>
+            <input type="text" placeholder="e.g. VAL 004" className={inputCls} value={form.valuationRef}
+              onChange={e => set('valuationRef', e.target.value)} />
+            <p className="text-[10px] text-slate-600 mt-1">Links this payment notice to a valuation so its certified figures feed back to the valuation and Overview.</p>
+          </div>
+
           <div className="border-t border-[#1e2d4a] pt-4">
             <p className="text-xs font-semibold text-slate-400 mb-3">Values (£)</p>
             <div className="grid grid-cols-2 gap-3">
@@ -295,9 +328,31 @@ function ApplicationDrawer({
                   onChange={e => set('paidValue', e.target.value)} />
               </div>
               <div>
-                <label className={labelCls}>Retention</label>
+                <label className={labelCls}>Retention (this notice)</label>
                 <input type="number" step="0.01" min={0} placeholder="0.00" className={inputCls} value={form.retention}
                   onChange={e => set('retention', e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-[#1e2d4a] pt-4">
+            <p className="text-xs font-semibold text-slate-400 mb-1">Cumulative Certified Figures (£)</p>
+            <p className="text-[10px] text-slate-600 mb-3">Cumulative totals per this payment notice — these feed the Certified to Date and Retention Held figures on the Overview.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Gross Certified to Date (after MCD, before retention)</label>
+                <input type="number" step="0.01" min={0} placeholder="0.00" className={inputCls} value={form.grossCertifiedToDate}
+                  onChange={e => set('grossCertifiedToDate', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Cumulative Retention Held</label>
+                <input type="number" step="0.01" min={0} placeholder="0.00" className={inputCls} value={form.cumulativeRetention}
+                  onChange={e => set('cumulativeRetention', e.target.value)} />
+              </div>
+              <div>
+                <label className={labelCls}>Certified Payment to Date (after retention)</label>
+                <input type="number" step="0.01" min={0} placeholder="0.00" className={inputCls} value={form.certifiedPaymentToDate}
+                  onChange={e => set('certifiedPaymentToDate', e.target.value)} />
               </div>
             </div>
           </div>
@@ -415,12 +470,32 @@ export default function CommercialApplications({
   const [pendingAppNumber, setPendingAppNumber] = useState<number>(0);
   const nextAppNumber = pendingAppNumber; // set before drawer opens
 
-  // Summary metrics
-  const appliedToDate    = items.reduce((s, a) => s + a.applied_value, 0);
-  const certifiedToDate  = items.reduce((s, a) => s + a.certified_value, 0);
-  const paidToDate       = items.reduce((s, a) => s + a.paid_value, 0);
-  const totalRetention   = items.reduce((s, a) => s + a.retention, 0);
-  const certificationShortfall = appliedToDate - certifiedToDate;
+  // Summary metrics — status-scoped per the reconciliation rules:
+  // Draft, withdrawn and disputed applications are excluded from current financial totals;
+  // cumulative figures come from the latest valid payment notice, not summed across rows.
+  const countable = useMemo(
+    () => items.filter(a => !['draft', 'withdrawn', 'disputed'].includes(a.status)),
+    [items]
+  );
+  const validNotices = useMemo(
+    () => countable.slice().sort((a, b) => b.app_number - a.app_number),
+    [countable]
+  );
+  const latestNotice = validNotices[0] ?? null;
+  // Cumulative certified figures: prefer the latest notice's stored cumulative fields;
+  // only fall back to summing per-notice values when no cumulative figures are recorded.
+  const latestCumCertified = latestNotice
+    ? (latestNotice.certified_payment_to_date ?? (validNotices.reduce((s, a) => s + a.certified_value, 0) || null))
+    : null;
+  const latestCumRetention = latestNotice
+    ? (latestNotice.cumulative_retention ?? null)
+    : null;
+  const appliedToDate    = countable.reduce((s, a) => s + a.applied_value, 0);
+  const certifiedToDate  = latestCumCertified ?? 0;
+  const paidToDate       = countable.reduce((s, a) => s + a.paid_value, 0);
+  const totalRetention   = latestCumRetention ?? countable.reduce((s, a) => s + a.retention, 0);
+  const awaitingCertification = appliedToDate > 0 && !latestNotice?.certified_value ? appliedToDate - certifiedToDate : Math.max(0, appliedToDate - certifiedToDate);
+  const certificationShortfall = latestNotice?.certified_value ? Math.max(0, appliedToDate - certifiedToDate) : null;
   const outstanding      = certifiedToDate - paidToDate;
   const remainingContract = forecastContractSum > 0 ? forecastContractSum - appliedToDate : null;
 
@@ -496,14 +571,16 @@ export default function CommercialApplications({
 
       {/* Summary strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 mb-6">
-        <MetricCard label="Applied To Date"         value={fmtCurrency(appliedToDate)} />
-        <MetricCard label="Certified To Date"       value={fmtCurrency(certifiedToDate)} />
-        <MetricCard label="Certification Shortfall" value={fmtCurrency(certificationShortfall)}
-          sub={certificationShortfall > 0 ? 'Applied – Certified' : undefined} />
+        <MetricCard label="Applied To Date"         value={fmtCurrency(appliedToDate)} sub="Excludes drafts, withdrawn, disputed" />
+        <MetricCard label="Certified To Date"       value={fmtCurrency(certifiedToDate)}
+          sub={latestNotice?.certified_payment_to_date != null ? `Per Notice ${String(latestNotice.app_number).padStart(2, '0')}` : 'Sum of notices (no cumulative figure)'} />
+        <MetricCard label="Awaiting Certification"  value={fmtCurrency(awaitingCertification)}
+          sub={certificationShortfall == null ? 'Latest notice not yet certified' : undefined} />
         <MetricCard label="Paid To Date"            value={fmtCurrency(paidToDate)} />
-        <MetricCard label="Outstanding"             value={fmtCurrency(outstanding)}
+        <MetricCard label="Outstanding Certified"   value={fmtCurrency(outstanding)}
           sub={outstanding > 0 ? 'Certified – Paid' : undefined} />
-        <MetricCard label="Retention"               value={fmtCurrency(totalRetention)} />
+        <MetricCard label="Retention Held"          value={fmtCurrency(totalRetention)}
+          sub={latestCumRetention != null ? 'Cumulative per latest notice' : undefined} />
         <MetricCard label="Remaining Contract"
           value={remainingContract != null ? fmtCurrency(remainingContract) : '—'}
           sub={remainingContract != null ? 'Forecast – Applied' : 'No contract value'} />

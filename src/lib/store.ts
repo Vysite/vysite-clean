@@ -1077,6 +1077,7 @@ export interface DBVariationAccountItem {
   reason: string;
   value: number;
   is_positive: boolean;
+  classification?: 'addition' | 'omission' | 'tender_item' | null;
   status: string;
   date_raised: string | null;
   date_agreed: string | null;
@@ -1190,6 +1191,11 @@ export interface DBCommercialApplication {
   created_by: string | null;
   created_at?: string;
   updated_at?: string;
+  // Payment-notice cumulative figures + optional valuation link.
+  valuation_id?: string | null;
+  gross_certified_to_date?: number | null;
+  cumulative_retention?: number | null;
+  certified_payment_to_date?: number | null;
 }
 
 export interface DBCommercialRecord {
@@ -1230,6 +1236,18 @@ export interface DBValuation {
   created_by: string;
   created_at?: string;
   updated_at?: string;
+  // Frozen financial snapshot — written once on submit/certify/lock, never recalculated.
+  snapshot_gross_to_date?: number | null;
+  snapshot_mcd_pct?: number | null;
+  snapshot_mcd_amount?: number | null;
+  snapshot_nett_to_date?: number | null;
+  snapshot_retention_pct?: number | null;
+  snapshot_retention_amount?: number | null;
+  snapshot_gross_payment_to_date?: number | null;
+  snapshot_previous_payments?: number | null;
+  snapshot_previous_payments_source?: 'payment_notice' | 'valuation_fallback' | 'none' | null;
+  snapshot_net_due?: number | null;
+  snapshot_frozen_at?: string | null;
 }
 
 export interface DBValuationWorkbook {
@@ -1239,6 +1257,7 @@ export interface DBValuationWorkbook {
   title: string;
   retention_pct?: number;
   mcd_pct?: number;
+  rebate_pct?: number | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -1460,6 +1479,19 @@ export interface AppStore {
   valuationExtraEntries: DBValuationExtraEntry[];
   addValuation: (v: DBValuation) => Promise<void>;
   updateValuation: (v: DBValuation) => Promise<void>;
+  freezeValuationSnapshot: (v: DBValuation, snapshot: {
+    snapshot_gross_to_date: number;
+    snapshot_mcd_pct: number;
+    snapshot_mcd_amount: number;
+    snapshot_nett_to_date: number;
+    snapshot_retention_pct: number;
+    snapshot_retention_amount: number;
+    snapshot_gross_payment_to_date: number;
+    snapshot_previous_payments: number;
+    snapshot_previous_payments_source: 'payment_notice' | 'valuation_fallback' | 'none';
+    snapshot_net_due: number;
+  }) => Promise<void>;
+  clearValuationSnapshot: (v: DBValuation) => Promise<void>;
   removeValuation: (id: string) => Promise<void>;
   addValuationWorkbook: (w: DBValuationWorkbook) => Promise<void>;
   updateValuationWorkbook: (w: DBValuationWorkbook) => Promise<void>;
@@ -2790,6 +2822,56 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     logWrite('updateValuation', 'vy_valuations', error);
   }, []);
 
+  // Freeze a valuation's financial snapshot. Called by ValuationDetail when the
+  // status transitions to submitted/certified/locked. Existing snapshots are never
+  // overwritten unless the valuation is unlocked back to draft (snapshot cleared).
+  const freezeValuationSnapshot = useCallback(async (v: DBValuation, snapshot: {
+    snapshot_gross_to_date: number;
+    snapshot_mcd_pct: number;
+    snapshot_mcd_amount: number;
+    snapshot_nett_to_date: number;
+    snapshot_retention_pct: number;
+    snapshot_retention_amount: number;
+    snapshot_gross_payment_to_date: number;
+    snapshot_previous_payments: number;
+    snapshot_previous_payments_source: 'payment_notice' | 'valuation_fallback' | 'none';
+    snapshot_net_due: number;
+  }) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const updated: DBValuation = {
+      ...v,
+      ...snapshot,
+      snapshot_frozen_at: new Date().toISOString(),
+    };
+    setValuations(prev => prev.map(x => x.id === v.id ? updated : x));
+    const { error } = await supabase.from('vy_valuations').upsert({ ...updated, org_id: oid }, { onConflict: 'id' });
+    logWrite('freezeValuationSnapshot', 'vy_valuations', error);
+  }, []);
+
+  // Clear a snapshot when a frozen valuation is unlocked back to draft.
+  const clearValuationSnapshot = useCallback(async (v: DBValuation) => {
+    const oid = getOrgId(orgIdRef.current);
+    if (!oid) return;
+    const updated: DBValuation = {
+      ...v,
+      snapshot_gross_to_date: null,
+      snapshot_mcd_pct: null,
+      snapshot_mcd_amount: null,
+      snapshot_nett_to_date: null,
+      snapshot_retention_pct: null,
+      snapshot_retention_amount: null,
+      snapshot_gross_payment_to_date: null,
+      snapshot_previous_payments: null,
+      snapshot_previous_payments_source: null,
+      snapshot_net_due: null,
+      snapshot_frozen_at: null,
+    };
+    setValuations(prev => prev.map(x => x.id === v.id ? updated : x));
+    const { error } = await supabase.from('vy_valuations').upsert({ ...updated, org_id: oid }, { onConflict: 'id' });
+    logWrite('clearValuationSnapshot', 'vy_valuations', error);
+  }, []);
+
   const removeValuation = useCallback(async (id: string) => {
     setValuations(prev => prev.filter(v => v.id !== id));
     setValuationLineEntries(prev => prev.filter(e => e.valuation_id !== id));
@@ -3655,7 +3737,7 @@ export function useStore(orgId: string | null, authUserId: string | null): AppSt
     addOAndMSection, updateOAndMSection, removeOAndMSection, reorderOAndMSections,
     addOAndMItem, updateOAndMItem, removeOAndMItem, reorderOAndMItems,
     valuations, valuationWorkbooks, workbookLines, workbookExtras, valuationLineEntries, valuationExtraEntries,
-    addValuation, updateValuation, removeValuation,
+    addValuation, updateValuation, removeValuation, freezeValuationSnapshot, clearValuationSnapshot,
     addValuationWorkbook, updateValuationWorkbook, removeValuationWorkbook,
     addWorkbookLine, updateWorkbookLine, removeWorkbookLine, batchAddWorkbookLines,
     addWorkbookExtra, updateWorkbookExtra, removeWorkbookExtra, batchAddWorkbookExtras,

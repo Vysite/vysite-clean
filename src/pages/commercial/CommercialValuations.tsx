@@ -7,6 +7,7 @@ import ValuationDetail from './ValuationDetail';
 import ValuationWorkbookEditor from './ValuationWorkbookEditor';
 import { logActivity } from '../../lib/activityLog';
 import { nextRef as getNextRef } from '../../lib/refSequence';
+import { round2, isValuationFrozen } from './finance';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -574,30 +575,28 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                   const e = lineEntries.find(x => x.workbook_line_id === l.id);
                   return s + l.contract_value * (e?.current_pct ?? 0) / 100;
                 }, 0);
-                const contractPrevValue = wbLines.reduce((s, l) => {
-                  const e = lineEntries.find(x => x.workbook_line_id === l.id);
-                  return s + l.contract_value * (e?.previous_pct ?? 0) / 100;
-                }, 0);
                 const extrasCurrValue = wbExtras.reduce((s, ex) => {
                   const e = extraEntries.find(x => x.workbook_extra_id === ex.id);
                   return s + ex.agreed_value * (e?.current_pct ?? 0) / 100;
                 }, 0);
-                const extrasPrevValue = wbExtras.reduce((s, ex) => {
-                  const e = extraEntries.find(x => x.workbook_extra_id === ex.id);
-                  return s + ex.agreed_value * (e?.previous_pct ?? 0) / 100;
-                }, 0);
 
-                const grossToDate = contractCurrValue + extrasCurrValue;
-                const prevTotal   = contractPrevValue + extrasPrevValue;
-                const thisVal     = grossToDate - prevTotal;
+                const grossToDate = round2(contractCurrValue + extrasCurrValue);
                 const retPct      = workbook?.retention_pct ?? 0;
                 const mcdPct      = workbook?.mcd_pct ?? 0;
-                const retAmt      = thisVal * retPct / 100;
-                const afterRet    = thisVal - retAmt;
-                const mcdAmt      = afterRet * mcdPct / 100;
-                const netVal      = afterRet - mcdAmt;
+                // Same order as the valuation pipeline: MCD on gross, then retention on nett.
+                const mcdAmt      = round2(grossToDate * mcdPct / 100);
+                const nettToDate  = round2(grossToDate - mcdAmt);
+                const retAmt      = round2(nettToDate * retPct / 100);
+                const grossPayment = round2(nettToDate - retAmt);
+                // Frozen valuations display their immutable snapshot figures.
+                const netVal = val.snapshot_gross_to_date != null && isValuationFrozen(val.status)
+                  ? (val.snapshot_net_due ?? grossPayment)
+                  : grossPayment;
+                const shownGross = val.snapshot_gross_to_date != null && isValuationFrozen(val.status)
+                  ? val.snapshot_gross_to_date
+                  : grossToDate;
                 const grandTotal  = contractTotal + extrasTotal;
-                const completionPct = grandTotal > 0 ? Math.min(grossToDate / grandTotal * 100, 100) : 0;
+                const completionPct = grandTotal > 0 ? Math.min(shownGross / grandTotal * 100, 100) : 0;
                 const hasDeductions = retPct > 0 || mcdPct > 0;
 
                 return (
@@ -627,15 +626,15 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                         </div>
                       </div>
 
-                      {grossToDate > 0 && (
+                      {shownGross > 0 && (
                         <div className="hidden sm:flex flex-col items-end gap-1 shrink-0 mr-2">
                           <div className="text-right">
-                            <p className="text-[9px] text-slate-600 uppercase tracking-wider">{hasDeductions ? 'Net Due' : 'This Valuation'}</p>
+                            <p className="text-[9px] text-slate-600 uppercase tracking-wider">{hasDeductions ? 'Gross Payment to Date' : 'Gross to Date'}</p>
                             <p className={`text-sm font-bold ${netVal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtCurrency(netVal)}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-[9px] text-slate-600 uppercase tracking-wider">Gross to Date</p>
-                            <p className="text-xs text-slate-400">{fmtCurrency(grossToDate)}</p>
+                            <p className="text-[9px] text-slate-600 uppercase tracking-wider">Gross Valuation to Date</p>
+                            <p className="text-xs text-slate-400">{fmtCurrency(shownGross)}</p>
                           </div>
                         </div>
                       )}
@@ -664,7 +663,7 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                     {grandTotal > 0 && (
                       <div className="px-4 pb-3">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[9px] text-slate-600">Contract Value Certified</span>
+                          <span className="text-[9px] text-slate-600">Gross Value Applied to Date</span>
                           <span className="text-[9px] text-slate-500">{completionPct.toFixed(1)}%</span>
                         </div>
                         <div className="h-1 bg-[#111827] rounded-full overflow-hidden">

@@ -48,20 +48,26 @@ export function calcVAMetrics(items: DBVariationAccountItem[]) {
   function signedValue(item: DBVariationAccountItem) {
     return item.is_positive ? item.value : -item.value;
   }
-  const exposure = items
+  // Tendered items are already inside the original contract sum — they must
+  // never move exposure, agreed variations, or the Adjusted Contract Sum.
+  const countable = items.filter(i => i.classification !== 'tender_item');
+  const tendered = items
+    .filter(i => i.classification === 'tender_item')
+    .reduce((s, i) => s + signedValue(i), 0);
+  const exposure = countable
     .filter(i => EXPOSURE_STATUSES.includes(i.status as VAStatus))
     .reduce((s, i) => s + signedValue(i), 0);
-  const agreedItems = items.filter(i => AGREED_STATUSES.includes(i.status as VAStatus));
+  const agreedItems = countable.filter(i => AGREED_STATUSES.includes(i.status as VAStatus));
   const agreed = agreedItems.reduce((s, i) => s + signedValue(i), 0);
   const agreedAdditions = agreedItems.filter(i => i.is_positive).reduce((s, i) => s + i.value, 0);
   const agreedOmissions = agreedItems.filter(i => !i.is_positive).reduce((s, i) => s + i.value, 0);
-  const rejected = items
+  const rejected = countable
     .filter(i => i.status === 'rejected')
     .reduce((s, i) => s + signedValue(i), 0);
-  const underReview = items
+  const underReview = countable
     .filter(i => i.status === 'under_review')
     .reduce((s, i) => s + signedValue(i), 0);
-  return { exposure, agreed, agreedAdditions, agreedOmissions, rejected, underReview };
+  return { exposure, agreed, agreedAdditions, agreedOmissions, rejected, underReview, tendered };
 }
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
@@ -528,6 +534,7 @@ function VariationDrawer({
     reason:      templateData ? templateData.reason : (item?.reason ?? ''),
     value:       (templateData?.value ?? item?.value) != null ? String(templateData?.value ?? item?.value) : '',
     isPositive:  templateData?.is_positive ?? item?.is_positive ?? true,
+    classification: ((item?.classification ?? (item?.is_positive === false ? 'omission' : 'addition')) ?? 'addition') as 'addition' | 'omission' | 'tender_item',
     status:      ((item?.status ?? 'draft')) as VAStatus,
     dateRaised:  item?.date_raised ?? new Date().toISOString().slice(0, 10),
     dateAgreed:  item?.date_agreed ?? '',
@@ -621,6 +628,7 @@ function VariationDrawer({
       reason:      form.reason.trim(),
       value:       valueNum,
       is_positive: form.isPositive,
+      classification: form.classification,
       status:      form.status,
       date_raised: form.dateRaised || null,
       date_agreed: form.dateAgreed || null,
@@ -896,6 +904,20 @@ function VariationDrawer({
                       <TrendingDown size={13} /> Omission
                     </button>
                   </div>
+                </div>
+                <div>
+                  <label className={labelCls}>Classification</label>
+                  <select
+                    className={selectCls}
+                    value={form.classification}
+                    onChange={e => setForm(f => ({ ...f, classification: e.target.value as 'addition' | 'omission' | 'tender_item' }))}
+                    disabled={!canEdit}
+                  >
+                    <option value="addition">Additional Variation — increases contract sum</option>
+                    <option value="omission">Omission — reduces contract sum</option>
+                    <option value="tender_item">Tendered Item — already in contract sum</option>
+                  </select>
+                  <p className="text-[10px] text-slate-600 mt-1">Tendered items appear on valuations but never increase the Adjusted Contract Sum.</p>
                 </div>
 
                 <div>

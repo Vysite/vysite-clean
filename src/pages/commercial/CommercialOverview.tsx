@@ -1,15 +1,26 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   MapPin, User, Calendar, Save, TrendingUp, Info,
-  FileText, TrendingDown, Wallet,
+  FileText, TrendingDown, Wallet, AlertTriangle,
 } from 'lucide-react';
 import { fmtCurrency, parseRawValue } from './types';
 import type { CommercialRecord, Project } from './types';
-import type { DBKeyDate } from '../../lib/store';
+import type { DBKeyDate, DBValuation, DBValuationWorkbook } from '../../lib/store';
+import {
+  computeContractSums, computeOverviewPayments, netForecastRevenue,
+  financialProgress, remainingContractValue, isValuationFrozen,
+} from './finance';
 import { exportPositionStatementPDF } from './CommercialPDF';
 import ProfitabilityChart from './ProfitabilityChart';
 import { useAppStore } from '../../lib/StoreContext';
 import { supabase } from '../../lib/supabase';
+
+interface OverviewPaymentModelInputLite {
+  appliedPaymentToDate: number | null;
+  certifiedPaymentToDate: number | null;
+  paidToDate: number;
+  retentionHeld: number | null;
+}
 
 interface CommercialOverviewProps {
   project: Project | null;
@@ -26,6 +37,12 @@ interface CommercialOverviewProps {
   vaAgreedOmissions: number;
   vaHasItems: boolean;
   canViewCosts: boolean;
+  // Valuation workbook (MCD / rebate %) and project valuations for source-driven cards
+  workbook: DBValuationWorkbook | null;
+  valuations: DBValuation[];
+  paymentModel: OverviewPaymentModelInputLite;
+  latestValuationRef: string | null;
+  latestValuationStatus: string | null;
   onProjectChange: (id: string) => void;
   onAddKeyDate: (d: DBKeyDate) => Promise<void>;
   onUpdateKeyDate: (d: DBKeyDate) => Promise<void>;
@@ -51,6 +68,7 @@ function normaliseInput(v: string): string {
 export default function CommercialOverview({
   project, projects, keyDates, canEdit, canCreate,
   currentUserName, vaExposure, vaAgreed, vaAgreedAdditions, vaAgreedOmissions, vaHasItems, canViewCosts,
+  workbook, valuations, paymentModel, latestValuationRef, latestValuationStatus,
   onProjectChange, onUpdateProject, onNewRecord,
 }: CommercialOverviewProps) {
   const store = useAppStore();
@@ -114,13 +132,51 @@ export default function CommercialOverview({
   const agreedVariations    = vaHasItems ? vaAgreed : 0;
   const agreedAdditions     = vaHasItems ? vaAgreedAdditions : 0;
   const agreedOmissions     = vaHasItems ? vaAgreedOmissions : 0;
-  const adjustedContractSum = contractNum + agreedVariations;
-  const forecastContractSum = adjustedContractSum + variationExposure;
-  const remainingValue      = completedNum != null ? adjustedContractSum - completedNum : null;
+  const sums = computeContractSums({
+    originalContractSum: contractNum,
+    netAgreedVariations: agreedVariations,
+    netOutstandingExposure: variationExposure,
+  });
+  const adjustedContractSum = sums.adjustedContractSum;
+  const forecastContractSum = sums.forecastContractSum;
 
-  const progress = contractNum > 0 && completedNum != null
-    ? Math.min(100, Math.round((completedNum / contractNum) * 100))
-    : project.progress;
+  // ── Valuation-driven figures (sources of truth; Overview only displays them) ──
+  const submittedVals = valuations.filter(v => isValuationFrozen(v.status));
+  const latestSubmitted = submittedVals
+    .slice()
+    .sort((a, b) => (b.valuation_date || '').localeCompare(a.valuation_date || '') || b.ref.localeCompare(a.ref))[0] ?? null;
+  const grossAppliedToDate = latestSubmitted?.snapshot_gross_to_date ?? null;
+  const hasSubmittedValuation = latestSubmitted != null;
+  // Legacy projects without a submitted valuation keep the manual completed value.
+  const displayAppliedValue = hasSubmittedValuation ? grossAppliedToDate : completedNum;
+
+  const payments = computeOverviewPayments({
+    appliedPaymentToDate: hasSubmittedValuation ? paymentModel.appliedPaymentToDate : null,
+    certifiedPaymentToDate: paymentModel.certifiedPaymentToDate,
+    paidToDate: paymentModel.paidToDate,
+    retentionHeld: paymentModel.retentionHeld,
+  });
+
+  const progressResult = hasSubmittedValuation && grossAppliedToDate != null
+    ? financialProgress(grossAppliedToDate, adjustedContractSum)
+    : null;
+  const progress = progressResult != null
+    ? Math.round(progressResult)
+    : (contractNum > 0 && completedNum != null
+      ? Math.min(100, Math.round((completedNum / contractNum) * 100))
+      : project.progress);
+
+  const remainingResult = hasSubmittedValuation && grossAppliedToDate != null
+    ? remainingContractValue(grossAppliedToDate, adjustedContractSum)
+    : null;
+  const remainingValue = remainingResult
+    ? remainingResult.remaining
+    : (completedNum != null ? Math.max(0, adjustedContractSum - completedNum) : null);
+  const overContractValue = remainingResult?.overContractValue ?? 0;
+
+  const mcdPct = workbook?.mcd_pct ?? 0;
+  const rebatePct = workbook?.rebate_pct ?? 0;
+  const forecastRevenue = netForecastRevenue(forecastContractSum, mcdPct, rebatePct);
 
   const contractDirty  = contractEdit !== '' && parseFloat(contractEdit) !== (project.value ? parseRawValue(project.value) : 0);
   const completedDirty = completedEdit !== '' && parseFloat(completedEdit) !== (project.committed ?? NaN);
@@ -342,10 +398,25 @@ export default function CommercialOverview({
               </span>
             </div>
 
-            {/* Row: Completed Value */}
+            {/* Row: Gross Value Applied to Date */}
             <div className="flex items-center justify-between py-1.5 border-b border-[#1e2d4a]/50">
-              <span className="text-sm text-slate-300">Completed Value</span>
-              {canEdit ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-slate-300">Gross Value Applied to Date</span>
+                {hasSubmittedValuation ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0d1628] border border-[#1e2d4a] text-slate-500">
+                    {latestValuationRef || 'Valuation'}{latestValuationStatus ? ` · ${latestValuationStatus}` : ''}
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setShowVariationsInfo(v => !v)}
+                    className="text-slate-600 hover:text-slate-400 transition-colors"
+                    title="Manual value — submit a valuation to calculate this automatically"
+                  >
+                    <Info size={12} />
+                  </button>
+                )}
+              </div>
+              {canEdit && !hasSubmittedValuation ? (
                 <div className="bg-[#0d1628] border border-[#1e2d4a] focus-within:border-[#f97316] rounded px-2.5 py-1 min-w-[160px] transition-colors">
                   <input
                     type="text"
@@ -360,18 +431,29 @@ export default function CommercialOverview({
                 </div>
               ) : (
                 <span className="text-sm font-semibold text-slate-200 tabular-nums">
-                  {completedNum != null ? fmtCurrency(completedNum) : '—'}
+                  {displayAppliedValue != null ? fmtCurrency(displayAppliedValue) : '—'}
                 </span>
               )}
             </div>
+            {!hasSubmittedValuation && (
+              <div className="py-1.5 px-3 bg-[#0d1628] text-[10px] text-slate-500 italic border-b border-[#1e2d4a]/50 rounded">
+                Manual value from project settings. Submit a valuation to calculate this automatically.
+              </div>
+            )}
+            {overContractValue > 0 && (
+              <div className="flex items-center gap-2 py-1.5 px-3 bg-amber-900/20 border border-amber-800/40 rounded text-[11px] text-amber-300">
+                <AlertTriangle size={12} className="shrink-0" />
+                Over Contract Value by {fmtCurrency(overContractValue)} — gross value applied exceeds the Adjusted Contract Sum.
+              </div>
+            )}
 
             {/* Row: Remaining Value */}
             <div className="flex items-center justify-between py-1.5">
               <span className="text-sm text-slate-300">Remaining Value</span>
               <span className={`text-sm font-semibold tabular-nums ${
                 remainingValue == null ? 'text-slate-500'
-                : remainingValue < 0 ? 'text-red-400'
-                : remainingValue < contractNum * 0.1 ? 'text-amber-400'
+                : overContractValue > 0 ? 'text-amber-400'
+                : remainingValue < adjustedContractSum * 0.1 ? 'text-amber-400'
                 : 'text-emerald-400'
               }`}>
                 {remainingValue != null ? fmtCurrency(remainingValue) : '—'}
@@ -380,24 +462,55 @@ export default function CommercialOverview({
           </div>
 
           {/* Project Health — at-a-glance summary integrated into Commercial Position */}
-          {contractNum > 0 && (() => {
+          {(() => {
             const actualCost = costSummary.actual ?? 0;
             const committedCost = costSummary.committed ?? 0;
             const forecastCost = costSummary.forecast ?? 0;
             const forecastFinalCost = actualCost + committedCost + forecastCost;
-            const forecastProfit = adjustedContractSum - forecastFinalCost;
-            const forecastMargin = adjustedContractSum > 0 ? (forecastProfit / adjustedContractSum) * 100 : 0;
+            const forecastProfit = forecastRevenue - forecastFinalCost;
+            const forecastMargin = forecastRevenue > 0 ? (forecastProfit / forecastRevenue) * 100 : 0;
             const profitPositive = forecastProfit >= 0;
             const hasCostData = canViewCosts && (actualCost > 0 || committedCost > 0 || forecastCost > 0);
             return (
               <div className="mt-4 pt-3 border-t border-[#1e2d4a]/50">
+                {/* Payment position cards — displayed from sources of truth */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                  <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Applied to Date</span>
+                    <p className="text-base font-bold text-white tabular-nums mt-1">
+                      {payments.appliedPaymentToDate != null ? fmtCurrency(payments.appliedPaymentToDate) : '—'}
+                    </p>
+                    <p className="text-[10px] text-slate-600 mt-0.5">Latest submitted valuation{latestValuationRef ? ` (${latestValuationRef})` : ''}</p>
+                  </div>
+                  <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Certified to Date</span>
+                    <p className="text-base font-bold text-emerald-400 tabular-nums mt-1">
+                      {payments.certifiedPaymentToDate != null ? fmtCurrency(payments.certifiedPaymentToDate) : '—'}
+                    </p>
+                    <p className="text-[10px] text-slate-600 mt-0.5">Latest payment notice</p>
+                  </div>
+                  <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Awaiting Certification</span>
+                    <p className="text-base font-bold text-amber-400 tabular-nums mt-1">
+                      {payments.awaitingCertification != null ? fmtCurrency(payments.awaitingCertification) : '—'}
+                    </p>
+                    <p className="text-[10px] text-slate-600 mt-0.5">Applied not yet certified</p>
+                  </div>
+                  <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Paid to Date</span>
+                    <p className="text-base font-bold text-sky-400 tabular-nums mt-1">
+                      {fmtCurrency(payments.paidToDate)}
+                    </p>
+                    <p className="text-[10px] text-slate-600 mt-0.5">Payment records</p>
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {/* Overall Progress */}
                   <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Overall Progress</span>
-                    <p className="text-lg font-bold text-[#f97316] tabular-nums mt-1">{progress}%</p>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Financial Progress</span>
+                    <p className="text-lg font-bold text-[#f97316] tabular-nums mt-1">{progress != null ? `${progress}%` : '—'}</p>
                     <div className="w-full bg-[#1e2d4a] rounded-full h-1 mt-2">
-                      <div className="h-1 rounded-full bg-[#f97316] transition-all" style={{ width: `${progress}%` }} />
+                      <div className="h-1 rounded-full bg-[#f97316] transition-all" style={{ width: `${Math.min(100, Math.max(0, progress ?? 0))}%` }} />
                     </div>
                   </div>
                   {/* Actual Spend */}
@@ -417,6 +530,7 @@ export default function CommercialOverview({
                     }`}>
                       {!canViewCosts ? '—' : costSummaryLoading ? '…' : hasCostData ? fmtCurrency(forecastProfit) : '—'}
                     </p>
+                    <p className="text-[10px] text-slate-600 mt-0.5">Forecast revenue net of MCD and rebate.</p>
                   </div>
                   {/* Forecast Margin */}
                   <div className="bg-[#0d1628] border border-[#1e2d4a] rounded-lg px-4 py-3">
@@ -459,8 +573,8 @@ export default function CommercialOverview({
         const hasBudget = budgetCost != null && budgetCost > 0;
         const originalForecastProfit = hasBudget ? contractNum - budgetCost : null;
         const originalMargin = hasBudget && contractNum > 0 ? ((contractNum - budgetCost) / contractNum) * 100 : null;
-        const currentForecastProfit = adjustedContractSum - forecastFinalCost;
-        const currentMargin = adjustedContractSum > 0 ? (currentForecastProfit / adjustedContractSum) * 100 : 0;
+        const currentForecastProfit = forecastRevenue - forecastFinalCost;
+        const currentMargin = forecastRevenue > 0 ? (currentForecastProfit / forecastRevenue) * 100 : 0;
         const marginMovement = hasBudget && originalMargin != null ? currentMargin - originalMargin : null;
         const marginImproving = marginMovement != null && marginMovement >= 0;
 
@@ -582,8 +696,8 @@ export default function CommercialOverview({
         const hasBudget = budgetCost != null && budgetCost > 0;
         const originalForecastProfit = hasBudget ? contractNum - budgetCost! : null;
         const originalMargin = hasBudget && contractNum > 0 ? ((contractNum - budgetCost!) / contractNum) * 100 : null;
-        const currentForecastProfit = adjustedContractSum - forecastFinalCost;
-        const currentMargin = adjustedContractSum > 0 ? (currentForecastProfit / adjustedContractSum) * 100 : 0;
+        const currentForecastProfit = forecastRevenue - forecastFinalCost;
+        const currentMargin = forecastRevenue > 0 ? (currentForecastProfit / forecastRevenue) * 100 : 0;
         const marginMovement = hasBudget && originalMargin != null ? currentMargin - originalMargin : null;
         const marginImproving = marginMovement != null && marginMovement >= 0;
         const hasCostData = actualCost > 0 || committedCost > 0 || forecastCost > 0;

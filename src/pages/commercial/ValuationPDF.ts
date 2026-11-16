@@ -30,6 +30,13 @@ export interface ValuationTotals {
   retentionAmt?:     number;
   mcdPct?:           number;
   mcdAmt?:           number;
+  /** Nett Valuation to Date (gross less MCD). */
+  nettToDate?:       number;
+  /** Cumulative Gross Payment to Date (after MCD, before previous certified payments). */
+  grossPaymentToDate?: number;
+  /** Previous certified payments deducted to reach Net Valuation Due. */
+  previousPayments?:    number;
+  previousPaymentsSource?: 'payment_notice' | 'valuation_fallback' | 'none';
   netValuation?:     number;
 }
 
@@ -557,8 +564,6 @@ function addSummaryPage(ctx: Ctx, totals: ValuationTotals) {
     ['Original Contract Value',         totals.contractOriginal, false],
     ['Extras / Agreed Variations Total', totals.extrasOriginal,   false],
     ['Gross Valuation to Date',          totals.grossToDate,      true],
-    ['Less: Previous Valuation Total',   -totals.previousTotal,   false],
-    ['Current Amount Due',               totals.amountDue,        false],
   ];
 
   const retPct = totals.retentionPct ?? 0;
@@ -567,8 +572,21 @@ function addSummaryPage(ctx: Ctx, totals: ValuationTotals) {
   const mcdAmt = totals.mcdAmt ?? 0;
   const netVal = totals.netValuation ?? totals.amountDue;
 
-  if (retPct > 0) summaryRows.push([`Less: Retention (${retPct.toFixed(2)}%)`, -retAmt, false]);
-  if (mcdPct > 0) summaryRows.push([`Less: MCD (${mcdPct.toFixed(2)}%)`, -mcdAmt, false]);
+  // Cumulative chain: MCD first (on gross), then retention (on nett), then previous certified payments.
+  if (mcdPct > 0) {
+    summaryRows.push([`Less: MCD (${mcdPct.toFixed(2)}%)`, -mcdAmt, false]);
+    summaryRows.push(['Nett Valuation to Date', totals.nettToDate ?? (totals.grossToDate - mcdAmt), false]);
+  }
+  if (retPct > 0) {
+    summaryRows.push([`Less: Retention (${retPct.toFixed(2)}%)`, -retAmt, false]);
+    summaryRows.push(['Gross Payment to Date', totals.grossPaymentToDate ?? (netVal + (totals.previousPayments ?? 0)), false]);
+  }
+  if ((totals.previousPayments ?? 0) > 0 || totals.previousPaymentsSource === 'payment_notice') {
+    const srcTag = totals.previousPaymentsSource === 'payment_notice' ? ' (per Payment Notice)'
+      : totals.previousPaymentsSource === 'valuation_fallback' ? ' (provisional — no notice)'
+      : '';
+    summaryRows.push([`Less: Previous Certified Payments${srcTag}`, -(totals.previousPayments ?? 0), false]);
+  }
 
   for (const [label, value, isBold] of summaryRows) {
     const font  = isBold ? ctx.bold : ctx.regular;

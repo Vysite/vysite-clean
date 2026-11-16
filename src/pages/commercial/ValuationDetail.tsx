@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { ArrowLeft, FileText, Download, ChevronDown, ChevronRight, X, CreditCard as Edit2, Lock, Unlock, CheckCircle } from 'lucide-react';
+import { ArrowLeft, FileText, Download, ChevronDown, ChevronRight, X, CreditCard as Edit2, Lock, Unlock, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '../../lib/StoreContext';import type {
   DBValuation, DBValuationWorkbook, DBWorkbookLine, DBWorkbookExtra,
   DBValuationLineEntry, DBValuationExtraEntry,
@@ -8,6 +8,8 @@ import type { Project } from '../../data/types';
 import { buildValuationPdf } from './ValuationPDF';
 import { buildValuationXlsx } from './ValuationXLSX';
 import { logActivity } from '../../lib/activityLog';
+import { computeValuationTotals, isValuationFrozen, round2 } from './finance';
+import type { ValuationTotalsResult } from './finance';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -260,7 +262,11 @@ export default function ValuationDetail({
   const { state: saveState, lastSaved, onSaveStart, onSaveDone } = useSaveIndicator();
 
   const isLocked = valuation.status === 'locked';
-  const effectiveCanEdit = canEdit && !isLocked;
+  const isFrozen = isValuationFrozen(valuation.status);
+  const hasSnapshot = valuation.snapshot_gross_to_date != null;
+  // Financial entries are frozen once submitted/certified/locked/superseded —
+  // the snapshot preserves the issued figures. Unlock back to draft to edit.
+  const effectiveCanEdit = canEdit && !isFrozen;
 
   // ── Activity log helper ───────────────────────────────────────────────────────
 
@@ -288,31 +294,81 @@ export default function ValuationDetail({
     }
   ), [extraEntries, valuation.id]);
 
-  const totals = useMemo(() => {
-    const contractOriginal  = wbLines.reduce((s, l) => s + l.contract_value, 0);
+  const totals = useMemo((): ValuationTotalsResult => {
     const contractPrevValue = wbLines.reduce((s, l) => s + l.contract_value * getLineEntry(l.id).previous_pct / 100, 0);
     const contractCurrValue = wbLines.reduce((s, l) => s + l.contract_value * getLineEntry(l.id).current_pct  / 100, 0);
-    const contractThisVal   = contractCurrValue - contractPrevValue;
-    const extrasOriginal    = wbExtras.reduce((s, e) => s + e.agreed_value, 0);
     const extrasPrevValue   = wbExtras.reduce((s, e) => s + e.agreed_value * getExtraEntry(e.id).previous_pct / 100, 0);
     const extrasCurrValue   = wbExtras.reduce((s, e) => s + e.agreed_value * getExtraEntry(e.id).current_pct  / 100, 0);
-    const extrasThisVal     = extrasCurrValue - extrasPrevValue;
-    const grossToDate    = contractCurrValue + extrasCurrValue;
-    const previousTotal  = contractPrevValue + extrasPrevValue;
-    const amountDue      = contractThisVal   + extrasThisVal;
-    const retentionPct   = workbook?.retention_pct ?? 0;
-    const mcdPct         = workbook?.mcd_pct ?? 0;
-    const retentionAmt   = amountDue * retentionPct / 100;
-    const afterRetention = amountDue - retentionAmt;
-    const mcdAmt         = afterRetention * mcdPct / 100;
-    const netValuation   = afterRetention - mcdAmt;
-    return {
-      contractOriginal, contractPrevValue, contractCurrValue, contractThisVal,
-      extrasOriginal, extrasPrevValue, extrasCurrValue, extrasThisVal,
-      grossToDate, previousTotal, amountDue,
-      retentionPct, retentionAmt, mcdPct, mcdAmt, netValuation,
-    };
-  }, [wbLines, wbExtras, getLineEntry, getExtraEntry, workbook]);
+
+    // Previous certified payments: latest valid payment notice linked to any preceding
+    // valuation. Where no notice exists, fall back to the preceding submitted valuation's
+    // cumulative Gross Payment to Date (provisional, shown with a warning).
+    const refNum = parseInt(valuation.ref.replace(/\D/g, ''), 10) || 0;
+    const earlierVals = store.valuations.filter(v => {
+      if (v.project_id !== valuation.project_id || v.id === valuation.id) return false;
+      const n = parseInt(v.ref.replace(/\D/g, ''), 10) || 0;
+      return n > 0 && n < refNum;
+    });
+    const earlierIds = new Set(earlierVals.map(v => v.id));
+    const linkedNotice = (store.commercialApplications ?? [])
+      .filter(a => a.project_id === valuation.project_id && a.valuation_id && earlierIds.has(a.valuation_id))
+      .filter(a => !['withdrawn', 'disputed', 'draft'].includes(a.status))
+      .sort((a, b) => b.app_number - a.app_number)[0];
+    const previousCertifiedPayment = linkedNotice
+      ? (linkedNotice.certified_payment_to_date ?? linkedNotice.certified_value)
+      : null;
+
+    // Preceding valuation fallback: use its frozen snapshot where available so historic
+    // figures are never silently recalculated.
+    const prevVal = earlierVals
+      .slice()
+      .sort((a, b) => (parseInt(b.ref.replace(/\D/g, ''), 10) || 0) - (parseInt(a.ref.replace(/\D/g, ''), 10) || 0))[0];
+    let previousValuationGrossPayment: number | null = null;
+    if (prevVal) {
+      if (prevVal.snapshot_gross_payment_to_date != null) {
+        previousValuationGrossPayment = prevVal.snapshot_gross_payment_to_date;
+      } else if (!isValuationFrozen(prevVal.status)) {
+        const pe = store.valuationLineEntries.filter(e => e.valuation_id === prevVal.id);
+        const px = store.valuationExtraEntries.filter(e => e.valuation_id === prevVal.id);
+        const pCurr = wbLines.reduce((s, l) => s + l.contract_value * (pe.find(x => x.workbook_line_id === l.id)?.current_pct ?? 0) / 100, 0)
+          + wbExtras.reduce((s, e) => s + e.agreed_value * (px.find(x => x.workbook_extra_id === e.id)?.current_pct ?? 0) / 100, 0);
+        const pMcd = round2(pCurr * (workbook?.mcd_pct ?? 0) / 100);
+        const pNett = round2(pCurr - pMcd);
+        const pRet = round2(pNett * (workbook?.retention_pct ?? 0) / 100);
+        previousValuationGrossPayment = round2(pNett - pRet);
+      }
+    }
+
+    return computeValuationTotals({
+      contractCurrValue, contractPrevValue, extrasCurrValue, extrasPrevValue,
+      mcdPct: workbook?.mcd_pct ?? 0,
+      retentionPct: workbook?.retention_pct ?? 0,
+      previousCertifiedPayment,
+      previousValuationGrossPayment,
+    });
+  }, [wbLines, wbExtras, getLineEntry, getExtraEntry, workbook, valuation.id, valuation.ref, valuation.project_id, store.valuations, store.valuationLineEntries, store.valuationExtraEntries, store.commercialApplications]);
+
+  // Figures shown on screen and in exports: frozen valuations show their immutable
+  // snapshot; drafts show live calculations.
+  const display = useMemo((): ValuationTotalsResult => {
+    if (isFrozen && hasSnapshot && valuation.snapshot_gross_to_date != null) {
+      return {
+        ...totals,
+        grossToDate: valuation.snapshot_gross_to_date,
+        mcdPct: valuation.snapshot_mcd_pct ?? totals.mcdPct,
+        mcdAmt: valuation.snapshot_mcd_amount ?? totals.mcdAmt,
+        nettToDate: valuation.snapshot_nett_to_date ?? totals.nettToDate,
+        retentionPct: valuation.snapshot_retention_pct ?? totals.retentionPct,
+        retentionAmt: valuation.snapshot_retention_amount ?? totals.retentionAmt,
+        grossPaymentToDate: valuation.snapshot_gross_payment_to_date ?? totals.grossPaymentToDate,
+        previousPaymentsUsed: valuation.snapshot_previous_payments ?? totals.previousPaymentsUsed,
+        previousPaymentsSource: valuation.snapshot_previous_payments_source ?? totals.previousPaymentsSource,
+        netValuationDue: valuation.snapshot_net_due ?? totals.netValuationDue,
+        provisionalPrevious: valuation.snapshot_previous_payments_source === 'valuation_fallback',
+      };
+    }
+    return totals;
+  }, [isFrozen, hasSnapshot, valuation, totals]);
 
   const handleLinePct = useCallback(async (lineId: string, current_pct: number) => {
     const existing = lineEntries.find(e => e.workbook_line_id === lineId);
@@ -369,9 +425,38 @@ export default function ValuationDetail({
   const handleUnlock = async () => {
     onSaveStart();
     await store.updateValuation({ ...valuation, status: 'draft' });
+    if (hasSnapshot) await store.clearValuationSnapshot({ ...valuation, status: 'draft' });
     onSaveDone();
-    valLog('status_changed', `${valuation.ref} unlocked — status changed: Locked → Draft`, { prevValue: 'Locked', newValue: 'Draft' });
+    valLog('status_changed', `${valuation.ref} unlocked — status changed: Locked → Draft. Financial snapshot cleared; figures return to live calculation.`, { prevValue: 'Locked', newValue: 'Draft' });
   };
+
+  // Build the export totals object (shared by PDF and Excel) from the displayed figures.
+  const buildExportTotals = useCallback(() => {
+    const contractOriginal = wbLines.reduce((s, l) => s + l.contract_value, 0);
+    const extrasOriginal   = wbExtras.reduce((s, e) => s + e.agreed_value, 0);
+    return {
+      contractOriginal,
+      contractPrevValue: totals.contractPrevValue,
+      contractCurrValue: display.contractCurrValue,
+      contractThisVal: totals.contractThisVal,
+      extrasOriginal,
+      extrasPrevValue: totals.extrasPrevValue,
+      extrasCurrValue: display.extrasCurrValue,
+      extrasThisVal: totals.extrasThisVal,
+      grossToDate: display.grossToDate,
+      previousTotal: totals.previousTotal,
+      amountDue: totals.amountDue,
+      retentionPct: display.retentionPct,
+      retentionAmt: display.retentionAmt,
+      mcdPct: display.mcdPct,
+      mcdAmt: display.mcdAmt,
+      nettToDate: display.nettToDate,
+      grossPaymentToDate: display.grossPaymentToDate,
+      previousPayments: display.previousPaymentsUsed,
+      previousPaymentsSource: display.previousPaymentsSource,
+      netValuation: display.netValuationDue,
+    };
+  }, [wbLines, wbExtras, totals, display]);
 
   const handleExportPdf = async () => {
     setPdfLoading(true);
@@ -380,7 +465,7 @@ export default function ValuationDetail({
       const lineData  = wbLines.map(l  => ({ line: l,  entry: getLineEntry(l.id) }));
       const extraData = wbExtras.map(e => ({ extra: e, entry: getExtraEntry(e.id) }));
       await buildValuationPdf(
-        valuation, project, lineData, extraData, totals,
+        valuation, project, lineData, extraData, buildExportTotals(),
         store.settings?.logo_data_url || undefined,
         store.settings?.company_name  || undefined,
       );
@@ -402,7 +487,7 @@ export default function ValuationDetail({
       const lineData  = wbLines.map(l  => ({ line: l,  entry: getLineEntry(l.id) }));
       const extraData = wbExtras.map(e => ({ extra: e, entry: getExtraEntry(e.id) }));
       await buildValuationXlsx(
-        valuation, project, lineData, extraData, totals,
+        valuation, project, lineData, extraData, buildExportTotals(),
         store.settings?.company_name || undefined,
       );
       valLog('pdf_exported', `${valuation.ref} — Valuation exported as Excel: ${valuation.title}`);
@@ -455,6 +540,30 @@ export default function ValuationDetail({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors"
               style={{ background: '#111827', border: '1px solid rgba(245,158,11,0.3)' }}>
               <Unlock size={11} /> Unlock
+            </button>
+          )}
+          {isFrozen && !hasSnapshot && canEdit && (
+            <button
+              onClick={async () => {
+                onSaveStart();
+                await store.freezeValuationSnapshot(valuation, {
+                  snapshot_gross_to_date: display.grossToDate,
+                  snapshot_mcd_pct: display.mcdPct,
+                  snapshot_mcd_amount: display.mcdAmt,
+                  snapshot_nett_to_date: display.nettToDate,
+                  snapshot_retention_pct: display.retentionPct,
+                  snapshot_retention_amount: display.retentionAmt,
+                  snapshot_gross_payment_to_date: display.grossPaymentToDate,
+                  snapshot_previous_payments: display.previousPaymentsUsed,
+                  snapshot_previous_payments_source: display.previousPaymentsSource,
+                  snapshot_net_due: display.netValuationDue,
+                });
+                onSaveDone();
+                valLog('record_updated', `${valuation.ref} — financial snapshot frozen against live figures after verification against issued records.`);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
+              style={{ background: '#111827', border: '1px solid rgba(59,130,246,0.3)' }}>
+              <CheckCircle size={11} /> Freeze Figures
             </button>
           )}
           {effectiveCanEdit && (
@@ -697,13 +806,15 @@ export default function ValuationDetail({
       )}
 
       {/* Summary panel */}
-      {(wbLines.length > 0 || wbExtras.length > 0) && (
+      {(wbLines.length > 0 || wbExtras.length > 0) && (() => {
+        const contractOriginal = wbLines.reduce((s, l) => s + l.contract_value, 0);
+        const extrasOriginal   = wbExtras.reduce((s, e) => s + e.agreed_value, 0);
+        return (
         <div className="rounded-xl overflow-hidden mt-4" style={{ border: '1px solid #1e2d4a' }}>
           {[
             { label: 'Contract Works (Gross to Date)',  value: totals.contractCurrValue },
             { label: 'Extras / Agreed Variations',      value: totals.extrasCurrValue },
-            { label: 'Gross Total to Date',             value: totals.grossToDate },
-            { label: 'Less: Previous Valuation Total',  value: -totals.previousTotal },
+            { label: 'Gross Valuation to Date',         value: display.grossToDate },
           ].map((row, i) => (
             <div key={i} className="flex items-center justify-between px-4 py-2.5"
               style={{ borderBottom: '1px solid #1e2d4a', background: i % 2 === 0 ? '#0d1628' : '#0a1020' }}>
@@ -711,35 +822,76 @@ export default function ValuationDetail({
               <span className={`text-xs font-bold tabular-nums ${row.value < 0 ? 'text-red-400' : 'text-white'}`}>{fmtCurrency(row.value)}</span>
             </div>
           ))}
-          {/* Amount Due */}
-          <div className="flex items-center justify-between px-4 py-2.5"
-            style={{ borderBottom: totals.retentionPct > 0 || totals.mcdPct > 0 ? '1px solid #1e2d4a' : undefined, background: '#0d1628' }}>
-            <span className="text-xs font-semibold text-slate-300">Current Amount Due (Before Deductions)</span>
-            <span className={`text-xs font-bold tabular-nums ${totals.amountDue >= 0 ? 'text-white' : 'text-red-400'}`}>{fmtCurrency(totals.amountDue)}</span>
-          </div>
-          {totals.retentionPct > 0 && (
+          {/* Cumulative deduction chain — MCD on gross, then retention on nett */}
+          {display.mcdPct > 0 && (
             <div className="flex items-center justify-between px-4 py-2.5"
               style={{ borderBottom: '1px solid #1e2d4a', background: '#0a1020' }}>
-              <span className="text-xs text-amber-400/80">Less: Retention ({totals.retentionPct.toFixed(2)}%)</span>
-              <span className="text-xs font-bold tabular-nums text-amber-400">({fmtCurrency(totals.retentionAmt)})</span>
+              <span className="text-xs text-amber-400/80">Less: MCD ({display.mcdPct.toFixed(2)}%)</span>
+              <span className="text-xs font-bold tabular-nums text-amber-400">({fmtCurrency(display.mcdAmt)})</span>
             </div>
           )}
-          {totals.mcdPct > 0 && (
+          {display.mcdPct > 0 && (
             <div className="flex items-center justify-between px-4 py-2.5"
-              style={{ borderBottom: '1px solid #1e2d4a', background: totals.retentionPct > 0 ? '#0d1628' : '#0a1020' }}>
-              <span className="text-xs text-amber-400/80">Less: MCD ({totals.mcdPct.toFixed(2)}%)</span>
-              <span className="text-xs font-bold tabular-nums text-amber-400">({fmtCurrency(totals.mcdAmt)})</span>
+              style={{ borderBottom: '1px solid #1e2d4a', background: '#0d1628' }}>
+              <span className="text-xs text-slate-400">Nett Valuation to Date</span>
+              <span className="text-xs font-bold tabular-nums text-white">{fmtCurrency(display.nettToDate)}</span>
             </div>
           )}
-          <div className="flex items-center justify-between px-5 py-4"
-            style={{ background: 'rgba(16,185,129,0.08)', borderTop: totals.retentionPct === 0 && totals.mcdPct === 0 ? '1px solid rgba(16,185,129,0.2)' : undefined }}>
-            <span className="text-sm font-bold text-emerald-400">
-              {totals.retentionPct > 0 || totals.mcdPct > 0 ? 'Net Valuation Due' : 'Amount Due This Valuation'}
+          {display.retentionPct > 0 && (
+            <div className="flex items-center justify-between px-4 py-2.5"
+              style={{ borderBottom: '1px solid #1e2d4a', background: '#0a1020' }}>
+              <span className="text-xs text-amber-400/80">Less: Retention ({display.retentionPct.toFixed(2)}%)</span>
+              <span className="text-xs font-bold tabular-nums text-amber-400">({fmtCurrency(display.retentionAmt)})</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between px-4 py-2.5"
+            style={{ borderBottom: '1px solid #1e2d4a', background: '#0d1628' }}>
+            <span className="text-xs text-slate-400">Gross Payment to Date</span>
+            <span className="text-xs font-bold tabular-nums text-white">{fmtCurrency(display.grossPaymentToDate)}</span>
+          </div>
+          <div className="flex items-center justify-between px-4 py-2.5"
+            style={{ borderBottom: '1px solid #1e2d4a', background: '#0a1020' }}>
+            <span className="text-xs text-slate-400">
+              Less: Previous Certified Payments
+              {display.previousPaymentsSource === 'payment_notice' && <span className="text-[9px] ml-1.5 px-1 py-0.5 rounded bg-[#0d1628] border border-[#1e2d4a] text-slate-500">From Payment Notice</span>}
+              {display.provisionalPrevious && <span className="text-[9px] ml-1.5 px-1 py-0.5 rounded bg-amber-900/20 border border-amber-800/40 text-amber-400">Provisional — no notice</span>}
             </span>
-            <span className={`text-xl font-black tabular-nums ${totals.netValuation >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {fmtCurrency(totals.netValuation)}
+            <span className="text-xs font-bold tabular-nums text-white">({fmtCurrency(display.previousPaymentsUsed)})</span>
+          </div>
+          {/* Amount due this period — informational, derived from the cumulative figures */}
+          <div className="flex items-center justify-between px-4 py-2.5"
+            style={{ borderBottom: '1px solid #1e2d4a', background: '#0d1628' }}>
+            <span className="text-xs text-slate-500">Amount Due This Valuation (Period)</span>
+            <span className={`text-xs font-bold tabular-nums ${totals.amountDue >= 0 ? 'text-slate-300' : 'text-red-400'}`}>{fmtCurrency(totals.amountDue)}</span>
+          </div>
+          <div className="flex items-center justify-between px-5 py-4"
+            style={{ background: 'rgba(16,185,129,0.08)' }}>
+            <span className="text-sm font-bold text-emerald-400">Net Valuation Due</span>
+            <span className={`text-xl font-black tabular-nums ${display.netValuationDue >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {fmtCurrency(display.netValuationDue)}
             </span>
           </div>
+        </div>
+        );
+      })()}
+
+      {/* Frozen snapshot notice */}
+      {isFrozen && hasSnapshot && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl mb-4 mt-3"
+          style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
+          <CheckCircle size={13} className="text-blue-400 shrink-0" />
+          <p className="text-xs text-slate-400">
+            Financial figures for this {valuation.status} valuation are preserved as an <strong className="text-slate-300">immutable snapshot</strong> (frozen {valuation.snapshot_frozen_at ? new Date(valuation.snapshot_frozen_at).toLocaleDateString('en-GB') : 'at issue'}). Later workbook or percentage changes will not alter them.
+          </p>
+        </div>
+      )}
+      {isFrozen && !hasSnapshot && (
+        <div className="flex items-start gap-3 px-4 py-2.5 rounded-xl mb-4 mt-3"
+          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+          <AlertTriangle size={13} className="text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-slate-400">
+            This {valuation.status} valuation has no stored snapshot (created before financial snapshots existed). Figures shown are recalculated live — open the valuation and press <strong className="text-amber-400">Freeze Figures</strong> after verifying them against the original issued records.
+          </p>
         </div>
       )}
 
@@ -748,7 +900,30 @@ export default function ValuationDetail({
           valuation={valuation}
           onSave={async patch => {
             onSaveStart();
+            const prevStatus = valuation.status;
+            const nextStatus = patch.status ?? prevStatus;
+            const wasFrozen = isValuationFrozen(prevStatus);
+            const willBeFrozen = isValuationFrozen(nextStatus);
             await store.updateValuation({ ...valuation, ...patch });
+            // Freeze the financial snapshot when a valuation becomes submitted/certified/locked.
+            if (!wasFrozen && willBeFrozen && valuation.snapshot_gross_to_date == null) {
+              await store.freezeValuationSnapshot({ ...valuation, ...patch }, {
+                snapshot_gross_to_date: display.grossToDate,
+                snapshot_mcd_pct: display.mcdPct,
+                snapshot_mcd_amount: display.mcdAmt,
+                snapshot_nett_to_date: display.nettToDate,
+                snapshot_retention_pct: display.retentionPct,
+                snapshot_retention_amount: display.retentionAmt,
+                snapshot_gross_payment_to_date: display.grossPaymentToDate,
+                snapshot_previous_payments: display.previousPaymentsUsed,
+                snapshot_previous_payments_source: display.previousPaymentsSource,
+                snapshot_net_due: display.netValuationDue,
+              });
+            }
+            // Unlock back to draft clears the snapshot (figures return to live calculation).
+            if (wasFrozen && !willBeFrozen && valuation.snapshot_gross_to_date != null) {
+              await store.clearValuationSnapshot({ ...valuation, ...patch });
+            }
             onSaveDone();
             // Build a human-readable diff of what changed
             const STATUS_LABEL: Record<string, string> = { draft: 'Draft', submitted: 'Submitted', certified: 'Certified', superseded: 'Superseded', locked: 'Locked' };
@@ -756,7 +931,7 @@ export default function ValuationDetail({
             if (patch.title !== undefined && patch.title !== valuation.title)
               changes.push(`title: "${valuation.title}" → "${patch.title}"`);
             if (patch.status !== undefined && patch.status !== valuation.status)
-              changes.push(`status: ${STATUS_LABEL[valuation.status] ?? valuation.status} → ${STATUS_LABEL[patch.status] ?? patch.status}`);
+              changes.push(`status: ${STATUS_LABEL[valuation.status] ?? valuation.status} → ${STATUS_LABEL[patch.status] ?? patch.status}${willBeFrozen && !wasFrozen ? ' — financial snapshot frozen' : ''}${wasFrozen && !willBeFrozen ? ' — snapshot cleared' : ''}`);
             if (patch.valuation_date !== undefined && patch.valuation_date !== valuation.valuation_date)
               changes.push(`date: ${valuation.valuation_date || '—'} → ${patch.valuation_date}`);
             if (patch.period !== undefined && patch.period !== valuation.period)

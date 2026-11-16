@@ -827,7 +827,7 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
                   disabled={!canEdit}
                   className="w-full bg-[#111827] border border-[#1e2d4a] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#f97316] transition-colors disabled:opacity-50"
                 />
-                <p className="text-[10px] text-slate-600 mt-1">Applied after retention as a secondary deduction.</p>
+                <p className="text-[10px] text-slate-600 mt-1">Applied to the Gross Valuation to Date, before retention.</p>
               </div>
             </div>
 
@@ -841,15 +841,17 @@ export default function ValuationWorkbookEditor({ workbook, project, orgId, canE
                   const gross = contractTotal + extrasTotal;
                   const ret = Math.min(100, Math.max(0, parseFloat(retentionDraft) || 0));
                   const mcd = Math.min(100, Math.max(0, parseFloat(mcdDraft) || 0));
-                  const retAmt = gross * ret / 100;
-                  const afterRet = gross - retAmt;
-                  const mcdAmt = afterRet * mcd / 100;
-                  const net = afterRet - mcdAmt;
+                  // Same order as the live valuation pipeline: MCD first (on gross), then retention (on nett).
+                  const mcdAmt = gross * mcd / 100;
+                  const nett = gross - mcdAmt;
+                  const retAmt = nett * ret / 100;
+                  const net = nett - retAmt;
                   const rows: [string, number, string][] = [
                     ['Gross Valuation to Date', gross, 'text-white'],
-                    ...(ret > 0 ? [['Less Retention (' + ret.toFixed(2) + '%)', -retAmt, 'text-amber-400']] as [string, number, string][] : []),
                     ...(mcd > 0 ? [['Less MCD (' + mcd.toFixed(2) + '%)', -mcdAmt, 'text-amber-400']] as [string, number, string][] : []),
-                    ['Net Valuation Due', net, 'text-emerald-400'],
+                    ...(mcd > 0 ? [['Nett Valuation to Date', nett, 'text-white']] as [string, number, string][] : []),
+                    ...(ret > 0 ? [['Less Retention (' + ret.toFixed(2) + '%)', -retAmt, 'text-amber-400']] as [string, number, string][] : []),
+                    ['Gross Payment to Date (less previous certified payments)', net, 'text-emerald-400'],
                   ];
                   return rows.map(([label, val, cls], i) => (
                     <div key={i} className="flex items-center justify-between px-4 py-2" style={{ borderBottom: i < rows.length - 1 ? '1px solid #1e2d4a' : undefined, background: i === rows.length - 1 ? 'rgba(16,185,129,0.05)' : undefined }}>

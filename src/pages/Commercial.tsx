@@ -19,6 +19,7 @@ import type { DBAttachment, DBCommercialRecordComment } from '../lib/store';
 import CommercialOverview from './commercial/CommercialOverview';
 import CommercialRegister from './commercial/CommercialRegister';
 import VariationAccount, { calcVAMetrics } from './commercial/VariationAccount';
+import { isValuationFrozen } from './commercial/finance';
 import CommercialApplications from './commercial/CommercialApplications';
 import CommercialTimeline from './commercial/CommercialTimeline';
 import CommercialValuations from './commercial/CommercialValuations';
@@ -2648,29 +2649,60 @@ export default function Commercial() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'overview' && (
-        <CommercialOverview
-          project={bannerProject}
-          projects={projects}
-          records={records}
-          keyDates={projectKeyDates}
-          canEdit={canEdit}
-          canCreate={canCreate}
-          currentUserName={store.currentUser?.name ?? ''}
-          vaExposure={vaMetrics.exposure}
-          vaAgreed={vaMetrics.agreed}
-          vaAgreedAdditions={vaMetrics.agreedAdditions}
-          vaAgreedOmissions={vaMetrics.agreedOmissions}
-          vaHasItems={vaHasItems}
-          canViewCosts={canViewCosts}
-          onProjectChange={(id) => selectProject(id)}
-          onAddKeyDate={store.addKeyDate}
-          onUpdateKeyDate={store.updateKeyDate}
-          onRemoveKeyDate={store.removeKeyDate}
-          onUpdateProject={store.updateProject}
-          onNewRecord={openNew}
-        />
-      )}
+      {activeTab === 'overview' && (() => {
+        // Valuation-driven figures for the Overview — derived here from the store so
+        // Overview only displays what the source modules hold (spec §5).
+        const workbook = store.valuationWorkbooks.find(w => w.project_id === effectiveBannerProjectId) ?? null;
+        const valuationsForProject = store.valuations.filter(v => v.project_id === effectiveBannerProjectId);
+        const submittedVals = valuationsForProject.filter(v => isValuationFrozen(v.status));
+        const latestSubmittedVal = submittedVals
+          .slice()
+          .sort((a, b) => (b.valuation_date || '').localeCompare(a.valuation_date || '') || b.ref.localeCompare(a.ref))[0] ?? null;
+        const notices = store.commercialApplications.filter(a => a.project_id === effectiveBannerProjectId);
+        const countableNotices = notices.filter(a => !['draft', 'withdrawn', 'disputed'].includes(a.status));
+        const latestNotice = countableNotices.slice().sort((a, b) => b.app_number - a.app_number)[0] ?? null;
+        const appliedPaymentToDate = latestSubmittedVal?.snapshot_gross_payment_to_date ?? null;
+        const certifiedPaymentToDate = latestNotice
+          ? (latestNotice.certified_payment_to_date ?? latestNotice.certified_value)
+          : null;
+        const paidToDate = countableNotices.reduce((s, a) => s + a.paid_value, 0);
+        const retentionHeld = latestNotice
+          ? (latestNotice.cumulative_retention ?? countableNotices.reduce((s, a) => s + a.retention, 0))
+          : null;
+        return (
+          <CommercialOverview
+            project={bannerProject}
+            projects={projects}
+            records={records}
+            keyDates={projectKeyDates}
+            canEdit={canEdit}
+            canCreate={canCreate}
+            currentUserName={store.currentUser?.name ?? ''}
+            vaExposure={vaMetrics.exposure}
+            vaAgreed={vaMetrics.agreed}
+            vaAgreedAdditions={vaMetrics.agreedAdditions}
+            vaAgreedOmissions={vaMetrics.agreedOmissions}
+            vaHasItems={vaHasItems}
+            canViewCosts={canViewCosts}
+            workbook={workbook}
+            valuations={valuationsForProject}
+            paymentModel={{
+              appliedPaymentToDate,
+              certifiedPaymentToDate,
+              paidToDate,
+              retentionHeld,
+            }}
+            latestValuationRef={latestSubmittedVal?.ref ?? null}
+            latestValuationStatus={latestSubmittedVal?.status ?? null}
+            onProjectChange={(id) => selectProject(id)}
+            onAddKeyDate={store.addKeyDate}
+            onUpdateKeyDate={store.updateKeyDate}
+            onRemoveKeyDate={store.removeKeyDate}
+            onUpdateProject={store.updateProject}
+            onNewRecord={openNew}
+          />
+        );
+      })()}
 
       {activeTab === 'register' && (
         <CommercialRegister

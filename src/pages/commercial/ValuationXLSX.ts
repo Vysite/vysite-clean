@@ -531,21 +531,33 @@ function buildSummarySheet(
   // Row 3 — spacer
   ws.getRow(3).height = 8;
 
+  const summaryRows: [string, number, boolean][] = [
+    ['Original Contract Value',          totals.contractOriginal, false],
+    ['Extras / Agreed Variations Total', totals.extrasOriginal,   false],
+    ['Gross Valuation to Date',          totals.grossToDate,      true ],
+  ];
+
   const retPct = totals.retentionPct ?? 0;
   const mcdPct = totals.mcdPct ?? 0;
   const retAmt = totals.retentionAmt ?? 0;
   const mcdAmt = totals.mcdAmt ?? 0;
   const netVal = totals.netValuation ?? totals.amountDue;
 
-  const summaryRows: [string, number, boolean][] = [
-    ['Original Contract Value',          totals.contractOriginal, false],
-    ['Extras / Agreed Variations Total', totals.extrasOriginal,   false],
-    ['Gross Valuation to Date',          totals.grossToDate,      true ],
-    ['Less: Previous Valuation Total',  -totals.previousTotal,    false],
-    ['Current Amount Due',               totals.amountDue,        false],
-  ];
-  if (retPct > 0) summaryRows.push([`Less: Retention (${retPct.toFixed(2)}%)`, -retAmt, false]);
-  if (mcdPct > 0) summaryRows.push([`Less: MCD (${mcdPct.toFixed(2)}%)`,       -mcdAmt, false]);
+  // Cumulative chain: MCD first (on gross), then retention (on nett), then previous certified payments.
+  if (mcdPct > 0) {
+    summaryRows.push([`Less: MCD (${mcdPct.toFixed(2)}%)`,                  -mcdAmt, false]);
+    summaryRows.push(['Nett Valuation to Date',  totals.nettToDate ?? (totals.grossToDate - mcdAmt), false]);
+  }
+  if (retPct > 0) {
+    summaryRows.push([`Less: Retention (${retPct.toFixed(2)}%)`,            -retAmt, false]);
+    summaryRows.push(['Gross Payment to Date', totals.grossPaymentToDate ?? (netVal + (totals.previousPayments ?? 0)), false]);
+  }
+  if ((totals.previousPayments ?? 0) > 0 || totals.previousPaymentsSource === 'payment_notice') {
+    const srcTag = totals.previousPaymentsSource === 'payment_notice' ? ' (per Payment Notice)'
+      : totals.previousPaymentsSource === 'valuation_fallback' ? ' (provisional — no notice)'
+      : '';
+    summaryRows.push([`Less: Previous Certified Payments${srcTag}`, -(totals.previousPayments ?? 0), false]);
+  }
 
   let rowNum = 4;
   for (const [label, value, bold] of summaryRows) {
