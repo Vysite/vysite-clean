@@ -266,6 +266,11 @@ html, body {
   text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 0; padding-left: 12px;
 }
 
+/* ── Full report: landscape named page for wide valuation tables ── */
+@page valuations-landscape { margin: 0; size: A4 landscape; }
+.land-section { page: valuations-landscape; page-break-before: always; }
+.land-section .data-table tbody td { padding-top: 8px; padding-bottom: 7px; }
+
 /* ── Empty notice ── */
 .empty-notice { padding: 20px 0; text-align: center; color: #475569; font-size: 9pt; border-top: 0.5px solid #f1f5f9; }
 `;
@@ -1839,7 +1844,7 @@ function valuationsSectionHtml(d: FullReportData): string {
       : '<th class="num" style="width:76px;">Net Due</th>';
 
     return `
-  <div style="margin-top:20px;page-break-inside:avoid;">
+  <div style="margin-top:20px;page-break-inside:avoid;page-break-after:always;">
     ${heading}
     <table class="data-table" style="width:100%;font-size:8.5pt;">
       <thead><tr>
@@ -1865,10 +1870,12 @@ function valuationsSectionHtml(d: FullReportData): string {
   return `
   <div class="exec-section-label">7. Valuations — ${esc(wb.title)}</div>
   ${wbSummary}
-  <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:8px;">Valuation History — ${valuations.length} valuation${valuations.length !== 1 ? 's' : ''}</div>
-  ${historyTable}
-  <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-top:20px;margin-bottom:8px;">Line Breakdown</div>
-  ${valDetailSections}`;
+  <div class="land-section">
+    <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:8px;">Valuation History — ${valuations.length} valuation${valuations.length !== 1 ? 's' : ''}</div>
+    ${historyTable}
+    <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-top:20px;margin-bottom:8px;">Line Breakdown</div>
+    ${valDetailSections}
+  </div>`;
 }
 
 function fullReportBody(d: FullReportData): string {
