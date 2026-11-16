@@ -266,11 +266,6 @@ html, body {
   text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 0; padding-left: 12px;
 }
 
-/* ── Full report: landscape named page for wide valuation tables ── */
-@page valuations-landscape { margin: 0; size: A4 landscape; }
-.land-section { page: valuations-landscape; page-break-before: always; }
-.land-section .data-table tbody td { padding-top: 8px; padding-bottom: 7px; }
-
 /* ── Empty notice ── */
 .empty-notice { padding: 20px 0; text-align: center; color: #475569; font-size: 9pt; border-top: 0.5px solid #f1f5f9; }
 `;
@@ -1705,7 +1700,10 @@ function valuationsSectionHtml(d: FullReportData): string {
     return { ...t, prevCertified: t.previousPaymentsSource === 'payment_notice' ? t.previousPaymentsUsed : null };
   };
 
-  // ── History table ──
+  // ── Valuation History summary table (one row per valuation) ──
+  // Cumulative columns come from the same chain as the Valuation Workbook;
+  // "New Work This Period" is the movement only, so repeating valuations
+  // show £0.00 instead of implying a double application.
   const historyRows = valuations.map((v, idx) => {
     const isLatest = idx === 0;
     const t = chainFor(v);
@@ -1715,167 +1713,42 @@ function valuationsSectionHtml(d: FullReportData): string {
 
     return `<tr style="${rowStyle}">
       <td class="dt-ref">${esc(v.ref)}${isLatest ? ' <span style="font-size:6.5pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#ea6c00;">LATEST</span>' : ''}</td>
-      <td style="font-size:8.5pt;color:#334155;">${fmtD(v.valuation_date)}</td>
+      <td style="font-size:8pt;color:#334155;">${fmtD(v.valuation_date)}</td>
       <td>${statusTag(v.status, statusLabel)}</td>
-      <td class="num" style="font-size:9pt;font-weight:600;">${fv(t.grossToDate)}</td>
-      <td class="num" style="font-size:9pt;font-weight:700;color:${thisValGross > 0 ? '#16a34a' : '#334155'};">${thisValGross !== 0 ? '+' + fv(thisValGross) : fv(0)}</td>
-      ${hasDeductions ? `<td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(t.mcdAmt)})` : '—'}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.nettToDate)}</td>
-      <td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(t.retentionAmt)})` : '—'}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.grossPaymentToDate)}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${t.prevCertified != null ? fv(t.prevCertified) : '—'}</td>` : ''}
-      <td class="num" style="font-size:9pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#16a34a' : '#991b1b'};">${fv(t.netValuationDue)}</td>
+      <td class="num" style="font-size:8.5pt;font-weight:600;">${fv(t.grossToDate)}</td>
+      <td class="num" style="font-size:8.5pt;font-weight:700;color:${thisValGross > 0 ? '#16a34a' : '#334155'};">${thisValGross !== 0 ? '+' + fv(thisValGross) : fv(0)}</td>
+      ${hasDeductions ? `<td class="num" style="font-size:8pt;color:#d97706;">${mcdPct > 0 ? `(${fv(t.mcdAmt)})` : '—'}</td>
+      <td class="num" style="font-size:8pt;color:#d97706;">${retentionPct > 0 ? `(${fv(t.retentionAmt)})` : '—'}</td>
+      <td class="num" style="font-size:8.5pt;color:#334155;">${fv(t.grossPaymentToDate)}</td>
+      <td class="num" style="font-size:8.5pt;color:#334155;">${t.prevCertified != null ? fv(t.prevCertified) : '—'}</td>` : ''}
+      <td class="num" style="font-size:8.5pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#16a34a' : '#991b1b'};">${fv(t.netValuationDue)}</td>
     </tr>`;
   }).join('');
 
   const deductionHeaders = hasDeductions
-    ? `<th class="num">MCD</th><th class="num">Nett</th><th class="num">Retention</th><th class="num">Gross Payment</th><th class="num">Prev Certified</th><th class="num">Net Due</th>`
-    : '<th class="num">Net Due</th>';
+    ? `<th class="num">MCD</th><th class="num">Retention</th><th class="num">Applied to Date</th><th class="num">Prev Certified</th><th class="num">Net Due / Awaiting Cert.</th>`
+    : '<th class="num">Net Due / Awaiting Cert.</th>';
 
   const historyTable = `
-  <table class="data-table" style="width:100%;font-size:9pt;margin-bottom:0;">
+  <table class="data-table" style="width:100%;font-size:8.5pt;margin-bottom:0;">
     <thead><tr>
-      <th style="width:72px;">Ref</th>
-      <th style="width:80px;">Date</th>
+      <th style="width:58px;">Ref</th>
+      <th style="width:62px;">Date</th>
       <th>Status</th>
       <th class="num">Gross to Date</th>
-      <th class="num">This Val</th>
+      <th class="num">New Work This Period</th>
       ${deductionHeaders}
     </tr></thead>
     <tbody>${historyRows}</tbody>
   </table>
-  <div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-top:6px;">All columns are cumulative to date. “This Val” shows the new valuation movement for the period (change in gross value since the preceding valuation) and is £0.00 where a valuation repeats the preceding position without additional work.</div>`;
-
-  // ── Per-valuation line detail ──
-  const valDetailSections = valuations.map((v, idx) => {
-    const isLatest = idx === 0;
-    const vLineEntries  = lineEntries.filter(e => e.valuation_id === v.id);
-    const vExtraEntries = extraEntries.filter(e => e.valuation_id === v.id);
-
-    const lineRows = wbLines.map(l => {
-      const e       = vLineEntries.find(x => x.workbook_line_id === l.id);
-      const prevPct = e?.previous_pct ?? 0;
-      const currPct = e?.current_pct  ?? 0;
-      const prevVal = l.contract_value * prevPct / 100;
-      const currVal = l.contract_value * currPct / 100;
-      const thisVal = currVal - prevVal;
-      return `<tr>
-        <td class="dt-ref" style="width:40px;">${esc(l.item_number)}</td>
-        <td style="font-size:9pt;color:#0f172a;">${esc(l.description)}</td>
-        <td class="num" style="font-size:8.5pt;color:#334155;">${fv(l.contract_value)}</td>
-        <td class="num" style="font-size:8.5pt;color:#334155;">${prevPct.toFixed(1)}%</td>
-        <td class="num" style="font-size:8.5pt;color:#334155;">${fv(prevVal)}</td>
-        <td class="num" style="font-size:8.5pt;">${currPct.toFixed(1)}%</td>
-        <td class="num" style="font-size:9pt;font-weight:600;">${fv(currVal)}</td>
-        <td class="num" style="font-size:9pt;font-weight:700;color:${thisVal > 0 ? '#16a34a' : thisVal < 0 ? '#991b1b' : '#334155'};">${thisVal > 0 ? '+' : ''}${fv(thisVal)}</td>
-      </tr>`;
-    }).join('');
-
-    const extraRows = wbExtras.map(ex => {
-      const e       = vExtraEntries.find(x => x.workbook_extra_id === ex.id);
-      const prevPct = e?.previous_pct ?? 0;
-      const currPct = e?.current_pct  ?? 0;
-      const prevVal = ex.agreed_value * prevPct / 100;
-      const currVal = ex.agreed_value * currPct / 100;
-      const thisVal = currVal - prevVal;
-      return `<tr style="background:#f8fafc;">
-        <td class="dt-ref" style="width:40px;color:#334155;">${esc(ex.ref)}</td>
-        <td style="font-size:9pt;color:#334155;font-style:italic;">${esc(ex.description)}</td>
-        <td class="num" style="font-size:8.5pt;color:#334155;">${fv(ex.agreed_value)}</td>
-        <td class="num" style="font-size:8.5pt;color:#475569;">${prevPct.toFixed(1)}%</td>
-        <td class="num" style="font-size:8.5pt;color:#475569;">${fv(prevVal)}</td>
-        <td class="num" style="font-size:8.5pt;color:#334155;">${currPct.toFixed(1)}%</td>
-        <td class="num" style="font-size:9pt;font-weight:600;color:#334155;">${fv(currVal)}</td>
-        <td class="num" style="font-size:9pt;font-weight:700;color:${thisVal > 0 ? '#16a34a' : thisVal < 0 ? '#991b1b' : '#334155'};">${thisVal > 0 ? '+' : ''}${fv(thisVal)}</td>
-      </tr>`;
-    }).join('');
-
-    // Totals row
-    const contractCurrValue = wbLines.reduce((s, l) => {
-      const e = vLineEntries.find(x => x.workbook_line_id === l.id);
-      return s + l.contract_value * (e?.current_pct ?? 0) / 100;
-    }, 0);
-    const contractPrevValue = wbLines.reduce((s, l) => {
-      const e = vLineEntries.find(x => x.workbook_line_id === l.id);
-      return s + l.contract_value * (e?.previous_pct ?? 0) / 100;
-    }, 0);
-    const extrasCurrValue = wbExtras.reduce((s, ex) => {
-      const e = vExtraEntries.find(x => x.workbook_extra_id === ex.id);
-      return s + ex.agreed_value * (e?.current_pct ?? 0) / 100;
-    }, 0);
-    const extrasPrevValue = wbExtras.reduce((s, ex) => {
-      const e = vExtraEntries.find(x => x.workbook_extra_id === ex.id);
-      return s + ex.agreed_value * (e?.previous_pct ?? 0) / 100;
-    }, 0);
-    const grossToDate  = contractCurrValue + extrasCurrValue;
-    const prevGross    = contractPrevValue + extrasPrevValue;
-    const amountDue    = grossToDate - prevGross;
-    const t            = chainFor(v);
-
-    const deductionTotals = hasDeductions ? `
-      <td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(t.mcdAmt)})` : '—'}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.nettToDate)}</td>
-      <td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(t.retentionAmt)})` : '—'}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.grossPaymentToDate)}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${t.prevCertified != null ? fv(t.prevCertified) : '—'}</td>
-      <td class="num" style="font-size:10pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#4ade80' : '#f87171'};">${fv(t.netValuationDue)}</td>`
-      : `<td class="num" style="font-size:10pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#4ade80' : '#f87171'};">${fv(t.netValuationDue)}</td>`;
-
-    const totalsRow = `<tr style="background:#0f172a;color:#fff;">
-      <td colspan="2" style="font-size:8.5pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:8px 10px;color:#fff;">Total</td>
-      <td class="num" style="font-size:8.5pt;color:#475569;">${fv(contractTotal + extrasTotal)}</td>
-      <td class="num" style="font-size:8.5pt;color:#475569;"></td>
-      <td class="num" style="font-size:9pt;font-weight:600;color:#cbd5e1;">${fv(prevGross)}</td>
-      <td class="num" style="font-size:8.5pt;color:#475569;"></td>
-      <td class="num" style="font-size:9pt;font-weight:700;color:#f97316;">${fv(grossToDate)}</td>
-      <td class="num" style="font-size:10pt;font-weight:800;color:${amountDue >= 0 ? '#4ade80' : '#f87171'};">${amountDue >= 0 ? '+' : ''}${fv(amountDue)}</td>
-      ${deductionTotals}
-    </tr>`;
-
-    const heading = isLatest
-      ? `<div style="font-size:9pt;font-weight:800;color:#ea6c00;margin-bottom:8px;">${esc(v.ref)} — ${fmtD(v.valuation_date)} <span style="font-size:6.5pt;letter-spacing:0.12em;text-transform:uppercase;background:#fff7ed;color:#ea6c00;border:1px solid #fed7aa;padding:2px 6px;border-radius:3px;margin-left:6px;">Latest</span> <span style="font-size:8pt;color:#475569;font-weight:400;">${VAL_STATUS_LABELS[v.status] ?? v.status}</span></div>`
-      : `<div style="font-size:9pt;font-weight:700;color:#0f172a;margin-bottom:8px;">${esc(v.ref)} — ${fmtD(v.valuation_date)} <span style="font-size:8pt;color:#475569;font-weight:400;">${VAL_STATUS_LABELS[v.status] ?? v.status}</span></div>`;
-
-    const thisValGross = round2(grossToDate - prevGross);
-    const hasExtras = wbExtras.length > 0;
-
-    const deductionHeaders2 = hasDeductions
-      ? `<th class="num" style="width:76px;">MCD</th><th class="num" style="width:76px;">Nett</th><th class="num" style="width:76px;">Retention</th><th class="num" style="width:76px;">Gross Payment</th><th class="num" style="width:76px;">Prev Certified</th><th class="num" style="width:76px;">Net Due</th>`
-      : '<th class="num" style="width:76px;">Net Due</th>';
-
-    return `
-  <div style="margin-top:20px;page-break-inside:avoid;page-break-after:always;">
-    ${heading}
-    <table class="data-table" style="width:100%;font-size:8.5pt;">
-      <thead><tr>
-        <th style="width:40px;">Item</th>
-        <th>Description</th>
-        <th class="num" style="width:76px;">Orig Value</th>
-        <th class="num" style="width:44px;">Prev %</th>
-        <th class="num" style="width:76px;">Prev Value</th>
-        <th class="num" style="width:44px;">Curr %</th>
-        <th class="num" style="width:76px;">Curr Value</th>
-        <th class="num" style="width:76px;">This Val</th>
-        ${deductionHeaders2}
-      </tr></thead>
-      <tbody>
-        ${lineRows}
-        ${hasExtras ? `<tr><td colspan="${8 + (hasDeductions ? 6 : 1)}" style="font-size:7pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;padding:8px 10px 4px;border-bottom:0.5px solid #e2e8f0;">Extras / Variations</td></tr>${extraRows}` : ''}
-        ${totalsRow}
-      </tbody>
-    </table>
-  </div>`;
-  }).join('');
+  <div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-top:6px;">Gross to Date, MCD, Retention, Applied to Date and Net Due are cumulative to date. “New Work This Period” shows the movement for the period only (change in gross value since the preceding valuation) and is £0.00 where a valuation repeats the preceding position without additional work — no cumulative figure is double counted. Net Due is the cumulative applied payment less the previous certified payment, i.e. the amount awaiting certification. Individual valuation line breakdowns are available in each Valuation Workbook export.</div>`;
 
   return `
   <div class="exec-section-label">7. Valuations — ${esc(wb.title)}</div>
   ${wbSummary}
-  <div class="land-section">
-    <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:8px;">Valuation History — ${valuations.length} valuation${valuations.length !== 1 ? 's' : ''}</div>
-    ${historyTable}
-    <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-top:20px;margin-bottom:8px;">Line Breakdown</div>
-    ${valDetailSections}
-  </div>`;
+  <div style="font-size:8pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:8px;">Valuation History — ${valuations.length} valuation${valuations.length !== 1 ? 's' : ''}</div>
+  ${historyTable}
+  <div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-top:6px;">Individual valuation line-item breakdowns are not reproduced in this management report — they remain available in each Valuation Workbook export.</div>`;
 }
 
 function fullReportBody(d: FullReportData): string {
