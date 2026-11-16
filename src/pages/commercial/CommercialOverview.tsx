@@ -141,11 +141,23 @@ export default function CommercialOverview({
   const forecastContractSum = sums.forecastContractSum;
 
   // ── Valuation-driven figures (sources of truth; Overview only displays them) ──
-  const submittedVals = valuations.filter(v => isValuationFrozen(v.status));
+  // The latest submitted valuation supplies these figures from its live workbook
+  // entries — snapshots are never used, so newly saved figures always win.
+  const submittedVals = valuations
+    .filter(v => isValuationFrozen(v.status))
+    .map(v => {
+      const lvEntries = store.valuationLineEntries.filter(e => e.valuation_id === v.id);
+      const lvExtras = store.valuationExtraEntries.filter(e => e.valuation_id === v.id);
+      const lvGross = (workbook
+        ? (store.workbookLines.filter(l => l.workbook_id === workbook.id).reduce((s, l) => s + l.contract_value * (lvEntries.find(x => x.workbook_line_id === l.id)?.current_pct ?? 0) / 100, 0)
+          + store.workbookExtras.filter(e => e.workbook_id === workbook.id).reduce((s, e) => s + e.agreed_value * (lvExtras.find(x => x.workbook_extra_id === e.id)?.current_pct ?? 0) / 100, 0))
+        : 0);
+      return { v, liveGrossToDate: Math.round(lvGross * 100) / 100 };
+    });
   const latestSubmitted = submittedVals
     .slice()
-    .sort((a, b) => (b.valuation_date || '').localeCompare(a.valuation_date || '') || b.ref.localeCompare(a.ref))[0] ?? null;
-  const grossAppliedToDate = latestSubmitted?.snapshot_gross_to_date ?? null;
+    .sort((a, b) => (b.v.valuation_date || '').localeCompare(a.v.valuation_date || '') || b.v.ref.localeCompare(a.v.ref))[0] ?? null;
+  const grossAppliedToDate = latestSubmitted?.liveGrossToDate ?? null;
   const hasSubmittedValuation = latestSubmitted != null;
   // Legacy projects without a submitted valuation keep the manual completed value.
   const displayAppliedValue = hasSubmittedValuation ? grossAppliedToDate : completedNum;

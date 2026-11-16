@@ -7,7 +7,7 @@ import ValuationDetail from './ValuationDetail';
 import ValuationWorkbookEditor from './ValuationWorkbookEditor';
 import { logActivity } from '../../lib/activityLog';
 import { nextRef as getNextRef } from '../../lib/refSequence';
-import { round2, isValuationFrozen } from './finance';
+import { round2 } from './finance';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -588,13 +588,8 @@ export default function CommercialValuations({ project, projects, orgId, canCrea
                 const nettToDate  = round2(grossToDate - mcdAmt);
                 const retAmt      = round2(nettToDate * retPct / 100);
                 const grossPayment = round2(nettToDate - retAmt);
-                // Frozen valuations display their immutable snapshot figures.
-                const netVal = val.snapshot_gross_to_date != null && isValuationFrozen(val.status)
-                  ? (val.snapshot_net_due ?? grossPayment)
-                  : grossPayment;
-                const shownGross = val.snapshot_gross_to_date != null && isValuationFrozen(val.status)
-                  ? val.snapshot_gross_to_date
-                  : grossToDate;
+                const netVal = grossPayment;
+                const shownGross = grossToDate;
                 const grandTotal  = contractTotal + extrasTotal;
                 const completionPct = grandTotal > 0 ? Math.min(shownGross / grandTotal * 100, 100) : 0;
                 const hasDeductions = retPct > 0 || mcdPct > 0;

@@ -2652,6 +2652,8 @@ export default function Commercial() {
       {activeTab === 'overview' && (() => {
         // Valuation-driven figures for the Overview — derived here from the store so
         // Overview only displays what the source modules hold (spec §5).
+        // Figures come from the latest submitted valuation's live workbook entries
+        // (never snapshots — old snapshots must not override newly saved figures).
         const workbook = store.valuationWorkbooks.find(w => w.project_id === effectiveBannerProjectId) ?? null;
         const valuationsForProject = store.valuations.filter(v => v.project_id === effectiveBannerProjectId);
         const submittedVals = valuationsForProject.filter(v => isValuationFrozen(v.status));
@@ -2661,7 +2663,19 @@ export default function Commercial() {
         const notices = store.commercialApplications.filter(a => a.project_id === effectiveBannerProjectId);
         const countableNotices = notices.filter(a => !['draft', 'withdrawn', 'disputed'].includes(a.status));
         const latestNotice = countableNotices.slice().sort((a, b) => b.app_number - a.app_number)[0] ?? null;
-        const appliedPaymentToDate = latestSubmittedVal?.snapshot_gross_payment_to_date ?? null;
+        let appliedPaymentToDate: number | null = null;
+        if (latestSubmittedVal && workbook) {
+          const lvEntries = store.valuationLineEntries.filter(e => e.valuation_id === latestSubmittedVal.id);
+          const lvExtras = store.valuationExtraEntries.filter(e => e.valuation_id === latestSubmittedVal.id);
+          const wbLines = store.workbookLines.filter(l => l.workbook_id === workbook.id);
+          const wbExtras = store.workbookExtras.filter(e => e.workbook_id === workbook.id);
+          const lvGross = wbLines.reduce((s, l) => s + l.contract_value * (lvEntries.find(x => x.workbook_line_id === l.id)?.current_pct ?? 0) / 100, 0)
+            + wbExtras.reduce((s, e) => s + e.agreed_value * (lvExtras.find(x => x.workbook_extra_id === e.id)?.current_pct ?? 0) / 100, 0);
+          const lvMcd = Math.round(lvGross * (workbook.mcd_pct ?? 0) / 100 * 100) / 100;
+          const lvNett = Math.round((lvGross - lvMcd) * 100) / 100;
+          const lvRet = Math.round(lvNett * (workbook.retention_pct ?? 0) / 100 * 100) / 100;
+          appliedPaymentToDate = Math.round((lvNett - lvRet) * 100) / 100;
+        }
         const certifiedPaymentToDate = latestNotice
           ? (latestNotice.certified_payment_to_date ?? latestNotice.certified_value)
           : null;

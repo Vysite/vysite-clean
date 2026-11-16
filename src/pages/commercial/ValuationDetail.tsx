@@ -262,12 +262,8 @@ export default function ValuationDetail({
   const { state: saveState, lastSaved, onSaveStart, onSaveDone } = useSaveIndicator();
 
   const isLocked = valuation.status === 'locked';
-  const isFrozen = isValuationFrozen(valuation.status);
-  const hasSnapshot = valuation.snapshot_gross_to_date != null;
-  // Financial entries are frozen once submitted/certified/locked/superseded —
-  // the snapshot preserves the issued figures. Unlock back to draft to edit.
-  const effectiveCanEdit = canEdit && !isFrozen;
-
+  const isIssued = isValuationFrozen(valuation.status);
+  const canEditValues = canEdit;
   // ── Activity log helper ───────────────────────────────────────────────────────
 
   const valLog = useCallback((actionType: Parameters<typeof logActivity>[0]['actionType'], description: string, extra?: Partial<Parameters<typeof logActivity>[0]>) => {
@@ -318,25 +314,21 @@ export default function ValuationDetail({
       ? (linkedNotice.certified_payment_to_date ?? linkedNotice.certified_value)
       : null;
 
-    // Preceding valuation fallback: use its frozen snapshot where available so historic
-    // figures are never silently recalculated.
+    // Preceding valuation fallback: live calculation from its workbook entries,
+    // so newly saved figures are never overridden by a stored snapshot.
     const prevVal = earlierVals
       .slice()
       .sort((a, b) => (parseInt(b.ref.replace(/\D/g, ''), 10) || 0) - (parseInt(a.ref.replace(/\D/g, ''), 10) || 0))[0];
     let previousValuationGrossPayment: number | null = null;
     if (prevVal) {
-      if (prevVal.snapshot_gross_payment_to_date != null) {
-        previousValuationGrossPayment = prevVal.snapshot_gross_payment_to_date;
-      } else if (!isValuationFrozen(prevVal.status)) {
-        const pe = store.valuationLineEntries.filter(e => e.valuation_id === prevVal.id);
-        const px = store.valuationExtraEntries.filter(e => e.valuation_id === prevVal.id);
-        const pCurr = wbLines.reduce((s, l) => s + l.contract_value * (pe.find(x => x.workbook_line_id === l.id)?.current_pct ?? 0) / 100, 0)
-          + wbExtras.reduce((s, e) => s + e.agreed_value * (px.find(x => x.workbook_extra_id === e.id)?.current_pct ?? 0) / 100, 0);
-        const pMcd = round2(pCurr * (workbook?.mcd_pct ?? 0) / 100);
-        const pNett = round2(pCurr - pMcd);
-        const pRet = round2(pNett * (workbook?.retention_pct ?? 0) / 100);
-        previousValuationGrossPayment = round2(pNett - pRet);
-      }
+      const pe = store.valuationLineEntries.filter(e => e.valuation_id === prevVal.id);
+      const px = store.valuationExtraEntries.filter(e => e.valuation_id === prevVal.id);
+      const pCurr = wbLines.reduce((s, l) => s + l.contract_value * (pe.find(x => x.workbook_line_id === l.id)?.current_pct ?? 0) / 100, 0)
+        + wbExtras.reduce((s, e) => s + e.agreed_value * (px.find(x => x.workbook_extra_id === e.id)?.current_pct ?? 0) / 100, 0);
+      const pMcd = round2(pCurr * (workbook?.mcd_pct ?? 0) / 100);
+      const pNett = round2(pCurr - pMcd);
+      const pRet = round2(pNett * (workbook?.retention_pct ?? 0) / 100);
+      previousValuationGrossPayment = round2(pNett - pRet);
     }
 
     return computeValuationTotals({
@@ -348,27 +340,9 @@ export default function ValuationDetail({
     });
   }, [wbLines, wbExtras, getLineEntry, getExtraEntry, workbook, valuation.id, valuation.ref, valuation.project_id, store.valuations, store.valuationLineEntries, store.valuationExtraEntries, store.commercialApplications]);
 
-  // Figures shown on screen and in exports: frozen valuations show their immutable
-  // snapshot; drafts show live calculations.
-  const display = useMemo((): ValuationTotalsResult => {
-    if (isFrozen && hasSnapshot && valuation.snapshot_gross_to_date != null) {
-      return {
-        ...totals,
-        grossToDate: valuation.snapshot_gross_to_date,
-        mcdPct: valuation.snapshot_mcd_pct ?? totals.mcdPct,
-        mcdAmt: valuation.snapshot_mcd_amount ?? totals.mcdAmt,
-        nettToDate: valuation.snapshot_nett_to_date ?? totals.nettToDate,
-        retentionPct: valuation.snapshot_retention_pct ?? totals.retentionPct,
-        retentionAmt: valuation.snapshot_retention_amount ?? totals.retentionAmt,
-        grossPaymentToDate: valuation.snapshot_gross_payment_to_date ?? totals.grossPaymentToDate,
-        previousPaymentsUsed: valuation.snapshot_previous_payments ?? totals.previousPaymentsUsed,
-        previousPaymentsSource: valuation.snapshot_previous_payments_source ?? totals.previousPaymentsSource,
-        netValuationDue: valuation.snapshot_net_due ?? totals.netValuationDue,
-        provisionalPrevious: valuation.snapshot_previous_payments_source === 'valuation_fallback',
-      };
-    }
-    return totals;
-  }, [isFrozen, hasSnapshot, valuation, totals]);
+  // Figures shown on screen and in exports are always the live calculation —
+  // stored snapshots are retained in the database but never override saved figures.
+  const display = totals;
 
   const handleLinePct = useCallback(async (lineId: string, current_pct: number) => {
     const existing = lineEntries.find(e => e.workbook_line_id === lineId);
@@ -425,9 +399,8 @@ export default function ValuationDetail({
   const handleUnlock = async () => {
     onSaveStart();
     await store.updateValuation({ ...valuation, status: 'draft' });
-    if (hasSnapshot) await store.clearValuationSnapshot({ ...valuation, status: 'draft' });
     onSaveDone();
-    valLog('status_changed', `${valuation.ref} unlocked — status changed: Locked → Draft. Financial snapshot cleared; figures return to live calculation.`, { prevValue: 'Locked', newValue: 'Draft' });
+    valLog('status_changed', `${valuation.ref} unlocked — status changed: Locked → Draft.`, { prevValue: 'Locked', newValue: 'Draft' });
   };
 
   // Build the export totals object (shared by PDF and Excel) from the displayed figures.
@@ -542,31 +515,7 @@ export default function ValuationDetail({
               <Unlock size={11} /> Unlock
             </button>
           )}
-          {isFrozen && !hasSnapshot && canEdit && (
-            <button
-              onClick={async () => {
-                onSaveStart();
-                await store.freezeValuationSnapshot(valuation, {
-                  snapshot_gross_to_date: display.grossToDate,
-                  snapshot_mcd_pct: display.mcdPct,
-                  snapshot_mcd_amount: display.mcdAmt,
-                  snapshot_nett_to_date: display.nettToDate,
-                  snapshot_retention_pct: display.retentionPct,
-                  snapshot_retention_amount: display.retentionAmt,
-                  snapshot_gross_payment_to_date: display.grossPaymentToDate,
-                  snapshot_previous_payments: display.previousPaymentsUsed,
-                  snapshot_previous_payments_source: display.previousPaymentsSource,
-                  snapshot_net_due: display.netValuationDue,
-                });
-                onSaveDone();
-                valLog('record_updated', `${valuation.ref} — financial snapshot frozen against live figures after verification against issued records.`);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors"
-              style={{ background: '#111827', border: '1px solid rgba(59,130,246,0.3)' }}>
-              <CheckCircle size={11} /> Freeze Figures
-            </button>
-          )}
-          {effectiveCanEdit && (
+          {canEdit && (
             <button onClick={() => setShowEditHeader(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition-colors"
               style={{ background: '#111827', border: '1px solid #1e2d4a' }}
@@ -622,8 +571,8 @@ export default function ValuationDetail({
           style={{ background: 'rgba(71,85,105,0.12)', border: '1px solid rgba(71,85,105,0.25)' }}>
           <Lock size={13} className="text-slate-400 shrink-0" />
           <p className="text-xs text-slate-400">
-            This valuation is <strong className="text-slate-300">locked</strong> and cannot be edited. It can still be viewed and exported as a PDF.
-            {canEdit && <> Use the <strong className="text-amber-400">Unlock</strong> button to enable editing.</>}
+            This valuation is <strong className="text-slate-300">locked</strong>. It can still be viewed and edited if you have permission.
+            {canEdit && <> Use the <strong className="text-amber-400">Unlock</strong> button to return it to draft status.</>}
           </p>
         </div>
       )}
@@ -711,12 +660,12 @@ export default function ValuationDetail({
                           <td className="px-2.5 py-2.5 text-slate-500 text-right tabular-nums">{entry.previous_pct.toFixed(2)}%</td>
                           <td className="px-2.5 py-2.5 text-slate-500 text-right tabular-nums">{fmtCurrency(prevV)}</td>
                           <td className="px-2.5 py-2.5 text-right">
-                            <PctInput value={entry.current_pct} disabled={!effectiveCanEdit} onCommit={v => handleLinePct(l.id, v)} />
+                            <PctInput value={entry.current_pct} disabled={!canEditValues} onCommit={v => handleLinePct(l.id, v)} />
                           </td>
                           <td className="px-2.5 py-2.5 text-white text-right tabular-nums font-medium">{fmtCurrency(currV)}</td>
                           <td className={`px-2.5 py-2.5 text-right tabular-nums font-semibold ${thisV >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtCurrency(thisV)}</td>
                           <td className="px-2.5 py-2.5">
-                            {effectiveCanEdit
+                            {canEditValues
                               ? <NotesInput value={entry.notes} onCommit={v => handleLineNotes(l.id, v)} />
                               : <span className="text-slate-600 text-xs">{entry.notes}</span>}
                           </td>
@@ -775,12 +724,12 @@ export default function ValuationDetail({
                           <td className="px-2.5 py-2.5 text-slate-500 text-right tabular-nums">{entry.previous_pct.toFixed(2)}%</td>
                           <td className="px-2.5 py-2.5 text-slate-500 text-right tabular-nums">{fmtCurrency(prevV)}</td>
                           <td className="px-2.5 py-2.5 text-right">
-                            <PctInput value={entry.current_pct} disabled={!effectiveCanEdit} onCommit={v => handleExtraPct(ex.id, v)} />
+                            <PctInput value={entry.current_pct} disabled={!canEditValues} onCommit={v => handleExtraPct(ex.id, v)} />
                           </td>
                           <td className="px-2.5 py-2.5 text-white text-right tabular-nums font-medium">{fmtCurrency(currV)}</td>
                           <td className={`px-2.5 py-2.5 text-right tabular-nums font-semibold ${thisV >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtCurrency(thisV)}</td>
                           <td className="px-2.5 py-2.5">
-                            {effectiveCanEdit
+                            {canEditValues
                               ? <NotesInput value={entry.notes} onCommit={v => handleExtraNotes(ex.id, v)} />
                               : <span className="text-slate-600 text-xs">{entry.notes}</span>}
                           </td>
@@ -875,22 +824,13 @@ export default function ValuationDetail({
         );
       })()}
 
-      {/* Frozen snapshot notice */}
-      {isFrozen && hasSnapshot && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl mb-4 mt-3"
-          style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
-          <CheckCircle size={13} className="text-blue-400 shrink-0" />
-          <p className="text-xs text-slate-400">
-            Financial figures for this {valuation.status} valuation are preserved as an <strong className="text-slate-300">immutable snapshot</strong> (frozen {valuation.snapshot_frozen_at ? new Date(valuation.snapshot_frozen_at).toLocaleDateString('en-GB') : 'at issue'}). Later workbook or percentage changes will not alter them.
-          </p>
-        </div>
-      )}
-      {isFrozen && !hasSnapshot && (
+      {/* Issued-valuation notice: editing is always permitted; the user manages revisions */}
+      {isIssued && (
         <div className="flex items-start gap-3 px-4 py-2.5 rounded-xl mb-4 mt-3"
-          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+          style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
           <AlertTriangle size={13} className="text-amber-400 shrink-0 mt-0.5" />
           <p className="text-xs text-slate-400">
-            This {valuation.status} valuation has no stored snapshot (created before financial snapshots existed). Figures shown are recalculated live — open the valuation and press <strong className="text-amber-400">Freeze Figures</strong> after verifying them against the original issued records.
+            This valuation may already have been issued. Changes will update its figures. Please manage the revision reference and reissue accordingly.
           </p>
         </div>
       )}
@@ -902,28 +842,7 @@ export default function ValuationDetail({
             onSaveStart();
             const prevStatus = valuation.status;
             const nextStatus = patch.status ?? prevStatus;
-            const wasFrozen = isValuationFrozen(prevStatus);
-            const willBeFrozen = isValuationFrozen(nextStatus);
             await store.updateValuation({ ...valuation, ...patch });
-            // Freeze the financial snapshot when a valuation becomes submitted/certified/locked.
-            if (!wasFrozen && willBeFrozen && valuation.snapshot_gross_to_date == null) {
-              await store.freezeValuationSnapshot({ ...valuation, ...patch }, {
-                snapshot_gross_to_date: display.grossToDate,
-                snapshot_mcd_pct: display.mcdPct,
-                snapshot_mcd_amount: display.mcdAmt,
-                snapshot_nett_to_date: display.nettToDate,
-                snapshot_retention_pct: display.retentionPct,
-                snapshot_retention_amount: display.retentionAmt,
-                snapshot_gross_payment_to_date: display.grossPaymentToDate,
-                snapshot_previous_payments: display.previousPaymentsUsed,
-                snapshot_previous_payments_source: display.previousPaymentsSource,
-                snapshot_net_due: display.netValuationDue,
-              });
-            }
-            // Unlock back to draft clears the snapshot (figures return to live calculation).
-            if (wasFrozen && !willBeFrozen && valuation.snapshot_gross_to_date != null) {
-              await store.clearValuationSnapshot({ ...valuation, ...patch });
-            }
             onSaveDone();
             // Build a human-readable diff of what changed
             const STATUS_LABEL: Record<string, string> = { draft: 'Draft', submitted: 'Submitted', certified: 'Certified', superseded: 'Superseded', locked: 'Locked' };
@@ -931,7 +850,7 @@ export default function ValuationDetail({
             if (patch.title !== undefined && patch.title !== valuation.title)
               changes.push(`title: "${valuation.title}" → "${patch.title}"`);
             if (patch.status !== undefined && patch.status !== valuation.status)
-              changes.push(`status: ${STATUS_LABEL[valuation.status] ?? valuation.status} → ${STATUS_LABEL[patch.status] ?? patch.status}${willBeFrozen && !wasFrozen ? ' — financial snapshot frozen' : ''}${wasFrozen && !willBeFrozen ? ' — snapshot cleared' : ''}`);
+              changes.push(`status: ${STATUS_LABEL[valuation.status] ?? valuation.status} → ${STATUS_LABEL[patch.status] ?? patch.status}`);
             if (patch.valuation_date !== undefined && patch.valuation_date !== valuation.valuation_date)
               changes.push(`date: ${valuation.valuation_date || '—'} → ${patch.valuation_date}`);
             if (patch.period !== undefined && patch.period !== valuation.period)
