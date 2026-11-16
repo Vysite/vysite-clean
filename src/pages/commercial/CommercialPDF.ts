@@ -8,7 +8,7 @@ import { openPrintTab } from '../../lib/printTab';
 import type { DBVariationAccountItem, DBCommercialApplication, DBVABuildUpLine, DBVAComment, DBAttachment, DBValuation, DBValuationWorkbook, DBWorkbookLine, DBWorkbookExtra, DBValuationLineEntry, DBValuationExtraEntry } from '../../lib/store';
 import type { CommercialRecord } from './types';
 import { typeInfo, statusInfo, parseRawValue } from './types';
-import { computeValuationTotals, isValuationFrozen, netForecastRevenue, round2 } from './finance';
+import { computeValuationTotals, isValuationFrozen, financialProgress, netForecastRevenue, round2 } from './finance';
 import type { DBKeyDate, Project } from '../../lib/store';
 
 // ─── Shared utilities ─────────────────────────────────────────────────────────
@@ -261,19 +261,26 @@ html, body {
 .fr-cover-fig-value.accent { color: #ea6c00; }
 .fr-cover-date { font-size: 7.5pt; color: #475569; }
 
+/* ── Full report: right-aligned numeric columns ── */
+.data-table th.num, .data-table td.num {
+  text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 0; padding-left: 12px;
+}
+
 /* ── Empty notice ── */
 .empty-notice { padding: 20px 0; text-align: center; color: #475569; font-size: 9pt; border-top: 0.5px solid #f1f5f9; }
 `;
 
 // ─── Shared page shell ────────────────────────────────────────────────────────
 
-function pageShell(title: string, body: string): string {
+function pageShell(title: string, body: string, orientation: 'portrait' | 'landscape' = 'portrait'): string {
+  const pageCss = orientation === 'landscape' ? '<style>@page { margin: 0; size: A4 landscape; }</style>' : '';
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <title>${esc(title)}</title>
 <style>${COMM_PDF_CSS}</style>
+${pageCss}
 <script>window.onload=function(){window.print();};<\/script>
 </head>
 <body>
@@ -1411,7 +1418,7 @@ function applicationsBody(d: ApplicationsData): string {
     <td class="r"><span class="tfoot-total">${fv(perNoticeCertified)}</span></td>
     <td class="r"><span style="font-size:8.5pt;color:#334155;">${fv(paidToDate)}</span></td>
     <td class="r"><span style="font-size:8.5pt;color:#334155;">${fv(totalRetention)}</span></td>
-    <td class="r"><span class="${totalOut > 0 ? 'tfoot-total" style="color:#b45309;' : 'tfoot-total'}">${fv(totalOut)}</span></td>
+    <td class="r"><span class="${totalOut > 0 ? 'tfoot-total' : 'tfoot-total'}"${totalOut > 0 ? ' style="color:#b45309;"' : ''}>${fv(totalOut)}</span></td>
     <td colspan="3"></td>
   </tr></tfoot>` : '';
 
@@ -1590,6 +1597,7 @@ interface FullReportData {
 const VAL_STATUS_LABELS: Record<string, string> = {
   draft: 'Draft', submitted: 'Submitted', under_review: 'Under Review',
   agreed: 'Agreed', locked: 'Locked', paid: 'Paid',
+  certified: 'Certified', superseded: 'Superseded',
 };
 
 function valuationsSectionHtml(d: FullReportData): string {
@@ -1696,6 +1704,7 @@ function valuationsSectionHtml(d: FullReportData): string {
   const historyRows = valuations.map((v, idx) => {
     const isLatest = idx === 0;
     const t = chainFor(v);
+    const thisValGross = round2(t.contractThisVal + t.extrasThisVal);
     const statusLabel = VAL_STATUS_LABELS[v.status] ?? v.status;
     const rowStyle = isLatest ? ' background:#fff7ed;' : '';
 
@@ -1704,18 +1713,19 @@ function valuationsSectionHtml(d: FullReportData): string {
       <td style="font-size:8.5pt;color:#334155;">${fmtD(v.valuation_date)}</td>
       <td>${statusTag(v.status, statusLabel)}</td>
       <td class="num" style="font-size:9pt;font-weight:600;">${fv(t.grossToDate)}</td>
-      <td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(t.mcdAmt)})` : '—'}</td>
+      <td class="num" style="font-size:9pt;font-weight:700;color:${thisValGross > 0 ? '#16a34a' : '#334155'};">${thisValGross !== 0 ? '+' + fv(thisValGross) : fv(0)}</td>
+      ${hasDeductions ? `<td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(t.mcdAmt)})` : '—'}</td>
       <td class="num" style="font-size:9pt;color:#334155;">${fv(t.nettToDate)}</td>
       <td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(t.retentionAmt)})` : '—'}</td>
       <td class="num" style="font-size:9pt;color:#334155;">${fv(t.grossPaymentToDate)}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${t.prevCertified != null ? fv(t.prevCertified) : '—'}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${t.prevCertified != null ? fv(t.prevCertified) : '—'}</td>` : ''}
       <td class="num" style="font-size:9pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#16a34a' : '#991b1b'};">${fv(t.netValuationDue)}</td>
     </tr>`;
   }).join('');
 
   const deductionHeaders = hasDeductions
     ? `<th class="num">MCD</th><th class="num">Nett</th><th class="num">Retention</th><th class="num">Gross Payment</th><th class="num">Prev Certified</th><th class="num">Net Due</th>`
-    : '';
+    : '<th class="num">Net Due</th>';
 
   const historyTable = `
   <table class="data-table" style="width:100%;font-size:9pt;margin-bottom:0;">
@@ -1724,10 +1734,12 @@ function valuationsSectionHtml(d: FullReportData): string {
       <th style="width:80px;">Date</th>
       <th>Status</th>
       <th class="num">Gross to Date</th>
+      <th class="num">This Val</th>
       ${deductionHeaders}
     </tr></thead>
     <tbody>${historyRows}</tbody>
-  </table>`;
+  </table>
+  <div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-top:6px;">All columns are cumulative to date. “This Val” shows the new valuation movement for the period (change in gross value since the preceding valuation) and is £0.00 where a valuation repeats the preceding position without additional work.</div>`;
 
   // ── Per-valuation line detail ──
   const valDetailSections = valuations.map((v, idx) => {
@@ -1795,14 +1807,6 @@ function valuationsSectionHtml(d: FullReportData): string {
     const amountDue    = grossToDate - prevGross;
     const t            = chainFor(v);
 
-    const deductionTotals = hasDeductions ? `
-      <td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(t.mcdAmt)})` : '—'}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.nettToDate)}</td>
-      <td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(t.retentionAmt)})` : '—'}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.grossPaymentToDate)}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${t.prevCertified != null ? fv(t.prevCertified) : '—'}</td>
-      <td class="num" style="font-size:10pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#4ade80' : '#f87171'};">${fv(t.netValuationDue)}</td>` : '';
-
     const totalsRow = `<tr style="background:#0f172a;color:#fff;">
       <td colspan="2" style="font-size:8.5pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:8px 10px;color:#fff;">Total</td>
       <td class="num" style="font-size:8.5pt;color:#475569;">${fv(contractTotal + extrasTotal)}</td>
@@ -1818,10 +1822,20 @@ function valuationsSectionHtml(d: FullReportData): string {
       ? `<div style="font-size:9pt;font-weight:800;color:#ea6c00;margin-bottom:8px;">${esc(v.ref)} — ${fmtD(v.valuation_date)} <span style="font-size:6.5pt;letter-spacing:0.12em;text-transform:uppercase;background:#fff7ed;color:#ea6c00;border:1px solid #fed7aa;padding:2px 6px;border-radius:3px;margin-left:6px;">Latest</span> <span style="font-size:8pt;color:#475569;font-weight:400;">${VAL_STATUS_LABELS[v.status] ?? v.status}</span></div>`
       : `<div style="font-size:9pt;font-weight:700;color:#0f172a;margin-bottom:8px;">${esc(v.ref)} — ${fmtD(v.valuation_date)} <span style="font-size:8pt;color:#475569;font-weight:400;">${VAL_STATUS_LABELS[v.status] ?? v.status}</span></div>`;
 
+    const thisValGross = round2(grossToDate - prevGross);
     const hasExtras = wbExtras.length > 0;
+    const deductionTotals = hasDeductions ? `
+      <td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(t.mcdAmt)})` : '—'}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.nettToDate)}</td>
+      <td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(t.retentionAmt)})` : '—'}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.grossPaymentToDate)}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${t.prevCertified != null ? fv(t.prevCertified) : '—'}</td>
+      <td class="num" style="font-size:10pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#4ade80' : '#f87171'};">${fv(t.netValuationDue)}</td>`
+      : `<td class="num" style="font-size:10pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#4ade80' : '#f87171'};">${fv(t.netValuationDue)}</td>`;
+
     const deductionHeaders2 = hasDeductions
       ? `<th class="num" style="width:76px;">MCD</th><th class="num" style="width:76px;">Nett</th><th class="num" style="width:76px;">Retention</th><th class="num" style="width:76px;">Gross Payment</th><th class="num" style="width:76px;">Prev Certified</th><th class="num" style="width:76px;">Net Due</th>`
-      : '';
+      : '<th class="num" style="width:76px;">Net Due</th>';
 
     return `
   <div style="margin-top:20px;page-break-inside:avoid;">
@@ -1840,7 +1854,7 @@ function valuationsSectionHtml(d: FullReportData): string {
       </tr></thead>
       <tbody>
         ${lineRows}
-        ${hasExtras ? `<tr><td colspan="${8 + (hasDeductions ? 3 : 0)}" style="font-size:7pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;padding:8px 10px 4px;border-bottom:0.5px solid #e2e8f0;">Extras / Variations</td></tr>${extraRows}` : ''}
+        ${hasExtras ? `<tr><td colspan="${8 + (hasDeductions ? 6 : 1)}" style="font-size:7pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;padding:8px 10px 4px;border-bottom:0.5px solid #e2e8f0;">Extras / Variations</td></tr>${extraRows}` : ''}
         ${totalsRow}
       </tbody>
     </table>
@@ -2099,16 +2113,22 @@ function fullReportBody(d: FullReportData): string {
     const forecastMargin = forecastRevenue > 0 ? (forecastProfit / forecastRevenue) * 100 : 0;
     const profitPositive = forecastProfit >= 0;
     const hasCostData = actualCost > 0 || committedCost > 0 || forecastCost > 0;
-    const progress = d.contractNum > 0 && d.completedNum != null
-      ? Math.min(100, Math.round((d.completedNum / d.contractNum) * 100)) : 0;
+    const progress = d.completedNum != null && d.contractNum > 0
+      ? Math.min(100, Math.round((d.completedNum / d.contractNum) * 100)) : null;
+    const finProg = grossApplied != null ? financialProgress(grossApplied, adjustedContractSum) : null;
     const profitColor = profitPositive ? '#16a34a' : '#991b1b';
+    const noForecastCost = hasCostData && forecastCost === 0;
 
     return `
   <div class="exec-section-label" style="margin-top:20px;">Project Health</div>
-  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:14px 0;margin-bottom:16px;">
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:14px 0;margin-bottom:8px;">
     <div style="padding-right:16px;">
-      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Overall Progress</div>
-      <div style="font-size:15pt;font-weight:700;color:#ea6c00;font-variant-numeric:tabular-nums;">${progress}%</div>
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Physical Progress</div>
+      <div style="font-size:15pt;font-weight:700;color:${progress != null ? '#ea6c00' : '#475569'};font-variant-numeric:tabular-nums;">${progress != null ? progress + '%' : '—'}</div>
+    </div>
+    <div style="padding:0 16px;border-left:0.5px solid #e2e8f0;">
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Financial Progress</div>
+      <div style="font-size:15pt;font-weight:700;color:#ea6c00;font-variant-numeric:tabular-nums;">${finProg != null ? Math.round(finProg) + '%' : '—'}</div>
     </div>
     <div style="padding:0 16px;border-left:0.5px solid #e2e8f0;">
       <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Actual Spend</div>
@@ -2126,6 +2146,10 @@ function fullReportBody(d: FullReportData): string {
       <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Forecast Margin</div>
       <div style="font-size:15pt;font-weight:700;color:${hasCostData ? profitColor : '#475569'};font-variant-numeric:tabular-nums;">${hasCostData ? forecastMargin.toFixed(1) + '%' : '—'}</div>
     </div>
+  </div>
+  <div style="display:flex;gap:24px;font-size:7.5pt;color:#64748b;font-style:italic;margin-bottom:16px;">
+    <span>Physical Progress is the completed value against the Original Contract Sum. Financial Progress is the Gross Value Applied to Date against the Adjusted Contract Sum — the same calculation as the Commercial Overview.</span>
+    ${noForecastCost ? '<span>No forecast cost to complete has been recorded — Forecast Profit and Margin reflect costs booked to date only and are not a final projection.</span>' : ''}
   </div>`;
   })()}
 
@@ -2183,6 +2207,8 @@ function fullReportBody(d: FullReportData): string {
   <div class="page-break">
   <div class="exec-section-label">Project Cost Position</div>
   ${finStatement(costRows)}
+  ${!hasBudget ? '<div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-top:8px;">No original budget cost is recorded, so original profit and margin comparisons are unavailable.</div>' : ''}
+  ${hasCostData && forecastCost === 0 ? '<div style="font-size:7.5pt;color:#64748b;font-style:italic;margin-top:8px;">No forecast cost to complete has been recorded — the Forecast Final Cost and profit figures reflect costs booked to date only and are not a final projection.</div>' : ''}
   </div>`;
   })()}
 
