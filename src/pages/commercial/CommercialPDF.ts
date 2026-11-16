@@ -8,6 +8,7 @@ import { openPrintTab } from '../../lib/printTab';
 import type { DBVariationAccountItem, DBCommercialApplication, DBVABuildUpLine, DBVAComment, DBAttachment, DBValuation, DBValuationWorkbook, DBWorkbookLine, DBWorkbookExtra, DBValuationLineEntry, DBValuationExtraEntry } from '../../lib/store';
 import type { CommercialRecord } from './types';
 import { typeInfo, statusInfo, parseRawValue } from './types';
+import { computeValuationTotals, isValuationFrozen, netForecastRevenue, round2 } from './finance';
 import type { DBKeyDate, Project } from '../../lib/store';
 
 // ─── Shared utilities ─────────────────────────────────────────────────────────
@@ -798,6 +799,12 @@ interface ApplicationsData {
   forecastContractSum: number;
   currentUserName: string;
   logoUrl?: string;
+  valuationWorkbook?: DBValuationWorkbook | null;
+  valuations?: DBValuation[];
+  valuationLineEntries?: DBValuationLineEntry[];
+  valuationExtraEntries?: DBValuationExtraEntry[];
+  wbLines?: DBWorkbookLine[];
+  wbExtras?: DBWorkbookExtra[];
 }
 
 // Dedicated CSS for the Applications PDF — injected into its own page shell
@@ -1189,16 +1196,36 @@ function applicationsBody(d: ApplicationsData): string {
   const projName = d.project?.name ?? '—';
   const client = d.project?.client ?? '';
 
-  const appliedToDate    = d.apps.reduce((s, a) => s + a.applied_value, 0);
-  const certifiedToDate  = d.apps.reduce((s, a) => s + a.certified_value, 0);
-  const paidToDate       = d.apps.reduce((s, a) => s + a.paid_value, 0);
-  const totalRetention   = d.apps.reduce((s, a) => s + a.retention, 0);
-  const certShortfall    = appliedToDate - certifiedToDate;
-  const outstanding      = certifiedToDate - paidToDate;
-  const remaining        = d.forecastContractSum > 0 ? d.forecastContractSum - appliedToDate : null;
+  // Cumulative sources of truth — never sums of per-notice amounts (matches the
+  // Project Overview and the Full Commercial Report).
+  const countableApps = d.apps.filter(a => !['draft', 'withdrawn', 'disputed'].includes(a.status));
+  const latestApp     = countableApps.slice().sort((a, b) => b.app_number - a.app_number)[0] ?? null;
+  const wb            = d.valuationWorkbook ?? null;
+  const submittedVals = (d.valuations ?? []).filter(v => isValuationFrozen(v.status));
+  const latestVal     = submittedVals.slice()
+    .sort((a, b) => (b.valuation_date || '').localeCompare(a.valuation_date || '') || b.ref.localeCompare(a.ref))[0] ?? null;
+  let grossApplied: number | null = null;
+  let appliedPayment: number | null = null;
+  if (latestVal && wb) {
+    const vLE = (d.valuationLineEntries ?? []).filter(e => e.valuation_id === latestVal.id);
+    const vEE = (d.valuationExtraEntries ?? []).filter(e => e.valuation_id === latestVal.id);
+    const gross = round2(
+      (d.wbLines ?? []).reduce((s, l) => s + l.contract_value * (vLE.find(x => x.workbook_line_id === l.id)?.current_pct ?? 0) / 100, 0)
+      + (d.wbExtras ?? []).reduce((s, ex) => s + ex.agreed_value * (vEE.find(x => x.workbook_extra_id === ex.id)?.current_pct ?? 0) / 100, 0));
+    const mcdAmt  = round2(gross * (wb.mcd_pct ?? 0) / 100);
+    const nett    = round2(gross - mcdAmt);
+    const retAmt  = round2(nett * (wb.retention_pct ?? 0) / 100);
+    grossApplied   = gross;
+    appliedPayment = round2(nett - retAmt);
+  }
+  const certifiedPayment = latestApp ? (latestApp.certified_payment_to_date ?? latestApp.certified_value) : null;
+  const paidToDate       = countableApps.reduce((s, a) => s + a.paid_value, 0);
+  const awaiting         = certifiedPayment != null && appliedPayment != null ? round2(appliedPayment - certifiedPayment) : null;
+  const outstanding      = certifiedPayment != null ? round2(certifiedPayment - paidToDate) : null;
+  const totalRetention   = latestApp ? (latestApp.cumulative_retention ?? countableApps.reduce((s, a) => s + a.retention, 0)) : countableApps.reduce((s, a) => s + a.retention, 0);
+  const remaining        = grossApplied != null && d.forecastContractSum > 0 ? round2(d.forecastContractSum - grossApplied) : null;
 
   // ── Page 1: Executive Commercial Summary ──
-  const isZeroShortfall = certShortfall <= 0;
   const sortedApps = [...d.apps].sort((a, b) => (a.app_date ?? '').localeCompare(b.app_date ?? ''));
   const firstPeriod = sortedApps.length > 0 ? (sortedApps[0].period || fmtD(sortedApps[0].app_date)) : '—';
   const lastPeriod  = sortedApps.length > 1 ? (sortedApps[sortedApps.length - 1].period || fmtD(sortedApps[sortedApps.length - 1].app_date)) : firstPeriod;
@@ -1233,34 +1260,38 @@ function applicationsBody(d: ApplicationsData): string {
 
   <div class="primary-row">
     <div class="primary-fig">
-      <div class="fig-label">Applied To Date</div>
-      <div class="fig-value accent">${fv(appliedToDate)}</div>
+      <div class="fig-label">Gross Value Applied to Date</div>
+      <div class="fig-value accent">${grossApplied != null ? fv(grossApplied) : '—'}</div>
     </div>
     <div class="primary-fig">
-      <div class="fig-label">Certified To Date</div>
-      <div class="fig-value">${fv(certifiedToDate)}</div>
+      <div class="fig-label">Certified Payment to Date</div>
+      <div class="fig-value">${certifiedPayment != null ? fv(certifiedPayment) : '—'}</div>
     </div>
   </div>
 
-  <div class="shortfall-band${isZeroShortfall ? ' zero' : ''}">
+  <div class="shortfall-band${awaiting != null && awaiting <= 0 ? ' zero' : ''}">
     <div class="shortfall-band-left">
-      <div class="shortfall-label">Certification Shortfall</div>
-      <div class="shortfall-sub">Applied to Date minus Certified to Date</div>
+      <div class="shortfall-label">Awaiting Certification</div>
+      <div class="shortfall-sub">Cumulative applied payment minus Certified Payment to Date</div>
     </div>
-    <div class="shortfall-value">${fv(Math.abs(certShortfall))}</div>
+    <div class="shortfall-value">${awaiting != null ? fv(Math.abs(awaiting)) : '—'}</div>
   </div>
 
   <div class="secondary-row">
     <div class="sec-fig">
-      <div class="sec-label">Paid To Date</div>
+      <div class="sec-label">Cumulative Applied Payment</div>
+      <div class="sec-value">${appliedPayment != null ? fv(appliedPayment) : '—'}</div>
+    </div>
+    <div class="sec-fig">
+      <div class="sec-label">Actual Paid to Date</div>
       <div class="sec-value">${fv(paidToDate)}</div>
     </div>
     <div class="sec-fig">
-      <div class="sec-label">Outstanding</div>
-      <div class="sec-value${outstanding > 0 ? ' warn' : ''}">${fv(outstanding)}</div>
+      <div class="sec-label">Outstanding Certified Payment</div>
+      <div class="sec-value${outstanding != null && outstanding > 0 ? ' warn' : ''}">${outstanding != null ? fv(outstanding) : '—'}</div>
     </div>
     <div class="sec-fig">
-      <div class="sec-label">Retention</div>
+      <div class="sec-label">Retention Held</div>
       <div class="sec-value">${fv(totalRetention)}</div>
     </div>
   </div>
@@ -1309,14 +1340,15 @@ function applicationsBody(d: ApplicationsData): string {
 
   // ── Section 1: Summary position ──
   const leftRows = [
-    { label: 'Applied To Date',        value: fv(appliedToDate),   cls: '' },
-    { label: 'Certified To Date',      value: fv(certifiedToDate), cls: '' },
-    { label: 'Certification Shortfall',value: fv(certShortfall),   cls: certShortfall > 0 ? ' warn' : '' },
+    { label: 'Gross Value Applied to Date', value: grossApplied != null ? fv(grossApplied) : '—', cls: '' },
+    { label: 'Certified Payment to Date',   value: certifiedPayment != null ? fv(certifiedPayment) : '—', cls: '' },
+    { label: 'Awaiting Certification',      value: awaiting != null ? fv(awaiting) : '—', cls: awaiting != null && awaiting > 0 ? ' warn' : '' },
   ];
   const rightRows = [
-    { label: 'Paid To Date',  value: fv(paidToDate),      cls: '' },
-    { label: 'Outstanding',   value: fv(outstanding),     cls: outstanding > 0 ? ' warn' : '' },
-    { label: 'Retention',     value: fv(totalRetention),  cls: '' },
+    { label: 'Cumulative Applied Payment',    value: appliedPayment != null ? fv(appliedPayment) : '—', cls: '' },
+    { label: 'Actual Paid to Date',           value: fv(paidToDate), cls: '' },
+    { label: 'Outstanding Certified Payment', value: outstanding != null ? fv(outstanding) : '—', cls: outstanding != null && outstanding > 0 ? ' warn' : '' },
+    { label: 'Retention Held',                value: fv(totalRetention), cls: '' },
   ];
 
   const summarySection = `<div class="section">
@@ -1367,14 +1399,16 @@ function applicationsBody(d: ApplicationsData): string {
     </tr>`;
   }).join('');
 
-  const totalOut = certifiedToDate - paidToDate;
+  const totalOut = outstanding ?? 0;
+  const perNoticeApplied  = d.apps.reduce((s, a) => s + a.applied_value, 0);
+  const perNoticeCertified = d.apps.reduce((s, a) => s + a.certified_value, 0);
   const schedFooter = d.apps.length > 1 ? `<tfoot><tr>
     <td colspan="2">
       <div style="font-size:8.5pt;font-weight:700;color:#0f172a;">Totals</div>
       <div class="tfoot-label">${d.apps.length} applications</div>
     </td>
-    <td class="r"><span class="tfoot-total">${fv(appliedToDate)}</span></td>
-    <td class="r"><span class="tfoot-total">${fv(certifiedToDate)}</span></td>
+    <td class="r"><span class="tfoot-total">${fv(perNoticeApplied)}</span></td>
+    <td class="r"><span class="tfoot-total">${fv(perNoticeCertified)}</span></td>
     <td class="r"><span style="font-size:8.5pt;color:#334155;">${fv(paidToDate)}</span></td>
     <td class="r"><span style="font-size:8.5pt;color:#334155;">${fv(totalRetention)}</span></td>
     <td class="r"><span class="${totalOut > 0 ? 'tfoot-total" style="color:#b45309;' : 'tfoot-total'}">${fv(totalOut)}</span></td>
@@ -1618,69 +1652,69 @@ function valuationsSectionHtml(d: FullReportData): string {
   <div style="font-size:9pt;color:#475569;font-style:italic;padding:8px 0;">No valuations recorded yet.</div>`;
   }
 
-  // Helper: compute deduction amounts for a given amountDue
-  const computeDeductions = (amountDue: number) => {
-    const retAmt   = amountDue * retentionPct / 100;
-    const afterRet = amountDue - retAmt;
-    const mcdAmt   = afterRet * mcdPct / 100;
-    const net      = afterRet - mcdAmt;
-    return { retAmt, mcdAmt, net };
+  // Cumulative chain per valuation — identical math to the Valuation Workbook,
+  // detail screen and Excel export (finance.ts): MCD on gross, retention on nett,
+  // previous certified from the latest valid payment notice linked to an earlier
+  // valuation (preceding valuation's gross payment as provisional fallback).
+  const valNum = (v: DBValuation) => parseInt(v.ref.replace(/\D/g, ''), 10) || 0;
+  const countableApps = (d.apps ?? []).filter(a => !['draft', 'withdrawn', 'disputed'].includes(a.status));
+
+  const grossPaymentOf = (v: DBValuation): number => {
+    const vLE = lineEntries.filter(e => e.valuation_id === v.id);
+    const vEE = extraEntries.filter(e => e.valuation_id === v.id);
+    const gross = round2(
+      wbLines.reduce((s, l) => s + l.contract_value * (vLE.find(x => x.workbook_line_id === l.id)?.current_pct ?? 0) / 100, 0)
+      + wbExtras.reduce((s, ex) => s + ex.agreed_value * (vEE.find(x => x.workbook_extra_id === ex.id)?.current_pct ?? 0) / 100, 0));
+    const mcdAmt  = round2(gross * mcdPct / 100);
+    const nett    = round2(gross - mcdAmt);
+    const retAmt  = round2(nett * retentionPct / 100);
+    return round2(nett - retAmt);
+  };
+
+  const chainFor = (v: DBValuation) => {
+    const vLE = lineEntries.filter(e => e.valuation_id === v.id);
+    const vEE = extraEntries.filter(e => e.valuation_id === v.id);
+    const contractCurrValue = wbLines.reduce((s, l) => s + l.contract_value * (vLE.find(x => x.workbook_line_id === l.id)?.current_pct ?? 0) / 100, 0);
+    const contractPrevValue = wbLines.reduce((s, l) => s + l.contract_value * (vLE.find(x => x.workbook_line_id === l.id)?.previous_pct ?? 0) / 100, 0);
+    const extrasCurrValue   = wbExtras.reduce((s, ex) => s + ex.agreed_value * (vEE.find(x => x.workbook_extra_id === ex.id)?.current_pct ?? 0) / 100, 0);
+    const extrasPrevValue   = wbExtras.reduce((s, ex) => s + ex.agreed_value * (vEE.find(x => x.workbook_extra_id === ex.id)?.previous_pct ?? 0) / 100, 0);
+    const earlierIds = new Set((d.valuations ?? []).filter(o => valNum(o) < valNum(v)).map(o => o.id));
+    const prevNotice = countableApps
+      .filter(a => a.valuation_id && earlierIds.has(a.valuation_id))
+      .sort((a, b) => b.app_number - a.app_number)[0];
+    const prevVal = (d.valuations ?? []).filter(o => o.id !== v.id && valNum(o) === valNum(v) - 1)[0] ?? null;
+    const t = computeValuationTotals({
+      contractCurrValue, contractPrevValue, extrasCurrValue, extrasPrevValue,
+      mcdPct, retentionPct,
+      previousCertifiedPayment: prevNotice ? (prevNotice.certified_payment_to_date ?? prevNotice.certified_value) : null,
+      previousValuationGrossPayment: prevVal ? grossPaymentOf(prevVal) : null,
+    });
+    return { ...t, prevCertified: t.previousPaymentsSource === 'payment_notice' ? t.previousPaymentsUsed : null };
   };
 
   // ── History table ──
   const historyRows = valuations.map((v, idx) => {
     const isLatest = idx === 0;
-    const vLineEntries  = lineEntries.filter(e => e.valuation_id === v.id);
-    const vExtraEntries = extraEntries.filter(e => e.valuation_id === v.id);
-
-    const contractCurrValue = wbLines.reduce((s, l) => {
-      const e = vLineEntries.find(x => x.workbook_line_id === l.id);
-      return s + l.contract_value * (e?.current_pct ?? 0) / 100;
-    }, 0);
-    const extrasCurrValue = wbExtras.reduce((s, ex) => {
-      const e = vExtraEntries.find(x => x.workbook_extra_id === ex.id);
-      return s + ex.agreed_value * (e?.current_pct ?? 0) / 100;
-    }, 0);
-    const grossToDate = contractCurrValue + extrasCurrValue;
-
-    // Previous valuation gross
-    const prevVal = valuations[idx + 1];
-    let prevGross = 0;
-    if (prevVal) {
-      const pvLineEntries  = lineEntries.filter(e => e.valuation_id === prevVal.id);
-      const pvExtraEntries = extraEntries.filter(e => e.valuation_id === prevVal.id);
-      const pvContract = wbLines.reduce((s, l) => {
-        const e = pvLineEntries.find(x => x.workbook_line_id === l.id);
-        return s + l.contract_value * (e?.current_pct ?? 0) / 100;
-      }, 0);
-      const pvExtras = wbExtras.reduce((s, ex) => {
-        const e = pvExtraEntries.find(x => x.workbook_extra_id === ex.id);
-        return s + ex.agreed_value * (e?.current_pct ?? 0) / 100;
-      }, 0);
-      prevGross = pvContract + pvExtras;
-    }
-    const amountDue = grossToDate - prevGross;
-    const { retAmt, mcdAmt, net } = computeDeductions(amountDue);
+    const t = chainFor(v);
     const statusLabel = VAL_STATUS_LABELS[v.status] ?? v.status;
     const rowStyle = isLatest ? ' background:#fff7ed;' : '';
-
-    const retCol  = hasDeductions ? `<td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(retAmt)})` : '—'}</td>` : '';
-    const mcdCol  = hasDeductions ? `<td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(mcdAmt)})` : '—'}</td>` : '';
-    const netCol  = hasDeductions ? `<td class="num" style="font-size:9pt;font-weight:800;color:${net >= 0 ? '#16a34a' : '#991b1b'};">${fv(net)}</td>` : '';
 
     return `<tr style="${rowStyle}">
       <td class="dt-ref">${esc(v.ref)}${isLatest ? ' <span style="font-size:6.5pt;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#ea6c00;">LATEST</span>' : ''}</td>
       <td style="font-size:8.5pt;color:#334155;">${fmtD(v.valuation_date)}</td>
       <td>${statusTag(v.status, statusLabel)}</td>
-      <td class="num" style="font-size:9pt;font-weight:600;">${fv(grossToDate)}</td>
-      <td class="num" style="font-size:9pt;color:#334155;">${fv(prevGross)}</td>
-      <td class="num" style="font-size:9pt;font-weight:700;color:${amountDue >= 0 ? '#16a34a' : '#991b1b'};">${amountDue >= 0 ? '+' : ''}${fv(amountDue)}</td>
-      ${retCol}${mcdCol}${netCol}
+      <td class="num" style="font-size:9pt;font-weight:600;">${fv(t.grossToDate)}</td>
+      <td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(t.mcdAmt)})` : '—'}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.nettToDate)}</td>
+      <td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(t.retentionAmt)})` : '—'}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.grossPaymentToDate)}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${t.prevCertified != null ? fv(t.prevCertified) : '—'}</td>
+      <td class="num" style="font-size:9pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#16a34a' : '#991b1b'};">${fv(t.netValuationDue)}</td>
     </tr>`;
   }).join('');
 
   const deductionHeaders = hasDeductions
-    ? `<th class="num">Retention</th><th class="num">MCD</th><th class="num">Net Due</th>`
+    ? `<th class="num">MCD</th><th class="num">Nett</th><th class="num">Retention</th><th class="num">Gross Payment</th><th class="num">Prev Certified</th><th class="num">Net Due</th>`
     : '';
 
   const historyTable = `
@@ -1690,8 +1724,6 @@ function valuationsSectionHtml(d: FullReportData): string {
       <th style="width:80px;">Date</th>
       <th>Status</th>
       <th class="num">Gross to Date</th>
-      <th class="num">Previous</th>
-      <th class="num">Amount Due</th>
       ${deductionHeaders}
     </tr></thead>
     <tbody>${historyRows}</tbody>
@@ -1761,12 +1793,15 @@ function valuationsSectionHtml(d: FullReportData): string {
     const grossToDate  = contractCurrValue + extrasCurrValue;
     const prevGross    = contractPrevValue + extrasPrevValue;
     const amountDue    = grossToDate - prevGross;
-    const { retAmt, mcdAmt, net } = computeDeductions(amountDue);
+    const t            = chainFor(v);
 
     const deductionTotals = hasDeductions ? `
-      <td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(retAmt)})` : '—'}</td>
-      <td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(mcdAmt)})` : '—'}</td>
-      <td class="num" style="font-size:10pt;font-weight:800;color:${net >= 0 ? '#4ade80' : '#f87171'};">${fv(net)}</td>` : '';
+      <td class="num" style="font-size:8.5pt;color:#d97706;">${mcdPct > 0 ? `(${fv(t.mcdAmt)})` : '—'}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.nettToDate)}</td>
+      <td class="num" style="font-size:8.5pt;color:#d97706;">${retentionPct > 0 ? `(${fv(t.retentionAmt)})` : '—'}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${fv(t.grossPaymentToDate)}</td>
+      <td class="num" style="font-size:9pt;color:#334155;">${t.prevCertified != null ? fv(t.prevCertified) : '—'}</td>
+      <td class="num" style="font-size:10pt;font-weight:800;color:${t.netValuationDue >= 0 ? '#4ade80' : '#f87171'};">${fv(t.netValuationDue)}</td>` : '';
 
     const totalsRow = `<tr style="background:#0f172a;color:#fff;">
       <td colspan="2" style="font-size:8.5pt;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:8px 10px;color:#fff;">Total</td>
@@ -1785,7 +1820,7 @@ function valuationsSectionHtml(d: FullReportData): string {
 
     const hasExtras = wbExtras.length > 0;
     const deductionHeaders2 = hasDeductions
-      ? `<th class="num" style="width:76px;">Retention</th><th class="num" style="width:76px;">MCD</th><th class="num" style="width:76px;">Net Due</th>`
+      ? `<th class="num" style="width:76px;">MCD</th><th class="num" style="width:76px;">Nett</th><th class="num" style="width:76px;">Retention</th><th class="num" style="width:76px;">Gross Payment</th><th class="num" style="width:76px;">Prev Certified</th><th class="num" style="width:76px;">Net Due</th>`
       : '';
 
     return `
@@ -1829,13 +1864,35 @@ function fullReportBody(d: FullReportData): string {
   const forecastContractSum = adjustedContractSum + d.variationExposure;
   const remainingValue = d.completedNum != null ? adjustedContractSum - d.completedNum : null;
 
-  const appliedToDate   = d.apps.reduce((s, a) => s + a.applied_value, 0);
-  const certifiedToDate = d.apps.reduce((s, a) => s + a.certified_value, 0);
-  const paidToDate      = d.apps.reduce((s, a) => s + a.paid_value, 0);
-  const totalRetention  = d.apps.reduce((s, a) => s + a.retention, 0);
-  const certShortfall   = appliedToDate - certifiedToDate;
-  const outstanding     = certifiedToDate - paidToDate;
-  const remaining       = d.forecastContractSum > 0 ? d.forecastContractSum - appliedToDate : null;
+  // Sources of truth (match the Project Overview): cumulative figures come from
+  // the latest submitted valuation and the latest valid payment notice — never
+  // sums of per-notice amounts.
+  const countableApps = d.apps.filter(a => !['draft', 'withdrawn', 'disputed'].includes(a.status));
+  const latestApp     = countableApps.slice().sort((a, b) => b.app_number - a.app_number)[0] ?? null;
+  const wb            = d.valuationWorkbook ?? null;
+  const submittedVals = (d.valuations ?? []).filter(v => isValuationFrozen(v.status));
+  const latestVal     = submittedVals.slice()
+    .sort((a, b) => (b.valuation_date || '').localeCompare(a.valuation_date || '') || b.ref.localeCompare(a.ref))[0] ?? null;
+  let grossApplied: number | null = null;
+  let appliedPayment: number | null = null;
+  if (latestVal && wb) {
+    const vLE = (d.valuationLineEntries ?? []).filter(e => e.valuation_id === latestVal.id);
+    const vEE = (d.valuationExtraEntries ?? []).filter(e => e.valuation_id === latestVal.id);
+    const gross = round2(
+      (d.wbLines ?? []).reduce((s, l) => s + l.contract_value * (vLE.find(x => x.workbook_line_id === l.id)?.current_pct ?? 0) / 100, 0)
+      + (d.wbExtras ?? []).reduce((s, ex) => s + ex.agreed_value * (vEE.find(x => x.workbook_extra_id === ex.id)?.current_pct ?? 0) / 100, 0));
+    const mcdAmt  = round2(gross * (wb.mcd_pct ?? 0) / 100);
+    const nett    = round2(gross - mcdAmt);
+    const retAmt  = round2(nett * (wb.retention_pct ?? 0) / 100);
+    grossApplied   = gross;
+    appliedPayment = round2(nett - retAmt);
+  }
+  const certifiedPayment = latestApp ? (latestApp.certified_payment_to_date ?? latestApp.certified_value) : null;
+  const paidToDate       = countableApps.reduce((s, a) => s + a.paid_value, 0);
+  const awaiting         = certifiedPayment != null && appliedPayment != null ? round2(appliedPayment - certifiedPayment) : null;
+  const outstanding      = certifiedPayment != null ? round2(certifiedPayment - paidToDate) : null;
+  const totalRetention   = latestApp ? (latestApp.cumulative_retention ?? countableApps.reduce((s, a) => s + a.retention, 0)) : countableApps.reduce((s, a) => s + a.retention, 0);
+  const remaining        = grossApplied != null && d.forecastContractSum > 0 ? round2(d.forecastContractSum - grossApplied) : null;
 
   // ── Cover ──
   const coverBrandHtml = d.logoUrl
@@ -1959,30 +2016,34 @@ function fullReportBody(d: FullReportData): string {
   <div class="exec-section-label">5. Valuation Applications — ${d.apps.length} application${d.apps.length !== 1 ? 's' : ''}</div>
   <div class="fin-primary-row" style="gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:14px 0;margin-bottom:14px;">
     <div>
-      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Applied To Date</div>
-      <div class="fin-fig-xl">${fv(appliedToDate)}</div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Gross Value Applied to Date</div>
+      <div class="fin-fig-xl">${grossApplied != null ? fv(grossApplied) : '—'}</div>
     </div>
     <div>
-      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Certified To Date</div>
-      <div class="fin-fig-xl accent">${fv(certifiedToDate)}</div>
+      <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:4px;">Certified Payment to Date</div>
+      <div class="fin-fig-xl accent">${certifiedPayment != null ? fv(certifiedPayment) : '—'}</div>
     </div>
   </div>
-  ${certShortfall > 0 ? `
+  ${awaiting != null && awaiting > 0 ? `
   <div class="exposure-band" style="margin-bottom:14px;">
-    <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#b45309;margin-bottom:4px;">Certification Shortfall</div>
-    <div class="exposure-value">${fv(certShortfall)}</div>
+    <div style="font-size:6.5pt;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#b45309;margin-bottom:4px;">Awaiting Certification</div>
+    <div class="exposure-value">${fv(awaiting)}</div>
   </div>` : ''}
   <div class="fin-secondary-row" style="gap:0;border-top:0.5px solid #e2e8f0;border-bottom:0.5px solid #e2e8f0;padding:12px 0;margin-bottom:16px;">
     <div>
-      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:3px;">Paid To Date</div>
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:3px;">Cumulative Applied Payment</div>
+      <div style="font-size:15pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${appliedPayment != null ? fv(appliedPayment) : '—'}</div>
+    </div>
+    <div>
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:3px;">Actual Paid to Date</div>
       <div style="font-size:15pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fv(paidToDate)}</div>
     </div>
     <div>
-      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:3px;">Outstanding</div>
-      <div style="font-size:15pt;font-weight:700;color:${outstanding > 0 ? '#b45309' : '#0f172a'};font-variant-numeric:tabular-nums;">${fv(outstanding)}</div>
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:3px;">Outstanding Certified Payment</div>
+      <div style="font-size:15pt;font-weight:700;color:${outstanding != null && outstanding > 0 ? '#b45309' : '#0f172a'};font-variant-numeric:tabular-nums;">${outstanding != null ? fv(outstanding) : '—'}</div>
     </div>
     <div>
-      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:3px;">Retention</div>
+      <div style="font-size:6.5pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#475569;margin-bottom:3px;">Retention Held</div>
       <div style="font-size:15pt;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">${fv(totalRetention)}</div>
     </div>
   </div>
@@ -2033,8 +2094,9 @@ function fullReportBody(d: FullReportData): string {
     const committedCost = cs.committed ?? 0;
     const forecastCost = cs.forecast ?? 0;
     const forecastFinalCost = actualCost + committedCost + forecastCost;
-    const forecastProfit = adjustedContractSum - forecastFinalCost;
-    const forecastMargin = adjustedContractSum > 0 ? (forecastProfit / adjustedContractSum) * 100 : 0;
+    const forecastRevenue = netForecastRevenue(forecastContractSum, wb?.mcd_pct ?? 0, wb?.rebate_pct ?? 0);
+    const forecastProfit = forecastRevenue - forecastFinalCost;
+    const forecastMargin = forecastRevenue > 0 ? (forecastProfit / forecastRevenue) * 100 : 0;
     const profitPositive = forecastProfit >= 0;
     const hasCostData = actualCost > 0 || committedCost > 0 || forecastCost > 0;
     const progress = d.contractNum > 0 && d.completedNum != null
@@ -2089,8 +2151,10 @@ function fullReportBody(d: FullReportData): string {
     const committedCost = cs.committed ?? 0;
     const forecastCost = cs.forecast ?? 0;
     const forecastFinalCost = actualCost + committedCost + forecastCost;
-    const currentForecastProfit = adjustedContractSum - forecastFinalCost;
-    const currentMargin = adjustedContractSum > 0 ? (currentForecastProfit / adjustedContractSum) * 100 : 0;
+    const hasCostData = actualCost > 0 || committedCost > 0 || forecastCost > 0;
+    const forecastRevenue = netForecastRevenue(forecastContractSum, wb?.mcd_pct ?? 0, wb?.rebate_pct ?? 0);
+    const currentForecastProfit = forecastRevenue - forecastFinalCost;
+    const currentMargin = forecastRevenue > 0 ? (currentForecastProfit / forecastRevenue) * 100 : 0;
     const budgetCost = (d.project as { budgetCost?: number | null }).budgetCost ?? null;
     const hasBudget = budgetCost != null && budgetCost > 0;
     const originalForecastProfit = hasBudget ? d.contractNum - budgetCost : null;
@@ -2103,9 +2167,9 @@ function fullReportBody(d: FullReportData): string {
       { label: 'Actual Cost to Date', value: fv(actualCost) },
       { label: 'Committed Costs', value: fv(committedCost) },
       { label: 'Forecast Cost to Complete', value: fv(forecastCost) },
-      { label: 'Forecast Final Cost', value: fv(forecastFinalCost), style: 'total' },
-      { label: 'Current Forecast Profit', value: fv(currentForecastProfit) },
-      { label: 'Current Forecast Margin', value: currentMargin.toFixed(1) + '%' },
+      { label: 'Forecast Final Cost', value: hasCostData ? fv(forecastFinalCost) : '—', style: 'total' },
+      { label: 'Current Forecast Profit', value: hasCostData ? fv(currentForecastProfit) : '—' },
+      { label: 'Current Forecast Margin', value: hasCostData ? currentMargin.toFixed(1) + '%' : '—' },
     ];
     if (hasBudget && originalForecastProfit != null && originalMargin != null) {
       costRows.push({ label: 'Original Forecast Profit', value: fv(originalForecastProfit) });

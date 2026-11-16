@@ -554,7 +554,15 @@ export default function CommercialApplications({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => exportApplicationsPDF({ project, apps: items, forecastContractSum, currentUserName: currentUserName || '', logoUrl: store.settings?.logo_data_url })}
+            onClick={() => exportApplicationsPDF({
+              project, apps: items, forecastContractSum, currentUserName: currentUserName || '', logoUrl: store.settings?.logo_data_url,
+              valuationWorkbook: store.valuationWorkbooks.find(w => w.project_id === project?.id) ?? null,
+              valuations: store.valuations.filter(v => v.project_id === project?.id),
+              valuationLineEntries: store.valuationLineEntries.filter(e => store.valuations.some(v => v.project_id === project?.id && v.id === e.valuation_id)),
+              valuationExtraEntries: store.valuationExtraEntries.filter(e => store.valuations.some(v => v.project_id === project?.id && v.id === e.valuation_id)),
+              wbLines: store.workbookLines.filter(l => store.valuationWorkbooks.some(w => w.project_id === project?.id && w.id === l.workbook_id)),
+              wbExtras: store.workbookExtras.filter(x => store.valuationWorkbooks.some(w => w.project_id === project?.id && w.id === x.workbook_id)),
+            })}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white border border-[#1e2d4a] hover:border-slate-600 transition-colors"
             title="Export Applications PDF"
           >
