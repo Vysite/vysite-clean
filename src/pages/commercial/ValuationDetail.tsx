@@ -476,6 +476,17 @@ export default function ValuationDetail({
 
   const statusStyle = STATUS_STYLES[valuation.status as ValuationStatus] ?? STATUS_STYLES.draft;
 
+  const handleStatusChange = async (next: ValuationStatus) => {
+    if (next === valuation.status) return;
+    const prevLabel = valuation.status;
+    onSaveStart();
+    await store.updateValuation({ ...valuation, status: next });
+    onSaveDone();
+    valLog('status_changed', `${valuation.ref} — Status changed: ${prevLabel} → ${next}.`, {
+      prevValue: prevLabel, newValue: next,
+    });
+  };
+
   return (
     <div>
       {/* Header */}
@@ -486,10 +497,20 @@ export default function ValuationDetail({
           </button>
           <div className="w-px h-4 bg-[#1e2d4a]" />
           <span className="text-[10px] font-bold font-mono text-slate-500">{valuation.ref}</span>
-          <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${statusStyle}`}>
-            {isLocked && <Lock size={8} />}
-            {valuation.status}
-          </span>
+          {canEdit ? (
+            <select value={valuation.status}
+              onChange={e => handleStatusChange(e.target.value as ValuationStatus)}
+              title="Change valuation status"
+              className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-[#111827] cursor-pointer transition-colors hover:border-[#f97316] ${statusStyle}`}>
+              {STATUS_OPTS.filter(o => o.value !== 'locked' || valuation.status === 'locked')
+                .map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          ) : (
+            <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${statusStyle}`}>
+              {isLocked && <Lock size={8} />}
+              {valuation.status}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* Save indicator */}
